@@ -247,6 +247,7 @@ export const PostMatchStudioView: React.FC = () => {
         playerName: getEventFormattedName(e.playerName, side),
         varDisallowed: e.varDisallowed,
         isOwnGoal: e.isOwnGoal,
+        isPenaltyNoCall: e.isPenaltyNoCall,
       }));
 
     const events = [...goalEvents, ...timelineEvents].sort((a, b) => a.minute - b.minute);
@@ -266,6 +267,16 @@ export const PostMatchStudioView: React.FC = () => {
             icon = '🟥'; color = 'text-red-500';
           } else if (e.type === MatchEventType.INJURY_LIGHT || e.type === MatchEventType.INJURY_SEVERE) {
             icon = '✚'; color = e.type === MatchEventType.INJURY_SEVERE ? 'text-red-600 font-bold' : 'text-slate-300';
+          }
+
+          if (e.isPenaltyNoCall) {
+            return (
+              <span key={i} className="text-[10px] font-black uppercase italic text-slate-500 flex items-center gap-1">
+                {side === 'HOME'
+                  ? <><s>{e.playerName} ({e.minute}' k.)</s>&nbsp;(VAR)</>
+                  : <>(VAR)&nbsp;<s>{e.playerName} ({e.minute}' k.)</s></>}
+              </span>
+            );
           }
 
           if (e.varDisallowed) {
@@ -518,23 +529,6 @@ export const PostMatchStudioView: React.FC = () => {
             {/* Commentary Panel */}
             <div className={`${GLASS_PANEL} flex-1 rounded-[55px] p-10 relative overflow-hidden group`}>
                <div className="absolute right-[-20px] bottom-[-20px] text-9xl font-black italic text-white/[0.03] select-none pointer-events-none">STUDIO</div>
-               <div className="flex items-center gap-6 mb-8">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-900 border-2 border-emerald-400 flex items-center justify-center font-black text-2xl text-white italic shadow-lg">H</div>
-                  <div>
-                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em]">ANALIZA EKSPERCKA</h4>
-                    <p className="text-xs font-black text-white italic">Tomasz Hajto</p>
-                  </div>
-                  <button
-                    onClick={() => setShowExpertModal(true)}
-                    className="ml-auto px-4 py-2 rounded-xl bg-emerald-600/20 border-t border-x border-b border-t-emerald-400/30 border-x-emerald-500/20 border-b-black/60 text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] hover:bg-emerald-500/30 transition-all active:translate-y-[2px]"
-                    style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
-                  >czytaj więcej ↗</button>
-               </div>
-               <p className="text-xl text-slate-300 italic leading-relaxed font-medium relative max-w-3xl line-clamp-4">
-                 <span className="text-emerald-500/50 text-6xl font-serif absolute -left-10 -top-4">"</span>
-                 {expertComment}
-                 <span className="text-emerald-500/50 text-6xl font-serif absolute -right-6 bottom-[-20px]">"</span>
-               </p>
             </div>
           </div>
 
@@ -573,6 +567,16 @@ export const PostMatchStudioView: React.FC = () => {
            </div>
            
            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowExpertModal(true)}
+                className="group relative px-8 py-4 bg-emerald-600/20 border-t border-x border-b border-t-emerald-400/30 border-x-emerald-500/20 border-b-black/60 hover:bg-emerald-500/30 transition-all rounded-2xl active:translate-y-[2px]"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
+              >
+                <span className="relative z-10 text-emerald-400 font-black italic uppercase tracking-tighter text-sm">
+                  czytaj więcej ↗
+                </span>
+              </button>
+
               <button
                 type="button"
                 disabled={!!postMatchConferenceOutcome}
@@ -617,6 +621,13 @@ export const PostMatchStudioView: React.FC = () => {
           >
             &larr; WRÓĆ DO ANALIZY
           </button>
+          <button
+            onClick={handleReturnToDashboard}
+            className="absolute right-6 px-6 py-2 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 font-black italic uppercase tracking-widest text-[10px] transition-all hover:bg-white/10 hover:text-white active:scale-95 active:translate-y-[2px]"
+            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
+          >
+            ZAMKNIJ
+          </button>
           <div className="text-center">
              <h2 className="text-5xl font-black italic uppercase tracking-tighter text-white leading-none">WYNIKI SPOTKAŃ</h2>
              <p className="text-blue-500 text-xs font-black uppercase tracking-[0.4em] mt-2">
@@ -631,14 +642,6 @@ export const PostMatchStudioView: React.FC = () => {
           {renderResultsSection("1. Liga", currentRoundResults?.league2Results || [], "#3b82f6", "L_PL_2")}
           {renderResultsSection("2. Liga", currentRoundResults?.league3Results || [], "#10b981", "L_PL_3")}
        </div>
-
-       {/* X BUTTON — top-right corner */}
-       <button
-         onClick={handleReturnToDashboard}
-         className="absolute top-0 right-0 w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-slate-300 hover:bg-white/20 hover:text-white transition-all active:scale-95 z-10 text-lg font-black"
-       >
-         ✕
-       </button>
 
     </div>
   );

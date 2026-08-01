@@ -3,6 +3,12 @@ import { MatchHistoryEntry } from '../types';
 // To jest nasza lokalna "Baza Danych" w pamięci (Runtime Database)
 let matchHistory: MatchHistoryEntry[] = [];
 
+// Indeks pomocniczy: klucz "sezon::matchId" -> pozycja w matchHistory.
+// Bez niego logMatch() musiał przy KAŻDYM zapisywanym meczu przeszukiwać liniowo
+// całą (rosnącą z każdym sezonem) tablicę, żeby sprawdzić czy to duplikat.
+let matchIndex: Map<string, number> = new Map();
+const indexKey = (season: number, matchId: string) => `${season}::${matchId}`;
+
 const toArchivedSummary = (entry: MatchHistoryEntry): MatchHistoryEntry => ({
   matchId: entry.matchId,
   date: entry.date,
@@ -25,10 +31,8 @@ const toArchivedSummary = (entry: MatchHistoryEntry): MatchHistoryEntry => ({
 export const MatchHistoryService = {
   // Funkcja dodająca nowy wpis
   logMatch: (entry: MatchHistoryEntry) => {
-    const duplicateIndex = matchHistory.findIndex(
-      e => e.matchId === entry.matchId && e.season === entry.season
-    );
-    if (duplicateIndex !== -1) {
+    const duplicateIndex = matchIndex.get(indexKey(entry.season, entry.matchId));
+    if (duplicateIndex !== undefined) {
       matchHistory = matchHistory.map((existing, index) =>
         index === duplicateIndex ? entry : existing
       );
@@ -36,6 +40,7 @@ export const MatchHistoryService = {
       return;
     }
     matchHistory.push(entry);
+    matchIndex.set(indexKey(entry.season, entry.matchId), matchHistory.length - 1);
     console.log(`[MatchHistory] Zapisano mecz: ${entry.homeTeamId} vs ${entry.awayTeamId}`);
   },
 
@@ -66,5 +71,6 @@ export const MatchHistoryService = {
   // Funkcja czyszcząca (np. przy nowej grze)
   clear: () => {
     matchHistory = [];
+    matchIndex.clear();
   }
 };

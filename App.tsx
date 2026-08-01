@@ -29,7 +29,7 @@ import { StaffSearchView } from './components/views/StaffSearchView';
 import { TransferNewsView } from './components/views/TransferNewsView';
 import { AiMarketNewsView } from './components/views/AiMarketNewsView';
 import { PreMatchCupStudioView } from './PolishCupEngine/PreMatchCupStudioView';
-import { MatchLiveViewPolishCupSimulation } from './PolishCupEngine/MatchLiveViewPolishCupSimulation';
+import { MatchLiveViewPolishCupV2 as MatchLiveViewPolishCupSimulation } from './PolishCupEngine/MatchLiveViewPolishCupV2';
 import { PostMatchCupStudioView } from './PolishCupEngine/PostMatchCupStudioView';
 import { ScoreResultsPolishCup } from './PolishCupEngine/ScoreResultsPolishCup';
 import { CoachCard } from './components/views/CoachCard';

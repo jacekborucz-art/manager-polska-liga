@@ -166,6 +166,99 @@ import { ManagerJobService } from '../services/ManagerJobService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
 import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { MediaInterviewService, SeasonInterviewSituation } from '../services/MediaInterviewService';
+import { PerfProfilerService } from '../services/PerfProfilerService';
+
+// ── DIAGNOSTYKA WYDAJNOŚCI (tymczasowe, do usunięcia po znalezieniu wąskiego gardła) ──
+// Owija metody poniższych serwisów pomiarem czasu. Użycie w konsoli:
+//   showPerfReport()  -> lista serwis.metoda wg łącznego czasu
+//   resetPerfReport() -> wyczyść zebrane dane
+[
+  ['StadiumExpansionService', StadiumExpansionService],
+  ['TrainingFacilityService', TrainingFacilityService],
+  ['AiFriendlyGeneratorService', AiFriendlyGeneratorService],
+  ['AiFriendlyMatchSimulator', AiFriendlyMatchSimulator],
+  ['AcademyService', AcademyService],
+  ['ScoutService', ScoutService],
+  ['NationalTeamService', NationalTeamService],
+  ['ELDrawService', ELDrawService],
+  ['CONFDrawService', CONFDrawService],
+  ['SeasonTemplateGenerator', SeasonTemplateGenerator],
+  ['LeagueScheduleGenerator', LeagueScheduleGenerator],
+  ['CalendarEngine', CalendarEngine],
+  ['SquadGeneratorService', SquadGeneratorService],
+  ['LineupService', LineupService],
+  ['BackgroundMatchProcessor', BackgroundMatchProcessor],
+  ['RelegationPlayoffSimulator', RelegationPlayoffSimulator],
+  ['BackgroundPlayOffMatchPolishCup', BackgroundPlayOffMatchPolishCup],
+  ['BackgroundMatchProcessorPolishCup', BackgroundMatchProcessorPolishCup],
+  ['RecoveryService', RecoveryService],
+  ['MailService', MailService],
+  ['TrainingService', TrainingService],
+  ['TrainingAssistantService', TrainingAssistantService],
+  ['AiWeeklyTrainingService', AiWeeklyTrainingService],
+  ['WeeklyMotivationService', WeeklyMotivationService],
+  ['SeasonTransitionService', SeasonTransitionService],
+  ['PolishEuropeanQualificationService', PolishEuropeanQualificationService],
+  ['PlayerReputationGrowthService', PlayerReputationGrowthService],
+  ['LeagueStatsService', LeagueStatsService],
+  ['FinanceService', FinanceService],
+  ['BoardFinanceMonitorService', BoardFinanceMonitorService],
+  ['PolishCupDrawService', PolishCupDrawService],
+  ['CLDrawService', CLDrawService],
+  ['SuperCupService', SuperCupService],
+  ['UEFASuperCupService', UEFASuperCupService],
+  ['CoachService', CoachService],
+  ['StaffGenerationService', StaffGenerationService],
+  ['ClubManagementService', ClubManagementService],
+  ['SportingDirectorService', SportingDirectorService],
+  ['RefereeService', RefereeService],
+  ['FreeAgentService', FreeAgentService],
+  ['AiContractService', AiContractService],
+  ['AiScoutingService', AiScoutingService],
+  ['AiTransferDecisionService', AiTransferDecisionService],
+  ['BackgroundMatchProcessorCL', BackgroundMatchProcessorCL],
+  ['BackgroundMatchUEFASuperCup', BackgroundMatchUEFASuperCup],
+  ['SaveArchiveService', SaveArchiveService],
+  ['ScoutAssistantService', ScoutAssistantService],
+  ['ChampionshipHistoryService', ChampionshipHistoryService],
+  ['TransferBuyerLogicService', TransferBuyerLogicService],
+  ['TransferSellerLogicService', TransferSellerLogicService],
+  ['TransferPlayerDecisionService', TransferPlayerDecisionService],
+  ['TransferExecutionService', TransferExecutionService],
+  ['IncomingTransferService', IncomingTransferService],
+  ['FreeAgentNegotiationService', FreeAgentNegotiationService],
+  ['PrestigeTransferGuardService', PrestigeTransferGuardService],
+  ['NationalTeamSimulator', NationalTeamSimulator],
+  ['WorldNationalFriendlyService', WorldNationalFriendlyService],
+  ['NationsLeagueService', NationsLeagueService],
+  ['EuroQualifiersService', EuroQualifiersService],
+  ['WorldCupQualifiersService', WorldCupQualifiersService],
+  ['EuroTournamentService', EuroTournamentService],
+  ['UefaNationalRankingService', UefaNationalRankingService],
+  ['WCQPlayoffService', WCQPlayoffService],
+  ['WorldCupService', WorldCupService],
+  ['WorldCupHistoryBackfillService', WorldCupHistoryBackfillService],
+  ['PlayerCareerService', PlayerCareerService],
+  ['LoanDevelopmentService', LoanDevelopmentService],
+  ['PlayerContractMindflowService', PlayerContractMindflowService],
+  ['PlayerMarketVisibilityService', PlayerMarketVisibilityService],
+  ['MysteryAgentService', MysteryAgentService],
+  ['ReserveScheduleService', ReserveScheduleService],
+  ['ReserveOpponentGeneratorService', ReserveOpponentGeneratorService],
+  ['ReserveMatchEngine', ReserveMatchEngine],
+  ['PlayerAttributesGenerator', PlayerAttributesGenerator],
+  ['PlayerDevelopmentService', PlayerDevelopmentService],
+  ['PlayerFormService', PlayerFormService],
+  ['EuropeanPlayerStatsService', EuropeanPlayerStatsService],
+  ['PlayerMoraleService', PlayerMoraleService],
+  ['PlayerTransferRequestDialogService', PlayerTransferRequestDialogService],
+  ['PzpnDisciplinaryService', PzpnDisciplinaryService],
+  ['ManagerExperienceService', ManagerExperienceService],
+  ['ManagerJobService', ManagerJobService],
+  ['LeagueTeamOfWeekService', LeagueTeamOfWeekService],
+  ['PreMatchPressConferenceService', PreMatchPressConferenceService],
+  ['MediaInterviewService', MediaInterviewService],
+].forEach(([name, svc]) => PerfProfilerService.instrument(svc, name as string));
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -631,7 +724,38 @@ const processAiToAiLoanMoves = (
     score: number;
   }> = [];
 
+  // PERF (znalezione i naprawione 2026-07-30): ta funkcja (w oknie transferowym, gdy
+  // maxDailyLoans > 0 — czyli w praktyce blisko połowy dni okna) dla KAŻDEGO klubu AI
+  // wystawiającego zawodników na wypożyczenie sprawdzała WSZYSTKICH innych klubów AI jako
+  // potencjalnych kupujących — potrójna pętla sprzedający×zawodnik×kupujący, bez żadnego
+  // rozłożenia w czasie. Zmierzone przez PerfProfilerService: ~750 000 wywołań dziennie
+  // IncomingTransferService.shouldGenerateLoanOffer i ~427 000 dziennie getLoanSquadNeed —
+  // drugi po AiContractService.processAiRecruitment/processAiPreContractOpportunities/
+  // processAiInterestedPlayerTargeting (patrz komentarze w AiContractService.tsx) wkład
+  // w łączny czas przetwarzania dnia.
+  //
+  // FIX: rozłożenie na 3 dni po stronie SPRZEDAJĄCEGO klubu (dayOfYear + hash(clubId) +
+  // modulo 3) — dokładnie ten sam wzorzec co w AiContractService.tsx, tu z ponownym
+  // wykorzystaniem już istniejącej IncomingTransferService.hashString zamiast pisania
+  // nowej funkcji haszującej.
+  //
+  // BEZPIECZEŃSTWO (nie zmniejsza liczby wypożyczeń, wypożyczenia nie stają się "martwe"):
+  // 1) i tak tylko `maxDailyLoans` (1-2) najlepszych ofert spośród WSZYSTKICH znalezionych
+  //    kandydatów jest wybieranych na końcu (linia z `.slice(0, maxDailyLoans)` niżej) —
+  //    reszta kandydatów i tak jest odrzucana, więc przeszukanie mniejszej (ale wciąż
+  //    reprezentatywnej, bo rotującej) grupy sprzedających nie zmienia ILE wypożyczeń
+  //    dochodzi do skutku dziennie/tygodniowo, tylko z KTÓREGO klubu akurat danego dnia;
+  // 2) `player.isAvailableForLoan` nie znika po jednym dniu — zawodnik zostaje wystawiony
+  //    na wypożyczenie, dopóki nie zostanie faktycznie wypożyczony (ustawiane osobno,
+  //    patrz funkcja ustalająca listę wypożyczeń wyżej w tym pliku), więc pominięty dziś
+  //    sprzedający zostanie sprawdzony ponownie za maks. 2 dni — żaden kandydat nie znika
+  //    z rynku na stałe.
+  const dayOfYear = Math.floor(
+    (currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 0).getTime()) / 86_400_000
+  );
+
   aiClubs.forEach(sellerClub => {
+    if ((dayOfYear + IncomingTransferService.hashString(sellerClub.id)) % 3 !== 0) return;
     const sellerSquad = players[sellerClub.id] || [];
     sellerSquad
       .filter(player =>
@@ -2038,7 +2162,19 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         return queueGeneratedSquad(newSquad);
     }
 
-    const newSquad = withMoraleState(SquadGeneratorService.generateSquadForClub(clubId));
+    // BUG (found 2026-07-29): SquadGeneratorService.generateSquadForClub() builds player ids
+    // purely from `clubId + squad index`, with no randomness. This branch only runs when
+    // `players[clubId]` does not exist yet (checked above), so this club currently has no squad
+    // of its own — but a player originally generated for this exact clubId could already be
+    // active elsewhere: released to FREE_AGENTS by AiContractService, or transferred away to a
+    // completely different club. Recreating the same deterministic ids here would duplicate that
+    // player across two unrelated clubs (or FREE_AGENTS + a club), which crashes React's list
+    // reconciliation wherever every club's squad gets flattened into one list (JobMarketView).
+    // FIX: never bring back an id that is currently active anywhere else in the world.
+    const allIdsInUse = new Set(Object.values(players).flat().map(player => player.id));
+    const newSquad = withMoraleState(
+      SquadGeneratorService.generateSquadForClub(clubId).filter(player => !allIdsInUse.has(player.id))
+    );
     return queueGeneratedSquad(newSquad);
 }, [players, clubs, currentDate, userTeamId]);
 
@@ -2938,6 +3074,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       seasonNumber
     );
     const transitionResult = SeasonTransitionService.processSquadTransition(playersAfterReputationGrowth, updatedClubs, seasonEndDate, userTeamId);
+    if (transitionResult.expiredFreeAgentCount > 0) {
+      DebugLoggerService.log('SQUAD_REVIEW', `Koniec kariery wolnych agentów bez klubu przez 2 sezony: ${transitionResult.expiredFreeAgentCount} zawodników opuściło świat gry.`, true);
+    }
     const confEuropeTeamIds = polishEuropeanQualification.conferenceLeagueR2TeamIds;
     const europeanQualificationIds = new Set([
       polishEuropeanQualification.championsLeagueR2TeamId,
@@ -3351,6 +3490,90 @@ if (userTeamId) {
     return { nationalTeams: currentTeams, players: currentPlayers, generatedCount, updateCount };
   };
 
+  // BUG (found 2026-07-29): SquadGeneratorService.generateSquadForClub() builds player ids
+  // purely from `clubId + squad index`, with no randomness. AiContractService periodically
+  // releases "surplus" players from background/lower-league (mainly L_PL_4) clubs into
+  // FREE_AGENTS, and whenever such a club's squad then drops below 18 players, the background
+  // simulation code (BackgroundMatchProcessor.ensureFourthLeagueSquads,
+  // ThirdLeagueBackgroundService.ensureHiddenMatchReadySquad, and the fallback branch of
+  // getOrGenerateSquad above) regenerated a fresh squad with those exact same deterministic ids
+  // — resurrecting the very players that had just been released. Every time this happened again
+  // in a later season, another copy of the same id was appended to FREE_AGENTS, because nothing
+  // ever checked for an existing entry there. In one real save this had produced a FREE_AGENTS
+  // list of 21,675 entries with some player ids duplicated 25-31 times. Rendering all clubs'
+  // squads flattened into a single list (the only screen that does this is JobMarketView, which
+  // uses `key={player.id}`) crashed React's reconciliation with "Encountered two children with
+  // the same key", and made the market filters appear to silently stop updating until the whole
+  // view was remounted (e.g. by opening a player card and navigating back).
+  //
+  // The write-site fixes above (AiContractService._appendUniqueToFreeAgents, and the
+  // freeAgentIds filters in BackgroundMatchProcessor / ThirdLeagueBackgroundService /
+  // getOrGenerateSquad) stop this from getting any worse going forward, but they cannot undo
+  // duplicates that are already baked into the JSON of a save created before this fix.
+  //
+  // FIX: repair FREE_AGENTS on every load, so a previously-corrupted save is cleaned up the
+  // moment it is opened, with no manual editing of the save file required. Re-saving afterwards
+  // then produces a clean file. Preference order when the same id appears more than once:
+  // 1) if the id is also present in an actual club's squad, that club assignment is kept and the
+  //    stale FREE_AGENTS copy is dropped (an employed player is the more current truth);
+  // 2) otherwise, only the first FREE_AGENTS occurrence of that id is kept.
+  // BUG (found 2026-07-29): two related root causes let the same deterministic player id end up
+  // active in more than one place in `players` at once:
+  // 1) FREE_AGENTS growth loop — AiContractService releases a "surplus" background/lower-league
+  //    player to FREE_AGENTS, then a later squad regeneration (BackgroundMatchProcessor,
+  //    ThirdLeagueBackgroundService, getOrGenerateSquad — all in this file/services folder)
+  //    recreated the exact same deterministic id, appending yet another copy to FREE_AGENTS on
+  //    every cycle. One real save had 21,675 FREE_AGENTS entries with some ids duplicated 25-31
+  //    times.
+  // 2) Cross-club duplication — the AI youth-intake generator (AiContractService.tsx,
+  //    generateSeasonYouthIntakeForAiClubs / processAiDeadlineAcademyFallback) and the same
+  //    squad-regeneration functions above only checked a player's *own* club/FREE_AGENTS for slot
+  //    re-use, never the rest of the world. If that player was later transferred away to a
+  //    completely unrelated club, their old slot looked "free" again and got regenerated with the
+  //    same id — leaving the same id active in both the real destination club and a freshly
+  //    generated impostor back at the origin club (occasionally a third club too).
+  // Both write-side loops are now fixed (see the FIX comments at each site), so this cannot get
+  // any worse going forward, but a save created before this fix still has the corruption baked
+  // into its JSON. Rendering all clubs' squads flattened into a single list (only JobMarketView
+  // does this, keyed by `player.id`) crashed React's list reconciliation with "Encountered two
+  // children with the same key", making the transfer/free-agent filters look like they had
+  // silently stopped updating.
+  // FIX: repair every duplicate id on load, so a previously-corrupted save becomes clean the
+  // moment it's opened — no manual save-editing required — and re-saving afterwards produces a
+  // clean file. Preference order when the same id appears more than once:
+  // 1) an id claimed by a real club squad wins over a stale FREE_AGENTS copy, and over a second
+  //    club (the first club encountered, in stable save-file order, keeps the player);
+  // 2) within FREE_AGENTS itself, only the first occurrence of an id is kept.
+  const repairDuplicatePlayerIds = (
+    playersMap: Record<string, Player[]>
+  ): Record<string, Player[]> => {
+    const claimedIds = new Set<string>();
+    let anyChanged = false;
+
+    const nonFreeAgentEntries = Object.entries(playersMap).filter(([clubId]) => clubId !== 'FREE_AGENTS');
+    const dedupedClubs: Record<string, Player[]> = {};
+    for (const [clubId, squad] of nonFreeAgentEntries) {
+      const dedupedSquad = squad.filter(player => {
+        if (claimedIds.has(player.id)) return false;
+        claimedIds.add(player.id);
+        return true;
+      });
+      if (dedupedSquad.length !== squad.length) anyChanged = true;
+      dedupedClubs[clubId] = dedupedSquad;
+    }
+
+    const freeAgents = playersMap['FREE_AGENTS'] || [];
+    const dedupedFreeAgents = freeAgents.filter(player => {
+      if (claimedIds.has(player.id)) return false;
+      claimedIds.add(player.id);
+      return true;
+    });
+    if (dedupedFreeAgents.length !== freeAgents.length) anyChanged = true;
+
+    if (!anyChanged) return playersMap;
+    return { ...dedupedClubs, 'FREE_AGENTS': dedupedFreeAgents };
+  };
+
   const loadGameFromFile = (data: SaveState): void => {
     const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
     const loadedClubById = new Map(loadedClubs.map(club => [club.id, club]));
@@ -3387,7 +3610,9 @@ if (userTeamId) {
     setRuntimeSimulationSeed(generateRuntimeSeed());
     setClubs(ensuredNationalCoachData.updatedClubs);
     setLeagues(data.leagues);
-    setPlayers(repairedNationalData.players);
+    // FIX: see repairDuplicatePlayerIds above — cleans up any duplicate-player-id corruption
+    // already baked into the save being loaded (from before the write-site fixes).
+    setPlayers(repairDuplicatePlayerIds(repairedNationalData.players));
     setReserves(data.reserves);
     setReserveReleaseDirective(data.reserveReleaseDirective ?? null);
     setReserveCoachId(data.reserveCoachId);
@@ -5766,6 +5991,15 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         }),
       };
     });
+
+    setMessages(prev => prev.map(m =>
+      m.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
+      m.metadata.playerId === playerId &&
+      (m.metadata.requestType === 'ROLE' || m.metadata.requestType === 'ROLE_PLAYTIME' ||
+       m.metadata.requestType === 'MINUTES' || m.metadata.requestType === 'DEVELOPMENT_EXIT')
+        ? { ...m, metadata: { ...m.metadata, resolved: true } }
+        : m
+    ));
   }, [allFixtures, clubs, currentDate, userTeamId]);
 
   const resolvePlayerTransferConversation = useCallback((playerId: string, result: PlayerTransferConversationResult): void => {
@@ -5835,6 +6069,14 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         };
       }),
     }));
+
+    setMessages(prev => prev.map(m =>
+      m.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
+      m.metadata.playerId === playerId &&
+      m.metadata.requestType === 'TRANSFER_LIST_OBJECTION'
+        ? { ...m, metadata: { ...m.metadata, resolved: true } }
+        : m
+    ));
   }, [currentDate, userTeamId]);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5913,6 +6155,14 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         return updated;
       }),
     }));
+
+    setMessages(prev => prev.map(m =>
+      m.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
+      m.metadata.playerId === playerId &&
+      m.metadata.requestType === 'TRANSFER_LIST'
+        ? { ...m, metadata: { ...m.metadata, resolved: true } }
+        : m
+    ));
   }, [currentDate, userTeamId]);
 
   const ensureWinterCampInviteState = useCallback((baseDate: Date = currentDate) => {
@@ -10459,7 +10709,7 @@ const finalResult: SimulationOutput = {
               sender: 'Zarząd Klubu',
               role: 'Prezes Zarządu',
               subject: 'Rezerwy: konieczne zmniejszenie kadry',
-              body: `Kadra rezerw liczy ${reserves.length} zawodników i przekracza limit ${RESERVE_SQUAD_LIMIT}.\n\nWskaż ${reserveOverflow} zawodników do zwolnienia z poniższej listy kandydatów. Lista jest szersza niż wymagane odejścia, aby sztab mógł ochronić wybranych piłkarzy i wskazać innych.\n\nKandydaci:\n${candidateNames}\n\nTermin decyzji: ${deadline.toLocaleDateString('pl-PL')}. Jeśli sztab nie podejmie decyzji, zarząd zwolni najsłabszych zawodników automatycznie.`,
+              body: `Szanowny Panie Trenerze,\n\nZarząd Klubu informuje, że obecna liczebność kadry rezerw przekracza możliwości organizacyjne oraz finansowe klubu. W związku z koniecznością optymalizacji składu prosimy o wskazanie ${reserveOverflow} zawodników przeznaczonych do zwolnienia lub wystawienia na listę transferową.\n\nW celu ułatwienia decyzji przygotowano listę zawodników, którzy według działu sportowego spełniają kryteria kwalifikujące ich do odejścia. Lista ma charakter wyłącznie rekomendacyjny — sztab szkoleniowy może zdecydować o pozostawieniu wybranych zawodników i wskazać innych piłkarzy do opuszczenia klubu.\n\n${candidateNames}\n\nTermin przekazania decyzji: ${deadline.toLocaleDateString('pl-PL')}.\n\nJeżeli decyzja nie zostanie podjęta w wyznaczonym terminie, Zarząd Klubu, kierując się rekomendacjami działu sportowego, dokona redukcji kadry rezerw we własnym zakresie.\n\nZ poważaniem,\nZarząd Klubu`,
               date: new Date(nextDay),
               isRead: false,
               type: MailType.BOARD,
@@ -12190,6 +12440,13 @@ const finalResult: SimulationOutput = {
         const totalMaintenance = signedScoutYouths.reduce((sum, yp) => sum + (yp.weeklyMaintenanceCost ?? 0), 0);
         setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - totalMaintenance } : c));
         addFinanceLog(userTeamId, `Utrzymanie wychowanków skauta (${signedScoutYouths.length})`, -totalMaintenance, nextDay);
+      }
+
+      // 8. Tygodniowy budżet operacyjny akademii
+      if (academy.operationalBudgetWeekly > 0) {
+        const weeklyBudgetCost = academy.operationalBudgetWeekly;
+        setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - weeklyBudgetCost } : c));
+        addFinanceLog(userTeamId, `Budżet operacyjny akademii`, -weeklyBudgetCost, nextDay);
       }
     }
 
@@ -17118,7 +17375,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       type: MailType.SYSTEM,
       priority: 90
     }));
-    setMessages(prev => [...arrivalMails, ...prev]);
+    prependUniqueMessages(arrivalMails);
     if (arriving.length > 0) {
       showGameNotification({
         title: 'Zawodnik zameldował się',
@@ -17128,7 +17385,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         actionLabel: 'Przejdź do składu →'
       });
     }
-  }, [currentDate, userTeamId, players, lineups, showGameNotification, navigateTo]);
+  }, [currentDate, userTeamId, players, lineups, showGameNotification, navigateTo, prependUniqueMessages]);
 
   useEffect(() => {
     if (targetJumpTime !== null && viewState !== ViewState.CUP_DRAW) {

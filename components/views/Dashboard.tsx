@@ -17,6 +17,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import saveButton from '../../Graphic/buttons/save.png';
 import { exportSaveToFile } from '../../services/SaveGameService';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { RefereeService } from '../../services/RefereeService';
 import edytorButton from '../../Graphic/buttons/edytor.png';
 import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
 import winnerPolishImg from '../../Graphic/cup/winnerpolish.png';
@@ -45,10 +46,12 @@ export const Dashboard: React.FC = () => {
     seasonTemplate,
     messages,
     markMessageRead,
+    setMessages,
 
    processBackgroundCupMatches,
    processCLMatchDay,
    coaches,
+   staffMembers,
    viewCoachDetails,
    viewPlayerDetails,
    nationalTeams,
@@ -90,12 +93,14 @@ export const Dashboard: React.FC = () => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
-  const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers'>('main');
+  const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers' | 'trash'>('main');
+  const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
   const [isWinterCampLocationOpen, setIsWinterCampLocationOpen] = useState(false);
   const [isWinterCampProgramOpen, setIsWinterCampProgramOpen] = useState(false);
   const [isSummerCampLocationOpen, setIsSummerCampLocationOpen] = useState(false);
   const [isSummerCampProgramOpen, setIsSummerCampProgramOpen] = useState(false);
   const [activeHint, setActiveHint] = useState<string | null>(null);
+  const [isDebugStatsModalOpen, setIsDebugStatsModalOpen] = useState(false);
   const handleSaveGame = async () => {
     showGameNotification({
       title: 'Zapisywanie gry',
@@ -236,6 +241,17 @@ const boardConfidence = useMemo(() => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleDebugStatsShortcut = (event: KeyboardEvent) => {
+      if (event.ctrlKey && (event.key === 'd' || event.key === 'D')) {
+        event.preventDefault();
+        setIsDebugStatsModalOpen(prev => !prev);
+      }
+    };
+    document.addEventListener('keydown', handleDebugStatsShortcut);
+    return () => document.removeEventListener('keydown', handleDebugStatsShortcut);
   }, []);
 
   const formatDate = (date: Date) => {
@@ -613,6 +629,17 @@ const boardConfidence = useMemo(() => {
     return [...filteredClubs, ...filteredNationalTeams, ...filteredPlayers, ...filteredCoaches].slice(0, 10);
   }, [searchTerm, clubs, coaches, players, nationalTeams]);
 
+  const getGameDebugStats = () => ({
+    totalPlayers: Object.values(players).flat().length,
+    totalCoaches: Object.keys(coaches).length,
+    totalStaff: Object.keys(staffMembers).length,
+    totalReferees: RefereeService.pool.length,
+    totalClubs: clubs.length,
+    totalNationalTeams: nationalTeams.length,
+    totalMessages: messages.length,
+    totalMatchHistoryEntries: MatchHistoryService.getAll().length,
+  });
+
   const getMailIcon = (type: MailType) => {
     switch (type) {
       case MailType.BOARD: return '🏛️';
@@ -646,6 +673,7 @@ const boardConfidence = useMemo(() => {
 
     switch (mail.metadata?.type) {
       case 'PLAYER_MORALE_REQUEST':
+        return mail.metadata.resolved ? null : 'Odpowiedz';
       case 'INTERVIEW_REQUEST':
         return 'Odpowiedz';
       case 'SPORTING_DIRECTOR_OBJECTIVE': {
@@ -697,19 +725,39 @@ const boardConfidence = useMemo(() => {
   };
 
   const transferMessages = useMemo(
-    () => messages.filter(isTransferOfferMail),
+    () => messages.filter(mail => !mail.isTrashed && isTransferOfferMail(mail)),
     [messages]
   );
 
   const mainMessages = useMemo(
-    () => messages.filter(mail => !isTransferOfferMail(mail)),
+    () => messages.filter(mail => !mail.isTrashed && !isTransferOfferMail(mail)),
     [messages]
   );
 
-  const activeMailboxMessages = activeMailboxTab === 'transfers' ? transferMessages : mainMessages;
+  const trashedMessages = useMemo(
+    () => messages.filter(mail => mail.isTrashed),
+    [messages]
+  );
+
+  const activeMailboxMessages = activeMailboxTab === 'transfers' ? transferMessages : activeMailboxTab === 'trash' ? trashedMessages : mainMessages;
   const unreadMainMessagesCount = mainMessages.filter(mail => !mail.isRead).length;
   const unreadTransferMessagesCount = transferMessages.filter(mail => !mail.isRead).length;
   const unreadActiveMailboxMessagesCount = activeMailboxMessages.filter(mail => !mail.isRead).length;
+
+  const trashMail = (id: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, isTrashed: true } : m));
+  const restoreMail = (id: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, isTrashed: false } : m));
+  const emptyTrash = () => {
+    if (trashedMessages.length === 0) return;
+    setShowEmptyTrashConfirm(true);
+  };
+  const confirmEmptyTrash = () => {
+    setMessages(prev => prev.filter(m => !m.isTrashed));
+    setShowEmptyTrashConfirm(false);
+  };
+  const markAllAsRead = () => {
+    const idsToMark = new Set(activeMailboxMessages.map(m => m.id));
+    setMessages(prev => prev.map(m => idsToMark.has(m.id) ? { ...m, isRead: true } : m));
+  };
   const clubPrimary = myClub?.colorsHex[0] ?? '#2563eb';
   const clubSecondary = myClub?.colorsHex[1] ?? '#0f172a';
   const squadButtonKits = useMemo(() => {
@@ -1701,13 +1749,44 @@ const boardConfidence = useMemo(() => {
                         <span className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[7px] font-black italic uppercase tracking-tighter shadow-md border border-amber-300/60 leading-none">Nowa</span>
                       )}
                     </button>
+                    <button
+                      onClick={() => setActiveMailboxTab('trash')}
+                      className={`rounded-[12px] px-4 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter relative ${
+                        activeMailboxTab === 'trash'
+                          ? 'bg-white text-slate-950 shadow-lg'
+                          : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      Kosz ({trashedMessages.length})
+                    </button>
                   </div>
                 </div>
-                {unreadActiveMailboxMessagesCount > 0 && (
-                   <span className="text-[9px] text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shadow-inner font-black italic uppercase tracking-tighter">
-                     {unreadActiveMailboxMessagesCount} NOWE
-                   </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {activeMailboxTab === 'trash' ? (
+                    <button
+                      onClick={emptyTrash}
+                      disabled={trashedMessages.length === 0}
+                      className="text-[9px] text-rose-300 bg-rose-500/10 px-3 py-1.5 rounded-full border border-rose-500/20 shadow-inner font-black italic uppercase tracking-tighter disabled:opacity-30 disabled:cursor-not-allowed hover:bg-rose-500/20 transition-colors"
+                    >
+                      Opróżnij kosz
+                    </button>
+                  ) : (
+                    <>
+                      {unreadActiveMailboxMessagesCount > 0 && (
+                         <span className="text-[9px] text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shadow-inner font-black italic uppercase tracking-tighter">
+                           {unreadActiveMailboxMessagesCount} NOWE
+                         </span>
+                      )}
+                      <button
+                        onClick={markAllAsRead}
+                        disabled={unreadActiveMailboxMessagesCount === 0}
+                        className="text-[9px] text-slate-300 bg-white/[0.04] px-3 py-1.5 rounded-full border border-white/10 shadow-inner font-black italic uppercase tracking-tighter disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] transition-colors"
+                      >
+                        Oznacz wszystkie jako przeczytane
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               
                <div className="h-[700px] overflow-y-auto custom-scrollbar p-5 space-y-2.5">
@@ -1748,6 +1827,11 @@ const boardConfidence = useMemo(() => {
                                       {actionLabel}
                                     </span>
                                   )}
+                                  {!actionLabel && mail.metadata?.type === 'PLAYER_MORALE_REQUEST' && mail.metadata.resolved && (
+                                    <span className="shrink-0 rounded-full border border-slate-500/35 bg-slate-500/15 px-2 py-0.5 text-[8px] text-slate-300 shadow-[0_0_12px_rgba(100,116,139,0.12)] font-black italic uppercase tracking-tighter">
+                                      Wykonano
+                                    </span>
+                                  )}
                                 </div>
                                 <span className="text-[10px] text-slate-500 shrink-0 font-black italic uppercase tracking-tighter">
                                    {formatMailDate(mail.date)}
@@ -1764,6 +1848,20 @@ const boardConfidence = useMemo(() => {
                              <div className={`w-2 h-12 rounded-full ${actionLabel ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.9)]' : 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,1)]'}`} />
                           )}
                        </div>
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           if (activeMailboxTab === 'trash') {
+                             restoreMail(mail.id);
+                           } else {
+                             trashMail(mail.id);
+                           }
+                         }}
+                         title={activeMailboxTab === 'trash' ? 'Przywróć' : 'Usuń'}
+                         className="absolute top-2 right-2 z-20 w-6 h-6 rounded-full flex items-center justify-center text-slate-400 bg-slate-950/60 border border-white/10 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-rose-500/40 hover:border-rose-400/50 transition-all"
+                       >
+                         {activeMailboxTab === 'trash' ? '↺' : '✕'}
+                       </button>
                     </div>
                     );
                    })
@@ -1942,6 +2040,56 @@ const boardConfidence = useMemo(() => {
           </div>
         </div>
       )}
+
+      {showEmptyTrashConfirm && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-slate-900 border border-white/10 rounded-[32px] p-8 flex flex-col items-center gap-6 shadow-2xl w-80">
+            <span className="text-4xl">🗑️</span>
+            <div className="text-center">
+              <p className="text-sm font-black uppercase tracking-widest text-white mb-2">OPRÓŻNIĆ KOSZ</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider">Ta decyzja jest nieodwracalna</p>
+            </div>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setShowEmptyTrashConfirm(false)}
+                className="flex-1 py-3 rounded-[20px] bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:border-white/20 transition-all">
+                ANULUJ
+              </button>
+              <button onClick={confirmEmptyTrash}
+                className="flex-1 py-3 rounded-[20px] bg-red-600 border border-red-400 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-500 transition-all">
+                USUŃ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDebugStatsModalOpen && (() => {
+        const stats = getGameDebugStats();
+        return (
+          <div className="fixed inset-0 z-[2000] bg-black/70 flex items-center justify-center">
+            <div className="bg-slate-900 border border-white/10 rounded-md p-6 w-96 max-w-[90vw] text-slate-200 text-sm">
+              <p className="mb-4">Statystyki gry</p>
+              <div className="space-y-1 text-xs">
+                <p>Sezon: {seasonNumber}</p>
+                <p>Zawodnicy razem (kluby + wolni agenci): {stats.totalPlayers}</p>
+                <p>Trenerzy: {stats.totalCoaches}</p>
+                <p>Sztab (staff): {stats.totalStaff}</p>
+                <p>Sędziowie: {stats.totalReferees}</p>
+                <p>Kluby: {stats.totalClubs}</p>
+                <p>Reprezentacje narodowe: {stats.totalNationalTeams}</p>
+                <p>Wiadomości w skrzynce: {stats.totalMessages}</p>
+                <p>Wpisy w historii meczów (MatchHistoryService): {stats.totalMatchHistoryEntries}</p>
+              </div>
+              <button
+                onClick={() => setIsDebugStatsModalOpen(false)}
+                className="mt-4 w-full py-2 rounded bg-white/10 text-xs"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {seasonCelebration && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85" onClick={clearSeasonCelebration}>

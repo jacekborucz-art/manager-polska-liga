@@ -60,7 +60,7 @@ export const SeasonTransitionService = {
     clubs: Club[],
     seasonEndDate: Date,
     userTeamId: string | null
-  ): { updatedPlayers: Record<string, Player[]>, retirementLogs: RetirementInfo[], releasedPlayers: Player[] } => {
+  ): { updatedPlayers: Record<string, Player[]>, retirementLogs: RetirementInfo[], releasedPlayers: Player[], expiredFreeAgentCount: number } => {
     const updatedMap = { ...playersMap };
     const logs: RetirementInfo[] = [];
 const releasedPlayers: Player[] = [];  // ← NOWA LINIA
@@ -197,7 +197,42 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
       updatedMap[clubId] = nextSquad;
     }
 
-        return { updatedPlayers: updatedMap, retirementLogs: logs, releasedPlayers };
+    // PERF/EKONOMIA RYNKU (dodane 2026-07-31): pula FREE_AGENTS nigdy wcześniej nie miała
+    // żadnego mechanizmu usuwania — zawodnicy tylko do niej trafiali (zwolnienia, nieudane
+    // negocjacje) i nigdy z niej nie znikali poza podpisaniem kontraktu. W realnym save'ie
+    // (sezon 4) dało to 15 737 wolnych agentów na 33 228 wszystkich zawodników w grze —
+    // 47% całego świata gry bez klubu — mimo że to zawodnicy w pełni zdatni do gry (mediana
+    // wieku 28 lat), po prostu AI nie nadążało ich podpisywać. Poza tym, że to nierealistyczne,
+    // każdy dodatkowy wolny agent to koszt przy KAŻDYM przeszukaniu rynku przez KAŻDY klub AI
+    // (patrz komentarze w AiContractService.processAiRecruitment) — więc ta rosnąca bez końca
+    // pula była głównym, systemowym powodem narastającego spowolnienia gry z sezonu na sezon.
+    //
+    // FIX: zawodnik niepodpisany przez AI klub przez 2 pełne cykle zmiany sezonu (czyli 2 razy
+    // ta funkcja wykona się, gdy on wciąż jest w FREE_AGENTS) opuszcza świat gry na stałe —
+    // odpowiednik zakończenia kariery / zejścia do niesymulowanych, niższych lig. Licznik lat
+    // bez klubu liczony jest z `player.history` — szukamy OSTATNIEGO (najnowszego) wpisu z
+    // `clubId === 'FREE_AGENTS'` i `toYear === null` (czyli wciąż otwartego, aktualnego pobytu
+    // na rynku — nie sumujemy wcześniejszych, zamkniętych pobytów, więc ponowne zwolnienie po
+    // tym jak zawodnik był już gdzieś podpisany, resetuje licznik od zera — to poprawne, bo
+    // interesuje nas CIĄGŁY czas bez klubu, nie sumaryczny w całej karierze).
+    //
+    // BEZPIECZEŃSTWO: jeśli zawodnik nie ma takiego wpisu w historii (np. starszy zapis sprzed
+    // wprowadzenia tego pola, dane niekompletne) — NIE usuwamy go (domyślnie bezpiecznie
+    // zachowujemy, zamiast ryzykować usunięcie danych, których nie potrafimy poprawnie ocenić).
+    const currentFreeAgents = updatedMap['FREE_AGENTS'] || [];
+    const seasonEndYear = seasonEndDate.getFullYear();
+    const remainingFreeAgents = currentFreeAgents.filter(player => {
+      const openFreeAgentEntry = [...(player.history || [])]
+        .reverse()
+        .find(h => h.clubId === 'FREE_AGENTS' && h.toYear === null);
+      if (!openFreeAgentEntry) return true;
+      const seasonsUnsigned = seasonEndYear - openFreeAgentEntry.fromYear;
+      return seasonsUnsigned < 2;
+    });
+    const expiredFreeAgentCount = currentFreeAgents.length - remainingFreeAgents.length;
+    updatedMap['FREE_AGENTS'] = remainingFreeAgents;
+
+        return { updatedPlayers: updatedMap, retirementLogs: logs, releasedPlayers, expiredFreeAgentCount };
   },
 
   /**

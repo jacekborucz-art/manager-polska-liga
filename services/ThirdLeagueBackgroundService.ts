@@ -53,8 +53,22 @@ const hasUsableStartingXI = (lineup: Lineup | undefined, squad: Player[]): lineu
   return starters.length >= 11 && starters.some(id => squad.find(player => player.id === id)?.position === PlayerPosition.GK);
 };
 
-const ensureHiddenMatchReadySquad = (club: Club, squad: Player[]): Player[] => {
-  const baseSquad = squad.length >= 18 ? squad : SquadGeneratorService.generateSquadForClub(club.id);
+const ensureHiddenMatchReadySquad = (club: Club, squad: Player[], idsInUseElsewhere: Set<string>): Player[] => {
+  // BUG (found 2026-07-29): SquadGeneratorService.generateSquadForClub() builds player ids
+  // purely from `clubId + squad index`, with no randomness. Whenever this L_PL_4 club's squad
+  // drops below 18 players — because AiContractService released a "surplus" player to
+  // FREE_AGENTS, or because a player was legitimately transferred away to a completely different
+  // club — regenerating with the same deterministic ids resurrects that exact player, so the id
+  // ends up simultaneously in this club's fresh squad AND wherever the original player actually
+  // is now (FREE_AGENTS, or an unrelated club anywhere in the world). That duplicate id crashes
+  // React's list reconciliation wherever every club's squad gets flattened into one list
+  // (JobMarketView), and the impostor can be released/transferred again next cycle, compounding
+  // duplicates over many seasons.
+  // FIX: never bring back an id that is currently active anywhere else in the world (idsInUseElsewhere,
+  // computed by the caller from the whole players map minus this club's own squad).
+  const baseSquad = squad.length >= 18
+    ? squad
+    : SquadGeneratorService.generateSquadForClub(club.id).filter(player => !idsInUseElsewhere.has(player.id));
   const readyPlayers = baseSquad.filter(canPlayHiddenMatch);
   const hasReadyGk = readyPlayers.some(player => player.position === PlayerPosition.GK);
   if (readyPlayers.length >= 11 && hasReadyGk) return baseSquad;
@@ -246,6 +260,10 @@ export const ThirdLeagueBackgroundService = {
     const dateKey = currentDate.toISOString().split('T')[0];
     const shuffledClubs = shuffle(eligibleClubs, hashString(`${dateKey}_${sessionSeed}_L_PL_4`));
     let currentPlayers = playersMap;
+    // Computed once per matchday — see the FIX note in ensureHiddenMatchReadySquad for why a
+    // regenerated squad must never resurrect an id that is currently active anywhere else in the
+    // world (FREE_AGENTS, or a different club the real player was transferred to).
+    const allIdsInUse = new Set(Object.values(playersMap).flat().map(player => player.id));
 
     for (let i = 0; i < shuffledClubs.length - 1; i += 2) {
       const home = shuffledClubs[i];
@@ -255,8 +273,18 @@ export const ThirdLeagueBackgroundService = {
       const seed = hashString(`${fixture.id}_${sessionSeed}_${home.id}_${away.id}`);
       const homeCoach = coaches[home.coachId || ''] || fallbackCoach();
       const awayCoach = coaches[away.coachId || ''] || fallbackCoach();
-      const homePlayers = ensureHiddenMatchReadySquad(home, currentPlayers[home.id] || []);
-      const awayPlayers = ensureHiddenMatchReadySquad(away, currentPlayers[away.id] || []);
+      const homeOwnIds = new Set((currentPlayers[home.id] || []).map(player => player.id));
+      const awayOwnIds = new Set((currentPlayers[away.id] || []).map(player => player.id));
+      const homePlayers = ensureHiddenMatchReadySquad(
+        home,
+        currentPlayers[home.id] || [],
+        new Set([...allIdsInUse].filter(id => !homeOwnIds.has(id)))
+      );
+      const awayPlayers = ensureHiddenMatchReadySquad(
+        away,
+        currentPlayers[away.id] || [],
+        new Set([...allIdsInUse].filter(id => !awayOwnIds.has(id)))
+      );
       const homeLineup = ensureHiddenMatchReadyLineup(home, homePlayers, lineups[home.id], homeCoach, dateKey);
       const awayLineup = ensureHiddenMatchReadyLineup(away, awayPlayers, lineups[away.id], awayCoach, dateKey);
 

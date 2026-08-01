@@ -408,6 +408,7 @@ export interface MailMessage {
   body: string;
   date: Date;
   isRead: boolean;
+  isTrashed?: boolean;
   type: MailType;
   priority: number;
    metadata?: {
@@ -482,6 +483,7 @@ export interface MailMessage {
     requestedYears?: number;
     nextFixtureId?: string;
     responseDeadline: string;
+    resolved?: boolean;
   } | {
     type: 'PLAYER_BOARD_APPEAL';
     playerId: string;
@@ -2496,6 +2498,7 @@ export interface MatchSummaryEvent {
   varDisallowed?: boolean;
   isOwnGoal?: boolean;
   ownGoalPlayerName?: string;
+  isPenaltyNoCall?: boolean;
 }
 
 export interface MatchSummary {

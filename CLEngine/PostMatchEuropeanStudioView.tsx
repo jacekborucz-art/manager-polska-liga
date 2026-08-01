@@ -355,29 +355,8 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
             <StatBar label="Strzały celne" homeVal={homeStats.shotsOnTarget} awayVal={awayStats.shotsOnTarget} hColor={homeClub.colorsHex[0]} aColor={awayClub.colorsHex[0]} />
             <StatBar label="Rzuty rożne" homeVal={homeStats.corners} awayVal={awayStats.corners} hColor={homeClub.colorsHex[0]} aColor={awayClub.colorsHex[0]} />
             <StatBar label="Przewinienia" homeVal={homeStats.fouls} awayVal={awayStats.fouls} hColor={homeClub.colorsHex[0]} aColor={awayClub.colorsHex[0]} />
-          </div>
-
-          {/* Expert Comment */}
-          <div className={`${GLASS_PANEL} flex-1 rounded-[55px] p-10 relative overflow-hidden group`}>
-            <div className="absolute right-[-20px] bottom-[-20px] text-9xl font-black italic text-white/[0.03] select-none pointer-events-none">STUDIO</div>
-            <div className="flex items-center gap-6 mb-8">
-              <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center font-black text-2xl text-white italic shadow-lg ${accentBg}`}>
-                {compIcon}
-              </div>
-              <div>
-                <h4 className={`text-[10px] font-black uppercase tracking-[0.3em] ${accentCls}`}>ANALIZA EKSPERCKA</h4>
-                <p className="text-xs font-black text-white italic">Tomasz Hajto</p>
-              </div>
-              <button
-                onClick={() => setShowExpertModal(true)}
-                className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${accentBg} ${accentCls} hover:opacity-80`}
-              >czytaj więcej ↗</button>
-            </div>
-            <p className="text-xl text-slate-300 italic leading-relaxed font-medium relative max-w-3xl line-clamp-4">
-              <span className={`${accentCls} opacity-50 text-6xl font-serif absolute -left-10 -top-4`}>"</span>
-              {expertComment}
-              <span className={`${accentCls} opacity-50 text-6xl font-serif absolute -right-6 bottom-[-20px]`}>"</span>
-            </p>
+            <StatBar label="Żółte kartki" homeVal={homeStats.yellowCards} awayVal={awayStats.yellowCards} hColor={homeClub.colorsHex[0]} aColor={awayClub.colorsHex[0]} />
+            <StatBar label="Czerwone kartki" homeVal={homeStats.redCards} awayVal={awayStats.redCards} hColor={homeClub.colorsHex[0]} aColor={awayClub.colorsHex[0]} />
           </div>
         </div>
 
@@ -408,6 +387,10 @@ export const PostMatchEuropeanStudioView: React.FC = () => {
           </div>
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">KROK 1: ANALIZA SPOTKANIA</span>
         </div>
+        <button
+          onClick={() => setShowExpertModal(true)}
+          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${accentBg} ${accentCls} hover:opacity-80`}
+        >Analiza pomeczowa ekspertów</button>
         <button
           onClick={() => setPageIndex(2)}
           className="group relative px-12 py-4 bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-500 rounded-2xl overflow-hidden shadow-2xl active:scale-95"

@@ -615,6 +615,17 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         const nextMinute = prev.minute + 1;
         let currentAddedTime = prev.addedTime;
         const currentSeed = prev.sessionSeed;
+        /*
+         * Period 2/3/4 restart the displayed clock back near 45/90/105 (see the
+         * halftime/ET resume handlers below), so raw minute numbers repeat across
+         * periods whenever the previous period ran into stoppage time. Every RNG
+         * roll in this tick is seeded by (currentSeed, minute, slot) alone, so a
+         * repeated minute reproduces the exact same rolls (same foul, same
+         * penalty, same card) as the first time that minute occurred. rngMinute
+         * offsets by period so the seed space never overlaps, while nextMinute
+         * keeps representing the real displayed clock value everywhere else.
+         */
+        const rngMinute = nextMinute + (prev.period - 1) * 300;
 
 const nextMomentumSum = prev.momentumSum + prev.momentum;
   const nextMomentumTicks = prev.momentumTicks + 1;
@@ -838,7 +849,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            }
         }
 
-        const rngEvent = seededRng(currentSeed, nextMinute, 500);
+        const rngEvent = seededRng(currentSeed, rngMinute, 500);
 
         // ─── KARA ZA ZMĘCZENIE DRUŻYNY (wpływ na inicjatywę i liczbę strzałów) ───
         // Liczymy średnią kondycję aktywnych zawodników każdej drużyny
@@ -889,7 +900,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // Bardziej zmęczona drużyna rzadziej przejmuje inicjatywę
         const fatInitiativeMod = (homeFatPenalty - awayFatPenalty) * 0.6; // max ±0.08
         const homeAttackChance = Math.min(0.92, Math.max(0.08, 0.5 + prev.momentum / 220 + fatInitiativeMod));
-        let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
+        let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, rngMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
         const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
         const secondZeroShotCheckMinute = 61 + Math.floor(seededRng(currentSeed, 0, 642) * 30);
         const isZeroShotCheckMinute = nextMinute === firstZeroShotCheckMinute || nextMinute === secondZeroShotCheckMinute;
@@ -1125,7 +1136,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
         const getCommentary = (type: MatchEventType, playerName?: string) => {
           const pool = MATCH_COMMENTARY_DB[type] || ["Zdarzenie meczowe..."];
-          const idx = Math.floor(seededRng(currentSeed, nextMinute, 888) * pool.length);
+          const idx = Math.floor(seededRng(currentSeed, rngMinute, 888) * pool.length);
           let text = pool[idx];
           if (playerName) text = text.replace("{Nazwisko}", playerName);
           return text;
@@ -1165,7 +1176,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             const playerObj = (isHomeInj ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId);
             const mentality = playerObj?.attributes.mentality ?? 50;
             const wantsOffProb = Math.max(0.05, (100 - mentality) / 100 * 0.75);
-            const wantsOff = seededRng(currentSeed, nextMinute, 9900) < wantsOffProb;
+            const wantsOff = seededRng(currentSeed, rngMinute, 9900) < wantsOffProb;
             if (isUserTeam) {
               if (wantsOff) {
                 nextLightInjuryPrompt = { playerId: pId, playerName: injury.text, minute: nextMinute };
@@ -1181,10 +1192,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (!forceZeroShotChance && rngEvent < uFoulThreshold) {
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const validXi = xi.filter(id => id !== null) as string[];
-           const pId = validXi[Math.floor(seededRng(currentSeed, nextMinute, 1500) * validXi.length)];
+           const pId = validXi[Math.floor(seededRng(currentSeed, rngMinute, 1500) * validXi.length)];
            const player = (activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).find(p => p.id === pId)!;
            if (!player) return prev; // Jeśli zawodnik zniknął (np. czerwona kartka), przerwij akcję
-           const isPenalty = seededRng(currentSeed, nextMinute, 1700) < (0.0956 * (isUserAttacking ? uPenaltyMod : 1.0));
+           const isPenalty = seededRng(currentSeed, rngMinute, 1700) < (0.0956 * (isUserAttacking ? uPenaltyMod : 1.0));
 
            if (isPenalty) {
               const attackingSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
@@ -1195,7 +1206,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               const keeperTeam = defendingSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
               const keeperXI = (defendingSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter(id => id !== null) as string[];
 
-              const kicker = GoalAttributionService.pickScorer(kickerTeam, kickerXI, false, () => seededRng(currentSeed, nextMinute, 1800));
+              const kicker = GoalAttributionService.pickScorer(kickerTeam, kickerXI, false, () => seededRng(currentSeed, rngMinute, 1800));
               const keeper = keeperTeam.find(p => p.id === keeperXI[0]) || keeperTeam[0];
 
               if (!kicker || !keeper || !kicker.attributes || !keeper.attributes) return prev;
@@ -1205,13 +1216,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               immediateEventType = MatchEventType.PENALTY_AWARDED;
               
               const penPool = MATCH_COMMENTARY_DB[MatchEventType.PENALTY_AWARDED] || ["Rzut karny!"];
-              const penText = penPool[Math.floor(seededRng(currentSeed, nextMinute, 1900) * penPool.length)].replace("{Nazwisko}", kicker.lastName);
+              const penText = penPool[Math.floor(seededRng(currentSeed, rngMinute, 1900) * penPool.length)].replace("{Nazwisko}", kicker.lastName);
               newLog = { id: `PEN_AWARD_${nextMinute}`, minute: nextMinute, text: `👉 ${penText}`, type: MatchEventType.PENALTY_AWARDED, teamSide: attackingSide, playerName: kicker.lastName };
 
-              const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2000));
+              const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000));
               if (injury) processInjury(injury);
            } else {
-              const card = DisciplineService.evaluateFoul(env.ref, player, nextPlayerYellowCards[pId] || 0, () => seededRng(currentSeed, nextMinute, 1600));
+              const card = DisciplineService.evaluateFoul(env.ref, player, nextPlayerYellowCards[pId] || 0, () => seededRng(currentSeed, rngMinute, 1600));
 
               if (card === MatchEventType.YELLOW_CARD) {
                  nextPlayerYellowCards[pId] = (nextPlayerYellowCards[pId] || 0) + 1;
@@ -1245,7 +1256,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
 
               if (newLog) {
-                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: MatchEventType.FOUL, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2000));
+                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: MatchEventType.FOUL, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000));
                 if (injury) processInjury(injury);
               }
            }
@@ -1255,9 +1266,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const xi = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const oppTeam = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
            const oppXi = activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
-      const scorer = GoalAttributionService.pickScorer(team, xi as string[], false, () => seededRng(currentSeed, nextMinute, 700));
+      const scorer = GoalAttributionService.pickScorer(team, xi as string[], false, () => seededRng(currentSeed, rngMinute, 700));
            if (!scorer) return prev;
-           const assistant = GoalAttributionService.pickAssistant(team, xi as string[], scorer.id, false, () => seededRng(currentSeed, nextMinute, 720));
+           const assistant = GoalAttributionService.pickAssistant(team, xi as string[], scorer.id, false, () => seededRng(currentSeed, rngMinute, 720));
            
            // Bezpieczne pobieranie bramkarza
            const gk = oppTeam.find(p => p.id === oppXi[0]);
@@ -1289,7 +1300,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            const gkFitMod        = gk ? (gk.position === PlayerPosition.GK ? 1.0 : 0.45) : 0.01;
 
            // Jeśli bramkarza nie ma w slocie (chwila po czerwonej kartce), strzał ma ogromną szansę na gola
-           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, nextMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod, gkFitMod, oppFatigueMap);
+           const isGoal = GoalAttributionService.checkShotSuccess(scorer, gk as Player, defs, false, () => seededRng(currentSeed, rngMinute, 750), false, scorerLiveFatigue, gkLiveFatigue, scorerFitMod, gkFitMod, oppFatigueMap);
           
 
            if (isGoal) {
@@ -1317,7 +1328,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               newLog = { id: `GOAL_${nextMinute}`, minute: nextMinute, text: `⚽ ${getCommentary(MatchEventType.GOAL, scorer.lastName)}${assistant ? ` (Asystował: ${assistant.lastName})` : ''}`, type: MatchEventType.GOAL, teamSide: activeSide, playerId: scorer.id, playerName: scorer.lastName };
               goalTriggered = true; priorityAiTrigger = true; immediateEventType = MatchEventType.GOAL;
           } else {
-              const failRng = seededRng(currentSeed, nextMinute, 780);
+              const failRng = seededRng(currentSeed, rngMinute, 780);
               let failType = MatchEventType.SHOT_ON_TARGET;
               if (failRng < 0.08) failType = MatchEventType.SHOT_POST;
               else if (failRng < 0.16) failType = MatchEventType.SHOT_BAR;
@@ -1342,12 +1353,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            pauseForEvent = isGoal;
 
            if (newLog) {
-             const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, nextMinute, 2500));
+             const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2500));
              if (injury) processInjury(injury);
            }
         }
         else if (rngEvent < 0.42) {
-          const flavorRng = seededRng(currentSeed, nextMinute, 900);
+          const flavorRng = seededRng(currentSeed, rngMinute, 900);
          let type = MatchEventType.MIDFIELD_CONTROL;
           if (flavorRng < 0.25) type = MatchEventType.CORNER;
           else if (flavorRng < 0.12) type = MatchEventType.THROW_IN;
@@ -1371,12 +1382,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             else nextLiveStats.away.corners++;
 
             // Krok 5: Rzut rożny → szansa 25% na strzał głową (heading ma teraz znaczenie)
-            if (seededRng(currentSeed, nextMinute, 3300) < 0.25) {
+            if (seededRng(currentSeed, rngMinute, 3300) < 0.25) {
               const cornerTeam   = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
               const cornerXI     = (activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI).filter(id => id !== null) as string[];
               const cornerOppTeam = activeSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
               const cornerOppXI   = (activeSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI).filter(id => id !== null) as string[];
-              const headerScorer = GoalAttributionService.pickScorer(cornerTeam, cornerXI, true, () => seededRng(currentSeed, nextMinute, 3400));
+              const headerScorer = GoalAttributionService.pickScorer(cornerTeam, cornerXI, true, () => seededRng(currentSeed, rngMinute, 3400));
               if (headerScorer) {
                 const cornerGk   = cornerOppTeam.find(p => p.id === cornerOppXI[0]);
                 const cornerDefs = cornerOppTeam.filter(p => cornerOppXI.slice(1, 6).includes(p.id));
@@ -1387,7 +1398,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 const cornerOppFatigue = activeSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
                 const isHeaderGoal = GoalAttributionService.checkShotSuccess(
                   headerScorer, cornerGk as Player, cornerDefs, true,
-                  () => seededRng(currentSeed, nextMinute, 3500),
+                  () => seededRng(currentSeed, rngMinute, 3500),
                   false, hScorerFat, hGkFat, 1.0, hGkFitMod, cornerOppFatigue
                 );
                 if (isHeaderGoal) {
@@ -1421,23 +1432,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
           const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const flavorActiveIds = flavorLineup.filter(id => id !== null);
-          const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 777) * flavorActiveIds.length)];
+          const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, rngMinute, 777) * flavorActiveIds.length)];
           const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
           newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
         }
 
-        const accidentalInjuryRoll = seededRng(currentSeed, nextMinute, 4500);
+        const accidentalInjuryRoll = seededRng(currentSeed, rngMinute, 4500);
         const uInjuryThreshold = 0.0064 * ((uInjuryMod + 1.0) / 2);
         if (accidentalInjuryRoll < uInjuryThreshold) {
-           const side: 'HOME' | 'AWAY' = seededRng(currentSeed, nextMinute, 4600) < 0.5 ? 'HOME' : 'AWAY';
+           const side: 'HOME' | 'AWAY' = seededRng(currentSeed, rngMinute, 4600) < 0.5 ? 'HOME' : 'AWAY';
            const pool = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
            const lineup = side === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
            const activeInjMap = side === 'HOME' ? nextHomeInjuries : nextAwayInjuries;
            const healthyOnPitch = pool.filter(p => lineup.includes(p.id) && !activeInjMap[p.id]);
 
            if (healthyOnPitch.length > 0) {
-              const victim = healthyOnPitch[Math.floor(seededRng(currentSeed, nextMinute, 4700) * healthyOnPitch.length)];
-              const isSevere = seededRng(currentSeed, nextMinute, 4800) < 0.15;
+              const victim = healthyOnPitch[Math.floor(seededRng(currentSeed, rngMinute, 4700) * healthyOnPitch.length)];
+              const isSevere = seededRng(currentSeed, rngMinute, 4800) < 0.15;
               processInjury({
                  minute: nextMinute,
                  teamSide: side,
@@ -1448,7 +1459,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            }
         }
 
-        const upgrades = InjuryUpgradeService.checkUpgrades(ctx, prev, () => seededRng(currentSeed, nextMinute, 3000));
+        const upgrades = InjuryUpgradeService.checkUpgrades(ctx, prev, () => seededRng(currentSeed, rngMinute, 3000));
         upgrades.forEach(upg => processInjury(upg));
 
         const carriedOffLogs: MatchLogEntry[] = [];

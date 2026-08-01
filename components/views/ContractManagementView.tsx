@@ -379,7 +379,14 @@ export const ContractManagementView: React.FC = () => {
             ? Math.max(0, (c.boardExceptionalContractApprovals ?? 0) - 1)
             : c.boardExceptionalContractApprovals
         } : c));
-        
+        setMessages(prev => prev.map(m =>
+          m.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
+          m.metadata.playerId === player.id &&
+          m.metadata.requestType === 'RAISE'
+            ? { ...m, metadata: { ...m.metadata, resolved: true } }
+            : m
+        ));
+
         setNegotiationMessage(decision.reason);
         setShowSuccessModal(true);
       } else {
@@ -500,6 +507,13 @@ export const ContractManagementView: React.FC = () => {
           budget: c.budget - offerBonus,
           signingBonusPool: Math.max(0, c.signingBonusPool - offerBonus),
         } : c));
+        setMessages(prev => prev.map(m =>
+          m.metadata?.type === 'PLAYER_MORALE_REQUEST' &&
+          m.metadata.playerId === player.id &&
+          m.metadata.requestType === 'RAISE'
+            ? { ...m, metadata: { ...m.metadata, resolved: true } }
+            : m
+        ));
         setNegotiationMessage(decision.reason);
         setShowSuccessModal(true);
       } else {

@@ -167,24 +167,21 @@ export const PostMatchCupStudioView: React.FC = () => {
   };
 
   const EventList = ({ side }: { side: 'HOME' | 'AWAY' }) => {
-    // ZASTĄP TEN KOD (Łączenie timeline z GoalTickerInfo dla pewności wyświetlania strzelców)
+    // ZASTĄP TEN KOD (uznane bramki zawsze z `goals`, bo `timeline` gubi drugą bramkę tej samej
+    // drużyny padającą w tej samej minucie — kolizja id logu GOAL_${minute} w silniku)
     const goals = side === 'HOME' ? homeGoals : awayGoals;
-    const sideEvents = [...timeline.filter(e => e.teamSide === side)];
-    
-    // Dodajemy gole z tickerów, jeśli pucharowy silnik ich nie wrzucił do timeline
-    goals.forEach(g => {
-      const alreadyIn = sideEvents.some(e => e.minute === g.minute && (e.type === MatchEventType.GOAL || e.type === MatchEventType.PENALTY_SCORED));
-      if (!alreadyIn && !g.isMiss) {
-        sideEvents.push({
-          minute: g.minute,
-          type: g.isPenalty ? MatchEventType.PENALTY_SCORED : MatchEventType.GOAL,
-          playerName: g.playerName,
-          teamSide: side,
-          playerId: (g as any).playerId || ''
-        } as any);
-      }
-    });
+    const nonGoalEvents = timeline.filter(e => e.teamSide === side && e.type !== MatchEventType.GOAL && e.type !== MatchEventType.PENALTY_SCORED);
+    // Bramki odrzucone przez VAR nie występują w `goals` (summary je odfiltrowuje), więc biorę je z timeline.
+    const disallowedGoalEvents = timeline.filter(e => e.teamSide === side && (e.type === MatchEventType.GOAL || e.type === MatchEventType.PENALTY_SCORED) && e.varDisallowed);
+    const validGoalEvents = goals.filter(g => !g.isMiss).map(g => ({
+      minute: g.minute,
+      type: g.isPenalty ? MatchEventType.PENALTY_SCORED : MatchEventType.GOAL,
+      playerName: g.playerName,
+      teamSide: side,
+      playerId: (g as any).playerId || ''
+    } as any));
 
+    const sideEvents = [...nonGoalEvents, ...disallowedGoalEvents, ...validGoalEvents];
     sideEvents.sort((a, b) => a.minute - b.minute);
     if (sideEvents.length === 0) return null;
     // KONIEC ZMIANY
@@ -207,10 +204,17 @@ export const PostMatchCupStudioView: React.FC = () => {
              icon = "✚"; color = ev.type === MatchEventType.INJURY_SEVERE ? "text-red-600 font-bold" : "text-slate-300";
           }
 
+          const isVarDisallowed = (ev as any).varDisallowed === true;
+          const isPenaltyNoCall = (ev as any).isPenaltyNoCall === true;
+
           return (
             <div key={i} className={`flex items-center gap-3 ${side === 'HOME' ? 'flex-row-reverse' : 'flex-row'}`}>
-               <span className={`text-[11px] font-black uppercase italic tracking-tighter ${color}`}>
-                  {formatPlayerName(ev.playerName, (ev as any).playerId || '')} {ev.minute}'{suffix}
+               <span className={`text-[11px] font-black uppercase italic tracking-tighter ${isVarDisallowed || isPenaltyNoCall ? 'text-slate-500' : color}`}>
+                  {isPenaltyNoCall
+                    ? <><s>{formatPlayerName(ev.playerName, (ev as any).playerId || '')} {ev.minute}' k.</s> (VAR)</>
+                    : isVarDisallowed
+                      ? <><s>{formatPlayerName(ev.playerName, (ev as any).playerId || '')} {ev.minute}'{suffix}</s> (VAR)</>
+                      : <>{formatPlayerName(ev.playerName, (ev as any).playerId || '')} {ev.minute}'{suffix}</>}
                </span>
                <span className="text-sm">{icon}</span>
             </div>

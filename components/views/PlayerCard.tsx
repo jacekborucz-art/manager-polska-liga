@@ -566,7 +566,7 @@ export const PlayerCard: React.FC = () => {
                    </span>
                 </div>
               )}
-              {player.isAvailableForLoan && !player.loan && (
+              {player.isAvailableForLoan && !player.loan && club.id !== 'FREE_AGENTS' && (
                 <div className="mb-4">
                    <span className="bg-cyan-500/20 text-cyan-300 text-[10px] font-black italic uppercase tracking-tighter px-4 py-1 rounded-full border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
                      DOSTĘPNY DO WYPOŻYCZENIA

@@ -105,6 +105,16 @@ export const PreMatchCupStudioView: React.FC = () => {
     return { hXI, aXI, hBench, aBench, hStats, aStats, hAvg, aAvg };
   }, [data]);
 
+  // DODANE NA PROŚBĘ: walidacja kompletności składów przed startem meczu — silnik meczowy
+  // (stary i nowy) toleruje puste sloty jak grę w osłabieniu, ale ekran startowy nigdy tego
+  // nie sprawdzał, więc dało się wystartować mecz z niepełnym składem bez ostrzeżenia.
+  const lineupValidation = useMemo(() => {
+    if (!data || !squadDetails) return { isValid: true, homeMissing: 0, awayMissing: 0 };
+    const homeMissing = Math.max(0, 11 - squadDetails.hXI.length);
+    const awayMissing = Math.max(0, 11 - squadDetails.aXI.length);
+    return { isValid: homeMissing === 0 && awayMissing === 0, homeMissing, awayMissing };
+  }, [data, squadDetails]);
+
   const bettingData = useMemo(() => {
     if (!data || !squadDetails) return null;
     const { hAvg, aAvg, hStats, aStats } = squadDetails;
@@ -324,8 +334,21 @@ export const PreMatchCupStudioView: React.FC = () => {
 
            <div className="flex items-stretch justify-center gap-4">
               <button onClick={() => navigateTo(ViewState.SQUAD_VIEW)} className="px-12 py-5 rounded-[30px] bg-emerald-600/30 border-b-8 border-emerald-900 text-emerald-400 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl">✏️ ZMIEŃ SKŁAD</button>
-              <button onClick={() => navigateTo(ViewState.MATCH_LIVE_CUP)} className="group relative px-20 py-5 rounded-[30px] bg-rose-600 hover:bg-rose-500 text-white font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(225,29,72,0.3)] border-b-8 border-rose-800">ROZPOCZNIJ MECZ 🏆</button>
+              <button
+                 onClick={() => { if (lineupValidation.isValid) navigateTo(ViewState.MATCH_LIVE_CUP); }}
+                 disabled={!lineupValidation.isValid}
+                 className={`group relative px-20 py-5 rounded-[30px] font-black italic text-xl uppercase tracking-tighter transition-all border-b-8 ${lineupValidation.isValid ? 'bg-rose-600 hover:bg-rose-500 text-white hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(225,29,72,0.3)] border-rose-800' : 'bg-slate-700/50 text-slate-500 border-slate-800 cursor-not-allowed opacity-60'}`}
+              >ROZPOCZNIJ MECZ 🏆</button>
            </div>
+           {!lineupValidation.isValid && (
+              <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 px-6 py-3 text-center max-w-2xl">
+                 <span className="text-xs font-black uppercase tracking-widest text-rose-300">
+                    {lineupValidation.homeMissing > 0 && `${data.homeClub.name}: brakuje ${lineupValidation.homeMissing} zawodnika/-ów w składzie podstawowym (${11 - lineupValidation.homeMissing}/11). `}
+                    {lineupValidation.awayMissing > 0 && `${data.awayClub.name}: brakuje ${lineupValidation.awayMissing} zawodnika/-ów w składzie podstawowym (${11 - lineupValidation.awayMissing}/11). `}
+                    Uzupełnij skład, aby rozpocząć mecz.
+                 </span>
+              </div>
+           )}
 
            <div className="flex items-stretch justify-center gap-4 w-full max-w-4xl animate-slide-up" style={{ animationDelay: '0.4s' }}>
               <div className="bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-center flex-1">

@@ -361,13 +361,29 @@ const ensureFourthLeagueSquads = (
 ): Record<string, Player[]> => {
   let changed = false;
   const nextPlayers = { ...playersMap };
+  // BUG (found 2026-07-29): SquadGeneratorService.generateSquadForClub() builds player ids
+  // purely from `clubId + squad index`, with no randomness. Whenever a background L_PL_4 club's
+  // squad drops below 18 players — because AiContractService released a "surplus" player to
+  // FREE_AGENTS, or because a player was legitimately transferred away to a completely different
+  // club — regenerating with the same deterministic ids resurrects that exact player, so the id
+  // ends up simultaneously in this club's fresh squad AND wherever the original player actually
+  // is now (FREE_AGENTS, or an unrelated club anywhere in the world if they were transferred).
+  // That duplicate id crashes React's list reconciliation wherever every club's squad gets
+  // flattened into one list (JobMarketView), and the impostor can be released/transferred again
+  // next cycle, compounding duplicates over many seasons.
+  // FIX: never bring back an id that is currently active anywhere else in the world (any other
+  // club's squad, or FREE_AGENTS). An id still owned by this same club is left alone, since
+  // re-creating it there is a harmless no-op, not a duplicate.
+  const allIdsInUse = new Set(Object.values(playersMap).flat().map(player => player.id));
 
   clubs
     .filter(club => club.leagueId === 'L_PL_4' && club.isDefaultActive && club.id !== userTeamId)
     .forEach(club => {
       const squad = nextPlayers[club.id] || [];
       if (squad.length >= 18) return;
+      const ownIds = new Set(squad.map(player => player.id));
       nextPlayers[club.id] = SquadGeneratorService.generateSquadForClub(club.id)
+        .filter(player => ownIds.has(player.id) || !allIdsInUse.has(player.id))
         .map(player => PlayerMoraleService.ensurePlayerState(player));
       changed = true;
     });

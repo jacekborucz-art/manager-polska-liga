@@ -1468,6 +1468,29 @@ const _assessClubNeeds = (
   return results.sort((a, b) => urgencyOrder[b.urgency] - urgencyOrder[a.urgency]);
 };
 
+// BUG (found 2026-07-29): SquadGeneratorService.generateSquadForClub() builds player ids purely
+// from `clubId + squad index` with no randomness, so every time a background/lower-league club's
+// squad is regenerated (BackgroundMatchProcessor.ensureFourthLeagueSquads and
+// ThirdLeagueBackgroundService.ensureHiddenMatchReadySquad both do this whenever such a squad
+// drops below 18 players) it reproduces the exact same ids as before. Because the release logic
+// below treated those regenerated players as "surplus" again and pushed them into FREE_AGENTS
+// without checking whether that id was already there, the same player id kept getting appended
+// to FREE_AGENTS on every release/regeneration cycle, season after season. In a real save this
+// produced a FREE_AGENTS list of 21,675 entries with some ids duplicated 25-31 times, which broke
+// React's list reconciliation in JobMarketView ("Encountered two children with the same key")
+// because that screen is the only one that flattens every club's squad into one list keyed by
+// player id — the transfer/free-agent filters appeared to silently stop updating until the view
+// was fully remounted (e.g. by opening a player card and going back).
+// FIX: never push a player into FREE_AGENTS if that exact id is already sitting there.
+const _appendUniqueToFreeAgents = (
+  playersMap: Record<string, Player[]>,
+  player: Player
+): void => {
+  const freeAgents = playersMap['FREE_AGENTS'] || [];
+  if (freeAgents.some(existing => existing.id === player.id)) return;
+  playersMap['FREE_AGENTS'] = [...freeAgents, player];
+};
+
 export const AiContractService = {
   enforceTransferListLimits: (
     playersMap: Record<string, Player[]>,
@@ -1564,7 +1587,9 @@ export const AiContractService = {
         };
 
         squad = squad.filter(p => p.id !== playerToRelease.id);
-        updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+        // FIX: see _appendUniqueToFreeAgents above — guards against re-adding a player id that
+        // a previous release/regeneration cycle already put into FREE_AGENTS.
+        _appendUniqueToFreeAgents(updatedPlayersMap, releasedPlayer);
         updatedClubs = updatedClubs.map(c =>
           c.id === club.id ? { ...c, budget: Math.max(0, c.budget - releaseCost) } : c
         );
@@ -1670,7 +1695,9 @@ export const AiContractService = {
 
         squad = squad.filter(player => player.id !== playerId);
         counts[playerToRelease.position]--;
-        updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+        // FIX: see _appendUniqueToFreeAgents above — guards against re-adding a player id that
+        // a previous release/regeneration cycle already put into FREE_AGENTS.
+        _appendUniqueToFreeAgents(updatedPlayersMap, releasedPlayer);
         updatedClubs = updatedClubs.map(c =>
           c.id === club.id ? { ...c, budget: Math.max(0, c.budget - releaseCost) } : c
         );
@@ -1707,6 +1734,11 @@ export const AiContractService = {
     let updatedPlayersMap = { ...playersMap };
     let generatedCount = 0;
     const seasonYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+    // BUG (found 2026-07-29): see the matching FIX note in generateSeasonYouthIntakeForAiClubs
+    // above — slot availability must be checked against the whole world, not just this club's
+    // current squad, otherwise a deadline-fallback youth player transferred away to another club
+    // has their id regenerated here, duplicating them across two unrelated clubs.
+    const allIdsInUse = new Set(Object.values(playersMap).flat().map(player => player.id));
 
     const updatedClubs = clubs.map(club => {
       if (club.id === userTeamId || club.id === 'FREE_AGENTS' || !club.leagueId) return club;
@@ -1715,7 +1747,9 @@ export const AiContractService = {
       if (workingSquad.length === 0 || workingSquad.length >= AI_MAX_SQUAD_SIZE) return club;
 
       const deadlinePrefix = `${_buildAiYouthSeasonPrefix(seasonYear, club.id)}_DEADLINE`;
-      const alreadyGenerated = workingSquad.filter(player => player.id.startsWith(deadlinePrefix)).length;
+      // Count against the whole world (allIdsInUse), not just workingSquad — see FIX note above.
+      const alreadyGenerated = Array.from({ length: AI_SEASON_YOUTH_MAX_INTAKE + 8 }, (_, index) => index)
+        .filter(index => allIdsInUse.has(`${deadlinePrefix}_${index}`)).length;
       const initialRiskyOutgoing = workingSquad.filter(player => _isAiDeadlineOutgoingRisk(player, currentDate));
       const deadlineIntakeLimit = 4 + _getAiDeadlineExtraSlots(club, initialRiskyOutgoing.length, seasonYear);
       const slotsLeft = Math.min(deadlineIntakeLimit - alreadyGenerated, AI_MAX_SQUAD_SIZE - workingSquad.length);
@@ -1760,8 +1794,11 @@ export const AiContractService = {
         if (!need) break;
         const hadHardShortage = assessmentSquad.filter(player => player.position === need.position).length < MIN_SQUAD_POSITION_COUNTS[need.position];
         const hadRiskNeed = riskNeeds.some(risk => risk.position === need.position);
+        // Checked against allIdsInUse (whole world), not just workingSquad — see FIX note near
+        // the top of this function: a deadline-fallback youth player who was transferred away
+        // must not have their slot/id reused for a fresh impostor player.
         const slot = Array.from({ length: deadlineIntakeLimit }, (_, index) => index)
-          .find(index => !workingSquad.some(player => player.id === `${deadlinePrefix}_${index}`));
+          .find(index => !allIdsInUse.has(`${deadlinePrefix}_${index}`) && !workingSquad.some(player => player.id === `${deadlinePrefix}_${index}`));
         if (slot === undefined) break;
 
         const youthPlayer: Player = {
@@ -1809,7 +1846,9 @@ export const AiContractService = {
 
         const releasedPlayer = _releaseAiPlayerToFreeAgents(playerToRelease, club, currentDate);
         workingSquad = workingSquad.filter(player => player.id !== playerToRelease.id);
-        updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+        // FIX: see _appendUniqueToFreeAgents above — guards against re-adding a player id that
+        // a previous release/regeneration cycle already put into FREE_AGENTS.
+        _appendUniqueToFreeAgents(updatedPlayersMap, releasedPlayer);
         currentClub = { ...currentClub, budget: Math.max(0, currentClub.budget - releaseCost) };
       }
 
@@ -1946,6 +1985,40 @@ export const AiContractService = {
   /**
    * Analizuje wolnych agentów i generuje oferty oczekujące dla klubów AI.
    */
+  // PERF (znalezione i naprawione 2026-07-30): ta funkcja jest wywoływana codziennie
+  // (z BackgroundMatchProcessor.ts:460 w dni bez meczów i :1008 w dni meczowe — czyli
+  // praktycznie każdego dnia gry) i dla KAŻDEGO klubu AI przeszukiwała w całości
+  // (updatedPlayersMap['FREE_AGENTS'] || []).filter(...) — czyli listę wszystkich wolnych
+  // agentów w grze. Ta lista tylko rośnie przez cały czas trwania save'a (zwolnieni gracze
+  // nigdy nie są z niej usuwani), więc koszt = liczba_klubów_AI × rozmiar_FREE_AGENTS rósł
+  // z każdym rozegranym sezonem. Zmierzone przez PerfProfilerService na realnym save'ie
+  // (sezon 4): sama ta funkcja zajmowała ~13.8s na dzień, a pomocnicza
+  // PrestigeTransferGuardService.shouldConsiderDestination była wywoływana ~2 mln razy dziennie
+  // tylko z tego miejsca. Był to główny (choć nie jedyny) wkład w łączny czas przetwarzania
+  // jednego dnia sięgający 27-44 sekund.
+  //
+  // FIX: rozłożenie kosztownego przeszukania FREE_AGENTS na kilka dni per klub — patrz
+  // `dayOfYear`/`hashClubInt`/stagger `% 3` niżej w treści funkcji. Zastosowano dokładnie ten
+  // sam, już istniejący w tym pliku wzorzec (dayOfYear + hash(clubId) + modulo), jaki od dawna
+  // działa w processAiInterestedPlayerTargeting (linia ~2751) i processAiPreContractOpportunities
+  // (linia ~3009) — nie wprowadzono nowej konwencji.
+  //
+  // WAŻNE — kolejność sprawdzeń jest celowa i NIE WOLNO jej odwracać: stagger jest sprawdzany
+  // DOPIERO PO obliczeniu `needsFA`/`hasCriticalShortage`/`gulfStarCandidate` (tanie operacje,
+  // dotyczą tylko własnego składu klubu — nie całej puli FREE_AGENTS), a klub z krytycznym
+  // brakiem składu (`hasCriticalShortage`, np. właśnie stracił zawodnika i spadł poniżej
+  // minimum na pozycji) ORAZ kandydat na gwiazdę z Zatoki (`gulfStarCandidate`) ZAWSZE
+  // przeszukują rynek tego samego dnia, bez opóźnienia — stagger dotyczy wyłącznie
+  // opportunistycznego dokupywania/upgrade'u, nigdy pilnej potrzeby. To był świadomy wymóg
+  // (nie tylko optymalizacja): priorytet ma zawsze pilność potrzeby klubu, nie rotacja dni.
+  //
+  // Nie dotknięto: processAiPreContractOpportunities i processAiInterestedPlayerTargeting mają
+  // podobny koszt (odpowiednio ~8.6s i ~5.3s/dzień w tym samym pomiarze), ale ich stagger jest
+  // sprawdzany dopiero W ŚRODKU zagnieżdżonej pętli sprzedający×kupujący — sam koszt iterowania
+  // pozostaje pełny nawet gdy stagger odrzuca dalsze przetwarzanie. Naprawa tych dwóch wymaga
+  // przesunięcia sprawdzenia stagger na sam początek pętli (głębsza zmiana struktury) i została
+  // celowo odłożona jako osobny krok, żeby nie zmieniać zbyt wiele naraz w delikatnej logice
+  // transferowej.
 processAiRecruitment: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
@@ -1961,6 +2034,15 @@ processAiRecruitment: (
     if (freeAgents.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap, newOffers, logEntries };
 
     const clubMap = new Map(updatedClubs.map(c => [c.id, c]));
+
+    const dayOfYear = Math.floor(
+      (currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 0).getTime()) / 86_400_000
+    );
+    const hashClubInt = (id: string): number => {
+      let h = 0;
+      for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    };
 
     updatedClubs = updatedClubs.map(club => {
       if (club.id === userTeamId) return club;
@@ -1987,6 +2069,15 @@ processAiRecruitment: (
             )[0]
         : null;
       if (needsFA.length === 0 && !gulfStarCandidate) return club;
+
+      // Rozłożenie wyszukiwania wolnych agentów na kilka dni — ale TYLKO gdy klub
+      // nie ma krytycznego braku składu (i nie poluje na gwiazdę z Zatoki). Klub
+      // z krytycznym brakiem (np. właśnie stracił zawodnika i spadł poniżej minimum
+      // na pozycji) szuka od razu, każdego dnia — priorytet ma pilna potrzeba,
+      // nie ślepa rotacja dni. Pozostałe kluby (dokupywanie / upgrade) sprawdzają
+      // rynek co 3 dni, żeby nie przeszukiwać całej (rosnącej z sezonu na sezon)
+      // puli FREE_AGENTS codziennie dla wszystkich klubów naraz.
+      if (!hasCriticalShortage && !gulfStarCandidate && (dayOfYear + hashClubInt(club.id)) % 3 !== 0) return club;
 
       // OGRANICZENIE CZĘSTOTLIWOŚCI: klub może mieć tylko 1 aktywną negocjację z wolnym agentem
       const alreadyNegotiating = freeAgents.some(fa => fa.aiNegotiationClubId === club.id);
@@ -2707,9 +2798,6 @@ processAiRecruitment: (
       item => item.id
     )) {
       if (club.id === userTeamId) continue;
-      // Stagger: w oknie co 3 dni, poza oknem co 15 dni
-      const staggerInt = windowOpen ? 3 : 15;
-      if ((dayOfYear + hashClubInt(club.id)) % staggerInt !== 0) continue;
       const transferSpendingPower = _getAiTransferSpendingPower(club);
       if (transferSpendingPower <= 500_000) continue;
 
@@ -2717,18 +2805,32 @@ processAiRecruitment: (
       if (squad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(squad)) continue;
       const aiStrategy = AiClubTransferStrategyService.buildStrategy(club);
 
-      // Jeden aktywny zakup na raz
-      const alreadyBuying = Object.values(updatedPlayersMap)
-        .flat()
-        .some(p => p.transferPendingClubId === club.id);
-      if (alreadyBuying) continue;
-
       const idealOvr = 30 + club.reputation * 4.5;
       const isGulfStarHunter = _isGulfStarHunterClub(club);
       const needsIT = _assessClubNeeds(club, squad, currentDate, aiStrategy);
       if (needsIT.length === 0 && !isGulfStarHunter) continue;
       const hasCriticalShortageIT = needsIT.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
       const needsITMap = new Map(needsIT.map(n => [n.position as string, n]));
+
+      // PERF (2026-07-30): stagger przeniesiony TUTAJ — dopiero po tanich, wyłącznie
+      // per-klubowych sprawdzeniach powyżej (spendingPower, rozmiar składu, needsIT/
+      // hasCriticalShortageIT), a NIE przed nimi jak wcześniej. Wcześniej stagger był
+      // pierwszym sprawdzeniem w pętli, więc klub z krytycznym brakiem składu też był
+      // niesłusznie odkładany do kolejnego "swojego" dnia. Teraz: klub z krytycznym
+      // brakiem (hasCriticalShortageIT) lub kandydat na gwiazdę z Zatoki (isGulfStarHunter)
+      // ZAWSZE przechodzi do kosztownego przeszukania rynku tego samego dnia — stagger
+      // ogranicza wyłącznie opportunistyczne dokupywanie/upgrade, dokładnie tak samo jak
+      // w processAiRecruitment (patrz obszerny komentarz nad tamtą funkcją). Sam mechanizm
+      // stagger (dayOfYear + hash(clubId) + modulo co 3 dni w oknie transferowym / 15 poza
+      // oknem) jest niezmieniony — to wyłącznie zmiana KOLEJNOŚCI sprawdzeń, nie logiki.
+      const staggerInt = windowOpen ? 3 : 15;
+      if (!hasCriticalShortageIT && !isGulfStarHunter && (dayOfYear + hashClubInt(club.id)) % staggerInt !== 0) continue;
+
+      // Jeden aktywny zakup na raz
+      const alreadyBuying = Object.values(updatedPlayersMap)
+        .flat()
+        .some(p => p.transferPendingClubId === club.id);
+      if (alreadyBuying) continue;
 
       // Kandydaci: gracze z interestedClubs zawierającym ten klub, niewystawieni na listę
       const targets = Object.entries(updatedPlayersMap)
@@ -2976,13 +3078,24 @@ processAiRecruitment: (
         const candidateBuyers = clubs
           .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
           .filter(buyer => {
+            // PERF (2026-07-30): stagger przeniesiony na sam początek callbacku — dokładnie
+            // ten sam warunek co wcześniej (dayOfYear + hash(buyer_player), modulo 3/9),
+            // zero zmiany w tym KTO/KIEDY zostaje dopasowany. Wcześniej stagger był
+            // sprawdzany na końcu, po AiClubTransferStrategyService.buildStrategy(buyer) —
+            // czyli ta (niebagatelna) praca wykonywała się dla KAŻDEJ pary sprzedający×
+            // zawodnik×kupujący, nawet gdy stagger i tak odrzucał dany dzień. Ta funkcja
+            // NIE ma bypassu dla "pilnej potrzeby" (w przeciwieństwie do processAiRecruitment
+            // i processAiInterestedPlayerTargeting) — dotyczy zawodników, którzy DOPIERO
+            // będą wolni (długoterminowe skautowanie), nie wypełniania bieżącej luki
+            // w składzie, więc taki bypass nie miałby tu uzasadnienia.
+            const stagger = isEliteWatchlistOpportunity ? 3 : 9;
+            if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % stagger !== 0) return false;
+
             const buyerSquad = updatedPlayersMap[buyer.id] || [];
             const buyerStrategy = AiClubTransferStrategyService.buildStrategy(buyer);
             const canMonitorEliteWatchlist = buyer.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION;
             if (isEliteWatchlistOpportunity && !canMonitorEliteWatchlist) return false;
             if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
-            const stagger = isEliteWatchlistOpportunity ? 3 : 9;
-            if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % stagger !== 0) return false;
 
             const needs = _assessClubNeeds(buyer, buyerSquad, currentDate, buyerStrategy);
             const hasPosNeed = needs.some(need => need.position === player.position);
@@ -3454,6 +3567,20 @@ processAiRecruitment: (
     let updatedPlayersMap = { ...playersMap };
     let generatedCount = 0;
     const seasonYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+    // BUG (found 2026-07-29): slot availability used to be computed only from the club's
+    // *current* squad (`existingSquad`/`workingSquad`). If an AI youth intake player
+    // (`AI_YOUTH_INTAKE_${seasonYear}_${clubId}_${slot}`) was later transferred away to another
+    // club by the normal AI transfer market, that slot looked "free" again from this club's
+    // point of view, so a brand-new player was generated re-using the exact same id — leaving
+    // the same id simultaneously active in the real destination club (the actual transferred
+    // player) and back here as a freshly-generated impostor. That produced ids duplicated across
+    // two (sometimes three) completely unrelated clubs anywhere in the world, which crashes
+    // React's list reconciliation wherever every club's squad gets flattened into one list
+    // (JobMarketView, key={player.id}).
+    // FIX: a slot is considered "already generated" if that exact id exists ANYWHERE in the
+    // world, not only in this club's current squad, so a transferred-away youth player's slot is
+    // never reused.
+    const allIdsInUse = new Set(Object.values(playersMap).flat().map(player => player.id));
 
     const updatedClubs = clubs.map(club => {
       /**
@@ -3470,7 +3597,9 @@ processAiRecruitment: (
       if (existingSquad.length === 0) return club;
 
       const intakePrefix = _buildAiYouthSeasonPrefix(seasonYear, club.id);
-      const alreadyGeneratedThisSeason = existingSquad.filter(player => player.id.startsWith(intakePrefix)).length;
+      // Count against the whole world (allIdsInUse), not just existingSquad — see FIX note above.
+      const alreadyGeneratedThisSeason = Array.from({ length: AI_SEASON_YOUTH_MAX_INTAKE }, (_, index) => index)
+        .filter(index => allIdsInUse.has(`${intakePrefix}_${index}`)).length;
       if (alreadyGeneratedThisSeason >= AI_SEASON_YOUTH_MAX_INTAKE) return club;
 
       /**
@@ -3495,9 +3624,11 @@ processAiRecruitment: (
          * Slot jest szukany po pełnym zakresie 0-3, a nie po samej liczbie brakujących
          * zawodników. Dzięki temu, jeżeli zapis gry ma już np. slot 0 i 2, generator
          * uzupełni slot 1 albo 3, zamiast nadpisać istniejącego wychowanka.
+         * Sprawdzamy allIdsInUse (cały świat), a nie tylko workingSquad — patrz komentarz FIX
+         * powyżej: wychowanek mógł zostać transferowany do innego klubu i wciąż istnieje.
          */
         const slot = Array.from({ length: AI_SEASON_YOUTH_MAX_INTAKE }, (_, index) => index)
-          .find(index => !workingSquad.some(player => player.id === `${intakePrefix}_${index}`));
+          .find(index => !allIdsInUse.has(`${intakePrefix}_${index}`) && !workingSquad.some(player => player.id === `${intakePrefix}_${index}`));
         if (slot === undefined) break;
 
         const position = _pickAiYouthPosition(workingSquad, `${seasonYear}_${club.id}`, slot);
@@ -3606,7 +3737,9 @@ performSeasonSquadReview: (
 
               currentClub.budget -= cost;
               finalSquad = finalSquad.filter(p => p.id !== candidate.id);
-              updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+              // FIX: see _appendUniqueToFreeAgents above — guards against re-adding a player id
+              // that a previous release/regeneration cycle already put into FREE_AGENTS.
+              _appendUniqueToFreeAgents(updatedPlayersMap, releasedPlayer);
               actionTaken = true;
             }
           } else if (!_isInLastContractYear(candidate, currentDate)) {
@@ -3744,7 +3877,9 @@ performSeasonSquadReview: (
                 history: updatedHistory
               };
               finalSquad = finalSquad.filter(p => p.id !== player.id);
-              updatedPlayersMap['FREE_AGENTS'] = [...(updatedPlayersMap['FREE_AGENTS'] || []), releasedPlayer];
+              // FIX: see _appendUniqueToFreeAgents above — guards against re-adding a player id
+              // that a previous release/regeneration cycle already put into FREE_AGENTS.
+              _appendUniqueToFreeAgents(updatedPlayersMap, releasedPlayer);
               currentClubCopy.budget -= releaseCost;
             } else if ((finalSquad.length > AI_TARGET_SQUAD_SIZE || outlierIds.has(player.id)) && !_isInLastContractYear(player, currentDate)) {
               finalSquad = finalSquad.map(p =>

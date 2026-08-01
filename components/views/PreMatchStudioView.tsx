@@ -10,7 +10,7 @@ import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 
 // Import lokalnych zdjęć piłkarzy
-import { getPlayerCardImage, getClubKitVariantsForClub, KitVariant } from '../../resources/PlayerCardAssets';
+import { getClubKitVariantsForClub, KitVariant } from '../../resources/PlayerCardAssets';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { KitPreview } from '../common/KitPreview';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
@@ -34,6 +34,16 @@ const getContrastTextColor = (bgHex: string, secondaryHex: string): string => {
   const diff = Math.abs(bgLum - secLum);
   if (diff > 60) return secondaryHex;
   return bgLum > 128 ? '#000000' : '#ffffff';
+};
+
+// Sprawdza czy kolor koszulki jest czarny/bardzo ciemny (potrzebna dodatkowa poświata dla widoczności)
+const isDarkKitColor = (hex: string): boolean => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance < 60;
 };
 
 const GOALKEEPER_KIT_POOL = ['#facc15', '#fb923c', '#f472b6', '#881337', '#dc2626', '#16a34a'];
@@ -217,8 +227,6 @@ export const PreMatchStudioView: React.FC = () => {
     );
   }
 
-  const getJerseyUrl = (clubId: string, hex: string) => getPlayerCardImage(clubId, hex);
-
   const isUserHome = data.homeClub.id === userTeamId;
   const userClub = isUserHome ? data.homeClub : data.awayClub;
   const opponentClub = isUserHome ? data.awayClub : data.homeClub;
@@ -293,14 +301,17 @@ export const PreMatchStudioView: React.FC = () => {
         {/* Starting XI Section */}
         <div className="pb-2">
           <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] mb-2 block ml-2">Jedenastka Wyjściowa</span>
-          {xi.map(p => (
-            <div key={p.id} className={`flex items-center gap-3 p-2 rounded-xl bg-white/[0.03] border border-white/[0.05] group hover:bg-white/[0.08] transition-all ${side === 'right' ? 'flex-row-reverse text-right' : ''}`}>
-               <span className={`w-8 font-black font-mono text-[9px] ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
-               <span className="text-[12px] font-bold text-white uppercase italic tracking-tight truncate group-hover:text-blue-400">
-                  {p.firstName} {p.lastName}
-               </span>
-            </div>
-          ))}
+          {(() => {
+            const keyPlayerId = [...xi].sort((a, b) => b.overallRating - a.overallRating)[0]?.id;
+            return xi.map(p => (
+              <div key={p.id} className={`flex items-center gap-3 p-2 rounded-xl bg-white/[0.03] border border-white/[0.05] group hover:bg-white/[0.08] transition-all ${side === 'right' ? 'flex-row-reverse text-right' : ''}`}>
+                 <span className={`w-8 font-black font-mono text-[9px] ${PlayerPresentationService.getPositionColorClass(p.position)}`}>{p.position}</span>
+                 <span className="text-[12px] font-bold text-white uppercase italic tracking-tight truncate group-hover:text-blue-400">
+                    {side === 'right' && p.id === keyPlayerId ? '⭐ ' : ''}{p.firstName} {p.lastName}{side !== 'right' && p.id === keyPlayerId ? ' ⭐' : ''}
+                 </span>
+              </div>
+            ));
+          })()}
         </div>
         
         {/* Bench Section */}
@@ -325,7 +336,7 @@ export const PreMatchStudioView: React.FC = () => {
       {/* CINEMATIC BACKGROUND */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-black">
         <div 
-          className="absolute inset-0 bg-cover bg-center scale-100 opacity-20"
+          className="absolute inset-0 bg-cover bg-center scale-100 opacity-10"
           style={{ backgroundImage: `url(${startMecz})` }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/50 via-transparent to-slate-950/80" />
@@ -411,12 +422,14 @@ export const PreMatchStudioView: React.FC = () => {
                       <div className="shrink-0 self-center -mr-16 z-20 flex flex-col items-center gap-3">
                  <div className="relative group">
                     <div className="absolute -inset-4 bg-blue-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                    <img
-                       src={getJerseyUrl(data.homeClub.id, matchKits.home.primary)}
+                    <div
                        className="
       w-48 h-72 lg:w-64 lg:h-[450px]
-      object-cover rounded-[50px]
+      flex items-center justify-center
+      rounded-[50px]
       border-2 border-white/20
+      bg-black/30
+      relative overflow-hidden
       shadow-[0_40px_80px_rgba(0,0,0,0.7)]
       transform perspective-[1000px] rotate-y-[12deg] -rotate-[2deg]
       group-hover:rotate-y-0 group-hover:rotate-0
@@ -424,13 +437,29 @@ export const PreMatchStudioView: React.FC = () => {
       hover:scale-[1.02] opacity-80
     "
                        style={{ boxShadow: `0 0 50px ${matchKits.home.primary}44` }}
-                       alt="Star Home"
-                    />
-                    <div className="absolute bottom-6 left-6 right-6 bg-slate-900/30 backdrop-blur-[1px] p-4 rounded-3xl border border-white/10 shadow-2xl">
-                       <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">KLUCZOWY ZAWODNIK</p>
-                       <p className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
-                          {[...homeXI].sort((a,b) => b.overallRating - a.overallRating)[0]?.lastName}
-                       </p>
+                    >
+                      {getClubLogo(data.homeClub.id) && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <img
+                            src={getClubLogo(data.homeClub.id)}
+                            alt=""
+                            className="w-[160%] h-[160%] max-w-none object-contain opacity-30 -rotate-[15deg]"
+                          />
+                        </div>
+                      )}
+                      <div
+                        className="relative z-10"
+                        style={isDarkKitColor(matchKits.home.primary) ? { filter: 'drop-shadow(0 0 14px rgba(255,255,255,0.45))' } : undefined}
+                      >
+                        <KitPreview
+                          shirt={matchKits.home.primary}
+                          shirtSecondary={matchKits.home.shirtSecondary}
+                          shorts={matchKits.home.secondary}
+                          socks={matchKits.home.secondary}
+                          pattern={matchKits.home.pattern}
+                          className="h-40 w-40 lg:h-56 lg:w-56"
+                        />
+                      </div>
                     </div>
                  </div>
                  {isUserHome && (
@@ -524,12 +553,14 @@ export const PreMatchStudioView: React.FC = () => {
                            <div className="shrink-0 self-center -ml-16 z-20 flex flex-col items-center gap-3">
                  <div className="relative group">
                     <div className="absolute -inset-4 bg-emerald-500/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                    <img
-                       src={getJerseyUrl(data.awayClub.id, matchKits.away.primary)}
+                    <div
                        className="
       w-48 h-72 lg:w-64 lg:h-[450px]
-      object-cover rounded-[50px]
+      flex items-center justify-center
+      rounded-[50px]
       border-2 border-white/20
+      bg-black/30
+      relative overflow-hidden
       shadow-[0_40px_80px_rgba(0,0,0,0.7)]
       transform perspective-[1000px] rotate-y-[-12deg] rotate-[2deg]
       group-hover:rotate-y-0 group-hover:rotate-0
@@ -537,13 +568,29 @@ export const PreMatchStudioView: React.FC = () => {
       hover:scale-[1.02] opacity-80
     "
                        style={{ boxShadow: `0 0 50px ${matchKits.away.primary}44` }}
-                       alt="Star Away"
-                    />
-                    <div className="absolute bottom-6 left-6 right-6 bg-slate-900/30 backdrop-blur-[1px] p-4 rounded-3xl border border-white/10 shadow-2xl text-right">
-                       <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">KLUCZOWY ZAWODNIK</p>
-                       <p className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
-                          {[...awayXI].sort((a,b) => b.overallRating - a.overallRating)[0]?.lastName}
-                       </p>
+                    >
+                      {getClubLogo(data.awayClub.id) && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <img
+                            src={getClubLogo(data.awayClub.id)}
+                            alt=""
+                            className="w-[160%] h-[160%] max-w-none object-contain opacity-30 rotate-[15deg]"
+                          />
+                        </div>
+                      )}
+                      <div
+                        className="relative z-10"
+                        style={isDarkKitColor(matchKits.away.primary) ? { filter: 'drop-shadow(0 0 14px rgba(255,255,255,0.45))' } : undefined}
+                      >
+                        <KitPreview
+                          shirt={matchKits.away.primary}
+                          shirtSecondary={matchKits.away.shirtSecondary}
+                          shorts={matchKits.away.secondary}
+                          socks={matchKits.away.secondary}
+                          pattern={matchKits.away.pattern}
+                          className="h-40 w-40 lg:h-56 lg:w-56"
+                        />
+                      </div>
                     </div>
                  </div>
                  {!isUserHome && (

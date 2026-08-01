@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { PortalScaleWrapper } from '../GameScaler';
 import { useGame } from '../../context/GameContext';
 import {
   ViewState, PlayerPosition, PlayerAttributes, Region, YouthPlayer, ClubAcademy, Scout,
@@ -6,6 +8,7 @@ import {
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { AcademyService, ACADEMY_UPGRADE_COSTS, ACADEMY_UPGRADE_DAYS, ACADEMY_MAX_SLOTS } from '../../services/AcademyService';
 import { ScoutService } from '../../services/ScoutService';
+import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenerator';
 import rezerwyBg from '../../Graphic/themes/rezerwy.png';
 
 // ── Pomocnicze stałe ───────────────────────────────────────────────────────────
@@ -104,7 +107,7 @@ export const AcademyView: React.FC = () => {
   } = useGame();
 
   const [tab, setTab] = useState<Tab>('players');
-  const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
+  const [hoveredYouthProgress, setHoveredYouthProgress] = useState<{ youth: YouthPlayer; x: number; y: number } | null>(null);
 
   const [showPromoteMenu, setShowPromoteMenu] = useState<string | null>(null);
   const [budgetInputValue, setBudgetInputValue] = useState<string>('');
@@ -129,10 +132,6 @@ export const AcademyView: React.FC = () => {
     });
   }, [academy]);
 
-  const selectedYouth = useMemo(
-    () => sortedYouth.find(yp => yp.id === selectedYouthId) ?? null,
-    [sortedYouth, selectedYouthId]
-  );
   const promoteChoiceYouth = useMemo(
     () => sortedYouth.find(yp => yp.id === showPromoteMenu) ?? null,
     [sortedYouth, showPromoteMenu]
@@ -147,6 +146,105 @@ export const AcademyView: React.FC = () => {
   const readinessThreshold = AcademyService.getReadinessThreshold();
 
   // ── Renderowanie ──────────────────────────────────────────────────────────────
+
+  const renderYouthProgressTooltip = (youth: YouthPlayer) => {
+    const attributeRows = ATTR_DISPLAY.map(a => {
+      const value = youth.attributes[a.key];
+      const isFocusAttribute = youth.developmentFocus === a.key;
+      const color = value >= 40 ? '#34d399' : value >= 28 ? '#f8fafc' : '#64748b';
+      const label = FOCUS_ATTRS.find(f => f.key === a.key)?.label ?? a.label;
+      return { key: a.key, label, value, isFocusAttribute, color };
+    });
+    const isReady = youth.readinessScore >= readinessThreshold;
+    const talent = youth.revealedTalentRating ? TALENT_LABEL[youth.revealedTalentRating] : null;
+    const overall = PlayerAttributesGenerator.calculateOverall(youth.attributes, youth.position);
+    const attrSvgW = 860;
+    const attrSvgH = 260;
+    const attrColW = 430;
+    const attrBarStartX = 125;
+    const attrBarMaxW = 195;
+    const attrBarYStart = 66;
+    const attrRowGap = 28;
+
+    return (
+      <div
+        className="fixed z-[130] pointer-events-none w-[940px] overflow-hidden rounded-[28px] border border-emerald-400/25 bg-slate-950/95 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.68)] backdrop-blur-xl"
+        style={hoveredYouthProgress ? { left: `${hoveredYouthProgress.x}px`, top: `${hoveredYouthProgress.y}px` } : undefined}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,rgba(16,185,129,0.24),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.55),rgba(2,6,23,0.22))]" />
+        <div className="relative z-10 flex items-start justify-between gap-3 px-2 pt-1">
+          <div className="min-w-0">
+            <span className="block text-[8px] text-emerald-300/75 font-black italic uppercase tracking-tighter">
+              Indywidualny progres
+            </span>
+            <p className="mt-1 truncate text-[15px] text-white font-black italic uppercase tracking-tighter leading-none">
+              {youth.firstName} {youth.lastName}
+            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className={`text-[9px] font-black uppercase tracking-widest ${youth.position === PlayerPosition.GK ? 'text-amber-400' : youth.position === PlayerPosition.DEF ? 'text-blue-400' : youth.position === PlayerPosition.MID ? 'text-emerald-400' : 'text-rose-400'}`}>{POSITION_LABEL[youth.position]}</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">{youth.age} lat</span>
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tight">{youth.nationalityCountry || REGION_LABELS[youth.nationality] || youth.nationality}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-right">
+            <div className="flex flex-col items-center justify-center h-12 w-12 shrink-0 rounded-full border-2 border-white/15 bg-white/[0.05]">
+              <span className="text-[6px] text-slate-500 font-black italic uppercase tracking-tighter leading-none">OVR</span>
+              <span className="text-base font-black text-white tabular-nums leading-none mt-0.5">{overall}</span>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-2.5 py-1.5">
+              <div className="text-[7px] text-slate-500 font-black italic uppercase tracking-tighter">Gotowość</div>
+              <div className={`text-lg font-black tabular-nums leading-none ${isReady ? 'text-emerald-400' : 'text-white'}`}>{Math.round(youth.readinessScore)}%</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-2.5 py-1.5">
+              <div className="text-[7px] text-slate-500 font-black italic uppercase tracking-tighter">Talent</div>
+              <div className={`text-[11px] font-black uppercase leading-none ${talent ? talent.color.split(' ')[0] : 'text-slate-500'}`}>{talent ? talent.label : 'Nieznany'}</div>
+            </div>
+          </div>
+        </div>
+
+        <svg viewBox={`0 0 ${attrSvgW} ${attrSvgH}`} width="100%" height={attrSvgH} className="relative z-10 mt-3 block">
+          <defs>
+            {attributeRows.map(attr => (
+              <linearGradient key={attr.key} id={`youth-attr-${attr.key}`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor={attr.color} stopOpacity="0.18" />
+                <stop offset="100%" stopColor={attr.color} stopOpacity="0.92" />
+              </linearGradient>
+            ))}
+          </defs>
+          <rect x="8" y="4" width={attrSvgW - 16} height={attrSvgH - 10} rx="22" fill="rgba(2,6,23,0.48)" stroke="rgba(255,255,255,0.08)" />
+          <text x="24" y="28" fill="rgba(203,213,225,0.72)" fontSize="8" fontWeight="900" fontStyle="italic" letterSpacing="2">
+            WSZYSTKIE ATRYBUTY
+          </text>
+          <line x1="24" y1="44" x2={attrSvgW - 24} y2="44" stroke="rgba(255,255,255,0.08)" />
+          {attributeRows.map((attr, i) => {
+            const col = i < 6 ? 0 : 1;
+            const row = i < 6 ? i : i - 6;
+            const x = 24 + col * attrColW;
+            const y = attrBarYStart + row * attrRowGap;
+            const barX = x + attrBarStartX;
+            const barW = Math.max(8, (Math.min(attr.value, 100) / 100) * attrBarMaxW);
+            return (
+              <g key={attr.key}>
+                {attr.isFocusAttribute && (
+                  <rect x={x - 6} y={y - 12} width="120" height="20" rx="7" fill="rgba(250,204,21,0.06)" stroke="rgba(250,204,21,0.48)" />
+                )}
+                <text x={x} y={y + 4} fill={attr.isFocusAttribute ? 'rgba(254,240,138,0.95)' : 'rgba(226,232,240,0.9)'} fontSize="10" fontWeight="900" fontStyle="italic" letterSpacing="1.1">
+                  {attr.label.toUpperCase()}
+                </text>
+                <rect x={barX} y={y - 8} width={attrBarMaxW} height="16" rx="8" fill="rgba(15,23,42,0.92)" stroke="rgba(255,255,255,0.08)" />
+                <rect x={barX} y={y - 8} width={barW} height="16" rx="8" fill={`url(#youth-attr-${attr.key})`} />
+                <line x1={barX + barW} y1={y - 10} x2={barX + barW} y2={y + 10} stroke={attr.color} strokeOpacity="0.95" strokeWidth="2" />
+                <text x={barX + attrBarMaxW + 22} y={y + 4} fill="white" fontSize="12" fontWeight="900" textAnchor="end">
+                  {attr.value}
+                </text>
+                <title>{`${attr.label}: ${attr.value}${attr.isFocusAttribute ? ', focus rozwoju' : ''}`}</title>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  };
 
   if (!academy) {
     return (
@@ -184,6 +282,12 @@ export const AcademyView: React.FC = () => {
 
   return (
     <>
+      {hoveredYouthProgress && createPortal(
+        <PortalScaleWrapper>
+          {renderYouthProgressTooltip(hoveredYouthProgress.youth)}
+        </PortalScaleWrapper>,
+        document.body
+      )}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <img src={rezerwyBg} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.3 }} />
         <div className="absolute inset-0 bg-slate-950/70" />
@@ -273,11 +377,10 @@ export const AcademyView: React.FC = () => {
                         return (
                           <tr
                             key={youth.id}
-                            onClick={() => setSelectedYouthId(prev => prev === youth.id ? null : youth.id)}
-                            className={`border-t border-slate-700/30 cursor-pointer transition-colors ${
+                            className={`border-t border-slate-700/30 transition-colors ${
                               youth.contractSigned === false
                                 ? 'bg-amber-500/5 border-l-2 border-l-amber-500/40'
-                                : selectedYouthId === youth.id ? 'bg-white/5' : 'hover:bg-white/[0.03]'
+                                : 'hover:bg-white/[0.03]'
                             }`}
                           >
                             <td className="px-3 py-2">
@@ -286,7 +389,20 @@ export const AcademyView: React.FC = () => {
                               </span>
                             </td>
                             <td className="px-3 py-2">
-                              <span className="font-black text-white">{youth.firstName} {youth.lastName}</span>
+                              <span
+                                className="font-black text-white cursor-default hover:text-emerald-400 transition-colors"
+                                onMouseEnter={e => setHoveredYouthProgress({
+                                  youth,
+                                  x: Math.max(18, Math.min(e.clientX + 18, window.innerWidth - 962)),
+                                  y: Math.max(18, Math.min(Math.max(e.clientY - 210, 32), window.innerHeight - 360))
+                                })}
+                                onMouseMove={e => setHoveredYouthProgress({
+                                  youth,
+                                  x: Math.max(18, Math.min(e.clientX + 18, window.innerWidth - 962)),
+                                  y: Math.max(18, Math.min(Math.max(e.clientY - 210, 32), window.innerHeight - 360))
+                                })}
+                                onMouseLeave={() => setHoveredYouthProgress(null)}
+                              >{youth.firstName} {youth.lastName}</span>
                             </td>
                             <td className="px-3 py-2 text-center text-slate-400">{youth.age}</td>
                             {ATTR_DISPLAY.map(a => {
@@ -425,63 +541,6 @@ export const AcademyView: React.FC = () => {
                   </table>
                 )}
               </div>
-
-              {/* Karta szczegółów wybranego zawodnika */}
-              {selectedYouth && (
-                <div className="w-72 shrink-0 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md p-5 shadow-2xl self-start sticky top-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${POSITION_BADGE[selectedYouth.position]}`}>
-                      {POSITION_LABEL[selectedYouth.position]}
-                    </span>
-                    <div>
-                      <p className="text-white font-black text-sm">{selectedYouth.firstName} {selectedYouth.lastName}</p>
-                      <p className="text-slate-500 text-[9px] uppercase tracking-widest">{selectedYouth.age} lat • {selectedYouth.nationalityCountry || REGION_LABELS[selectedYouth.nationality] || selectedYouth.nationality}</p>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Gotowość do awansu</p>
-                    <div className="w-full h-2.5 bg-slate-700/60 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${selectedYouth.readinessScore >= readinessThreshold ? 'bg-emerald-500' : 'bg-blue-500'}`}
-                        style={{ width: `${selectedYouth.readinessScore}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[9px] text-slate-500">{Math.round(selectedYouth.readinessScore)}%</span>
-                      <span className="text-[9px] text-slate-600">Próg: {readinessThreshold}%</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Talent</p>
-                    {selectedYouth.revealedTalentRating ? (
-                      <span className={`text-xs font-black px-3 py-1 rounded-lg border ${TALENT_LABEL[selectedYouth.revealedTalentRating].color}`}>
-                        {TALENT_LABEL[selectedYouth.revealedTalentRating].label}
-                      </span>
-                    ) : (
-                      <p className="text-slate-600 text-xs">Niezbadany — wyślij skaut</p>
-                    )}
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Atrybuty</p>
-                    <div className="grid grid-cols-2 gap-1">
-                      {ATTR_DISPLAY.map(a => (
-                        <div key={a.key} className="flex justify-between items-center px-2 py-1 bg-slate-800/40 rounded-lg">
-                          <span className="text-[9px] text-slate-400 font-bold">{a.label}</span>
-                          <span className={`text-[10px] font-black ${selectedYouth.attributes[a.key] >= 40 ? 'text-emerald-400' : selectedYouth.attributes[a.key] >= 28 ? 'text-slate-300' : 'text-slate-600'}`}>
-                            {selectedYouth.attributes[a.key]}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <p className="text-[9px] text-slate-600 mt-2">Miesięcy w Akademii: {Math.round(selectedYouth.monthsInAcademy)}</p>
-                  <p className="text-[9px] text-slate-600">Kontrakt do: {selectedYouth.contractEndDate}</p>
-                </div>
-              )}
             </div>
           )}
 

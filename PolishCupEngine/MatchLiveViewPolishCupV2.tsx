@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
-import { getClubLogo } from '../../resources/ClubLogoAssets';
-import { useGame } from '../../context/GameContext';
-import { 
-  ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType, 
-  MatchEventType, SubstitutionRecord, MatchLogEntry, InjurySeverity, 
+import { getClubLogo } from '../resources/ClubLogoAssets';
+import { useGame } from '../context/GameContext';
+import {
+  ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType,
+  MatchEventType, SubstitutionRecord, MatchLogEntry, InjurySeverity,
   Player, HealthStatus, MatchSummary, MatchSummaryEvent, MatchResult,
   Lineup,
   PlayerPerformance,
@@ -12,10 +12,620 @@ import {
   InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack, InstructionMarking,
   Referee,
   Fixture,
-  WeatherSnapshot
-} from '../../types';
-import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
-import { PlayerMoraleService } from '../../services/PlayerMoraleService';
+  WeatherSnapshot,
+  Club,
+  PlayerStats,
+  TacticalInstructions,
+  PlayerAttributes,
+  GoalTickerInfo,
+  AiCupMatchPlan,
+  MatchStatus,
+  PromotionPlayoffSingleMatchResult,
+  PromotionPlayoffSemiResults
+} from '../types';
+import { rollInjuryBySeverity } from '../services/InjuryCatalog';
+import { PlayerMoraleService } from '../services/PlayerMoraleService';
+import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
+import { PostMatchCommentSelector } from './PostMatchCommentSelector';
+import { MailService } from '../services/MailService';
+import { PolishCupVenueService } from '../services/PolishCupVenueService';
+
+// --- PRZENIESIONE Z PolishCupEngine/MatchLiveViewPolishCupSimulation.tsx: warstwa czystych funkcji kalkulacyjnych Pucharu (moc drużyn, morale/leadership, ocena instrukcji, deformacja pozycyjna, seria karna, nazwy graczy) ---
+const getCupDebriefMatchStage = (fixtureId: string, playoffMatchType?: string): DebriefMatchStage => {
+  const normalizedId = fixtureId.toUpperCase();
+  if (playoffMatchType?.includes('FINAL')) return 'CUP_FINAL';
+  if (playoffMatchType?.includes('SEMI')) return 'CUP_SEMIFINAL';
+  if (normalizedId.includes('SUPER_CUP') || normalizedId.includes('FINA')) return 'CUP_FINAL';
+  if (normalizedId.includes('1/2') || normalizedId.includes('SEMI')) return 'CUP_SEMIFINAL';
+  return 'CUP';
+};
+
+const getCupBriefingMatchStage = (fixtureId: string, playoffMatchType?: string): BriefingMatchStage => {
+  const normalizedId = fixtureId.toUpperCase();
+  if (playoffMatchType?.includes('FINAL')) return 'CUP_FINAL';
+  if (playoffMatchType?.includes('SEMI')) return 'CUP_SEMIFINAL';
+  if (normalizedId.includes('SUPER_CUP') || normalizedId.includes('FINA')) return 'CUP_FINAL';
+  if (normalizedId.includes('1/2') || normalizedId.includes('SEMI')) return 'CUP_SEMIFINAL';
+  return 'CUP';
+};
+
+const createEmptyCupStats = (): PlayerStats => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: []
+});
+
+type CupInstructionAssessment = {
+  score: number;
+  attackDelta: number;
+  defendDelta: number;
+  fatigueMultiplier: number;
+  riskMultiplier: number;
+  label: 'IDEALNE' | 'DOBRE' | 'RYZYKOWNE' | 'ZŁY MATCH-UP';
+};
+
+type CupInstructionAssessmentPack = {
+  pressing: CupInstructionAssessment;
+  shortPassing: CupInstructionAssessment;
+  longPassing: CupInstructionAssessment;
+  counterAttack: CupInstructionAssessment;
+  marking: CupInstructionAssessment;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const getAssessmentLabel = (score: number): CupInstructionAssessment['label'] => {
+  if (score >= 12) return 'IDEALNE';
+  if (score >= 2) return 'DOBRE';
+  if (score > -10) return 'RYZYKOWNE';
+  return 'ZŁY MATCH-UP';
+};
+
+const getLineupPlayers = (
+  lineup: (string | null)[],
+  teamPlayers: Player[]
+) => lineup
+  .filter((id): id is string => id !== null)
+  .map(id => teamPlayers.find(player => player.id === id))
+  .filter((player): player is Player => player !== undefined);
+
+const getWeightedAverage = (
+  players: Player[],
+  weights: Partial<Record<keyof PlayerAttributes, number>>
+) => {
+  if (players.length === 0) return 50;
+  const entries = Object.entries(weights) as Array<[keyof PlayerAttributes, number]>;
+  if (entries.length === 0) return 50;
+  const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0) || 1;
+  return players.reduce((sum, player) => {
+    const weighted = entries.reduce((acc, [attr, weight]) => acc + (player.attributes[attr] || 50) * weight, 0);
+    return sum + weighted / totalWeight;
+  }, 0) / players.length;
+};
+
+const getAverageFatigue = (
+  players: Player[],
+  fatigueMap: Record<string, number>
+) => {
+  if (players.length === 0) return 100;
+  return players.reduce((sum, player) => sum + (fatigueMap[player.id] ?? player.condition ?? 100), 0) / players.length;
+};
+
+type CupLeadershipMoraleProfile = {
+  captainOnPitch: boolean;
+  captainScore: number;
+  moraleScore: number;
+  powerMultiplier: number;
+  actionMultiplier: number;
+  riskMultiplier: number;
+  fatigueMultiplier: number;
+  incidentMultiplier: number;
+  attackThresholdDelta: number;
+  defenseThresholdDelta: number;
+  penaltyComposureDelta: number;
+  penaltyRiskMultiplier: number;
+  initialMomentumDelta: number;
+};
+
+const neutralCupLeadershipMoraleProfile: CupLeadershipMoraleProfile = {
+  captainOnPitch: false,
+  captainScore: 50,
+  moraleScore: 50,
+  powerMultiplier: 1,
+  actionMultiplier: 1,
+  riskMultiplier: 1,
+  fatigueMultiplier: 1,
+  incidentMultiplier: 1,
+  attackThresholdDelta: 0,
+  defenseThresholdDelta: 0,
+  penaltyComposureDelta: 0,
+  penaltyRiskMultiplier: 1,
+  initialMomentumDelta: 0,
+};
+
+const getCupLeadershipMoraleProfile = ({
+  club,
+  lineup,
+  teamPlayers,
+  fatigueMap,
+  sentOffIds,
+  injuries,
+}: {
+  club: Club;
+  lineup: (string | null)[];
+  teamPlayers: Player[];
+  fatigueMap: Record<string, number>;
+  sentOffIds: string[];
+  injuries: Record<string, InjurySeverity>;
+}): CupLeadershipMoraleProfile => {
+  const activePlayers = lineup
+    .filter((id): id is string => id !== null)
+    .filter(id => !sentOffIds.includes(id) && injuries[id] !== InjurySeverity.SEVERE)
+    .map(id => teamPlayers.find(player => player.id === id))
+    .filter((player): player is Player => player !== undefined);
+
+  if (activePlayers.length === 0) return neutralCupLeadershipMoraleProfile;
+
+  const moraleScore = clamp(club.morale ?? 50, 5, 95);
+  const captain = club.captainId ? activePlayers.find(player => player.id === club.captainId) : undefined;
+  const emergencyLeader = [...activePlayers].sort((a, b) => {
+    const aScore = (a.attributes.leadership || 50) * 0.72 + (a.attributes.mentality || 50) * 0.28;
+    const bScore = (b.attributes.leadership || 50) * 0.72 + (b.attributes.mentality || 50) * 0.28;
+    return bScore - aScore;
+  })[0];
+
+  const leaderForScore = captain ?? emergencyLeader;
+  const liveCondition = leaderForScore ? (fatigueMap[leaderForScore.id] ?? leaderForScore.condition ?? 100) : 100;
+  const conditionMult = clamp(0.84 + liveCondition / 625, 0.84, 1.0);
+  const rawCaptainScore = leaderForScore
+    ? ((leaderForScore.attributes.leadership || 50) * 0.62 +
+        (leaderForScore.attributes.mentality || 50) * 0.26 +
+        (leaderForScore.attributes.workRate || 50) * 0.12) * conditionMult
+    : 50;
+  const captainScore = clamp(rawCaptainScore, 25, 95);
+
+  // A named captain is valuable only while he is actually available on the pitch.
+  // If he is missing, the best remaining leader reduces the damage but cannot create a full captain bonus.
+  const captainAvailabilityEdge = captain
+    ? clamp((captainScore - 55) / 1500, -0.018, 0.020)
+    : (club.captainId
+        ? clamp(-0.026 + ((captainScore - 60) / 2400), -0.036, -0.012)
+        : clamp(-0.012 + ((captainScore - 62) / 3200), -0.020, 0.004));
+
+  // Club morale is a team-wide confidence layer. It is capped tightly so it supports attributes instead of replacing them.
+  const moraleEdge = clamp((moraleScore - 50) / 1600, -0.018, 0.018);
+  const composureEdge = clamp(moraleEdge * 0.82 + captainAvailabilityEdge * 0.92, -0.038, 0.034);
+  const pressureEdge = clamp(composureEdge * 1.18, -0.044, 0.038);
+
+  return {
+    captainOnPitch: !!captain,
+    captainScore: parseFloat(captainScore.toFixed(2)),
+    moraleScore: parseFloat(moraleScore.toFixed(2)),
+    powerMultiplier: clamp(1 + moraleEdge + captainAvailabilityEdge, 0.955, 1.036),
+    actionMultiplier: clamp(1 + composureEdge * 0.46, 0.984, 1.016),
+    riskMultiplier: clamp(1 - pressureEdge * 0.72, 0.972, 1.042),
+    fatigueMultiplier: clamp(1 - Math.max(0, composureEdge) * 0.22 + Math.max(0, -composureEdge) * 0.34, 0.992, 1.016),
+    incidentMultiplier: clamp(1 - pressureEdge * 0.48, 0.984, 1.032),
+    attackThresholdDelta: clamp(composureEdge * 0.48, -0.014, 0.012),
+    defenseThresholdDelta: clamp(composureEdge * 0.58, -0.016, 0.014),
+    penaltyComposureDelta: clamp(pressureEdge * 0.42, -0.018, 0.016),
+    penaltyRiskMultiplier: clamp(1 - pressureEdge * 0.70, 0.966, 1.058),
+    initialMomentumDelta: clamp(composureEdge * 42, -1.65, 1.45),
+  };
+};
+
+const getCupPenaltyLeadershipChanceShift = (
+  attackerProfile: CupLeadershipMoraleProfile,
+  defenderProfile: CupLeadershipMoraleProfile
+) => clamp(
+  attackerProfile.penaltyComposureDelta - defenderProfile.penaltyComposureDelta * 0.42,
+  -0.024,
+  0.022
+);
+
+const buildInstructionAssessment = (
+  score: number,
+  attackDelta: number,
+  defendDelta: number,
+  fatigueMultiplier: number,
+  riskMultiplier: number
+): CupInstructionAssessment => ({
+  score: parseFloat(score.toFixed(2)),
+  attackDelta: parseFloat(attackDelta.toFixed(4)),
+  defendDelta: parseFloat(defendDelta.toFixed(4)),
+  fatigueMultiplier: parseFloat(fatigueMultiplier.toFixed(3)),
+  riskMultiplier: parseFloat(riskMultiplier.toFixed(3)),
+  label: getAssessmentLabel(score),
+});
+
+const evaluateCupInstructionAssessments = ({
+  userSide,
+  homeLineup,
+  awayLineup,
+  homePlayers,
+  awayPlayers,
+  homeFatigue,
+  awayFatigue,
+  aiTacticId,
+  aiShout,
+}: {
+  userSide: 'HOME' | 'AWAY';
+  homeLineup: (string | null)[];
+  awayLineup: (string | null)[];
+  homePlayers: Player[];
+  awayPlayers: Player[];
+  homeFatigue: Record<string, number>;
+  awayFatigue: Record<string, number>;
+  aiTacticId: string;
+  aiShout?: { mindset?: string; tempo?: string } | null;
+}): CupInstructionAssessmentPack => {
+  const userPlayersPool = userSide === 'HOME' ? homePlayers : awayPlayers;
+  const aiPlayersPool = userSide === 'HOME' ? awayPlayers : homePlayers;
+  const userLineup = getLineupPlayers(userSide === 'HOME' ? homeLineup : awayLineup, userPlayersPool);
+  const aiLineup = getLineupPlayers(userSide === 'HOME' ? awayLineup : homeLineup, aiPlayersPool);
+  const userOutfield = userLineup.filter(player => player.position !== PlayerPosition.GK);
+  const aiOutfield = aiLineup.filter(player => player.position !== PlayerPosition.GK);
+  const userDefenders = userLineup.filter(player => player.position === PlayerPosition.DEF || player.position === PlayerPosition.MID);
+  const aiAttackers = aiLineup.filter(player => player.position === PlayerPosition.FWD || player.position === PlayerPosition.MID);
+  const userMidFwd = userLineup.filter(player => player.position === PlayerPosition.MID || player.position === PlayerPosition.FWD);
+  const aiMidFwd = aiLineup.filter(player => player.position === PlayerPosition.MID || player.position === PlayerPosition.FWD);
+  const aiDefenders = aiLineup.filter(player => player.position === PlayerPosition.DEF);
+  const aiBackLine = aiLineup.filter(player => player.position === PlayerPosition.DEF || player.position === PlayerPosition.GK);
+  const userFatigueMap = userSide === 'HOME' ? homeFatigue : awayFatigue;
+
+  const userAvgFatigue = getAverageFatigue(userOutfield, userFatigueMap);
+  const aiTactic = TacticRepository.getById(aiTacticId);
+  const aiAttackIntent = clamp(
+    (aiTactic?.attackBias ?? 50) +
+      (aiShout?.mindset === 'OFFENSIVE' ? 12 : aiShout?.mindset === 'DEFENSIVE' ? -10 : 0) +
+      (aiShout?.tempo === 'FAST' ? 8 : aiShout?.tempo === 'SLOW' ? -6 : 0),
+    20,
+    95
+  );
+  const aiBlockLevel = clamp(
+    (aiTactic?.defenseBias ?? 50) +
+      (aiShout?.mindset === 'DEFENSIVE' ? 10 : aiShout?.mindset === 'OFFENSIVE' ? -8 : 0),
+    20,
+    95
+  );
+
+  const pressingCore = getWeightedAverage(userOutfield, {
+    workRate: 0.27,
+    stamina: 0.26,
+    aggression: 0.18,
+    pace: 0.16,
+    mentality: 0.13,
+  });
+  const aiPressResistance = getWeightedAverage(aiOutfield, {
+    passing: 0.28,
+    technique: 0.24,
+    vision: 0.18,
+    mentality: 0.16,
+    workRate: 0.14,
+  });
+  const pressingScore = (pressingCore - aiPressResistance) + (userAvgFatigue - 72) * 0.42;
+  const pressingEdge = clamp(pressingScore / 600, -0.024, 0.026);
+
+  const shortBuildCore = getWeightedAverage(userMidFwd, {
+    passing: 0.32,
+    technique: 0.24,
+    vision: 0.20,
+    dribbling: 0.12,
+    workRate: 0.12,
+  });
+  const aiShortDisruption = getWeightedAverage(aiOutfield, {
+    defending: 0.25,
+    aggression: 0.22,
+    pace: 0.17,
+    workRate: 0.18,
+    positioning: 0.18,
+  });
+  const shortPassingScore = shortBuildCore - aiShortDisruption + (userAvgFatigue - 70) * 0.18;
+  const shortPassingEdge = clamp(shortPassingScore / 620, -0.022, 0.024);
+
+  const longDistribution = getWeightedAverage(userLineup, {
+    passing: 0.34,
+    technique: 0.22,
+    crossing: 0.16,
+    vision: 0.16,
+    mentality: 0.12,
+  });
+  const longTargets = getWeightedAverage(userMidFwd, {
+    heading: 0.28,
+    strength: 0.22,
+    pace: 0.20,
+    attacking: 0.18,
+    positioning: 0.12,
+  });
+  const aiLongControl = getWeightedAverage(aiBackLine, {
+    heading: 0.28,
+    positioning: 0.24,
+    strength: 0.20,
+    pace: 0.16,
+    defending: 0.12,
+  });
+  const longPassingScore = (longDistribution * 0.46 + longTargets * 0.54) - aiLongControl;
+  const longPassingEdge = clamp(longPassingScore / 700, -0.021, 0.023);
+
+  const userTransitionCore = getWeightedAverage(userMidFwd, {
+    pace: 0.24,
+    dribbling: 0.18,
+    attacking: 0.18,
+    finishing: 0.14,
+    passing: 0.14,
+    vision: 0.12,
+  });
+  const aiRecovery = getWeightedAverage(aiDefenders.length > 0 ? aiDefenders : aiBackLine, {
+    pace: 0.26,
+    positioning: 0.24,
+    defending: 0.20,
+    workRate: 0.18,
+    strength: 0.12,
+  });
+  const aiExposure = (aiAttackIntent - 55) * 0.65 + (60 - aiBlockLevel) * 0.45;
+  const counterAttackScore = (userTransitionCore - aiRecovery) + aiExposure;
+  const counterAttackEdge = clamp(counterAttackScore / 650, -0.024, 0.026);
+  const markingDiscipline = getWeightedAverage(userDefenders, {
+    positioning: 0.27,
+    defending: 0.27,
+    mentality: 0.16,
+    workRate: 0.14,
+    stamina: 0.10,
+    strength: 0.06,
+  });
+  const attackerMovement = getWeightedAverage(aiAttackers.length > 0 ? aiAttackers : aiOutfield, {
+    attacking: 0.22,
+    pace: 0.20,
+    dribbling: 0.18,
+    technique: 0.16,
+    positioning: 0.14,
+    vision: 0.10,
+  });
+  const markingPressure = (aiAttackIntent - 55) * 0.38 + (userAvgFatigue - 74) * 0.25;
+  const markingScore = (markingDiscipline - attackerMovement) + markingPressure;
+  const markingEdge = clamp(markingScore / 680, -0.026, 0.024);
+
+  return {
+    pressing: buildInstructionAssessment(
+      pressingScore,
+      pressingEdge,
+      pressingEdge * 0.88,
+      1.09 + clamp((78 - userAvgFatigue) / 240, 0, 0.09) + clamp(-pressingEdge * 1.8, 0, 0.05),
+      1.08 + clamp(-pressingEdge * 2.8, 0, 0.12)
+    ),
+    shortPassing: buildInstructionAssessment(
+      shortPassingScore,
+      shortPassingEdge,
+      shortPassingEdge * 0.34,
+      1.0 + clamp(-shortPassingEdge * 0.8, 0, 0.02),
+      1.0 + clamp(-shortPassingEdge * 1.6, 0, 0.06)
+    ),
+    longPassing: buildInstructionAssessment(
+      longPassingScore,
+      longPassingEdge,
+      longPassingEdge * 0.42,
+      0.99 + clamp(-longPassingEdge * 1.2, 0, 0.03),
+      1.0 + clamp(-longPassingEdge * 1.8, 0, 0.08)
+    ),
+    counterAttack: buildInstructionAssessment(
+      counterAttackScore,
+      counterAttackEdge,
+      counterAttackEdge * 0.52,
+      0.97 + clamp(-counterAttackEdge * 0.9, 0, 0.03),
+      1.0 + clamp(-counterAttackEdge * 1.8, 0, 0.08)
+    ),
+    marking: buildInstructionAssessment(
+      markingScore,
+      Math.max(0, markingEdge) * 0.12,
+      markingEdge,
+      1.02 + clamp(-markingEdge * 1.4, 0, 0.05),
+      1.0 + clamp(-markingEdge * 2.2, 0, 0.12)
+    ),
+  };
+};
+
+const getFormationPowerPro = (
+  lineup: (string | null)[],
+  teamPlayers: Player[],
+  fatigueMap: Record<string, number>,
+  attrKeys: (keyof PlayerAttributes)[],
+  positions: PlayerPosition[],
+  weatherMod: number,
+  injuriesMap: Record<string, InjurySeverity> = {},
+  instructions?: TacticalInstructions
+) => {
+    let tacticalMult = 1.0;
+    if (instructions?.tempo === 'FAST' && positions.includes(PlayerPosition.FWD)) tacticalMult = 1.15;
+    if (instructions?.tempo === 'SLOW' && attrKeys.includes('technique')) tacticalMult = 1.20;
+
+  const activePlayers = teamPlayers.filter(p => lineup.includes(p.id) && positions.includes(p.position));
+
+  // --- TUTAJ WSTAW TEN KOD (Kara za brak specjalisty) ---
+  if (activePlayers.length === 0) return 1; // Drastyczny spadek mocy przy pustej linii
+
+  // Jeśli formacja zawiera bramkę (GK) a w slocie 0 nie ma gracza z pozycją GK -> cała formacja traci 85% mocy
+ const hasRealGkInStartingXI = teamPlayers.find(p => p.id === lineup[0])?.position === PlayerPosition.GK;
+
+  // Jeśli brak bramkarza, każda formacja (Atak, Pomoc, Obrona) traci moc.
+  // Obrona i GK (positions z GK lub DEF) tracą 85%, Atak/Pomoc traci 50% (paraliż decyzyjny).
+  const isDefensiveLine = positions.includes(PlayerPosition.GK) || positions.includes(PlayerPosition.DEF);
+
+  // TUTAJ WSTAW TEN KOD: KALIBRACJA INTEGRITY (STAGE 1 PRO)
+  // Zwiększamy mnożnik z 0.2 do 0.45. Obrona bez GK jest słaba, ale nie przestaje istnieć.
+  // TUTAJ WSTAW TEN KOD: KALIBRACJA INTEGRITY (STAGE 1 PRO + LOSOWOŚĆ)
+
+// deklarujemy zmienną na poziomie funkcji (poza if)
+let integrityMult = 1.0;
+
+if (!hasRealGkInStartingXI) {
+    if (isDefensiveLine) {
+        // defensywa / GK → strata ~60% (napastnik w bramce = panika)
+        integrityMult = 0.35 + Math.random() * 0.10;
+    } else {
+        // pomoc / atak → strata ~24% (dezorganizacja taktyczna)
+        integrityMult = 0.72 + Math.random() * 0.10;
+    }
+}
+
+
+const startersCount = lineup.filter(id => id !== null).length;
+
+  // TUTAJ ZASTĄP TEN KOD (ASYMETRYCZNA KARA ZA CZERWONĄ KARTKĘ)
+  // Atak cierpi mocno (0.15 na gracza), ale obrona mniej (0.05 na gracza) - symulacja "parkowania autobusu"
+  const isAttack = positions.includes(PlayerPosition.FWD);
+  const penaltyPerPlayer = isAttack ? 0.10 : 0.04;
+  const numericalPenalty = Math.max(0.78, 1 - (11 - startersCount) * penaltyPerPlayer);
+  // KONIEC POPRAWKI
+
+  // Ogólne zaburzenie składu: GK na polu + brak obrońców redukują moc drużyny
+  const gksOnFieldCount = teamPlayers.filter(p =>
+    lineup.slice(1).filter(id => id !== null).includes(p.id) && p.position === PlayerPosition.GK
+  ).length;
+  const defLineupCount = teamPlayers.filter(p =>
+    lineup.filter(id => id !== null).includes(p.id) && p.position === PlayerPosition.DEF
+  ).length;
+  const generalDisorderMult = Math.max(0.55, 1
+    - gksOnFieldCount * 0.09
+    - Math.max(0, 2 - defLineupCount) * 0.08);
+
+  return activePlayers.reduce((sum, p) => {
+    const pFatigue = fatigueMap[p.id] ?? p.condition;
+    // Kondycja wpływa na statystyki: 100% kondycji = 100% mocy, 50% = 61% mocy, 0% = 22% mocy
+    // Szerszy zakres 0.12–0.55 sprawia, że kontuzje i zmęczenie mają realne znaczenie
+const fatigueMult = 0.12 + (pFatigue / 100) * 0.43; // Zakres: 0.12 (cond=0) → 0.55 (cond=100)
+    const avgAttr = attrKeys.reduce((s, attr) => s + (p.attributes[attr] || 50), 0) / attrKeys.length;
+    const mentalityWorkRateBase = ((p.attributes.mentality || 50) * 0.55) + ((p.attributes.workRate || 50) * 0.45);
+    const mentalityWorkRateMult = 0.92 + (mentalityWorkRateBase / 100) * 0.16;
+
+    // ZMIANA PRO: Potencjał nieliniowy. Każdy punkt atrybutu powyżej 50 ma coraz większą wagę.
+    // 1.15 zamiast 1.35 — łagodniejsza krzywa, niższe Tiery mają realne szanse na akcje
+    const powerBase = Math.pow(avgAttr, 1.0);
+    // Lekka kontuzja: gracz gra przez ból — bezpośrednia kara -6% wkładu w moc drużyny
+    const lightInjMult = injuriesMap[p.id] === InjurySeverity.LIGHT ? 0.94 : 1.0;
+
+    return sum + (powerBase * fatigueMult * weatherMod * integrityMult * numericalPenalty * generalDisorderMult * lightInjMult * tacticalMult * mentalityWorkRateMult);
+  }, 0);
+};
+
+// Macierz kar za granie poza pozycją: [rzeczywista pozycja][oczekiwana rola slotu]
+// Wartość = disorder dodany za każdy taki mismatch
+const POSITION_MISMATCH_PENALTY: Record<PlayerPosition, Record<PlayerPosition, number>> = {
+  [PlayerPosition.GK]:  { [PlayerPosition.GK]: 0.00, [PlayerPosition.DEF]: 0.10, [PlayerPosition.MID]: 0.12, [PlayerPosition.FWD]: 0.12 },
+  [PlayerPosition.DEF]: { [PlayerPosition.GK]: 0.22, [PlayerPosition.DEF]: 0.00, [PlayerPosition.MID]: 0.05, [PlayerPosition.FWD]: 0.08 },
+  [PlayerPosition.MID]: { [PlayerPosition.GK]: 0.22, [PlayerPosition.DEF]: 0.05, [PlayerPosition.MID]: 0.00, [PlayerPosition.FWD]: 0.04 },
+  [PlayerPosition.FWD]: { [PlayerPosition.GK]: 0.25, [PlayerPosition.DEF]: 0.08, [PlayerPosition.MID]: 0.05, [PlayerPosition.FWD]: 0.00 },
+};
+
+const getPositionalDisorder = (
+  lineup: (string | null)[],
+  players: Player[],
+  tacticId: string,
+  useSecondaryPositions = false
+): number => {
+  const tactic = TacticRepository.getById(tacticId);
+  if (!tactic || tactic.slots.length === 0) return 0;
+
+  let disorder = 0;
+
+  lineup.forEach((playerId, slotIndex) => {
+    if (!playerId) return; // pusty slot (czerwona kartka) — brak kary, zawodnika nie ma
+    const player = players.find(p => p.id === playerId);
+    if (!player) return;
+    const slot = tactic.slots[slotIndex];
+    if (!slot) return; // slot poza definicją taktyki
+
+    const expectedRole = slot.role;
+    const actualPos = player.position;
+    disorder += POSITION_MISMATCH_PENALTY[actualPos][expectedRole] *
+      PlayerPositionFitService.getPenaltyFactor(player, expectedRole, useSecondaryPositions);
+  });
+
+  // Normalizacja: max disorder = 11 zawodników × maks kara 0.25 = 2.75 → cappujemy do 0.70
+  // Dzielnik 4 zamiast 5: ten sam skład daje 25% silniejszy sygnał zaburzeń
+  return Math.min(0.70, disorder / 4);
+};
+
+const checkShootoutWinner = (
+  seq: NonNullable<MatchLiveState['penaltySequence']>
+): 'HOME' | 'AWAY' | null => {
+  const homeShots = seq.filter(s => s.side === 'HOME');
+  const awayShots = seq.filter(s => s.side === 'AWAY');
+  const homeScored = homeShots.filter(s => s.result === 'SCORED').length;
+  const awayScored = awayShots.filter(s => s.result === 'SCORED').length;
+  const homeTaken = homeShots.length;
+  const awayTaken = awayShots.length;
+  const sharedRounds = Math.min(homeTaken, awayTaken);
+
+  if (sharedRounds < 5) {
+    const homeRemaining = 5 - homeTaken;
+    const awayRemaining = 5 - awayTaken;
+    if (homeScored > awayScored + awayRemaining) return 'HOME';
+    if (awayScored > homeScored + homeRemaining) return 'AWAY';
+    return null;
+  }
+
+  if (homeTaken >= 5 && awayTaken >= 5 && homeTaken === awayTaken) {
+    if (homeScored !== awayScored) return homeScored > awayScored ? 'HOME' : 'AWAY';
+
+    for (let round = 5; round < homeTaken; round++) {
+      const homeResult = homeShots[round]?.result;
+      const awayResult = awayShots[round]?.result;
+      if (homeResult && awayResult) {
+        if (homeResult === 'SCORED' && awayResult === 'MISSED') return 'HOME';
+        if (awayResult === 'SCORED' && homeResult === 'MISSED') return 'AWAY';
+      }
+    }
+  }
+
+  return null;
+};
+
+const getNextShootoutSide = (
+  seq: NonNullable<MatchLiveState['penaltySequence']>
+): 'HOME' | 'AWAY' => {
+  const homeTaken = seq.filter(s => s.side === 'HOME').length;
+  const awayTaken = seq.filter(s => s.side === 'AWAY').length;
+  return homeTaken <= awayTaken ? 'HOME' : 'AWAY';
+};
+
+const getPlayerReportName = (player: Player) => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
+};
+
+const getPenaltyDisplayName = (player: Player) => {
+  const lastName = player.lastName.trim();
+  return lastName ? `${player.firstName} ${lastName}` : player.firstName;
+};
+
+const getPlayerGoalNames = (player: Player) => new Set([
+  player.lastName,
+  getPlayerReportName(player),
+  getPenaltyDisplayName(player),
+]);
+
+const doesGoalBelongToScorer = (goal: GoalTickerInfo & { playerId?: string }, player: Player) => {
+  if (goal.scorerId === player.id || goal.playerId === player.id) return true;
+  return getPlayerGoalNames(player).has(goal.playerName);
+};
+
+const doesGoalBelongToAssistant = (goal: GoalTickerInfo & { playerId?: string }, player: Player) => {
+  if (goal.assistantId === player.id) return true;
+  return !!goal.assistantName && getPlayerGoalNames(player).has(goal.assistantName);
+};
+
+const toCupHistoryGoal = (goal: GoalTickerInfo, teamId: string) => ({
+  ...goal,
+  playerId: goal.scorerId,
+  teamId
+});
+// --- KONIEC PRZENIESIONEGO BLOKU ---
 
 const getPlayerPenaltyImpact = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   const ownGoals = side === 'HOME' ? state.homeGoals : state.awayGoals;
@@ -99,66 +709,65 @@ const calculateLiveRating = (player: Player, side: 'HOME' | 'AWAY', state: any) 
   return calculateLiveRatingNumber(player, side, state).toFixed(1);
 };
 
-import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { MatchEngineService } from '../../services/MatchEngineService';
-import { MomentumService } from '../../services/MomentumService';
-import { TacticRepository } from '../../resources/tactics_db';
-import { PlayerPresentationService } from '../../services/PlayerPresentationService';
-import { MatchTacticsModal } from '../modals/MatchTacticsModal';
-import { GoalAttributionService } from '../../services/GoalAttributionService';
-import { BackgroundMatchProcessor } from '../../services/BackgroundMatchProcessor';
-import { RefereeService } from '../../services/RefereeService';
-import { PolandWeatherService } from '../../services/PolandWeatherService';
-import { DisciplineService } from '../../services/DisciplineService';
-import { AiMatchDecisionService } from '../../services/AiMatchDecisionService';
-import { PlayerStatsService } from '../../services/PlayerStatsService';
-import { MATCH_COMMENTARY_DB } from '../../data/match_commentary_pl';
-import { KitSelectionService } from '../../services/KitSelectionService';
-import { InjuryEventGenerator } from '../../services/InjuryEventGenerator';
-import { MatchHistoryService } from '../../services/MatchHistoryService';
-import { DebugLoggerService } from '../../services/DebugLoggerService';
-import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
-import { MatchActionService } from '../../services/MatchActionService';
-import { LiveMatchInstructionBalanceService } from '../../services/LiveMatchInstructionBalanceService';
-import { AttendanceService } from '../../services/AttendanceService';
-import { RivalryService } from '../../services/RivalryService';
-import { LineupService } from '../../services/LineupService';
-import { LiveMatchPhysicalMismatchService } from '../../services/LiveMatchPhysicalMismatchService';
-import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../../services/MatchFormService';
-import { applyFocusToFormImpact } from '../../services/MatchPrepFocusService';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { MatchEngineService } from '../services/MatchEngineService';
+import { MomentumService } from '../services/MomentumSeriveCup';
+import { TacticRepository } from '../resources/tactics_db';
+import { PlayerPresentationService } from '../services/PlayerPresentationService';
+import { MatchTacticsModal } from '../components/modals/MatchTacticsModal';
+import { GoalAttributionService } from '../services/GoalAttributionService';
+import { BackgroundMatchProcessor } from '../services/BackgroundMatchProcessor';
+import { RefereeService } from '../services/RefereeService';
+import { PolandWeatherService } from '../services/PolandWeatherService';
+import { DisciplineService } from '../services/DisciplineService';
+import { AiMatchDecisionCupService } from '../services/AiMatchDecisionCupService';
+import { PlayerStatsService } from '../services/PlayerStatsService';
+import { MATCH_COMMENTARY_DB } from '../data/match_commentary_pl';
+import { KitSelectionService } from '../services/KitSelectionService';
+import { InjuryEventGenerator } from '../services/InjuryEventGenerator';
+import { MatchHistoryService } from '../services/MatchHistoryService';
+import { DebugLoggerService } from '../services/DebugLoggerService';
+import { InjuryUpgradeService } from '../services/InjuryUpgradeService';
+import { MatchActionService } from '../services/MatchActionService';
+import { LiveMatchInstructionBalanceService } from '../services/LiveMatchInstructionBalanceService';
+import { AttendanceService } from '../services/AttendanceService';
+import { RivalryService } from '../services/RivalryService';
+import { LineupService } from '../services/LineupService';
+import { LiveMatchPhysicalMismatchService } from '../services/LiveMatchPhysicalMismatchService';
+import { analyzeClubFormImpact, NEUTRAL_CLUB_FORM_IMPACT } from '../services/MatchFormService';
+import { applyFocusToFormImpact } from '../services/MatchPrepFocusService';
 import { FinanceService } from '@/services/FinanceService';
-import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
-import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../../services/HalftimeTalkService';
-import { AiCoachTacticsService } from '../../services/AiCoachTacticsService';
-import { AiOpponentAnalysisService, AiOpponentMatchReport } from '../../services/AiOpponentAnalysisService';
-import { AiLeagueMatchPlanService } from '../../services/AiLeagueMatchPlanService';
-import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
-import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
-import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
-import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
-import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
-import { PreMatchPressConferenceService } from '../../services/PreMatchPressConferenceService';
-import { TacticalMatchupService } from '../../services/TacticalMatchupService';
-import { TeamFormImpactService } from '../../services/TeamFormImpactService';
+import { HalftimeTalkModal } from '../components/modals/HalftimeTalkModal';
+import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '../services/HalftimeTalkService';
+import { AiCoachTacticsService } from '../services/AiCoachTacticsService';
+import { AiOpponentAnalysisService, AiOpponentMatchReport } from '../services/AiOpponentAnalysisService';
+import { AiScoutingService } from '../services/AiScoutingService';
+import { AiCupMatchPlanService } from '../services/AiCupMatchPlanService';
+import { PreMatchBriefingModal } from '../components/modals/PreMatchBriefingModal';
+import { BriefingEffect, BriefingMatchStage, calculateAiCoachBriefingEffect } from '../services/PreMatchBriefingService';
+import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
+import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
+import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
+import { PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
+import { TacticalMatchupService } from '../services/TacticalMatchupService';
+import { TeamFormImpactService } from '../services/TeamFormImpactService';
 import {
   adjustBriefingEffectForPressure,
-  adjustDebriefEffectForPressure,
   adjustTalkEffectForPressure,
   buildMatchPressureContext,
   getAiHalftimePressureMultiplier,
   getLivePressureModifiers,
   getPressureProfileForSide,
-} from '../../services/MatchPressureService';
-import { detectLeagueMotivationContext } from '../../services/LeagueMotivationContextService';
+} from '../services/MatchPressureService';
 import {
   createRuntimeSessionSeed,
   getLegacyMinuteSeededValue,
   getLegacyOffsetSeededValue,
-} from '../../services/match/live/LiveMatchRandom';
-import { buildLiveMatchTeamProfile } from '../../services/match/live/LiveMatchTeamProfile';
-import { calculateLiveMatchInitiative } from '../../services/match/live/LiveMatchInitiative';
-import { calculateLiveMatchFatigueImpact } from '../../services/match/live/LiveMatchFatigue';
+} from '../services/match/live/LiveMatchRandom';
+import { buildLiveMatchTeamProfile } from '../services/match/live/LiveMatchTeamProfile';
+import { calculateLiveMatchInitiative } from '../services/match/live/LiveMatchInitiative';
+import { calculateLiveMatchFatigueImpact } from '../services/match/live/LiveMatchFatigue';
 import {
   adjustLiveShotThresholdForRainTechnique,
   calculateLiveDefendingBiasShotPenalty,
@@ -170,14 +779,14 @@ import {
   calculateLiveTopStrikerShotBonus,
   getLiveEmergencyKeeperRead,
   getLiveLineupAttributeAverage,
-} from '../../services/match/live/LiveMatchShotPressure';
-import { calculateLiveUserPhysicalActionSuppression } from '../../services/match/live/LiveMatchUserPhysicalAction';
-import { resolveLiveOwnGoal } from '../../services/match/live/LiveMatchOwnGoal';
+} from '../services/match/live/LiveMatchShotPressure';
+import { calculateLiveUserPhysicalActionSuppression } from '../services/match/live/LiveMatchUserPhysicalAction';
+import { resolveLiveOwnGoal } from '../services/match/live/LiveMatchOwnGoal';
 import {
   isLiveShotOnTargetEvent,
   resolveLiveMissedShotOutcome,
   shouldAttemptLiveOpenPlayShot,
-} from '../../services/match/live/LiveMatchOutcome';
+} from '../services/match/live/LiveMatchOutcome';
 import {
   calculateLiveFoulThreshold,
   calculateLivePenaltyIncidentChance,
@@ -187,7 +796,7 @@ import {
   resolveLivePenaltyReviewCard,
   resolveLivePenaltyReviewVerdict,
   shouldTriggerLiveFoul,
-} from '../../services/match/live/LiveMatchDiscipline';
+} from '../services/match/live/LiveMatchDiscipline';
 
 const BigJerseyIcon = ({ primary, secondary, size = "w-[89px] h-[89px]" }: { primary: string, secondary: string, size?: string }) => (
   <div className="relative group">
@@ -791,14 +1400,21 @@ type PenaltyReviewReason = 'HAND_BALL' | 'FOUL';
 type PenaltyReviewPhase = 'INCIDENT' | 'CHECKING' | 'RETURNING' | 'VERDICT';
 type PenaltyReviewVerdict = 'PENALTY' | 'NO_PENALTY';
 
-export const MatchLiveView = () => {
+export const MatchLiveViewPolishCupV2 = () => {
   const {
     navigateTo, userTeamId, clubs, fixtures, players,
-    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
-    roundResults, setClubs,
+    lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails, seasonNumber, coaches, staffMembers,
+    setClubs, setMessages,
+    activePlayoffMatch, setActivePlayoffMatch,
+    setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
+    setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
     activeMatchState: matchState, setActiveMatchState: setMatchState,
     pendingMatchKits, pressConferenceEffects
   } = useGame();
+
+  // PRZENIESIONE Z PUCHARU: tryb barażowy — ten sam komponent obsługuje zarówno mecze pucharowe,
+  // jak i baraże o awans/spadek, budując ctx z activePlayoffMatch zamiast z fixtures.
+  const isPlayoffMode = !!activePlayoffMatch;
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
   const [openTacticalSelect, setOpenTacticalSelect] = useState<string | null>(null);
@@ -862,13 +1478,18 @@ export const MatchLiveView = () => {
   const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
   const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  // PRZENIESIONE Z PUCHARU: isFinishing chroni przed podwójnym zakończeniem meczu (np. przy karnych/dogrywce,
+  // gdzie zakończenie jest asynchroniczne) — brama w useEffect ticku poniżej.
+  const [isFinishing, setIsFinishing] = useState(false);
   const [pendingFinishPayload, setPendingFinishPayload] = useState<{
-    simResultMerged: any;
+    applyArgs: any;
     matchHistoryArgs: any;
-    summary: MatchSummary;
-    userTeamId: string;
     debriefContext: DebriefContext;
+    debriefMatchStage: DebriefMatchStage;
+    debriefPenaltyScores?: { user: number; opp: number };
     sessionSeed: number;
+    navigateTarget: 'POST_MATCH_PLAYOFF_STUDIO' | 'POST_MATCH_CUP_STUDIO';
+    userTeamId: string;
   } | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -905,7 +1526,28 @@ export const MatchLiveView = () => {
 
 
   const ctx = useMemo(() => {
-    const fixture = fixtures.find(f => 
+    // PRZENIESIONE Z PUCHARU: w trybie barażowym nie ma zwykłego fixture — kontekst budujemy
+    // bezpośrednio z activePlayoffMatch (syntetyczny fixture), tak jak robi to dzisiejszy Puchar.
+    if (isPlayoffMode && activePlayoffMatch) {
+      const home = activePlayoffMatch.homeClub;
+      const away = activePlayoffMatch.awayClub;
+      const syntheticFixture: Fixture = {
+        id: `PLAYOFF_${activePlayoffMatch.matchType}_${home.id}_${away.id}`,
+        homeTeamId: home.id,
+        awayTeamId: away.id,
+        date: currentDate,
+        leagueId: 'PLAYOFF',
+        status: MatchStatus.SCHEDULED,
+      } as Fixture;
+      const homeCoach = home.coachId ? coaches[home.coachId] ?? null : null;
+      const awayCoach = away.coachId ? coaches[away.coachId] ?? null : null;
+      return {
+        fixture: syntheticFixture, homeClub: home, awayClub: away,
+        homePlayers: players[home.id] || [], awayPlayers: players[away.id] || [],
+        homeCoach, awayCoach, homeAdvantage: true, competition: CompetitionType.POLISH_CUP
+      } as MatchContext;
+    }
+    const fixture = fixtures.find(f =>
         (f.homeTeamId === userTeamId || f.awayTeamId === userTeamId) &&
         f.date.toDateString() === currentDate.toDateString()
     );
@@ -917,9 +1559,9 @@ export const MatchLiveView = () => {
     const homeCoach = home.coachId ? coaches[home.coachId] ?? null : null;
     const awayCoach = away.coachId ? coaches[away.coachId] ?? null : null;
     return {
-      fixture, homeClub: home, awayClub: away, homePlayers: hPlayers, awayPlayers: aPlayers, homeCoach, awayCoach, homeAdvantage: true, competition: CompetitionType.LEAGUE
+      fixture, homeClub: home, awayClub: away, homePlayers: hPlayers, awayPlayers: aPlayers, homeCoach, awayCoach, homeAdvantage: true, competition: CompetitionType.POLISH_CUP
     } as MatchContext;
-  }, [userTeamId, clubs, fixtures, players, currentDate, coaches]);
+  }, [isPlayoffMode, activePlayoffMatch, userTeamId, clubs, fixtures, players, currentDate, coaches]);
 
   const kitColors = useMemo(() => {
     if (pendingMatchKits) return pendingMatchKits;
@@ -932,16 +1574,25 @@ export const MatchLiveView = () => {
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
 
-  const livePressureContext = useMemo(() => {
-    if (!ctx) return null;
-    const leagueClubs = clubs.filter(c => c.leagueId === ctx.homeClub.leagueId);
-    const sortedStandings = [...leagueClubs].sort((a, b) =>
-      b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor
-    );
-    const homeCoach = ctx.homeClub.coachId ? coaches[ctx.homeClub.coachId] : null;
-    const awayCoach = ctx.awayClub.coachId ? coaches[ctx.awayClub.coachId] : null;
-    return buildMatchPressureContext(ctx.fixture, ctx.homeClub, ctx.awayClub, sortedStandings, homeCoach, awayCoach);
-  }, [ctx, clubs, coaches]);
+  // PRZENIESIONE Z PUCHARU: raport zwiadowczy AI — generowany raz przed meczem na podstawie jakości całego sztabu AI.
+  // Wpływa na decyzje taktyczne AI w pierwszych ~25 minutach meczu (AiMatchDecisionCupService).
+  const aiScoutReport = useMemo(() => {
+    if (!ctx || !userTeamId) return undefined;
+    const aiClub = ctx.homeClub.id === userTeamId ? ctx.awayClub : ctx.homeClub;
+    const playerClub = ctx.homeClub.id === userTeamId ? ctx.homeClub : ctx.awayClub;
+    const playerPlayersArr = ctx.homeClub.id === userTeamId ? ctx.homePlayers : ctx.awayPlayers;
+    const playerLineupForScout = lineups[playerClub.id];
+    if (!playerLineupForScout) return undefined;
+    const aiCoachObj = coaches[aiClub.coachId || ''];
+    const staffProfile = AiOpponentAnalysisService.buildStaffProfile(aiClub, aiCoachObj ?? null, staffMembers);
+    return AiScoutingService.generateReport(playerClub, playerPlayersArr, playerLineupForScout, staffProfile.analysisQuality);
+  }, [ctx, coaches, lineups, staffMembers, userTeamId]);
+
+  // PRZENIESIONE Z PUCHARU: Puchar nie ma systemu presji tabelowej (walka o mistrzostwo/spadek).
+  // livePressureContext = null → getPressureProfileForSide(null, side) zwraca gwarantowany,
+  // zaprojektowany do tego NEUTRAL_PRESSURE_PROFILE (wszystkie mnożniki = 1), więc każde miejsce
+  // poniżej, które z niego korzysta, dostaje neutralną wartość bez dodatkowych zmian.
+  const livePressureContext: ReturnType<typeof buildMatchPressureContext> | null = null;
 
   const userPressureProfile = useMemo(
     () => getPressureProfileForSide(livePressureContext, userSide),
@@ -952,20 +1603,6 @@ export const MatchLiveView = () => {
     () => getPressureProfileForSide(livePressureContext, userSide === 'HOME' ? 'AWAY' : 'HOME'),
     [livePressureContext, userSide]
   );
-
-  const leagueMotivationContext = useMemo(() => {
-    if (!ctx || !userTeamId || typeof ctx.fixture.leagueId !== 'string') return null;
-    const userClub = userSide === 'HOME' ? ctx.homeClub : ctx.awayClub;
-    const opponentClub = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
-    const standings = clubs.filter(club => club.leagueId === ctx.fixture.leagueId);
-    return detectLeagueMotivationContext({
-      fixture: ctx.fixture,
-      userClub,
-      opponentClub,
-      standings,
-      fixtures,
-    });
-  }, [ctx, userTeamId, userSide, clubs, fixtures]);
 
   const rivalryContext = useMemo(
     () => ctx ? RivalryService.getMatchContext(ctx.homeClub, ctx.awayClub) : null,
@@ -1108,29 +1745,34 @@ const isPausedForSevereInjury = useMemo(() => {
         opponentPlayers: userPlayersInit,
         opponentLineup: userLineupInit,
         seed: sessionSeed,
-        matchEnvironment: 'DOMESTIC_LEAGUE',
+        matchEnvironment: 'DOMESTIC_CUP',
       });
-      const { plan: aiLeagueMatchPlan } = AiLeagueMatchPlanService.createPlan({
-        report: opponentReport,
-        aiClub: aiClubInit,
-        aiCoach: aiCoachInit,
-        aiPlayers: aiPlayersInit,
-        aiBaseLineup: aiLineupBase,
-        userClub: userClubInit,
-        userPlayers: userPlayersInit,
-        userLineup: userLineupInit,
-        aiRank: aiPressureProfile.rank,
-        userRank: userPressureProfile.rank,
-        isAiAway: aiClubInit.id !== ctx.homeClub.id,
-        seed: sessionSeed,
-      });
-      const aiPreparedTacticId = aiLeagueMatchPlan.initialTacticId;
-      const preMatchInstr = aiLeagueMatchPlan.initialInstructions;
+      // PRZENIESIONE Z PUCHARU: liga wybierała otwierającą taktykę AI przez AiLeagueMatchPlanService.createPlan()
+      // (wpleciony w aiRank/userRank z systemu presji tabelowej). Puchar tego nie robi — AI zostaje przy swojej
+      // domyślnej/zapisanej taktyce (aiLineupBase) i dostosowuje tylko instrukcje przedmeczowe (tempo/mindset/itd.)
+      // przez AiCoachTacticsService.decidePreMatchInstructions — dokładnie jak w dzisiejszym silniku Pucharu.
+      const preMatchInstr = AiCoachTacticsService.decidePreMatchInstructions(
+        aiClubInit, aiCoachInit, aiPlayersInit, userClubInit, userPlayersInit, userTacticIdInit, sessionSeed, opponentReport
+      );
+      const aiPreparedTacticId = aiLineupBase.tacticId;
       const aiLineupPrepared = LineupService.autoPickLineup(aiClubInit.id, aiPlayersInit, aiPreparedTacticId, aiCoachInit, {
         formAware: true,
         selectionSeed: `${ctx.fixture.id}_${aiClubInit.id}_${aiPreparedTacticId}_live_ai_${preMatchInstr.tempo}_${preMatchInstr.mindset}`,
         respectRequestedTactic: true,
         instructionProfile: preMatchInstr
+      });
+      // PRZENIESIONE Z PUCHARU: plan meczowy AI (AiCupMatchPlan) — osobna warstwa od preMatchInstr, używana
+      // w trakcie meczu przez AiCupMatchPlanService.getActiveInstructions() do dynamicznej reakcji na wynik.
+      const getInitSimplePower = (players: Player[], lineup: Lineup): number =>
+        lineup.startingXI.filter((id): id is string => id !== null)
+          .map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p)
+          .reduce((s, p) => s + p.attributes.attacking + p.attributes.passing + p.attributes.defending + p.attributes.technique * 0.5, 0);
+      const initStaffProfile = AiOpponentAnalysisService.buildStaffProfile(aiClubInit, aiCoachInit, staffMembers);
+      const aiCupMatchPlan: AiCupMatchPlan = AiCupMatchPlanService.generatePlan({
+        aiPerceivedPlayerPower: opponentReport.perceivedPower,
+        aiOwnPower: getInitSimplePower(aiPlayersInit, aiLineupPrepared),
+        coachQuality: initStaffProfile.decisionQuality,
+        seed: sessionSeed + 31,
       });
       const homeLineupInit = aiClubInit.id === ctx.homeClub.id
         ? aiLineupPrepared
@@ -1144,8 +1786,7 @@ const isPausedForSevereInjury = useMemo(() => {
           userClubInit.reputation,
           aiCoachInit?.attributes,
           sessionSeed + 17,
-          'LEAGUE',
-          leagueMotivationContext
+          getCupBriefingMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType)
         );
       const aiMediaStakesEffect = getAiMediaStakesBriefingEffect(
         aiInitialSide,
@@ -1264,7 +1905,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           label:         aiBriefingEffect.label,
         },
         aiNextInstructionMinute: aiInitNextMin,
-        aiLeagueMatchPlan,
+        aiCupMatchPlan,
         lastGoalBoostMinute: -1,
         activeTacticalBoost: 0,
         tacticalBoostExpiry: -1,
@@ -1276,7 +1917,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
         
      });
     }
-  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, userPressureProfile, pressConferenceEffects, rivalryContext, leagueMotivationContext, livePressureContext]);
+  }, [ctx, lineups, matchState, setMatchState, userTeamId, coaches, staffMembers, aiPressureProfile, userPressureProfile, pressConferenceEffects, rivalryContext, livePressureContext]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1814,28 +2455,170 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     setIsHalftimeTalkOpen(false);
   };
 
+  // PRZENIESIONE Z PUCHARU (handleCupDebriefClose): brak korekty presji tabelowej (Puchar jej nie ma)
+  // oraz podwójny cel nawigacji — Puchar Polski vs baraż o awans/spadek.
   const handleDebriefClose = (effect: DebriefEffect) => {
     if (!pendingFinishPayload) return;
-    const args = pendingFinishPayload.matchHistoryArgs;
-    const userScore = args.homeTeamId === pendingFinishPayload.userTeamId ? args.homeScore : args.awayScore;
-    const oppScore = args.homeTeamId === pendingFinishPayload.userTeamId ? args.awayScore : args.homeScore;
-    const pressureEffect = adjustDebriefEffectForPressure(effect, userPressureProfile, userScore - oppScore);
-    const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
+    const finalUpdatedClubs = pendingFinishPayload.applyArgs.updatedClubs.map((c: any) => {
       if (c.id !== pendingFinishPayload.userTeamId) return c;
-      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + pressureEffect.moraleDelta)));
+      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + effect.moraleDelta)));
       return { ...c, morale: newMorale };
     });
-    applySimulationResult({ ...pendingFinishPayload.simResultMerged, updatedClubs: finalUpdatedClubs });
+    applySimulationResult({ ...pendingFinishPayload.applyArgs, updatedClubs: finalUpdatedClubs });
     MatchHistoryService.logMatch(pendingFinishPayload.matchHistoryArgs);
     setMatchState(null);
     setShowPostMatchDebrief(false);
     setPendingFinishPayload(null);
-    navigateTo(ViewState.MATCH_POST);
+    navigateTo(pendingFinishPayload.navigateTarget === 'POST_MATCH_PLAYOFF_STUDIO'
+      ? ViewState.POST_MATCH_PLAYOFF_STUDIO
+      : ViewState.POST_MATCH_CUP_STUDIO);
   };
+
+  // PRZENIESIONE Z PUCHARU: dogrywka + rzuty karne — silnik ligowy tego nie potrzebuje (mecz ligowy może
+  // skończyć się remisem), więc ten cały blok jest w 100% nowy w tym pliku.
+  const startExtraTimeMatch = () => {
+    setMatchState(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        minute: 90,
+        period: 3,
+        isExtraTime: true,
+        isPaused: false,
+        isHalfTime: false,
+        addedTime: 0,
+        logs: [
+          { id: `et_start_real_${Date.now()}`, minute: 90, text: "Gwizdek sędziego! Zaczynamy dogrywkę!", type: MatchEventType.GENERIC },
+          ...prev.logs
+        ]
+      };
+    });
+  };
+
+  const requiresExtraTime = (homeScore: number, awayScore: number): boolean => {
+    if (activePlayoffMatch?.matchType !== 'RELEGATION_LEG2' || !activePlayoffMatch.firstLegResult) {
+      return homeScore === awayScore;
+    }
+    const firstLeg = activePlayoffMatch.firstLegResult;
+    const clubL3Aggregate = firstLeg.homeGoals + awayScore;
+    const clubL4Aggregate = firstLeg.awayGoals + homeScore;
+    return clubL3Aggregate === clubL4Aggregate;
+  };
+
+  const getPenaltyOrder = (
+    lineup: Lineup,
+    teamPlayers: Player[],
+    sentOffIds: string[],
+    injuries: Record<string, InjurySeverity>
+  ) => {
+    const onPitch = lineup.startingXI
+      .filter((id): id is string => (
+        id !== null &&
+        !sentOffIds.includes(id) &&
+        injuries[id] !== InjurySeverity.SEVERE
+      ))
+      .map(id => teamPlayers.find(p => p.id === id))
+      .filter((p): p is Player => p !== undefined)
+      .sort((a, b) => {
+        const penDiff = (b.attributes.penalties || 50) - (a.attributes.penalties || 50);
+        if (penDiff !== 0) return penDiff;
+        const finDiff = (b.attributes.finishing || 50) - (a.attributes.finishing || 50);
+        if (finDiff !== 0) return finDiff;
+        const mentDiff = (b.attributes.mentality || 50) - (a.attributes.mentality || 50);
+        if (mentDiff !== 0) return mentDiff;
+        return getPenaltyDisplayName(a).localeCompare(getPenaltyDisplayName(b));
+      });
+    if (onPitch.length > 0) return onPitch;
+    const emergencyOrder = lineup.startingXI
+      .filter((id): id is string => id !== null)
+      .map(id => teamPlayers.find(p => p.id === id))
+      .filter((p): p is Player => p !== undefined);
+    return emergencyOrder.length > 0 ? emergencyOrder : teamPlayers.slice(0, 1);
+  };
+
+  // LOGIKA RZUTÓW KARNYCH (STEP-BY-STEP) — przeniesione 1:1 z Pucharu.
+  useEffect(() => {
+    if (!matchState?.isPenalties || matchState.isFinished || isFinishing) return;
+
+    const penInterval = setInterval(() => {
+      setMatchState(prev => {
+        if (!prev || !ctx) return prev;
+
+        const penaltySequence = prev.penaltySequence || [];
+        const winner = checkShootoutWinner(penaltySequence);
+        if (winner) {
+          return { ...prev, isFinished: true, isPaused: true };
+        }
+
+        const currentRound = penaltySequence.length;
+        const side = getNextShootoutSide(penaltySequence);
+        const shootoutTeamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+        const shootoutLineup = side === 'HOME' ? prev.homeLineup : prev.awayLineup;
+        const injuries = side === 'HOME' ? prev.homeInjuries : prev.awayInjuries;
+        const penaltyOrder = getPenaltyOrder(shootoutLineup, shootoutTeamPlayers, prev.sentOffIds, injuries);
+        const attemptsTakenBySide = penaltySequence.filter(s => s.side === side).length;
+        const kicker = penaltyOrder[attemptsTakenBySide % penaltyOrder.length] || shootoutTeamPlayers[0];
+        if (!kicker) return prev;
+        const shootoutAttackerProfile = getCupLeadershipMoraleProfile({
+          club: side === 'HOME' ? ctx.homeClub : ctx.awayClub,
+          lineup: side === 'HOME' ? prev.homeLineup.startingXI : prev.awayLineup.startingXI,
+          teamPlayers: side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+          fatigueMap: side === 'HOME' ? prev.homeFatigue : prev.awayFatigue,
+          sentOffIds: prev.sentOffIds,
+          injuries,
+        });
+        const shootoutDefenderProfile = getCupLeadershipMoraleProfile({
+          club: side === 'HOME' ? ctx.awayClub : ctx.homeClub,
+          lineup: side === 'HOME' ? prev.awayLineup.startingXI : prev.homeLineup.startingXI,
+          teamPlayers: side === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+          fatigueMap: side === 'HOME' ? prev.awayFatigue : prev.homeFatigue,
+          sentOffIds: prev.sentOffIds,
+          injuries: side === 'HOME' ? prev.awayInjuries : prev.homeInjuries,
+        });
+
+        const kickerPenaltySkill =
+          (kicker.attributes.penalties || 50) * 0.58 +
+          (kicker.attributes.finishing || 50) * 0.22 +
+          (kicker.attributes.technique || 50) * 0.12 +
+          (kicker.attributes.mentality || 50) * 0.08;
+        const baseProb = 0.80 + (kickerPenaltySkill - 50) / 430 + getCupPenaltyLeadershipChanceShift(shootoutAttackerProfile, shootoutDefenderProfile);
+        const isScored = Math.random() < Math.max(0.65, Math.min(0.95, baseProb));
+
+        const newSequence = [
+          ...penaltySequence,
+          {
+            side,
+            result: isScored ? 'SCORED' as const : 'MISSED' as const,
+            playerId: kicker.id,
+            playerName: getPenaltyDisplayName(kicker),
+          }
+        ];
+
+        const newHomePenScore = side === 'HOME' && isScored ? (prev.homePenaltyScore || 0) + 1 : (prev.homePenaltyScore || 0);
+        const newAwayPenScore = side === 'AWAY' && isScored ? (prev.awayPenaltyScore || 0) + 1 : (prev.awayPenaltyScore || 0);
+        const kickerDisplayName = getPenaltyDisplayName(kicker);
+
+        return {
+          ...prev,
+          homePenaltyScore: newHomePenScore,
+          awayPenaltyScore: newAwayPenScore,
+          penaltySequence: newSequence,
+          logs: [{
+            id: `pen_${currentRound}`,
+            minute: 120,
+            text: `${side === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName}: ${kickerDisplayName} ${isScored ? 'trafia!' : 'pudłuje!'}`,
+            type: isScored ? MatchEventType.PENALTY_SCORED : MatchEventType.PENALTY_MISSED
+          }, ...prev.logs]
+        };
+      });
+    }, 2000);
+
+    return () => clearInterval(penInterval);
+  }, [matchState?.isPenalties, ctx, isFinishing]);
 
   useEffect(() => {
     if (!matchState || matchState.isPaused || matchState.isPausedForEvent ||
-        matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activePenaltyReview || activeVAR || activePenaltyNoCall) return;
+        matchState.isFinished || matchState.isHalfTime || isTacticsOpen || isCelebratingGoal || !env || activePenalty || activePenaltyReview || activeVAR || activePenaltyNoCall || isFinishing || matchState.isPenalties) return;
 
     const tickInterval = matchState.speed === 5 ? 120 
   : matchState.speed === 3.5 ? 200 
@@ -1870,8 +2653,10 @@ const nextMomentumSum = prev.momentumSum + prev.momentum;
             currentAddedTime = Math.floor(seededRng(currentSeed, 90, 2) * 5) + 2;
 
         const limit = prev.period === 1 ? (45 + currentAddedTime) : (90 + currentAddedTime);
-        
-        if (nextMinute > limit) {
+
+        // PRZENIESIONE Z PUCHARU: ten blok (przerwa/koniec meczu regulaminowego) dotyczy tylko połowy 1-2 —
+        // dogrywka (period 3) ma własną obsługę niżej (105. i 121. minuta).
+        if (prev.period <= 2 && nextMinute > limit) {
            const isFT = prev.period === 2;
            const logText = isFT ? "Sędzia kończy mecz!" : "Przerwa w grze.";
            const newLog: MatchLogEntry = { id: `PERIOD_END_${prev.period}`, minute: prev.minute, text: logText, type: MatchEventType.GENERIC };
@@ -1923,9 +2708,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            // --- HALFTIME AI DECISIONS ---
            if (!isFT) {
               const aiSide: 'HOME' | 'AWAY' = userSide === 'HOME' ? 'AWAY' : 'HOME';
-              const decision = AiMatchDecisionService.makeDecisions(
-                { ...prev, minute: 45 }, 
-                ctx, aiSide, false, true
+              const htAiCoach = aiSide === 'HOME' ? ctx.homeCoach : ctx.awayCoach;
+              const htPlayerTacticId = userSide === 'HOME' ? prev.homeLineup.tacticId : prev.awayLineup.tacticId;
+              const decision = AiMatchDecisionCupService.makeDecisions(
+                { ...prev, minute: 45 },
+                ctx, aiSide, true, htAiCoach, htPlayerTacticId, undefined, aiScoutReport
               );
               
               if (decision.subRecord) {
@@ -1950,13 +2737,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
                 else nextAwayLineup = decision.newLineup || nextAwayLineup;
               }
-              if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
-              if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
-              if (decision.lastAiFormationMinute !== undefined) nextLastAiFormationMinute = decision.lastAiFormationMinute;
-              if (decision.aiTacticLockUntilMinute !== undefined) nextAiTacticLockUntilMinute = decision.aiTacticLockUntilMinute;
-              if (decision.aiLateTacticChanges !== undefined) nextAiLateTacticChanges = decision.aiLateTacticChanges;
-              if (decision.aiLateTacticScoreDiffAtLastChange !== undefined) nextAiLateTacticScoreDiffAtLastChange = decision.aiLateTacticScoreDiffAtLastChange;
-              nextAiTacticLocked = nextAiTacticLockUntilMinute > 45 || !!decision.aiTacticLocked;
+              // AiMatchDecisionCupService (Puchar) nie śledzi lastAiActionMinute/lastAiSubMinute/lastAiFormationMinute/
+              // aiTacticLockUntilMinute/aiLateTacticChanges/aiLateTacticScoreDiffAtLastChange/aiTacticLocked — te pola
+              // ligowe pozostają nieaktualizowane przez ten serwis, dokładnie jak w dzisiejszym silniku Pucharu.
+              nextAiTacticLocked = nextAiTacticLockUntilMinute > 45;
               if (decision.logs) {
                  decision.logs.forEach(l => {
                     updatedLogs = [{ id: `AI_HT_${Math.random()}`, minute: 45, text: l, type: MatchEventType.GENERIC }, ...updatedLogs];
@@ -1981,8 +2765,50 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               aiLateTacticChanges: nextAiLateTacticChanges,
               aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange,
               aiTacticLocked: nextAiTacticLocked,
-              isHalfTime: !isFT, isFinished: isFT, isPaused: true, addedTime: currentAddedTime, logs: updatedLogs
+              // PRZENIESIONE Z PUCHARU: remis po 90 minutach → pauza i czekanie na dogrywkę (przycisk),
+              // zamiast automatycznego zakończenia meczu.
+              isHalfTime: !isFT,
+              isFinished: isFT ? !requiresExtraTime(prev.homeScore, prev.awayScore) : false,
+              isPaused: true,
+              addedTime: currentAddedTime,
+              logs: updatedLogs
            };
+        }
+
+        // PRZENIESIONE Z PUCHARU: dogrywka — przerwa w 105. minucie.
+        if (prev.period === 3 && prev.isExtraTime && nextMinute === 105) {
+          return {
+            ...prev,
+            minute: 105,
+            isHalfTime: true,
+            isPaused: true,
+            logs: [{ id: `ht_et_${Date.now()}`, minute: 105, text: "Przerwa w dogrywce", type: MatchEventType.GENERIC }, ...prev.logs]
+          };
+        }
+
+        // PRZENIESIONE Z PUCHARU: koniec dogrywki w 121. minucie — remis → karne, inaczej koniec meczu.
+        if (prev.period === 3 && prev.isExtraTime && nextMinute >= 121) {
+          const isDrawAfterEt = requiresExtraTime(prev.homeScore, prev.awayScore);
+          if (isDrawAfterEt) {
+            return {
+              ...prev,
+              minute: 120,
+              isPenalties: true,
+              isFinished: false,
+              isPaused: false,
+              homePenaltyScore: 0,
+              awayPenaltyScore: 0,
+              penaltySequence: [],
+              logs: [{ id: `et_end_pens_${Date.now()}`, minute: 120, text: "Koniec dogrywki! Remis! Czas na rzuty karne!", type: MatchEventType.GENERIC }, ...prev.logs]
+            };
+          }
+          return {
+            ...prev,
+            minute: 120,
+            isFinished: true,
+            isPaused: true,
+            logs: [{ id: `et_end_win_${Date.now()}`, minute: 120, text: `Koniec dogrywki! Wynik ${prev.homeScore}:${prev.awayScore}`, type: MatchEventType.GENERIC }, ...prev.logs]
+          };
         }
               
            
@@ -2011,6 +2837,72 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let aiFormationChangedThisMinute = false;
         let nextHomeInjuries = { ...prev.homeInjuries };
         let nextAwayInjuries = { ...prev.awayInjuries };
+
+        // --- PRZENIESIONE Z PUCHARU: morale/leadership drużyn + moc całkowita (pPower/aPower) używane przez aiSensors i mechaniki cupowe ---
+        const homeLeadershipMorale = getCupLeadershipMoraleProfile({
+          club: ctx.homeClub,
+          lineup: nextHomeLineup.startingXI,
+          teamPlayers: ctx.homePlayers,
+          fatigueMap: prev.homeFatigue,
+          sentOffIds: nextSentOffIds,
+          injuries: nextHomeInjuries,
+        });
+        const awayLeadershipMorale = getCupLeadershipMoraleProfile({
+          club: ctx.awayClub,
+          lineup: nextAwayLineup.startingXI,
+          teamPlayers: ctx.awayPlayers,
+          fatigueMap: prev.awayFatigue,
+          sentOffIds: nextSentOffIds,
+          injuries: nextAwayInjuries,
+        });
+        const getTeamTotalPower = (
+          ids: (string | null)[],
+          pool: Player[],
+          fatigueMap: Record<string, number>,
+          leadershipMorale: CupLeadershipMoraleProfile
+        ) => {
+           const act = pool.filter(p => ids.includes(p.id));
+           const rawPower = act.reduce((sum, p) => {
+             const liveCondition = fatigueMap[p.id] ?? p.condition ?? 100;
+             const fatigueMult = 0.72 + (Math.max(0, liveCondition) / 100) * 0.28;
+             const corePower =
+               (p.attributes.attacking * 1.15) +
+               (p.attributes.finishing * 0.95) +
+               (p.attributes.passing * 1.0) +
+               (p.attributes.defending * 1.1) +
+               (p.attributes.technique * 0.75) +
+               (p.attributes.vision * 0.55) +
+               (p.attributes.positioning * 0.65) +
+               (p.attributes.pace * 0.45) +
+               (p.attributes.stamina * 0.42) +
+               (p.attributes.strength * 0.38) +
+               (p.attributes.heading * 0.32) +
+               (p.attributes.crossing * 0.30) +
+               (p.attributes.mentality * 0.60) +
+               (p.attributes.workRate * 0.58) +
+               (p.attributes.leadership * 0.20);
+             const gkBonus = p.position === PlayerPosition.GK
+               ? (p.attributes.goalkeeping * 1.9) + (p.attributes.positioning * 0.45) + (p.attributes.mentality * 0.20)
+               : 0;
+             return sum + ((corePower + gkBonus) * fatigueMult);
+           }, 0);
+           // This is the broadest team-confidence layer; it remains small and capped by the profile helper.
+           return rawPower * leadershipMorale.powerMultiplier;
+        };
+        const pPower = getTeamTotalPower(
+          userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+          userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+          userSide === 'HOME' ? prev.homeFatigue : prev.awayFatigue,
+          userSide === 'HOME' ? homeLeadershipMorale : awayLeadershipMorale
+        );
+        const aPower = getTeamTotalPower(
+          userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI,
+          userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers,
+          userSide === 'HOME' ? prev.awayFatigue : prev.homeFatigue,
+          userSide === 'HOME' ? awayLeadershipMorale : homeLeadershipMorale
+        );
+        // --- KONIEC PRZENIESIONEGO BLOKU ---
+
         let nextHomeRiskMode = { ...prev.homeRiskMode };
         let nextAwayRiskMode = { ...prev.awayRiskMode };
         let nextLightInjuryPrompt: { playerId: string; playerName: string; minute: number } | null = prev.lightInjuryPrompt ?? null;
@@ -2092,25 +2984,37 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const hasSevereHome = nextHomeLineup.startingXI.some(id => id && nextHomeInjuries[id] === InjurySeverity.SEVERE);
         const hasSevereAway = nextAwayLineup.startingXI.some(id => id && nextAwayInjuries[id] === InjurySeverity.SEVERE);
         const hasEmptySlotsAi = aiSide === 'AWAY' ? nextAwayLineup.startingXI.some(id => id === null) : nextHomeLineup.startingXI.some(id => id === null);
-        const aiLateMatchContext = {
-          aiStakes: aiPressureProfile.stakes,
-          userStakes: userPressureProfile.stakes,
-          aiRank: aiPressureProfile.rank,
-          userRank: userPressureProfile.rank,
-          isLateSeason: livePressureContext?.isLateSeason ?? false,
-          rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1
-        };
+        // PRZENIESIONE Z PUCHARU: aiLateMatchContext (aiStakes/userStakes/aiRank/userRank z presji tabelowej)
+        // usunięte — AiMatchDecisionCupService go nie przyjmuje (patrz nowa sygnatura wywołania niżej).
 
         let immediateAiTrigger = hasSevereHome || hasSevereAway || hasEmptySlotsAi;
 
+        // --- PRZENIESIONE Z PUCHARU: sensory AI (pilność reakcji) na bazie pPower/aPower ---
+        const playerTacticId = userSide === 'HOME' ? prev.homeLineup.tacticId : prev.awayLineup.tacticId;
+        const aiCoachForDecision = aiSide === 'HOME' ? ctx.homeCoach : ctx.awayCoach;
+        const diffAi = aiSide === 'HOME' ? (nextHomeScore - nextAwayScore) : (nextAwayScore - nextHomeScore);
+        const playerSentOffCount = nextSentOffIds.filter(id => (userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers).some(p => p.id === id)).length;
+        const aiSensors = {
+          losingByTwo: diffAi <= -2,
+          opponentShortHanded: diffAi >= 0 && playerSentOffCount > 0,
+          winningWeaker: diffAi >= 1 && pPower > aPower + 10,
+          winningStronger: diffAi >= 1 && aPower > pPower + 10,
+          lateLeadUnderPressure: diffAi === 1 && nextMinute >= 70 && pPower > aPower,
+          lateChase: diffAi === -1 && nextMinute >= 70,
+          lateDrawUnderPressure: diffAi === 0 && nextMinute >= 70 && pPower > aPower
+        };
+        immediateAiTrigger = immediateAiTrigger || aiSensors.losingByTwo || aiSensors.lateChase || (nextMinute > 80 && diffAi === -1);
+
         if (nextMinute % 5 === 0 || immediateAiTrigger) {
-           const decision = AiMatchDecisionService.makeDecisions(
-              { ...prev, minute: nextMinute, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: nextLastAiActionMinute, lastAiSubMinute: nextLastAiSubMinute, lastAiFormationMinute: nextLastAiFormationMinute, aiTacticLockUntilMinute: nextAiTacticLockUntilMinute, aiTacticLocked: nextAiTacticLocked, aiLateTacticChanges: nextAiLateTacticChanges, aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory },
+           const decision = AiMatchDecisionCupService.makeDecisions(
+              { ...prev, minute: nextMinute, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, sentOffIds: nextSentOffIds, lastAiActionMinute: nextLastAiActionMinute },
               ctx,
               aiSide,
               immediateAiTrigger,
-              false,
-              aiLateMatchContext
+              aiCoachForDecision,
+              playerTacticId,
+              aiSensors,
+              aiScoutReport
             );
            if (decision.subRecord) {
               if (aiSide === 'HOME') {
@@ -2131,13 +3035,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               else nextAwayLineup = decision.newLineup || nextAwayLineup;
               aiFormationChangedThisMinute = true;
            }
-           if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
-           if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
-           if (decision.lastAiFormationMinute !== undefined) nextLastAiFormationMinute = decision.lastAiFormationMinute;
-           if (decision.aiTacticLockUntilMinute !== undefined) nextAiTacticLockUntilMinute = decision.aiTacticLockUntilMinute;
-           if (decision.aiLateTacticChanges !== undefined) nextAiLateTacticChanges = decision.aiLateTacticChanges;
-           if (decision.aiLateTacticScoreDiffAtLastChange !== undefined) nextAiLateTacticScoreDiffAtLastChange = decision.aiLateTacticScoreDiffAtLastChange;
-           nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute || !!decision.aiTacticLocked;
+           // AiMatchDecisionCupService (Puchar) nie śledzi lastAiActionMinute/lastAiSubMinute/lastAiFormationMinute/
+           // aiTacticLockUntilMinute/aiLateTacticChanges/aiLateTacticScoreDiffAtLastChange/aiTacticLocked — patrz
+           // identyczny komentarz przy pierwszym takim bloku (sekcja przerwy).
+           nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute;
            if (decision.logs) {
               decision.logs.forEach(l => {
                  updatedLogs = [{ id: `AI_LOG_${nextMinute}_${Math.random()}`, minute: nextMinute, text: l, type: MatchEventType.GENERIC, teamSide: aiSide }, ...updatedLogs];
@@ -3166,12 +4067,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           } else if (shouldHoldExploit) {
             nextAiActiveShout = prev.aiActiveShout;
           } else {
-            // null z serwisu oznacza „bez zmiany”, a nie „wyczyść plan”. Po zakończeniu
-            // krótkiego okna eksploatacji wracamy do instrukcji zapisanych przed meczem.
-            const initialPlanInstructions = prev.aiLeagueMatchPlan?.initialInstructions;
-            nextAiActiveShout = aiExploitExpiredThisMinute && initialPlanInstructions
-              ? { id: `plan_${nextMinute}`, ...initialPlanInstructions, expiryMinute: -1 }
-              : prev.aiActiveShout;
+            // null z serwisu oznacza „bez zmiany”, a nie „wyczyść plan”.
+            // PRZENIESIONE Z PUCHARU: liga po zakończeniu okna eksploatacji wracała do instrukcji
+            // zapisanych przed meczem (aiLeagueMatchPlan.initialInstructions) — dzisiejszy silnik Pucharu
+            // nie ma takiego mechanizmu powrotu, więc po prostu zostajemy przy aktualnym shout AI.
+            nextAiActiveShout = prev.aiActiveShout;
             nextAiExploitUntilMinute = -1;
           }
           if (decision) {
@@ -3560,6 +4460,25 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         if (userPhysicalActionSuppression.criticalExhaustionActionCap !== null) {
           shotThreshold = Math.min(shotThreshold, userPhysicalActionSuppression.criticalExhaustionActionCap);
         }
+
+        // PRZENIESIONE Z PUCHARU (Giant Killer + underdog + "chłopaki walczą"), przełożone na skalę
+        // ligowego shotThreshold (pasmo ~0.05–0.155; tu podniesienie = więcej strzałów dla tej strony).
+        const attackingClubRepGK = activeSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
+        const defendingClubRepGK = activeSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation;
+        const gkRepGap = defendingClubRepGK - attackingClubRepGK;
+        if (gkRepGap >= 3) {
+          // Underdog atakuje faworyta: bonus proporcjonalny do przepaści reputacji (cap +0.020).
+          shotThreshold = Math.min(0.155, shotThreshold + Math.min(0.020, gkRepGap * 0.003));
+        }
+        if (activeSide === userSide && attackingClubRepGK >= 8 && defendingClubRepGK <= 5) {
+          // "Chłopaki walczą": gracz-faworyt atakujący Tier3/4 AI ustawione ultra-defensywnie ma pod górkę.
+          const aiDefTacticGK = TacticRepository.getById(activeSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId);
+          const aiIsUltraDefensiveGK = prev.aiActiveShout?.mindset === 'DEFENSIVE' || aiDefTacticGK.defenseBias > 65;
+          if (aiIsUltraDefensiveGK) {
+            shotThreshold = Math.max(0.050, shotThreshold - (0.008 + seededRng(currentSeed, rngMinute, 3131) * 0.012));
+          }
+        }
+
         const statShotGapDrag = activeShotsSoFar >= 14
           ? Math.min(0.035, (activeShotsSoFar - 13) * 0.007)
           : 0;
@@ -3871,7 +4790,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               isCounterAttack: (counterAttackTriggered && activeSide === userSide) || (aiCounterAttackTriggered && activeSide !== userSide),
               rng: () => seededRng(currentSeed, rngMinute, 760),
             });
-            const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost * playerFormFinishingBoost * actionProfile.finishingFitMod;
+            // PRZENIESIONE Z PUCHARU: Giant Killer — gdy strzela skrajny underdog (repGap≥3), podbijamy
+            // szansę na konwersję (odpowiednik cupowego rawGoalProbability floor 0.18), zamiast twardego
+            // floora niedostępnego w tym silniku (checkShotSuccess jest nieprzezroczysty).
+            const giantKillerFitBoost = gkRepGap >= 3 ? 1 + Math.min(0.35, gkRepGap * 0.05) : 1;
+            const scorerTeamFormFitMod = scorerCounterFitMod * scorerFormBoost * playerFormFinishingBoost * actionProfile.finishingFitMod * giantKillerFitBoost;
             const defendingSideForShot = activeSide === 'HOME' ? 'AWAY' : 'HOME';
             const gkInjuryFitMod = getInjuredGoalkeeperFitMultiplier(defendingSideForShot, gk);
             const gkTeamFormFitMod = gkFitMod * gkFormBoost * playerFormGoalkeepingBoost * gkInjuryFitMod;
@@ -4497,7 +5420,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            let aiDecisionIterations = 0;
 
            while (aiDecisionIterations < 5) {
-           const decision = AiMatchDecisionService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, lastAiSubMinute: nextLastAiSubMinute, lastAiFormationMinute: nextLastAiFormationMinute, aiTacticLockUntilMinute: nextAiTacticLockUntilMinute, aiTacticLocked: nextAiTacticLocked, aiLateTacticChanges: nextAiLateTacticChanges, aiLateTacticScoreDiffAtLastChange: nextAiLateTacticScoreDiffAtLastChange, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway }, ctx, aiSide, true, false, aiLateMatchContext);
+           const decision = AiMatchDecisionCupService.makeDecisions({ ...prev, minute: nextMinute, homeScore: nextHomeScore, awayScore: nextAwayScore, sentOffIds: nextSentOffIds, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup, homeInjuries: nextHomeInjuries, awayInjuries: nextAwayInjuries, homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue, lastAiActionMinute: nextLastAiActionMinute, homeSubsHistory: nextHomeSubsHistory, awaySubsHistory: nextAwaySubsHistory, subsCountHome: nextSubsCountHome, subsCountAway: nextSubsCountAway }, ctx, aiSide, true, aiCoachForDecision, playerTacticId, aiSensors, aiScoutReport);
            
            // TUTAJ WSTAW TEN KOD - Obsługa wewnętrznych przesunięć (np. gracz z pola na bramkę)
            if (decision.newLineup) {
@@ -4528,13 +5451,10 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (aiSide === 'HOME') nextHomeLineup = decision.newLineup || nextHomeLineup;
               else nextAwayLineup = decision.newLineup || nextAwayLineup;
            }
-           if (decision.lastAiActionMinute !== undefined) nextLastAiActionMinute = decision.lastAiActionMinute;
-           if (decision.lastAiSubMinute !== undefined) nextLastAiSubMinute = decision.lastAiSubMinute;
-           if (decision.lastAiFormationMinute !== undefined) nextLastAiFormationMinute = decision.lastAiFormationMinute;
-           if (decision.aiTacticLockUntilMinute !== undefined) nextAiTacticLockUntilMinute = decision.aiTacticLockUntilMinute;
-           if (decision.aiLateTacticChanges !== undefined) nextAiLateTacticChanges = decision.aiLateTacticChanges;
-           if (decision.aiLateTacticScoreDiffAtLastChange !== undefined) nextAiLateTacticScoreDiffAtLastChange = decision.aiLateTacticScoreDiffAtLastChange;
-           nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute || !!decision.aiTacticLocked;
+           // AiMatchDecisionCupService (Puchar) nie śledzi lastAiActionMinute/lastAiSubMinute/lastAiFormationMinute/
+           // aiTacticLockUntilMinute/aiLateTacticChanges/aiLateTacticScoreDiffAtLastChange/aiTacticLocked — patrz
+           // identyczny komentarz przy pierwszym takim bloku (sekcja przerwy).
+           nextAiTacticLocked = nextAiTacticLockUntilMinute > nextMinute;
            if (decision.logs) {
               decision.logs.forEach(l => {
                  updatedLogs = [{ id: `AI_LOG_${nextMinute}_${Math.random()}`, minute: nextMinute, text: l, type: MatchEventType.GENERIC, teamSide: aiSide }, ...updatedLogs];
@@ -4824,101 +5744,115 @@ return {
       });
     }, tickInterval);
     return () => clearInterval(interval);
-  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activePenaltyReview, activeVAR, activePenaltyNoCall, hasMandatorySub, setMatchState]);
+  }, [matchState?.isPaused, matchState?.isPausedForEvent, matchState?.isFinished, matchState?.isHalfTime, matchState?.speed, isCelebratingGoal, ctx, env, userSide, livePressureContext, isTacticsOpen, activePenalty, activePenaltyReview, activeVAR, activePenaltyNoCall, isFinishing, hasMandatorySub, setMatchState]);
 
  const handleFinishMatch = () => {
     if (!matchState || !ctx) return;
+    setIsFinishing(true);
 
-    const simResult = BackgroundMatchProcessor.processLeagueEvent(currentDate, userTeamId, fixtures, clubs, players, lineups, seasonNumber, coaches);
-    // TUTAJ WSTAW TEN KOD
-    // Obliczamy ranking ligowy gracza dla potrzeb frekwencji
-    const leagueClubs = clubs.filter(c => c.leagueId === ctx.homeClub.leagueId);
-    const sortedStandings = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
-    const homeRank = sortedStandings.findIndex(c => c.id === ctx.homeClub.id) + 1;
-    
-    // Obliczamy frekwencję (korzystając z pogody zdefiniowanej w env.weather)
-    const leaderPoints = sortedStandings[0]?.stats.points ?? 0;
-    const isTitleRace = homeRank <= 3 && ctx.homeClub.stats.played >= 27 && (leaderPoints - ctx.homeClub.stats.points) <= 9;
-    const attendance = AttendanceService.calculate(ctx.homeClub, homeRank, env!.weather, ctx.awayClub, isTitleRace);
+    // PRZENIESIONE Z PUCHARU (handleFinish): wyłonienie zwycięzcy — karne, dogrywka, agregat dwumeczu barażowego.
+    const penaltyWinner: 'HOME' | 'AWAY' | null = matchState.isPenalties
+      ? (matchState.homePenaltyScore || 0) > (matchState.awayPenaltyScore || 0)
+        ? 'HOME'
+        : (matchState.awayPenaltyScore || 0) > (matchState.homePenaltyScore || 0)
+          ? 'AWAY'
+          : null
+      : null;
+    const firstRelegationLeg = activePlayoffMatch?.matchType === 'RELEGATION_LEG2'
+      ? activePlayoffMatch.firstLegResult
+      : undefined;
+    const homeWinningScore = firstRelegationLeg ? firstRelegationLeg.awayGoals + matchState.homeScore : matchState.homeScore;
+    const awayWinningScore = firstRelegationLeg ? firstRelegationLeg.homeGoals + matchState.awayScore : matchState.awayScore;
+    const isHomeWinner = matchState.isPenalties ? penaltyWinner === 'HOME' : homeWinningScore > awayWinningScore;
+    const isAwayWinner = matchState.isPenalties ? penaltyWinner === 'AWAY' : awayWinningScore > homeWinningScore;
+    const didUserWin = matchState.isPenalties ? penaltyWinner === userSide : (isHomeWinner && userSide === 'HOME') || (isAwayWinner && userSide === 'AWAY');
 
-    // NAPRAWKA DUPLIKACJI WYNIKÓW:
-    // Priorytet: wyniki z advanceDay (jeśli już uruchomił się dla daty meczu)
-    // Fallback: wyniki z processLeagueEvent powyżej (jeśli advanceDay jeszcze nie uruchomił się)
-    const fixtureDateKey = ctx.fixture.date.toDateString();
-    const bgFromAdvanceDay = roundResults[fixtureDateKey];
-    const bgFromProcessor = simResult.roundResults;
-    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [] };
+    // PRZENIESIONE Z PUCHARU: awans w drabince (isInPolishCup) zamiast tabeli ligowej — w trybie
+    // barażowym w ogóle nie zmieniamy tej flagi (to nie jest mecz pucharowy).
+    const updatedClubs = isPlayoffMode
+      ? clubs
+      : clubs.map(c => {
+          if (c.id === ctx.homeClub.id) return { ...c, isInPolishCup: isHomeWinner };
+          if (c.id === ctx.awayClub.id) return { ...c, isInPolishCup: isAwayWinner };
+          return c;
+        });
 
-    DebugLoggerService.separator('handleFinishMatch');
-    DebugLoggerService.log('FINISH', `fixtureDateKey=${fixtureDateKey} | currentDate=${currentDate.toDateString()}`);
-    DebugLoggerService.log('FINISH', `bgFromAdvanceDay=${bgFromAdvanceDay?.league1Results?.length ?? 'null'} | bgFromProcessor=${bgFromProcessor?.league1Results?.length ?? 'null'} | bgSource=${bgSource.league1Results.length}`);
-    DebugLoggerService.log('FINISH', `roundResults keys in state: ${Object.keys(roundResults).join(', ')}`);
-    Object.entries(roundResults).forEach(([k, v]) => {
-      DebugLoggerService.log('FINISH', `  key=${k} L1=${v.league1Results.length} L2=${v.league2Results.length} L3=${v.league3Results.length}`);
-      v.league1Results.forEach((r, i) => DebugLoggerService.log('FINISH', `    L1[${i}]: ${r.homeTeamName} vs ${r.awayTeamName} ${r.homeScore}:${r.awayScore}`));
-    });
-
-    // Wyniki przechowywane pod currentDate.toDateString() - to samo co czyta PostMatchStudioView
-    const finalRoundResults = {
-      dateKey: currentDate.toDateString(),
-      league1Results: [...bgSource.league1Results],
-      league2Results: [...bgSource.league2Results],
-      league3Results: [...bgSource.league3Results],
-    };
-    const userMatchResult: MatchResult = { homeTeamName: ctx.homeClub.name, awayTeamName: ctx.awayClub.name, homeScore: matchState.homeScore, awayScore: matchState.awayScore, homeColors: ctx.homeClub.colorsHex, awayColors: ctx.awayClub.colorsHex };
-    const lid = ctx.fixture.leagueId;
-    if (lid === 'L_PL_1') finalRoundResults.league1Results.push(userMatchResult);
-    else if (lid === 'L_PL_2') finalRoundResults.league2Results.push(userMatchResult);
-    else if (lid === 'L_PL_3') finalRoundResults.league3Results.push(userMatchResult);
-
-   let updatedPlayers = { ...simResult.updatedPlayers };
-
-    // TUTAJ WSTAW TEN KOD - Poprawna identyfikacja wszystkich zawodników (Starterzy + Zmiennicy)
-    const getPlayedIds = (lineup: any, history: SubstitutionRecord[]) => {
-      const currentOnPitch = lineup.startingXI.filter((id: any) => id !== null) as string[];
-      const subbedOut = history.map(s => s.playerOutId).filter(id => id !== 'NONE' && id !== '??');
+    const getPlayedIds = (lineup: Lineup, history: SubstitutionRecord[]) => {
+      const currentOnPitch = lineup.startingXI.filter((id): id is string => !!id);
+      const subbedOut = history.map(s => s.playerOutId).filter((id): id is string => !!id);
       return new Set([...currentOnPitch, ...subbedOut]);
     };
-
     const playedIdsHome = getPlayedIds(matchState.homeLineup, matchState.homeSubsHistory);
     const playedIdsAway = getPlayedIds(matchState.awayLineup, matchState.awaySubsHistory);
-    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(updatedPlayers, ctx.homeClub.id, Array.from(playedIdsHome) as string[]);
-    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(updatedPlayers, ctx.awayClub.id, Array.from(playedIdsAway) as string[]);
 
-  const applyFatigueDebtToSquad = (squad: Player[], playedIds: Set<string>) => {
-      return squad.map(p => {
-        if (playedIds.has(p.id)) {
+    // PRZENIESIONE Z PUCHARU: brak PlayerStatsService.processMatchDayEndForClub/applyGoal/applyCard —
+    // to są statystyki SEZONU LIGOWEGO (player.stats). Puchar prowadzi osobną, własną statystykę
+    // (player.cupStats/cupSuspensionMatches), aktualizowaną niżej w updateCupStatsForClub.
+    let finalPlayers = { ...players };
+    [ctx.homeClub.id, ctx.awayClub.id].forEach(clubId => {
+      finalPlayers[clubId] = finalPlayers[clubId].map(p => {
+        const sideFatigue = clubId === ctx.homeClub.id ? matchState.homeFatigue : matchState.awayFatigue;
+        const endCondition = sideFatigue[p.id] !== undefined ? sideFatigue[p.id] : p.condition;
+        let updatedPlayer = { ...p, condition: Math.min(100, endCondition + 5) };
+        const onPitchIds = clubId === ctx.homeClub.id ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI;
+        if (onPitchIds.includes(p.id)) {
           const stamina = p.attributes.stamina || 50;
           const gkDebtFactor = p.position === PlayerPosition.GK
             ? Math.max(0.70, Math.min(0.90, 0.75 + Math.max(0, (p.age - 27) * 0.004) - (stamina / 100) * 0.05))
             : 1;
-          const matchDebt = (5 + ((100 - stamina) * 0.15)) * gkDebtFactor;
-          return { ...p, fatigueDebt: Math.min(100, (p.fatigueDebt || 0) + matchDebt) };
+          const matchDebt = (10 + ((100 - stamina) * 0.2)) * gkDebtFactor;
+          updatedPlayer.fatigueDebt = Math.min(100, (updatedPlayer.fatigueDebt || 0) + matchDebt);
         }
-        return p;
+        return updatedPlayer;
       });
-    };
-    updatedPlayers[ctx.homeClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.homeClub.id], playedIdsHome);
-    updatedPlayers[ctx.awayClub.id] = applyFatigueDebtToSquad(updatedPlayers[ctx.awayClub.id], playedIdsAway);
-
-    matchState.homeGoals.filter(g => !g.varDisallowed && !g.isOwnGoal).forEach(g => {
-       const pFound = g.scorerId
-         ? ctx.homePlayers.find(px => px.id === g.scorerId)
-         : ctx.homePlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
-    });
-    matchState.awayGoals.filter(g => !g.varDisallowed && !g.isOwnGoal).forEach(g => {
-       const pFound = g.scorerId
-         ? ctx.awayPlayers.find(px => px.id === g.scorerId)
-         : ctx.awayPlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
     });
 
-    Object.entries(matchState.playerYellowCards).forEach(([pId, count]) => {
-       for (let i = 0; i < (count as number); i++) updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.YELLOW_CARD);
-    });
-    matchState.sentOffIds.forEach(pId => updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.RED_CARD));
+    if (!isPlayoffMode) {
+      const buildParticipantSet = (side: 'HOME' | 'AWAY') => {
+        const lineup = side === 'HOME' ? matchState.homeLineup : matchState.awayLineup;
+        const subs = side === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory;
+        return new Set([...lineup.startingXI, ...subs.flatMap(sub => [sub.playerInId, sub.playerOutId])].filter((id): id is string => !!id));
+      };
+      const getGoalEvents = (side: 'HOME' | 'AWAY') => (side === 'HOME' ? matchState.homeGoals : matchState.awayGoals).filter(goal => !goal.isMiss && !goal.varDisallowed);
+      const updateCupStatsForClub = (clubId: string, side: 'HOME' | 'AWAY', goalsAgainst: number) => {
+        const participantIds = buildParticipantSet(side);
+        const goalEvents = getGoalEvents(side);
+        const cardEvents = matchState.logs.filter(log => log.teamSide === side && (log.type === MatchEventType.YELLOW_CARD || log.type === MatchEventType.RED_CARD));
+        finalPlayers[clubId] = finalPlayers[clubId].map(player => {
+          const displayName = getPlayerReportName(player);
+          const cup = { ...(player.cupStats ?? createEmptyCupStats()) };
+          let cupSuspensionMatches = Math.max(0, (player.cupSuspensionMatches ?? 0) - 1);
+          if (participantIds.has(player.id)) {
+            cup.matchesPlayed += 1;
+            cup.minutesPlayed += 90;
+            if (goalsAgainst === 0 && player.position === PlayerPosition.GK) cup.cleanSheets += 1;
+          }
+          goalEvents.forEach(goal => {
+            if (doesGoalBelongToScorer(goal, player)) cup.goals += 1;
+            if (doesGoalBelongToAssistant(goal, player)) cup.assists += 1;
+          });
+          cardEvents.forEach(card => {
+            if (card.playerName !== player.lastName && card.playerName !== displayName) return;
+            if (card.type === MatchEventType.YELLOW_CARD) {
+              cup.yellowCards += 1;
+              if (cup.yellowCards % 4 === 0) cupSuspensionMatches += 1;
+            }
+            if (card.type === MatchEventType.RED_CARD) {
+              cup.redCards += 1;
+              cupSuspensionMatches += card.id.startsWith('RED2_') ? 2 : 3;
+            }
+          });
+          return { ...player, cupStats: cup, cupSuspensionMatches };
+        });
+      };
+      updateCupStatsForClub(ctx.homeClub.id, 'HOME', matchState.awayScore);
+      updateCupStatsForClub(ctx.awayClub.id, 'AWAY', matchState.homeScore);
+    }
 
+    let updatedPlayers = finalPlayers;
+
+    // PRZENIESIONE Z PUCHARU: brak PlayerStatsService.applyCard — cupStats.yellowCards/redCards
+    // już policzone wyżej w updateCupStatsForClub.
     const applyInjuriesToSquad = (squad: Player[], sideInjuries: Record<string, InjurySeverity>, sideInMins: Record<string, number>) => {
       return squad.map(p => {
         if (sideInjuries[p.id]) {
@@ -4951,205 +5885,19 @@ return {
     updatedPlayers[ctx.homeClub.id] = applyInjuriesToSquad(updatedPlayers[ctx.homeClub.id], matchState.homeInjuries, matchState.homeInjuryMin);
     updatedPlayers[ctx.awayClub.id] = applyInjuriesToSquad(updatedPlayers[ctx.awayClub.id], matchState.awayInjuries, matchState.awayInjuryMin);
 
-    const applyMatchMoraleToSquad = (
-      squad: Player[],
-      side: 'HOME' | 'AWAY',
-      resultChar: 'W' | 'R' | 'P'
-    ) => {
-      const activeIds = new Set([
-        ...(side === 'HOME' ? matchState.homeLineup.startingXI : matchState.awayLineup.startingXI).filter((id): id is string => !!id),
-        ...matchState.playedPlayerIds,
-      ]);
-      const sideGoals = side === 'HOME' ? matchState.homeGoals : matchState.awayGoals;
-      const sideScore = side === 'HOME' ? matchState.homeScore : matchState.awayScore;
-      const oppScore = side === 'HOME' ? matchState.awayScore : matchState.homeScore;
-      const scoreDiff = sideScore - oppScore;
-      const teamDelta = resultChar === 'W' ? (scoreDiff >= 2 ? 5 : 3) : resultChar === 'P' ? (scoreDiff <= -3 ? -6 : -3) : 0;
-
-      return squad.map(player => {
-        const withMorale = PlayerMoraleService.ensurePlayerState(player);
-        let delta = activeIds.has(player.id) ? teamDelta : Math.round(teamDelta * 0.45);
-        const scored = sideGoals.some(goal => !goal.isOwnGoal && (goal.scorerId === player.id || goal.playerName === player.lastName));
-        const assisted = sideGoals.some(goal => !goal.isOwnGoal && goal.assistantId === player.id);
-        const ownGoalAgainst = (side === 'HOME' ? matchState.awayGoals : matchState.homeGoals)
-          .some(goal => goal.isOwnGoal && !goal.varDisallowed && (goal.ownGoalPlayerId === player.id || goal.ownGoalPlayerName === player.lastName));
-        const cards = (matchState.playerYellowCards[player.id] || 0) + (matchState.sentOffIds.includes(player.id) ? 2 : 0);
-
-        if (scored) delta += 3;
-        if (assisted) delta += 2;
-        if (ownGoalAgainst) delta -= 2;
-        if (cards > 0) delta -= cards;
-        if (!activeIds.has(player.id) && player.squadRole === 'KEY_PLAYER') delta -= 2;
-        if (!activeIds.has(player.id) && player.squadRole === 'STARTER') delta -= 1;
-
-        return {
-          ...withMorale,
-          morale: PlayerMoraleService.clamp((withMorale.morale ?? 50) + delta),
-        };
-      });
-    };
-
-    const homeResultChar: 'W' | 'R' | 'P' = matchState.homeScore > matchState.awayScore ? 'W' : matchState.homeScore === matchState.awayScore ? 'R' : 'P';
-    const awayResultChar: 'W' | 'R' | 'P' = matchState.awayScore > matchState.homeScore ? 'W' : matchState.awayScore === matchState.homeScore ? 'R' : 'P';
-    updatedPlayers[ctx.homeClub.id] = applyMatchMoraleToSquad(updatedPlayers[ctx.homeClub.id], 'HOME', homeResultChar);
-    updatedPlayers[ctx.awayClub.id] = applyMatchMoraleToSquad(updatedPlayers[ctx.awayClub.id], 'AWAY', awayResultChar);
-
-  const updatedClubs = simResult.updatedClubs.map(c => {
-       if (c.id === ctx.homeClub.id || c.id === ctx.awayClub.id) {
-          const isHome = c.id === ctx.homeClub.id;
-          const matchCost = FinanceService.calculateMatchdayExpenses(c, isHome, isHome ? attendance : undefined);
-          
-          // Dodajemy przychód z biletów dla gospodarza
-          const { revenue: ticketRevenue, avgPrice: ticketAvgPrice } = isHome
-            ? FinanceService.calculateMatchTicketRevenueForClub(attendance, c)
-            : { revenue: 0, avgPrice: 0 };
-          const additionalRevenues = isHome ? FinanceService.calculateMatchdayAdditionalRevenuesForClub(attendance, c) : null;
-          const additionalTotal = additionalRevenues
-            ? (additionalRevenues.catering + additionalRevenues.merchandising + additionalRevenues.programs + additionalRevenues.parking)
-            : 0;
-          const netChange = ticketRevenue + additionalTotal - matchCost;
-
-          const s = isHome ? matchState.homeScore : matchState.awayScore;
-          const o = isHome ? matchState.awayScore : matchState.homeScore;
-          const pts = s > o ? 3 : (s === o ? 1 : 0);
-          
-          const resultChar: "W" | "R" | "P" = pts === 3 ? 'W' : (pts === 1 ? 'R' : 'P');
-          const newForm = [...(c.stats.form || []), resultChar].slice(-5) as ("W" | "R" | "P")[];
-
-          const _scoreDiff = s - o;
-          const _moraleDelta = resultChar === 'W' ? (_scoreDiff >= 2 ? 8 : 5) : resultChar === 'P' ? (_scoreDiff <= -3 ? -10 : -5) : 0;
-          const _recentTwo = (c.stats.form || []).slice(-2);
-          const _seriesBonus = (resultChar === 'W' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'W')) ? 3 : (resultChar === 'P' && _recentTwo.length >= 2 && _recentTwo.every(r => r === 'P')) ? -4 : 0;
-          const _lossesInLastFive = newForm.filter(result => result === 'P').length;
-          const _lossCrisisPenalty = resultChar === 'P'
-            ? (_lossesInLastFive >= 5 ? -10 : _lossesInLastFive >= 4 ? -7 : _lossesInLastFive >= 3 ? -4 : 0)
-            : 0;
-          const _clubCoach = coaches[c.coachId || ''];
-          const _coachMotivation = _clubCoach?.attributes?.motivation ?? 50;
-          // Motywacja trenera amortyzuje porażki, ale nie może ukryć długiej serii przegranych.
-          const _motivationFactor = resultChar === 'P' ? Math.max(0.55, 1.0 - (_coachMotivation / 100) * 0.45) : 1.0;
-          const _adjustedMoraleDelta = _moraleDelta < 0 ? Math.round(_moraleDelta * _motivationFactor) : _moraleDelta;
-          const _adjustedSeriesBonus = _seriesBonus < 0 ? Math.round(_seriesBonus * _motivationFactor) : _seriesBonus;
-          const _adjustedLossCrisisPenalty = Math.round(_lossCrisisPenalty * _motivationFactor);
-          const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + _adjustedMoraleDelta + _adjustedSeriesBonus + _adjustedLossCrisisPenalty + (50 - (c.morale ?? 50)) * 0.05)));
-
-          // Tworzymy logi finansowe
-          const financeLogsToAdd: any[] = [];
-          let currentBalance = c.budget;
-          
-          if (isHome) {
-            // 🏟️ Przychody z biletów
-            if (ticketRevenue > 0) {
-              financeLogsToAdd.push({
-                id: Math.random().toString(36).substr(2, 9),
-                date: currentDate.toISOString().split('T')[0],
-                amount: ticketRevenue,
-                type: 'INCOME' as const,
-                description: `Bilety (vs ${ctx.awayClub.name}): ${attendance} widzów @ ${ticketAvgPrice} PLN`,
-                previousBalance: currentBalance
-              });
-              currentBalance += ticketRevenue;
-            }
-            
-            // 💰 Koszty organizacji
-            if (additionalRevenues && additionalRevenues.catering > 0) {
-              financeLogsToAdd.push({
-                id: Math.random().toString(36).substr(2, 9),
-                date: currentDate.toISOString().split('T')[0],
-                amount: additionalRevenues.catering,
-                type: 'INCOME' as const,
-                description: `Catering i Hospitality (vs ${ctx.awayClub.name})`,
-                previousBalance: currentBalance
-              });
-              currentBalance += additionalRevenues.catering;
-            }
-
-            if (additionalRevenues && additionalRevenues.merchandising > 0) {
-              financeLogsToAdd.push({
-                id: Math.random().toString(36).substr(2, 9),
-                date: currentDate.toISOString().split('T')[0],
-                amount: additionalRevenues.merchandising,
-                type: 'INCOME' as const,
-                description: `Sklep kibica — merchandising (vs ${ctx.awayClub.name})`,
-                previousBalance: currentBalance
-              });
-              currentBalance += additionalRevenues.merchandising;
-            }
-
-            if (additionalRevenues && additionalRevenues.programs > 0) {
-              financeLogsToAdd.push({
-                id: Math.random().toString(36).substr(2, 9),
-                date: currentDate.toISOString().split('T')[0],
-                amount: additionalRevenues.programs,
-                type: 'INCOME' as const,
-                description: `Programy meczowe i reklamy LED (vs ${ctx.awayClub.name})`,
-                previousBalance: currentBalance
-              });
-              currentBalance += additionalRevenues.programs;
-            }
-
-            if (additionalRevenues && additionalRevenues.parking > 0) {
-              financeLogsToAdd.push({
-                id: Math.random().toString(36).substr(2, 9),
-                date: currentDate.toISOString().split('T')[0],
-                amount: additionalRevenues.parking,
-                type: 'INCOME' as const,
-                description: `Parkingi i strefa kibica (vs ${ctx.awayClub.name})`,
-                previousBalance: currentBalance
-              });
-              currentBalance += additionalRevenues.parking;
-            }
-
-            if (matchCost > 0) {
-              financeLogsToAdd.push({
-                id: Math.random().toString(36).substr(2, 9),
-                date: currentDate.toISOString().split('T')[0],
-                amount: -matchCost,
-                type: 'EXPENSE' as const,
-                description: `Koszty organizacji meczu`,
-                previousBalance: currentBalance
-              });
-              currentBalance -= matchCost;
-            }
-          } else {
-            // 🚌 Koszty wyjazdu (away)
-            financeLogsToAdd.push({
-              id: Math.random().toString(36).substr(2, 9),
-              date: currentDate.toISOString().split('T')[0],
-              amount: -matchCost,
-              type: 'EXPENSE' as const,
-              description: `Koszty wyjazdu`,
-              previousBalance: currentBalance
-            });
-            currentBalance -= matchCost;
-          }
-
-          return {
-            ...c,
-            budget: c.budget + netChange,
-            financeHistory: [...financeLogsToAdd, ...(c.financeHistory || [])].slice(0, 50),
-            morale: newMorale,
-            stats: {
-              ...c.stats,
-              played: c.stats.played + 1,
-              wins: c.stats.wins + (pts === 3 ? 1 : 0),
-              draws: c.stats.draws + (pts === 1 ? 1 : 0),
-              losses: c.stats.losses + (pts === 0 ? 1 : 0),
-              goalsFor: c.stats.goalsFor + s,
-              goalsAgainst: c.stats.goalsAgainst + o,
-              goalDifference: c.stats.goalDifference + (s - o),
-              points: c.stats.points + pts,
-              form: newForm
-            }
-          };
-
-       }
-       return c;
-    });
-
-    const updatedFixtures = simResult.updatedFixtures.map(f => f.id === ctx.fixture.id ? { ...f, status: 'FINISHED' as any, homeScore: matchState.homeScore, awayScore: matchState.awayScore, attendance } : f);
-
-    
+    // PRZENIESIONE Z PUCHARU: brak applyMatchMoraleToSquad (indywidualne morale graczy) i brak
+    // finansów/punktów/formy tabelowej — mecz pucharowy nie aktualizuje tabeli ligowej ani budżetu klubu
+    // w ten sposób (jedyna korekta morale klubu gracza dzieje się w handleDebriefClose, tak jak w Pucharze).
+    const updatedFixtures = isPlayoffMode
+      ? fixtures
+      : fixtures.map(f => f.id === ctx.fixture.id ? {
+          ...f,
+          status: MatchStatus.FINISHED,
+          homeScore: matchState.homeScore,
+          awayScore: matchState.awayScore,
+          homePenaltyScore: matchState.homePenaltyScore,
+          awayPenaltyScore: matchState.awayPenaltyScore
+        } : f);
 
     const timeline: MatchSummaryEvent[] = [];
     let hCounter = 0, aCounter = 0;
@@ -5268,7 +6016,7 @@ const calculateUnitRatings = (teamPlayers: Player[], playedIds: Set<string>, sid
 const summary: MatchSummary = {
       matchId: ctx.fixture.id, userTeamId: userTeamId!, homeClub: ctx.homeClub, awayClub: ctx.awayClub, 
       homeScore: matchState.homeScore, awayScore: matchState.awayScore, homeGoals: matchState.homeGoals.filter(g => !g.varDisallowed), awayGoals: matchState.awayGoals.filter(g => !g.varDisallowed),
-      attendance: attendance,
+      homePenaltyScore: matchState.homePenaltyScore, awayPenaltyScore: matchState.awayPenaltyScore,
       homeStats: finalHomeStats,
       awayStats: finalAwayStats,
       homePlayers: calculateUnitRatings(ctx.homePlayers, playedIdsHome, 'HOME', matchState.awayScore, matchState.liveStats.away.shotsOnTarget),
@@ -5286,6 +6034,21 @@ const summary: MatchSummary = {
       if (perf.rating) finalRatingsMap[perf.playerId] = perf.rating;
     });
     // KONIEC WSTAWKI
+
+    // DOPISANE NA WYRAŹNĄ PROŚBĘ: ani stary silnik Pucharu, ani tło AI (BackgroundMatchProcessorPolishCup)
+    // nigdy nie zapisywały ocen meczowych do cupStats.ratingHistory — kolumna "śr. ocena" dla "Puchar PL"
+    // na karcie zawodnika (PlayerCard.tsx) zawsze była pusta. To jedyne miejsce w grze, które to teraz robi.
+    if (!isPlayoffMode) {
+      [ctx.homeClub.id, ctx.awayClub.id].forEach(clubId => {
+        updatedPlayers[clubId] = updatedPlayers[clubId].map(player => {
+          const rating = finalRatingsMap[player.id];
+          if (rating === undefined) return player;
+          const cup = { ...(player.cupStats ?? createEmptyCupStats()) };
+          cup.ratingHistory = [...(cup.ratingHistory || []), rating];
+          return { ...player, cupStats: cup };
+        });
+      });
+    }
 
     const buildReportLineup = (lineup: Lineup, subs: SubstitutionRecord[]) => {
       const reportLineup = [...lineup.startingXI];
@@ -5343,7 +6106,9 @@ const summary: MatchSummary = {
       awayTeamId: ctx.awayClub.id,
       homeScore: matchState.homeScore,
       awayScore: matchState.awayScore,
-      attendance: attendance,
+      homePenaltyScore: matchState.homePenaltyScore,
+      awayPenaltyScore: matchState.awayPenaltyScore,
+      venue: PolishCupVenueService.getVenue(ctx.fixture, ctx.homeClub).name,
       kits: kitColors,
       goals: matchState.homeGoals.map(g => ({
         playerId: g.isOwnGoal ? undefined : g.scorerId,
@@ -5410,6 +6175,21 @@ const summary: MatchSummary = {
         })()
     };
 
+    // PRZENIESIONE Z PUCHARU: mail o Superpucharze — wygrana/przegrana.
+    if (ctx.fixture.id.includes('SUPER_CUP')) {
+      if (didUserWin) {
+        const winMail = MailService.generateSuperCupMail(ctx.homeClub.name, ctx.awayClub.name, `${matchState.homeScore}:${matchState.awayScore}`);
+        setMessages(prev => [winMail, ...prev]);
+      } else {
+        const userClub = userSide === 'HOME' ? ctx.homeClub : ctx.awayClub;
+        const opponentName = userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name;
+        const userScore = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
+        const oppScore = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
+        const lossMails = MailService.generateSuperCupLossMails(userClub, opponentName, userScore, oppScore);
+        setMessages(prev => [...lossMails, ...prev]);
+      }
+    }
+
     const debriefUserScore = userSide === 'HOME' ? matchState.homeScore : matchState.awayScore;
     const debriefOppScore  = userSide === 'HOME' ? matchState.awayScore : matchState.homeScore;
     const debriefUserRep   = userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation;
@@ -5418,16 +6198,101 @@ const summary: MatchSummary = {
     const debriefOppGoals  = (userSide === 'HOME' ? matchState.awayGoals : matchState.homeGoals).filter(g => !g.varDisallowed);
     const debriefUserPIds  = userSide === 'HOME' ? ctx.homePlayers.map(p => p.id) : ctx.awayPlayers.map(p => p.id);
     const debriefUserHasRC = matchState.sentOffIds.some(id => debriefUserPIds.includes(id));
-    const debriefCtx = getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRC);
+    const debriefCtx = matchState.isPenalties
+      ? (didUserWin ? 'PENALTY_WIN' : 'PENALTY_LOSS')
+      : getDebriefContext(debriefUserScore, debriefOppScore, debriefUserRep, debriefOppRep, debriefUserGoals, debriefOppGoals, debriefUserHasRC);
+
+    // PRZENIESIONE Z PUCHARU: zapis wyniku barażowego (awans/spadek) — dwumecz, agregat, seria karnych.
+    // State updates muszą nastąpić przed pokazaniem modala debriefu.
+    let cupNavigateTarget: 'POST_MATCH_PLAYOFF_STUDIO' | 'POST_MATCH_CUP_STUDIO' = 'POST_MATCH_CUP_STUDIO';
+    if (isPlayoffMode && activePlayoffMatch) {
+      const legResult = {
+        homeId: ctx.homeClub.id,
+        awayId: ctx.awayClub.id,
+        homeGoals: matchState.homeScore,
+        awayGoals: matchState.awayScore,
+        matchId: ctx.fixture.id,
+        isExtraTime: matchState.isExtraTime,
+      };
+      const decidedBy: PromotionPlayoffSingleMatchResult['decidedBy'] = matchState.isPenalties ? 'PENALTIES' : (matchState.isExtraTime ? 'EXTRA_TIME' : 'REGULAR');
+      const winnerId = isHomeWinner ? ctx.homeClub.id : ctx.awayClub.id;
+
+      if (activePlayoffMatch.matchType === 'RELEGATION_LEG1') {
+        setRelegationPlayoffFirstLegResults(prev => {
+          if (!prev) return prev;
+          return activePlayoffMatch.pairIndex === 0 ? { ...prev, pair0: legResult } : { ...prev, pair1: legResult };
+        });
+      } else if (activePlayoffMatch.matchType === 'RELEGATION_LEG2') {
+        const firstLeg = activePlayoffMatch.firstLegResult!;
+        const clubL3 = clubs.find(c => c.id === firstLeg.homeId)!;
+        const clubL4 = clubs.find(c => c.id === firstLeg.awayId)!;
+        const seed = currentDate.getTime() + activePlayoffMatch.pairIndex * 10;
+        const outcome = matchState.isPenalties
+          ? {
+              leg1: firstLeg, leg2: legResult, winnerId,
+              loserId: winnerId === clubL3.id ? clubL4.id : clubL3.id,
+              decidedBy: 'PENALTIES' as const,
+              penalties: { winnerId, homeShots: matchState.awayPenaltyScore || 0, awayShots: matchState.homePenaltyScore || 0 },
+            }
+          : matchState.isExtraTime
+            ? {
+                leg1: firstLeg, leg2: legResult, winnerId,
+                loserId: winnerId === clubL3.id ? clubL4.id : clubL3.id,
+                decidedBy: 'EXTRA_TIME' as const,
+              }
+            : RelegationPlayoffSimulator.resolveAggregate(firstLeg, legResult, clubL3, clubL4, seed, { playersMap: players, lineups, coaches });
+        const otherOutcome = activePlayoffMatch.otherRelegationPairOutcome!;
+        setRelegationPlayoffFinalResult(activePlayoffMatch.pairIndex === 0
+          ? { pair0: outcome, pair1: otherOutcome }
+          : { pair0: otherOutcome, pair1: outcome }
+        );
+      } else if (activePlayoffMatch.matchType === 'PROMOTION_SEMI') {
+        const semiResult: PromotionPlayoffSingleMatchResult = {
+          homeId: ctx.homeClub.id, awayId: ctx.awayClub.id,
+          homeGoals: matchState.homeScore, awayGoals: matchState.awayScore,
+          decidedBy, winnerId, matchId: ctx.fixture.id,
+          penalties: matchState.isPenalties ? { winnerId, homeShots: matchState.homePenaltyScore || 0, awayShots: matchState.awayPenaltyScore || 0 } : undefined,
+        };
+        const others = activePlayoffMatch.otherPromotionSemiResults || {};
+        const semiKey = activePlayoffMatch.leagueContext === 'EKSTRAKLASA'
+          ? (activePlayoffMatch.pairIndex === 0 ? 'ekstraklasaSemi0' : 'ekstraklasaSemi1')
+          : (activePlayoffMatch.pairIndex === 0 ? 'ligaOneSemi0' : 'ligaOneSemi1');
+        setPromotionPlayoffSemiResults({ ...others, [semiKey]: semiResult } as PromotionPlayoffSemiResults);
+      } else if (activePlayoffMatch.matchType === 'PROMOTION_FINAL') {
+        const finalResult: PromotionPlayoffSingleMatchResult = {
+          homeId: ctx.homeClub.id, awayId: ctx.awayClub.id,
+          homeGoals: matchState.homeScore, awayGoals: matchState.awayScore,
+          decidedBy, winnerId, matchId: ctx.fixture.id,
+          penalties: matchState.isPenalties ? { winnerId, homeShots: matchState.homePenaltyScore || 0, awayShots: matchState.awayPenaltyScore || 0 } : undefined,
+        };
+        const otherFinal = activePlayoffMatch.otherPromotionFinalResult!;
+        setPromotionPlayoffFinalResults(activePlayoffMatch.leagueContext === 'EKSTRAKLASA'
+          ? { ekstraklasaFinal: finalResult, ligaOneFinal: otherFinal }
+          : { ekstraklasaFinal: otherFinal, ligaOneFinal: finalResult }
+        );
+      }
+      // Nie czyścimy activePlayoffMatch tutaj — PostMatchPlayoffStudioView potrzebuje go do wyświetlenia agregatu.
+      cupNavigateTarget = 'POST_MATCH_PLAYOFF_STUDIO';
+    }
 
     setLastMatchSummary(summary);
     setPendingFinishPayload({
-      simResultMerged: { ...simResult, updatedClubs, updatedFixtures, updatedPlayers, roundResults: finalRoundResults, seasonNumber, ratings: finalRatingsMap },
+      // PRZENIESIONE Z PUCHARU: brak pola `ratings` w applyArgs (w odróżnieniu od ligi) — Puchar celowo
+      // nie wpycha ocen z meczu pucharowego do historii formy/ratingów zawodnika (applySimulationResult
+      // robi to tylko gdy `ratings` jest obecne). `finalRatingsMap` służy tylko do summary/matchHistoryArgs.
+      applyArgs: { updatedFixtures, updatedClubs, updatedPlayers, updatedLineups: {}, newOffers: [], roundResults: null, seasonNumber },
       matchHistoryArgs,
-      summary,
-      userTeamId: userTeamId!,
       debriefContext: debriefCtx,
+      debriefMatchStage: getCupDebriefMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType),
+      debriefPenaltyScores: matchState.isPenalties
+        ? {
+            user: userSide === 'HOME' ? (matchState.homePenaltyScore || 0) : (matchState.awayPenaltyScore || 0),
+            opp: userSide === 'HOME' ? (matchState.awayPenaltyScore || 0) : (matchState.homePenaltyScore || 0),
+          }
+        : undefined,
       sessionSeed: matchState.sessionSeed,
+      navigateTarget: cupNavigateTarget,
+      userTeamId: userTeamId!,
     });
     setShowPostMatchDebrief(true);
   };
@@ -6971,12 +7836,12 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
           oppClubName={userSide === 'HOME' ? ctx.awayClub.name : ctx.homeClub.name}
           userRep={userSide === 'HOME' ? ctx.homeClub.reputation : ctx.awayClub.reputation}
           oppRep={userSide === 'HOME' ? ctx.awayClub.reputation : ctx.homeClub.reputation}
+          matchStage={getCupBriefingMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType)}
           userClubColors={userSide === 'HOME' ? ctx.homeClub.colorsHex : ctx.awayClub.colorsHex}
           oppClubColors={userSide === 'HOME' ? ctx.awayClub.colorsHex : ctx.homeClub.colorsHex}
           userClubId={userSide === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id}
           oppClubId={userSide === 'HOME' ? ctx.awayClub.id : ctx.homeClub.id}
           sessionSeed={matchState.sessionSeed}
-          leagueMotivationContext={leagueMotivationContext}
         />
       )}
 
@@ -7133,7 +7998,6 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
             momentumEndOf1st={matchState.momentum}
             avgFatigue={avgUserFatigue}
             sessionSeed={matchState.sessionSeed}
-            leagueMotivationContext={leagueMotivationContext}
           />
         );
       })()}
@@ -7143,13 +8007,15 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
         isOpen={true}
         onClose={handleDebriefClose}
         context={pendingFinishPayload.debriefContext}
+        matchStage={pendingFinishPayload.debriefMatchStage}
         userScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.homeScore : pendingFinishPayload.matchHistoryArgs.awayScore}
         oppScore={pendingFinishPayload.matchHistoryArgs.homeTeamId === userTeamId ? pendingFinishPayload.matchHistoryArgs.awayScore : pendingFinishPayload.matchHistoryArgs.homeScore}
         userSide={userSide}
-        homeClubName={pendingFinishPayload.summary.homeClub.name}
-        awayClubName={pendingFinishPayload.summary.awayClub.name}
+        homeClubName={ctx.homeClub.name}
+        awayClubName={ctx.awayClub.name}
         sessionSeed={pendingFinishPayload.sessionSeed}
-        leagueMotivationContext={leagueMotivationContext}
+        userPenaltyScore={pendingFinishPayload.debriefPenaltyScores?.user}
+        oppPenaltyScore={pendingFinishPayload.debriefPenaltyScores?.opp}
       />
     )}
 
@@ -7215,6 +8081,39 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
       </div>
     )}
 
+    {/* PRZENIESIONE Z PUCHARU: remis po 90 minutach — przycisk rozpoczęcia dogrywki */}
+    {matchState.isPaused && !matchState.isFinished && matchState.minute >= 90 && !matchState.isExtraTime && !matchState.isPenalties && requiresExtraTime(matchState.homeScore, matchState.awayScore) && (
+      <div
+        onClick={startExtraTimeMatch}
+        className="absolute inset-0 z-[60] flex items-center justify-center cursor-pointer"
+        style={{ transform: 'rotateX(-24deg)' }}
+      >
+        <div className="bg-slate-950/90 backdrop-blur-2xl border-y-4 border-amber-500 px-16 py-8 rounded-[40px] shadow-[0_0_100px_rgba(245,158,11,0.4)] animate-pulse">
+          <div className="flex flex-col items-center">
+            <span className="text-[10px] font-black text-amber-500 tracking-[0.5em] mb-2 uppercase">KONIEC II POŁOWY</span>
+            <span className="text-5xl font-black italic text-white uppercase tracking-[0.1em] drop-shadow-[0_0_20px_rgba(255,255,255,0.3)] text-center">
+              KONIEC II POŁOWY<br/>
+              <span className="text-2xl text-amber-400 font-bold not-italic tracking-normal">ROZPOCZNIJ DOGRYWKĘ</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* PRZENIESIONE Z PUCHARU: seria rzutów karnych w toku */}
+    {matchState.isPenalties && !matchState.isFinished && (
+      <div className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none" style={{ transform: 'rotateX(-24deg)' }}>
+        <div className="bg-slate-950/90 backdrop-blur-2xl border-y-4 border-cyan-500 px-16 py-8 rounded-[40px] shadow-[0_0_100px_rgba(6,182,212,0.4)]">
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-[10px] font-black text-cyan-400 tracking-[0.5em] uppercase">RZUTY KARNE</span>
+            <span className="text-4xl font-black italic text-white">
+              {matchState.homePenaltyScore || 0} : {matchState.awayPenaltyScore || 0}
+            </span>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Etykieta Końca Meczu */}
     {matchState.isFinished && !showPostMatchDebrief && (
       <div className="absolute inset-0 z-[999] flex items-center justify-center pointer-events-none" style={{ transform: 'rotateX(-24deg)' }}>
@@ -7238,4 +8137,5 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
   </div>
   );
 };
-   
+
+

@@ -1348,7 +1348,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               </div>
             )}
 
-            {mail.metadata?.type === 'PLAYER_MORALE_REQUEST' && (
+            {mail.metadata?.type === 'PLAYER_MORALE_REQUEST' && !mail.metadata.resolved && (
               <button
                 onClick={() => {
                   if (mail.metadata!.requestType === 'RAISE') {
