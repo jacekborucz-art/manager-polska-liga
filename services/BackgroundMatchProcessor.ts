@@ -391,6 +391,77 @@ const ensureFourthLeagueSquads = (
   return changed ? nextPlayers : playersMap;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MINDFLOW AI — jak kluby AI wzmacniają/uzupełniają skład (spisane 2026-08-01)
+// ═══════════════════════════════════════════════════════════════════════════
+// Poniżej pełna sekwencja priorytetów. To NIE jest jedna płaska lista — są 3
+// osobne poziomy, bo działają na różnych osiach czasu (natychmiast / codziennie
+// w ściśle ustalonej kolejności / kalendarzowo).
+//
+// POZIOM 0 — awaryjne, nadrzędne nad wszystkim (wykonywane w tym pliku, ZANIM
+// wystartuje cały łańcuch AiContractService niżej — patrz processLeagueEvent):
+//   1. ensureFourthLeagueSquads (wyżej w tym pliku) — jeśli klub 4. ligi spadnie
+//      poniżej 18 zawodników, generuje mu od razu cały świeży skład. Fundament —
+//      reszta pipeline'u zakłada, że skład w ogóle istnieje.
+//   2. ensureEmergencyGoalkeepers (wyżej w tym pliku) — jeśli klub nie ma ani
+//      jednego zdatnego bramkarza na dzisiejszy mecz, generuje awaryjnego.
+//      Drużyna fizycznie nie może zagrać bez bramkarza.
+//
+// POZIOM 1 — codzienny łańcuch AiContractService, DOKŁADNA kolejność wykonania
+// (patrz processLeagueEvent niżej, wywołania processClubsContracts...resolveAiTransferPending
+// — każdy krok dostaje zaktualizowane kluby/zawodników z kroku poprzedniego,
+// więc kolejność ma realne znaczenie, nie jest przypadkowa):
+//   1. processClubsContracts — próba ZATRZYMANIA własnych zawodników z kończącym
+//      się kontraktem (renegocjacja). Najtańsze rozwiązanie idzie pierwsze.
+//   2. processAiPreContractOpportunities — podkupywanie CUDZYCH zawodników z
+//      kończącym się kontraktem (do 330 dni wcześniej) na przyszły wolny transfer.
+//      Długoterminowe skautowanie, nie wypełnia dzisiejszej luki.
+//   3. processAiPrioritySquadDepth — jeśli klub jest na maksimum (32) i ma
+//      krytyczny brak głębi na jakiejś pozycji, ZWALNIA najsłabszego nadwyżkowego
+//      zawodnika, żeby zrobić miejsce. Musi być PRZED rekrutacją.
+//   4. processAiRecruitment — szukanie WOLNYCH AGENTÓW (patrz obszerny komentarz
+//      PERF nad tą funkcją w AiContractService.tsx — cache co 90 dni).
+//   5. resolveAiFreeAgentNegotiations — finalizacja negocjacji z kroku 4.
+//   6. processAiSquadFinancing — jeśli klub ma potrzebę kadrową ale za mało
+//      budżetu, WYSTAWIA NA SPRZEDAŻ najbardziej zbędnego zawodnika, żeby
+//      zdobyć środki na wzmocnienie (to LISTOWANIE, nie to samo co zwolnienie
+//      w kroku 3 — różne przyczyny, nie duplikat).
+//   7. processAiTransferListSignings — kupowanie zawodników JAWNIE wystawionych
+//      na listę transferową przez inne kluby (isOnTransferList).
+//   8. processAiInterestedPlayerTargeting — kupowanie zawodników NIEWYSTAWIONYCH,
+//      ale zainteresowanych klubem (interestedClubs) — uzupełnia krok 7 (patrz
+//      obszerny komentarz PERF nad tą funkcją w AiContractService.tsx — cache
+//      co 90 dni, ten sam mechanizm co krok 4).
+//   9. processAiDeadlineAcademyFallback — AWARYJNY nabór z akademii, tydzień
+//      przed końcem okna transferowego, DOPIERO PO nieudanych próbach rynkowych
+//      z kroków 4-8. Explicit ostatnia deska ratunku.
+//   10. resolveAiTransferPending — finalizacja transferów uzgodnionych w krokach
+//       7-8 (gdy nadejdzie data zameldowania).
+//
+// POZIOM 2 — kalendarzowe, osobna oś czasu (nie konkurują o kolejność dnia):
+//   - processMonthlyPlayerReview (1. dnia każdego miesiąca) — wystawia słabo
+//     grających zawodników na listę transferową (max 2/klub/miesiąc) — ZASILA
+//     krok 7 innym klubom, jednocześnie tworząc lukę u wystawiającego.
+//   - processWeakPlayerContractCuts (12 stycznia, otwarcie zimowego okna) —
+//     zwalnia słabych zawodników wprost do FREE_AGENTS.
+//   - generateSeasonYouthIntakeForAiClubs (start sezonu, lipiec — "YOUTH REFILL")
+//     — bezpośredni nabór młodzieżowy do składu, tylko dla klubów AI (gracz ma
+//     własny, ręczny system Akademii).
+//   - processAiToAiLoanMoves (GameContext.tsx, w oknie transferowym) —
+//     wypożyczenia między klubami AI, osobny mechanizm od kupna/sprzedaży.
+//   - SeasonTransitionService.generateNewgen (koniec sezonu) — gwarantowane 1:1
+//     zastąpienie każdego przechodzącego na emeryturę zawodnika świeżo
+//     wygenerowanym młodym graczem — to nie rynek, to automatyczne uzupełnienie.
+//
+// ZNANA, ŚWIADOMIE ZAAKCEPTOWANA NIESPÓJNOŚĆ (2026-08-01, decyzja użytkownika):
+// krok 1 (processClubsContracts) NIE ustawia 6-miesięcznej tarczy ochronnej
+// (transferLockoutUntil — patrz _buildTransferLockoutUntil w AiContractService.tsx),
+// którą dostają tylko NOWE podpisania (kroki 5 i 10). Teoretycznie klub może więc
+// odnowić komuś kontrakt w kroku 1 i tego samego dnia zwolnić go w kroku 3 z
+// powodu nadmiaru na pozycji. Zgłoszone i świadomie pozostawione — użytkownik
+// traktuje to jako akceptowalną nieprzewidywalność, nie bug do naprawienia.
+// ═══════════════════════════════════════════════════════════════════════════
+
 export const BackgroundMatchProcessor = {
   processLeagueEvent: (
     currentDate: Date,
