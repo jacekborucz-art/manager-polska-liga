@@ -1883,6 +1883,20 @@ export interface Club {
   trainingFacilityLevel?: TrainingFacilityLevel;
   trainingFacilityUpgradeProjects?: TrainingFacilityUpgradeProject[];
   management?: ClubManagement;
+  /**
+   * PERF (dodane 2026-08-01): krótka lista "obserwowanych" kandydatów transferowych
+   * klubu AI — wolnych agentów i zawodników innych klubów, którzy pasują do potrzeb
+   * kadrowych klubu. Odświeżana raz na ~3 miesiące (rozłożona per klub) zamiast
+   * skanowana od nowa przy każdym codziennym sprawdzeniu rynku — patrz obszerne
+   * komentarze w AiContractService.tsx (processAiRecruitment / processAiInterestedPlayerTargeting)
+   * dla pełnego wyjaśnienia. Nieobecne / undefined u klubu = jeszcze nigdy nie
+   * odświeżone (traktowane jak wygasłe, wymusza pełne skanowanie przy najbliższej okazji).
+   */
+  aiScoutedTargets?: {
+    lastRefreshDate: string;
+    freeAgentIds: string[];
+    interestedPlayerIds: string[];
+  };
 }
 
 export interface ClubKit {

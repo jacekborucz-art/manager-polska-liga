@@ -95,6 +95,10 @@ const MIN_SQUAD_POSITION_COUNTS: Record<PlayerPosition, number> = {
 const AI_MIN_SQUAD_SIZE = Object.values(MIN_SQUAD_POSITION_COUNTS).reduce((sum, count) => sum + count, 0);
 const AI_TARGET_SQUAD_SIZE = 28;
 const AI_MAX_SQUAD_SIZE = 32;
+// PERF (dodane 2026-08-01): jak często (w dniach) klub AI odbudowuje swoją krótką listę
+// obserwowanych kandydatów (club.aiScoutedTargets) pełnym skanowaniem rynku — patrz
+// obszerne komentarze przy processAiRecruitment / processAiInterestedPlayerTargeting.
+const AI_SCOUTING_REFRESH_DAYS = 90;
 const AI_SOFT_MAX_POSITION_COUNTS: Record<PlayerPosition, number> = {
   [PlayerPosition.GK]: 3,
   [PlayerPosition.DEF]: 9,
@@ -892,13 +896,20 @@ const _getScoutingProfile = (club: Club, hasCriticalShortage = false) => {
   };
 };
 
-const _pickDiscoveredMarketPlayer = <T extends Player>(
+// PERF (dodane 2026-08-01, refaktor bez zmiany zachowania): wydzielone z
+// _pickDiscoveredMarketPlayer, żeby móc reużyć identyczną logikę "co klub odkrywa na
+// rynku" (zależną od reputacji przez _getScoutingProfile) również przy budowaniu
+// krótkiej, cache'owanej listy obserwowanych kandydatów (patrz processAiRecruitment /
+// processAiInterestedPlayerTargeting) — a nie tylko przy jednorazowym wyborze kandydata.
+// _pickDiscoveredMarketPlayer niżej wywołuje to i robi dokładnie to samo co wcześniej —
+// zero zmiany zachowania dla żadnego z 3 dotychczasowych wywołań.
+const _computeDiscoveredPool = <T extends Player>(
   players: T[],
   seed: string,
   scorePlayer: (player: T) => number,
   options: { discoveryShare?: number; maxPool?: number; noise?: number; qualityBand?: number } = {}
-): T | null => {
-  if (players.length === 0) return null;
+): { player: T; score: number; discoveryScore: number }[] => {
+  if (players.length === 0) return [];
 
   const discoveryShare = options.discoveryShare ?? 0.40;
   const maxPool = options.maxPool ?? 10;
@@ -923,12 +934,123 @@ const _pickDiscoveredMarketPlayer = <T extends Player>(
     discovered.length,
     Math.max(1, Math.min(maxPool, Math.ceil(discovered.length * discoveryShare)))
   );
-  const visible = discovered
+  return discovered
     .slice(0, visibleCount)
     .sort((a, b) => b.score - a.score);
+};
+
+const _pickDiscoveredMarketPlayer = <T extends Player>(
+  players: T[],
+  seed: string,
+  scorePlayer: (player: T) => number,
+  options: { discoveryShare?: number; maxPool?: number; noise?: number; qualityBand?: number } = {}
+): T | null => {
+  const visible = _computeDiscoveredPool(players, seed, scorePlayer, options);
+  if (visible.length === 0) return null;
   const pickRoll = _seededRandom(`${seed}_PICK`);
   const pickIndex = Math.min(visible.length - 1, Math.floor(Math.pow(pickRoll, 1.35) * visible.length));
   return visible[pickIndex]?.player ?? null;
+};
+
+// PERF (dodane 2026-08-01, refaktor bez zmiany zachowania): wydzielone z pętli filtrującej
+// w processAiRecruitment. Przyjmuje `pool` jako PARAMETR (a nie zawsze całą listę
+// FREE_AGENTS) właśnie po to, żeby ta sama logika obsługiwała zarówno:
+//   a) pełne skanowanie (pool = cała pula FREE_AGENTS) — przy pilnej potrzebie klubu
+//      lub przy odświeżaniu cache co ~90 dni (patrz AI_SCOUTING_REFRESH_DAYS),
+//   b) codzienne, tanie sprawdzenie małej listy z cache'a (pool = ~6-24 zawodników
+//      z club.aiScoutedTargets.freeAgentIds) — bez ponownego skanowania całej puli.
+// Zero duplikacji: to jest JEDYNE miejsce z tą logiką filtrowania kandydatów.
+const _buildFreeAgentCandidates = (
+  pool: Player[],
+  club: Club,
+  squad: Player[],
+  needsFA: ReturnType<typeof _assessClubNeeds>,
+  aiStrategy: ReturnType<typeof AiClubTransferStrategyService.buildStrategy>,
+  minCounts: Record<PlayerPosition, number>,
+  idealOvr: number,
+  currentDate: Date
+): Player[] => {
+  return pool.filter(fa => {
+    const needFA = needsFA.find(n => n.position === fa.position);
+    if (!needFA) return false;
+    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
+    if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA)) return false;
+    const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
+    const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
+    const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
+    if (fa.overallRating > faMaxOvr || fa.overallRating < faMinOvr) return false;
+    if (fa.aiNegotiationClubId) return false;
+    if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) return false;
+
+    const posSquad = squad.filter(p => p.position === fa.position);
+    const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
+    const hasShortage = posSquad.length < minCounts[fa.position];
+    const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
+    const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
+
+    return hasShortage || needsSquadBody || (isUpgrade && _canAddBalancedDepth(squad, fa.position));
+  }).sort((a, b) => {
+    const needA = needsFA.find(n => n.position === a.position);
+    const needB = needsFA.find(n => n.position === b.position);
+    const scoreA = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needA?.urgency }) + _getRecruitmentReputationBonus(a, 3, needA);
+    const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
+    return scoreB - scoreA || a.age - b.age;
+  });
+};
+
+// PERF (dodane 2026-08-01, refaktor bez zmiany zachowania): wydzielone z pętli
+// filtrującej w processAiInterestedPlayerTargeting — analogicznie do
+// _buildFreeAgentCandidates. `pool` to albo WSZYSCY zawodnicy innych klubów (pełne
+// skanowanie), albo mała, cache'owana lista (club.aiScoutedTargets.interestedPlayerIds).
+// Jedyne miejsce z tą logiką filtrowania — zero duplikacji.
+const _buildInterestedPlayerTargets = (
+  pool: Player[],
+  club: Club,
+  squad: Player[],
+  needsITMap: Map<string, ReturnType<typeof _assessClubNeeds>[number]>,
+  idealOvr: number,
+  isGulfStarHunter: boolean,
+  windowOpen: boolean,
+  currentDate: Date,
+  sellerClubMap: Map<string, Club>
+): Player[] => {
+  return pool.filter(p => {
+    if (p.loan) return false;
+    if (_hasActiveTransferLockout(p, currentDate)) return false;
+    if (_hasActiveTransferOfferBan(p, currentDate)) return false;
+    if (p.isOnTransferList || p.transferPendingClubId) return false;
+    const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
+    if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
+    if (!PrestigeTransferGuardService.shouldConsiderDestination(p, club)) return false;
+
+    const sellerClub = sellerClubMap.get(p.clubId || '');
+    const isGulfVeteranStarTarget = !!sellerClub &&
+      isGulfStarHunter &&
+      _isExpiringBigClubVeteranStar(p, sellerClub, currentDate);
+    if (isGulfVeteranStarTarget) return true;
+
+    const isShortlisted = (p.interestedClubs || []).includes(club.id);
+    const need = needsITMap.get(p.position);
+    if (!need) return false;
+    if (_isBelowAiMarketQualityFloor(p, club, squad, need)) return false;
+    if (!_canAddBalancedDepth(squad, p.position) && need.reason !== 'SHORTAGE') return false;
+
+    const buyerPositionAverage = _getPositionAverageOverall(squad, p.position);
+    const isQuantityNeed = _isQuantityDepthNeed(need, squad, p.position);
+    const isOpenMarketTarget =
+      !isShortlisted &&
+      (
+        isQuantityNeed ||
+        p.overallRating >= buyerPositionAverage + (need.starterRequired ? 2 : 3) ||
+        (club.reputation >= (sellerClub?.reputation ?? 0) + 2 && p.overallRating >= buyerPositionAverage + 1)
+      );
+    if (!isShortlisted && !isOpenMarketTarget) return false;
+
+    const ovrCap = Math.min(idealOvr, 95);
+    const low = isQuantityNeed ? 45 : need.urgency === 'CRITICAL' ? ovrCap - 14 : ovrCap - 8;
+    const high = isQuantityNeed ? Math.max(ovrCap + 12, 99) : ovrCap + (isShortlisted ? 12 : 8);
+    return p.overallRating >= low && p.overallRating <= high;
+  });
 };
 
 const _roundContractMoney = (value: number): number =>
@@ -1985,40 +2107,51 @@ export const AiContractService = {
   /**
    * Analizuje wolnych agentów i generuje oferty oczekujące dla klubów AI.
    */
-  // PERF (znalezione i naprawione 2026-07-30): ta funkcja jest wywoływana codziennie
-  // (z BackgroundMatchProcessor.ts:460 w dni bez meczów i :1008 w dni meczowe — czyli
-  // praktycznie każdego dnia gry) i dla KAŻDEGO klubu AI przeszukiwała w całości
-  // (updatedPlayersMap['FREE_AGENTS'] || []).filter(...) — czyli listę wszystkich wolnych
-  // agentów w grze. Ta lista tylko rośnie przez cały czas trwania save'a (zwolnieni gracze
-  // nigdy nie są z niej usuwani), więc koszt = liczba_klubów_AI × rozmiar_FREE_AGENTS rósł
-  // z każdym rozegranym sezonem. Zmierzone przez PerfProfilerService na realnym save'ie
-  // (sezon 4): sama ta funkcja zajmowała ~13.8s na dzień, a pomocnicza
-  // PrestigeTransferGuardService.shouldConsiderDestination była wywoływana ~2 mln razy dziennie
-  // tylko z tego miejsca. Był to główny (choć nie jedyny) wkład w łączny czas przetwarzania
-  // jednego dnia sięgający 27-44 sekund.
+  // PERF — HISTORIA (znalezione 2026-07-30, naprawione ostatecznie 2026-08-01):
+  // Ta funkcja jest wywoływana codziennie (z BackgroundMatchProcessor.ts:460 w dni bez
+  // meczów i :1008 w dni meczowe — czyli praktycznie każdego dnia gry). Pierwotnie dla
+  // KAŻDEGO klubu AI przeszukiwała w całości (updatedPlayersMap['FREE_AGENTS'] || []).filter(...)
+  // — czyli listę WSZYSTKICH wolnych agentów w grze. Ta lista tylko rośnie przez cały czas
+  // trwania save'a (zwolnieni gracze nigdy nie są z niej usuwani), więc koszt =
+  // liczba_klubów_AI × rozmiar_FREE_AGENTS rósł z każdym rozegranym sezonem. Zmierzone przez
+  // PerfProfilerService na realnym save'ie (sezon 4): sama ta funkcja zajmowała ~13.8s na
+  // dzień, a pomocnicza PrestigeTransferGuardService.shouldConsiderDestination była
+  // wywoływana ~2 mln razy dziennie tylko z tego miejsca. Sprawdzenie faktycznego rozmiaru
+  // puli w tym samym save'ie: 15 737 wolnych agentów na 33 228 wszystkich zawodników w grze
+  // (47%!) — AI nie nadążała ich podpisywać, pula tylko rosła.
   //
-  // FIX: rozłożenie kosztownego przeszukania FREE_AGENTS na kilka dni per klub — patrz
-  // `dayOfYear`/`hashClubInt`/stagger `% 3` niżej w treści funkcji. Zastosowano dokładnie ten
-  // sam, już istniejący w tym pliku wzorzec (dayOfYear + hash(clubId) + modulo), jaki od dawna
-  // działa w processAiInterestedPlayerTargeting (linia ~2751) i processAiPreContractOpportunities
-  // (linia ~3009) — nie wprowadzono nowej konwencji.
+  // Pierwsza poprawka (2026-07-30) rozkładała pełne skanowanie na 3 dni per klub (stagger).
+  // To pomogło (~13.8s → ~4-5s/dzień), ale nadal oznaczało pełne skanowanie 15 737+ wolnych
+  // agentów co 3 dni, przez każdy klub z osobna, dla samego tylko "opportunistycznego"
+  // dokupywania.
   //
-  // WAŻNE — kolejność sprawdzeń jest celowa i NIE WOLNO jej odwracać: stagger jest sprawdzany
-  // DOPIERO PO obliczeniu `needsFA`/`hasCriticalShortage`/`gulfStarCandidate` (tanie operacje,
-  // dotyczą tylko własnego składu klubu — nie całej puli FREE_AGENTS), a klub z krytycznym
-  // brakiem składu (`hasCriticalShortage`, np. właśnie stracił zawodnika i spadł poniżej
-  // minimum na pozycji) ORAZ kandydat na gwiazdę z Zatoki (`gulfStarCandidate`) ZAWSZE
-  // przeszukują rynek tego samego dnia, bez opóźnienia — stagger dotyczy wyłącznie
-  // opportunistycznego dokupywania/upgrade'u, nigdy pilnej potrzeby. To był świadomy wymóg
-  // (nie tylko optymalizacja): priorytet ma zawsze pilność potrzeby klubu, nie rotacja dni.
+  // FIX OSTATECZNY (2026-08-01): zamiast rozkładać PEŁNE skanowanie w czasie, klub AI w
+  // ogóle nie skanuje już codziennie/co kilka dni całej puli. Zamiast tego trzyma własną,
+  // krótką listę obserwowanych kandydatów (club.aiScoutedTargets.freeAgentIds — patrz pole
+  // w types.ts, ~6-24 zawodników zależnie od reputacji klubu przez _getScoutingProfile),
+  // odświeżaną PEŁNYM skanowaniem raz na AI_SCOUTING_REFRESH_DAYS (90) dni. Klub REALIZUJE
+  // transfery (przegląda listę, składa oferty) codziennie — tylko samo SKANOWANIE rynku
+  // jest rzadkie. To był wyraźny wymóg: "klub mając listę może realizować transfery
+  // codziennie, ale skanowanie musi być co 3 miesiące" — i nie ma tu duplikacji logiki:
+  // _buildFreeAgentCandidates to JEDYNE miejsce z logiką filtrowania kandydatów, używane
+  // identycznie zarówno przy pełnym skanie, jak i przy skanie małej listy z cache'a (różni
+  // się tylko rozmiarem `pool`, który dostaje).
   //
-  // Nie dotknięto: processAiPreContractOpportunities i processAiInterestedPlayerTargeting mają
-  // podobny koszt (odpowiednio ~8.6s i ~5.3s/dzień w tym samym pomiarze), ale ich stagger jest
-  // sprawdzany dopiero W ŚRODKU zagnieżdżonej pętli sprzedający×kupujący — sam koszt iterowania
-  // pozostaje pełny nawet gdy stagger odrzuca dalsze przetwarzanie. Naprawa tych dwóch wymaga
-  // przesunięcia sprawdzenia stagger na sam początek pętli (głębsza zmiana struktury) i została
-  // celowo odłożona jako osobny krok, żeby nie zmieniać zbyt wiele naraz w delikatnej logice
-  // transferowej.
+  // WAŻNE — kolejność sprawdzeń jest celowa i NIE WOLNO jej odwracać: decyzja pełne-skanowanie-
+  // vs-cache zapada DOPIERO PO obliczeniu `needsFA`/`hasCriticalShortage`/`gulfStarCandidate`
+  // (tanie operacje, dotyczą tylko własnego składu klubu — nie całej puli FREE_AGENTS), a klub
+  // z krytycznym brakiem składu (`hasCriticalShortage`, np. właśnie stracił zawodnika i spadł
+  // poniżej minimum na pozycji) ORAZ kandydat na gwiazdę z Zatoki (`gulfStarCandidate`) ZAWSZE
+  // skanują pełną pulę tego samego dnia, bez opóźnienia i bez oglądania się na wiek cache'a —
+  // pilna potrzeba nigdy nie czeka na starą listę. Cache jest odświeżany (nadpisywany) tylko
+  // gdy faktycznie wygasł (cacheStale), nie przy każdym pełnym skanie wywołanym samą pilnością
+  // — inaczej marnowalibyśmy obliczenia, gdy lista jest i tak świeża.
+  //
+  // Ten sam mechanizm cache'a (z tym samym AI_SCOUTING_REFRESH_DAYS) zastosowano też w
+  // processAiInterestedPlayerTargeting (interestedPlayerIds zamiast freeAgentIds — patrz
+  // obszerny komentarz tam). processAiPreContractOpportunities NIE ma cache'a — dotyczy
+  // zawodników, którzy DOPIERO będą wolni (długoterminowe skautowanie), nie wypełniania
+  // bieżącej luki w składzie, więc to inna kategoria (patrz komentarz przy tamtej funkcji).
 processAiRecruitment: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
@@ -2034,15 +2167,14 @@ processAiRecruitment: (
     if (freeAgents.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap, newOffers, logEntries };
 
     const clubMap = new Map(updatedClubs.map(c => [c.id, c]));
-
-    const dayOfYear = Math.floor(
-      (currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 0).getTime()) / 86_400_000
+    // PERF (dodane 2026-08-01): budowane RAZ na całe wywołanie (nie per klub w pętli
+    // niżej), żeby odczyt cache'owanej listy kandydatów (freeAgentIds -> Player) i
+    // sprawdzenie "czy klub już negocjuje z jakimś wolnym agentem" nie wymagały
+    // skanowania całej (rosnącej z sezonu na sezon) puli FREE_AGENTS dla każdego klubu.
+    const freeAgentsById = new Map(freeAgents.map(fa => [fa.id, fa]));
+    const negotiatingClubIds = new Set(
+      freeAgents.filter(fa => fa.aiNegotiationClubId).map(fa => fa.aiNegotiationClubId as string)
     );
-    const hashClubInt = (id: string): number => {
-      let h = 0;
-      for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
-      return Math.abs(h);
-    };
 
     updatedClubs = updatedClubs.map(club => {
       if (club.id === userTeamId) return club;
@@ -2070,50 +2202,75 @@ processAiRecruitment: (
         : null;
       if (needsFA.length === 0 && !gulfStarCandidate) return club;
 
-      // Rozłożenie wyszukiwania wolnych agentów na kilka dni — ale TYLKO gdy klub
-      // nie ma krytycznego braku składu (i nie poluje na gwiazdę z Zatoki). Klub
-      // z krytycznym brakiem (np. właśnie stracił zawodnika i spadł poniżej minimum
-      // na pozycji) szuka od razu, każdego dnia — priorytet ma pilna potrzeba,
-      // nie ślepa rotacja dni. Pozostałe kluby (dokupywanie / upgrade) sprawdzają
-      // rynek co 3 dni, żeby nie przeszukiwać całej (rosnącej z sezonu na sezon)
-      // puli FREE_AGENTS codziennie dla wszystkich klubów naraz.
-      if (!hasCriticalShortage && !gulfStarCandidate && (dayOfYear + hashClubInt(club.id)) % 3 !== 0) return club;
-
-      // OGRANICZENIE CZĘSTOTLIWOŚCI: klub może mieć tylko 1 aktywną negocjację z wolnym agentem
-      const alreadyNegotiating = freeAgents.some(fa => fa.aiNegotiationClubId === club.id);
-      if (alreadyNegotiating) return club;
+      // OGRANICZENIE CZĘSTOTLIWOŚCI: klub może mieć tylko 1 aktywną negocjację z wolnym
+      // agentem — O(1) przez negotiatingClubIds, zamiast wcześniejszego
+      // freeAgents.some(...), które skanowało całą pulę dla każdego klubu.
+      if (negotiatingClubIds.has(club.id)) return club;
 
       if (club.budget <= 250_000 && !hasCriticalShortage && !gulfStarCandidate) return club;
 
-      // Szukanie kandydata: pasująca pozycja, OVR w zasięgu, nie jest już w negocjacji z innym AI, brak blokady
-      // Używamy updatedPlayersMap zamiast freeAgents — freeAgents to stary snapshot sprzed pętli.
-      // Bez tego kilka klubów może w jednej iteracji zgłosić się do tego samego agenta.
-      const freeAgentCandidates = (updatedPlayersMap['FREE_AGENTS'] || []).filter(fa => {
-        const needFA = needsFA.find(n => n.position === fa.position);
-        if (!needFA) return false;
-        if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
-        if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA)) return false;
-        const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
-        const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
-        const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
-        if (fa.overallRating > faMaxOvr || fa.overallRating < faMinOvr) return false;
-        if (fa.aiNegotiationClubId) return false;
-        if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) return false;
+      // PERF (dodane 2026-08-01, zastępuje wcześniejszy stagger "co 3 dni"): klub AI już
+      // NIE skanuje codziennie całej (rosnącej z sezonu na sezon) puli FREE_AGENTS.
+      // Zamiast tego trzyma własną, krótką listę obserwowanych kandydatów
+      // (club.aiScoutedTargets.freeAgentIds — ~6 do 24 zawodników, zależnie od
+      // reputacji klubu, patrz _getScoutingProfile.maxPool), odświeżaną PEŁNYM
+      // skanowaniem raz na AI_SCOUTING_REFRESH_DAYS (90) dni. Klub REALIZUJE transfery
+      // (przegląda listę, składa oferty) codziennie — tylko samo SKANOWANIE rynku jest
+      // rzadkie, dokładnie jak prosiłeś. Wyjątek bez kompromisów: klub z krytycznym
+      // brakiem składu (hasCriticalShortage) lub kandydatem na gwiazdę z Zatoki
+      // (gulfStarCandidate) zawsze skanuje PEŁNĄ pulę od razu, tego samego dnia —
+      // pilna potrzeba nigdy nie czeka na starą listę sprzed nawet 3 miesięcy.
+      // To JEDYNE miejsce decydujące o pełnym vs. cache'owanym skanowaniu — nie ma
+      // równoległego, zduplikowanego mechanizmu odświeżania gdzie indziej.
+      const scoutCache = club.aiScoutedTargets;
+      const cacheAgeDays = scoutCache?.lastRefreshDate
+        ? Math.floor((currentDate.getTime() - new Date(scoutCache.lastRefreshDate).getTime()) / 86_400_000)
+        : Number.POSITIVE_INFINITY;
+      const cacheStale = cacheAgeDays >= AI_SCOUTING_REFRESH_DAYS;
+      const useFullScan = hasCriticalShortage || !!gulfStarCandidate || cacheStale;
 
-        const posSquad = squad.filter(p => p.position === fa.position);
-        const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
-        const hasShortage = posSquad.length < minCounts[fa.position];
-        const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
-        const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
+      const searchPool = useFullScan
+        ? (updatedPlayersMap['FREE_AGENTS'] || [])
+        : (scoutCache?.freeAgentIds ?? [])
+            .map(id => freeAgentsById.get(id))
+            .filter((p): p is Player => !!p);
 
-        return hasShortage || needsSquadBody || (isUpgrade && _canAddBalancedDepth(squad, fa.position));
-      }).sort((a, b) => {
-        const needA = needsFA.find(n => n.position === a.position);
-        const needB = needsFA.find(n => n.position === b.position);
-        const scoreA = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needA?.urgency }) + _getRecruitmentReputationBonus(a, 3, needA);
-        const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
-        return scoreB - scoreA || a.age - b.age;
-      });
+      // Szukanie kandydata: pasująca pozycja, OVR w zasięgu, nie jest już w negocjacji z innym AI, brak blokady.
+      // _buildFreeAgentCandidates używa updatedPlayersMap (przez searchPool) zamiast starego
+      // snapshotu freeAgents sprzed pętli — bez tego kilka klubów mogłoby w jednej iteracji
+      // zgłosić się do tego samego agenta.
+      const freeAgentCandidates = _buildFreeAgentCandidates(
+        searchPool, club, squad, needsFA, aiStrategy, minCounts, idealOvr, currentDate
+      );
+
+      // Odświeżenie cache TYLKO gdy faktycznie wygasł — nie przy każdym pełnym skanie
+      // wywołanym samą pilną potrzebą, żeby nie marnować obliczeń, gdy cache jest i tak
+      // świeży. Reputacyjnie skalowana jakość odkrywania (_getScoutingProfile) decyduje
+      // ile i jak dobrych kandydatów trafia na listę — klub z wyższą reputacją naturalnie
+      // złapie lepszych (większy discoveryShare/maxPool, mniejszy noise/qualityBand).
+      let nextAiScoutedTargets = scoutCache;
+      if (cacheStale) {
+        const refreshScouting = _getScoutingProfile(club, false);
+        const discoveredPool = _computeDiscoveredPool(
+          freeAgentCandidates,
+          `AI_FA_SCOUT_REFRESH_${club.id}_${currentDate.toISOString().slice(0, 10)}`,
+          player => {
+            const need = needsFA.find(n => n.position === player.position);
+            return AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: need?.urgency }) +
+              _getRecruitmentReputationBonus(player, 3, need);
+          },
+          refreshScouting
+        );
+        nextAiScoutedTargets = {
+          lastRefreshDate: currentDate.toISOString(),
+          freeAgentIds: discoveredPool.map(entry => entry.player.id),
+          interestedPlayerIds: scoutCache?.interestedPlayerIds ?? [],
+        };
+      }
+      const clubWithScoutingUpdate = nextAiScoutedTargets !== scoutCache
+        ? { ...club, aiScoutedTargets: nextAiScoutedTargets }
+        : club;
+
       const faScouting = _getScoutingProfile(club, hasCriticalShortage);
       const candidate = gulfStarCandidate || _pickDiscoveredMarketPlayer(
         freeAgentCandidates,
@@ -2131,7 +2288,7 @@ processAiRecruitment: (
         }
       );
 
-      if (!candidate) return club;
+      if (!candidate) return clubWithScoutingUpdate;
 
       // Oznacz wolnego agenta jako "w negocjacji" — okno 4 dni dla gracza na kontr-ofertę
       const responseDate = new Date(currentDate);
@@ -2172,7 +2329,7 @@ processAiRecruitment: (
         });
       }
 
-      return club;
+      return clubWithScoutingUpdate;
     });
 
     return { updatedClubs, updatedPlayers: updatedPlayersMap, newOffers, logEntries };
@@ -2780,17 +2937,22 @@ processAiRecruitment: (
     // Poza oknem: podejścia dozwolone, ale rzadsze — transfer nastąpi w kolejnym oknie
     const windowOpen = _isTransferWindowOpen(currentDate);
 
-    const hashClubInt = (id: string): number => {
-      let h = 0;
-      for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
-      return Math.abs(h);
-    };
-
-    const dayOfYear = Math.floor(
-      (currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 0).getTime()) / 86_400_000
-    );
-
     const sellerClubMap = new Map(updatedClubs.map(c => [c.id, c]));
+    // PERF (dodane 2026-08-01): budowane RAZ na całe wywołanie (nie per klub w pętli
+    // niżej) — odpowiednik freeAgentsById/negotiatingClubIds z processAiRecruitment.
+    // otherClubPlayersById pozwala odczytać cache'owaną listę kandydatów
+    // (interestedPlayerIds -> Player) bez skanowania wszystkich klubów za każdym razem.
+    // buyingClubIds zastępuje wcześniejsze Object.values(updatedPlayersMap).flat().some(...)
+    // — to był osobny, jeszcze droższy pełny skan (WSZYSCY zawodnicy w grze, nie tylko
+    // FREE_AGENTS) wykonywany dla każdego sprawdzanego klubu.
+    const otherClubPlayersById = new Map<string, Player>();
+    const buyingClubIds = new Set<string>();
+    Object.entries(updatedPlayersMap).forEach(([cId, squadList]) => {
+      squadList.forEach(p => {
+        if (p.transferPendingClubId) buyingClubIds.add(p.transferPendingClubId);
+        if (cId !== 'FREE_AGENTS' && cId !== userTeamId) otherClubPlayersById.set(p.id, p);
+      });
+    });
 
     for (const club of _shuffleMarketOrder(
       clubs,
@@ -2812,67 +2974,58 @@ processAiRecruitment: (
       const hasCriticalShortageIT = needsIT.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
       const needsITMap = new Map(needsIT.map(n => [n.position as string, n]));
 
-      // PERF (2026-07-30): stagger przeniesiony TUTAJ — dopiero po tanich, wyłącznie
-      // per-klubowych sprawdzeniach powyżej (spendingPower, rozmiar składu, needsIT/
-      // hasCriticalShortageIT), a NIE przed nimi jak wcześniej. Wcześniej stagger był
-      // pierwszym sprawdzeniem w pętli, więc klub z krytycznym brakiem składu też był
-      // niesłusznie odkładany do kolejnego "swojego" dnia. Teraz: klub z krytycznym
-      // brakiem (hasCriticalShortageIT) lub kandydat na gwiazdę z Zatoki (isGulfStarHunter)
-      // ZAWSZE przechodzi do kosztownego przeszukania rynku tego samego dnia — stagger
-      // ogranicza wyłącznie opportunistyczne dokupywanie/upgrade, dokładnie tak samo jak
-      // w processAiRecruitment (patrz obszerny komentarz nad tamtą funkcją). Sam mechanizm
-      // stagger (dayOfYear + hash(clubId) + modulo co 3 dni w oknie transferowym / 15 poza
-      // oknem) jest niezmieniony — to wyłącznie zmiana KOLEJNOŚCI sprawdzeń, nie logiki.
-      const staggerInt = windowOpen ? 3 : 15;
-      if (!hasCriticalShortageIT && !isGulfStarHunter && (dayOfYear + hashClubInt(club.id)) % staggerInt !== 0) continue;
+      // Jeden aktywny zakup na raz — O(1) przez buyingClubIds, zamiast wcześniejszego
+      // pełnego skanu Object.values(updatedPlayersMap).flat().some(...).
+      if (buyingClubIds.has(club.id)) continue;
 
-      // Jeden aktywny zakup na raz
-      const alreadyBuying = Object.values(updatedPlayersMap)
-        .flat()
-        .some(p => p.transferPendingClubId === club.id);
-      if (alreadyBuying) continue;
+      // PERF (dodane 2026-08-01, zastępuje wcześniejszy stagger "co 3/15 dni"): dokładnie
+      // ten sam mechanizm cache'a co w processAiRecruitment (patrz obszerny komentarz tam
+      // dla pełnego wyjaśnienia) — klub trzyma krótką listę obserwowanych zawodników
+      // innych klubów (club.aiScoutedTargets.interestedPlayerIds), odświeżaną pełnym
+      // skanowaniem WSZYSTKICH innych klubów raz na AI_SCOUTING_REFRESH_DAYS (90) dni,
+      // zamiast robić to codziennie/co kilka dni. Klub REALIZUJE transfery (przegląda
+      // listę, składa oferty) codziennie — tylko pełne SKANOWANIE rynku jest rzadkie.
+      // Klub z krytycznym brakiem składu lub kandydatem na gwiazdę z Zatoki zawsze
+      // skanuje pełną pulę od razu, tego samego dnia — bez kompromisu.
+      const scoutCache = club.aiScoutedTargets;
+      const cacheAgeDays = scoutCache?.lastRefreshDate
+        ? Math.floor((currentDate.getTime() - new Date(scoutCache.lastRefreshDate).getTime()) / 86_400_000)
+        : Number.POSITIVE_INFINITY;
+      const cacheStale = cacheAgeDays >= AI_SCOUTING_REFRESH_DAYS;
+      const useFullScan = hasCriticalShortageIT || isGulfStarHunter || cacheStale;
+
+      const targetPool = useFullScan
+        ? Object.entries(updatedPlayersMap)
+            .filter(([cId]) => cId !== 'FREE_AGENTS' && cId !== club.id && cId !== userTeamId)
+            .flatMap(([, sq]) => sq)
+        : (scoutCache?.interestedPlayerIds ?? [])
+            .map(id => otherClubPlayersById.get(id))
+            .filter((p): p is Player => !!p && p.clubId !== club.id);
 
       // Kandydaci: gracze z interestedClubs zawierającym ten klub, niewystawieni na listę
-      const targets = Object.entries(updatedPlayersMap)
-        .filter(([cId]) => cId !== 'FREE_AGENTS' && cId !== club.id && cId !== userTeamId)
-        .flatMap(([, sq]) => sq)
-        .filter(p => {
-          if (p.loan) return false;
-          if (_hasActiveTransferLockout(p, currentDate)) return false;
-          if (_hasActiveTransferOfferBan(p, currentDate)) return false;
-          if (p.isOnTransferList || p.transferPendingClubId) return false;
-          const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
-          if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
-          if (!PrestigeTransferGuardService.shouldConsiderDestination(p, club)) return false;
+      const targets = _buildInterestedPlayerTargets(
+        targetPool, club, squad, needsITMap, idealOvr, isGulfStarHunter, windowOpen, currentDate, sellerClubMap
+      );
 
-          const sellerClub = sellerClubMap.get(p.clubId || '');
-          const isGulfVeteranStarTarget = !!sellerClub &&
-            isGulfStarHunter &&
-            _isExpiringBigClubVeteranStar(p, sellerClub, currentDate);
-          if (isGulfVeteranStarTarget) return true;
-
-          const isShortlisted = (p.interestedClubs || []).includes(club.id);
-          const need = needsITMap.get(p.position);
-          if (!need) return false;
-          if (_isBelowAiMarketQualityFloor(p, club, squad, need)) return false;
-          if (!_canAddBalancedDepth(squad, p.position) && need.reason !== 'SHORTAGE') return false;
-
-          const buyerPositionAverage = _getPositionAverageOverall(squad, p.position);
-          const isQuantityNeed = _isQuantityDepthNeed(need, squad, p.position);
-          const isOpenMarketTarget =
-            !isShortlisted &&
-            (
-              isQuantityNeed ||
-              p.overallRating >= buyerPositionAverage + (need.starterRequired ? 2 : 3) ||
-              (club.reputation >= (sellerClub?.reputation ?? 0) + 2 && p.overallRating >= buyerPositionAverage + 1)
-            );
-          if (!isShortlisted && !isOpenMarketTarget) return false;
-
-          const ovrCap = Math.min(idealOvr, 95);
-          const low = isQuantityNeed ? 45 : need.urgency === 'CRITICAL' ? ovrCap - 14 : ovrCap - 8;
-          const high = isQuantityNeed ? Math.max(ovrCap + 12, 99) : ovrCap + (isShortlisted ? 12 : 8);
-          return p.overallRating >= low && p.overallRating <= high;
-        });
+      // Odświeżenie cache TYLKO gdy faktycznie wygasł — nie przy każdym pełnym skanie
+      // wywołanym samą pilną potrzebą (analogicznie do processAiRecruitment).
+      if (cacheStale) {
+        const refreshScouting = _getScoutingProfile(club, false);
+        const discoveredPool = _computeDiscoveredPool(
+          targets,
+          `AI_IT_SCOUT_REFRESH_${club.id}_${currentDate.toISOString().slice(0, 10)}`,
+          player =>
+            AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: needsITMap.get(player.position)?.urgency }) +
+            _getRecruitmentReputationBonus(player, 2, needsITMap.get(player.position)),
+          refreshScouting
+        );
+        const nextAiScoutedTargets = {
+          lastRefreshDate: currentDate.toISOString(),
+          freeAgentIds: scoutCache?.freeAgentIds ?? [],
+          interestedPlayerIds: discoveredPool.map(entry => entry.player.id),
+        };
+        updatedClubs = updatedClubs.map(c => c.id === club.id ? { ...c, aiScoutedTargets: nextAiScoutedTargets } : c);
+      }
 
       if (targets.length === 0) continue;
 
