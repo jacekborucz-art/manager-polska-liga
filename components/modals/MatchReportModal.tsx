@@ -594,14 +594,6 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
           <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all text-2xl">×</button>
         </div>
 
-        {match.archived && (
-          <div className="border-b border-amber-400/20 bg-amber-400/10 px-8 py-3 text-center">
-            <span className="font-black italic uppercase tracking-tighter text-[10px] text-amber-200">
-              Raport zarchiwizowany — zachowano wynik i podstawowe informacje o meczu
-            </span>
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {/* Match conditions row */}
           <div className="px-8 py-3 flex items-center gap-6 border-b border-white/5 flex-wrap">
@@ -693,26 +685,28 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
             </div>
           </div>
 
-          {/* Lineup + Pitch + Lineup */}
-          <div className="px-8 pb-6 grid gap-3" style={{ gridTemplateColumns: '250px 1fr 250px' }}>
-            <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
-              <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
-                {homeClub.shortName}
-              </h3>
-              {renderLineup('home')}
-            </div>
+          {/* Lineup + Pitch + Lineup — ukryte dla zarchiwizowanych meczów (brak danych składu) */}
+          {!match.archived && (
+            <div className="px-8 pb-6 grid gap-3" style={{ gridTemplateColumns: '250px 1fr 250px' }}>
+              <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
+                <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
+                  {homeClub.shortName}
+                </h3>
+                {renderLineup('home')}
+              </div>
 
-            <div className="rounded-xl overflow-hidden opacity-[0.85]" style={{ minHeight: '420px' }}>
-              {renderPitch()}
-            </div>
+              <div className="rounded-xl overflow-hidden opacity-[0.85]" style={{ minHeight: '420px' }}>
+                {renderPitch()}
+              </div>
 
-            <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
-              <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
-                {awayClub.shortName}
-              </h3>
-              {renderLineup('away')}
+              <div className={`${GLASS_PANEL} rounded-[20px] p-3`}>
+                <h3 className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 text-center">
+                  {awayClub.shortName}
+                </h3>
+                {renderLineup('away')}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

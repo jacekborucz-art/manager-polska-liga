@@ -3325,6 +3325,20 @@ if (userTeamId) {
     }
   }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, showGameNotification]);
 
+  // PERF/ROZMIAR ZAPISU (dodane 2026-08-01): przy KAŻDYM zapisie do pliku (nie tylko
+  // co 5 sezonów jak automatyczna archiwizacja w startNextSeason powyżej) dane starsze
+  // niż SAVE_DETAIL_SEASONS pełnych sezonów wstecz trafiają do pliku w formie
+  // "podglądowej" (matchHistory: wynik/drużyny/data bez goals/cards) albo są całkiem
+  // usuwane (maile/raporty sparingów/wyniki rezerw — dokładnie tymi samymi funkcjami
+  // SaveArchiveService, które już działa przy przejściu sezonu, tylko z niższym progiem
+  // i częstszym wyzwalaniem). NIE mutuje żywego stanu gry w bieżącej sesji — `players`,
+  // `messages`, `matchHistory` w pamięci (i to co widzisz na ekranie) zostają bez zmian;
+  // przycięcie dotyczy wyłącznie danych zapisywanych do pliku.
+  const SAVE_DETAIL_SEASONS = 2;
+  const saveArchiveFirstDetailedSeason = seasonNumber - (SAVE_DETAIL_SEASONS - 1);
+  const saveArchiveSeasonStartYear = currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+  const saveArchiveCutoffDate = new Date(saveArchiveSeasonStartYear - (SAVE_DETAIL_SEASONS - 1), 6, 1);
+
   const getSaveState = (): SaveState => ({
     version: SAVE_VERSION,
     savedAt: new Date().toISOString(),
@@ -3337,7 +3351,7 @@ if (userTeamId) {
     reserveReleaseDirective,
     reserveCoachId,
     reserveFixtures,
-    reserveMatchResults,
+    reserveMatchResults: SaveArchiveService.archiveReserveResultsBefore(reserveMatchResults, saveArchiveFirstDetailedSeason),
     academy,
     scoutPool,
     scoutMarket,
@@ -3356,7 +3370,7 @@ if (userTeamId) {
     managerProfile,
     managerJobOffers,
     seasonNumber,
-    messages,
+    messages: SaveArchiveService.archiveMessagesBefore(messages, saveArchiveCutoffDate),
     mediaRelationships,
     sentUnfriendlyPressMonths,
     sentFriendlyPressMonths,
@@ -3414,15 +3428,15 @@ if (userTeamId) {
     confR1QPolishTeamIds,
     confR2QPolishTeamIds,
     supercupWinners,
-    matchHistory: MatchHistoryService.getAll(),
+    matchHistory: MatchHistoryService.getAllForSave(seasonNumber, SAVE_DETAIL_SEASONS),
     championshipHistory: ChampionshipHistoryService.getAll(),
     winterCampInvitePending,
     winterCampProgramPending,
     summerCampInvitePending,
     summerCampProgramPending,
     lastNTMatchResults,
-    aiFriendlyPairs,
-    aiFriendlyReports,
+    aiFriendlyPairs: SaveArchiveService.archiveAiFriendlyPairsBefore(aiFriendlyPairs, saveArchiveCutoffDate),
+    aiFriendlyReports: SaveArchiveService.archiveAiFriendlyReportsBefore(aiFriendlyReports, saveArchiveCutoffDate),
     pzpnDisciplinaryEvents,
     sentMailIds: Array.from(sentMailIdsRef.current),
     lastProcessedLeagueDate: lastProcessedLeagueDateRef.current,

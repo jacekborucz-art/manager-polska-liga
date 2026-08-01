@@ -68,6 +68,27 @@ export const MatchHistoryService = {
     return archivedCount;
   },
 
+  // PERF/ROZMIAR ZAPISU (dodane 2026-08-01): zwraca historię meczów przeznaczoną
+  // do ZAPISU DO PLIKU — mecze starsze niż `detailSeasons` pełnych sezonów wstecz
+  // dostają wersję "podglądową" (bez goals[]/cards[]), dokładnie tym samym
+  // przekształceniem (toArchivedSummary) co archiveBeforeSeason powyżej — zero
+  // nowej logiki, tylko reużycie istniejącej funkcji.
+  //
+  // KLUCZOWA RÓŻNICA względem archiveBeforeSeason: ta funkcja NIE mutuje żywej
+  // tablicy `matchHistory` w pamięci (buduje nową tablicę przez .map(), nie
+  // przypisuje do `matchHistory`). Rozgrywka w bieżącej sesji (widok "Historia
+  // meczów", statystyki na żywo) nadal widzi pełne szczegóły niezależnie od wieku
+  // meczu — przycięcie dotyczy WYŁĄCZNIE tego, co trafia do pliku zapisu. Dopiero
+  // wczytanie takiego zapisu pokaże stare mecze bez szczegółów (bo to fizycznie
+  // jedyne dane, jakie w nim wtedy będą).
+  getAllForSave: (currentSeasonNumber: number, detailSeasons: number = 2): MatchHistoryEntry[] => {
+    const firstDetailedSeason = currentSeasonNumber - (detailSeasons - 1);
+    return matchHistory.map(entry => {
+      if (entry.season >= firstDetailedSeason || entry.archived) return entry;
+      return toArchivedSummary(entry);
+    });
+  },
+
   // Funkcja czyszcząca (np. przy nowej grze)
   clear: () => {
     matchHistory = [];

@@ -1019,11 +1019,12 @@ export const MatchHistoryView: React.FC = () => {
                     const home = getClub(m.homeTeamId);
                     const away = getClub(m.awayTeamId);
                     return (
-                      <div 
-                        key={i} 
-                        onClick={() => setSelectedMatch(m)} 
-                        className={`group relative p-5 bg-slate-900/40 rounded-3xl border border-white/5 hover:border-white/20 cursor-pointer flex justify-between items-center transition-all duration-300
-                          ${selectedMatch?.matchId === m.matchId ? 'ring-2 ring-blue-500 bg-blue-900/20 shadow-2xl scale-[1.01]' : 'hover:scale-[1.005]'}`}
+                      <div
+                        key={i}
+                        onClick={() => { if (!m.archived) setSelectedMatch(m); }}
+                        className={`group relative p-5 bg-slate-900/40 rounded-3xl border border-white/5 flex justify-between items-center transition-all duration-300
+                          ${m.archived ? 'cursor-default' : 'hover:border-white/20 cursor-pointer'}
+                          ${selectedMatch?.matchId === m.matchId ? 'ring-2 ring-blue-500 bg-blue-900/20 shadow-2xl scale-[1.01]' : m.archived ? '' : 'hover:scale-[1.005]'}`}
                       >
                         <div className="flex-1 flex justify-center items-center gap-8">
                           <div className="flex items-center gap-3 w-64 justify-end">
