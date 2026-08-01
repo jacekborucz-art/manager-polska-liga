@@ -1,23 +1,74 @@
 
-import { Club, Player, PlayerPosition, Lineup, HealthStatus, Coach } from '../types';
+import { Club, Player, PlayerPosition, Lineup, HealthStatus, Coach, Fixture, MatchStatus } from '../types';
 import { LineupService } from './LineupService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 
 export const AiMatchPreparationService = {
 
+  // PERF (dodane 2026-08-01): `fixtures`/`currentDate` są OPCJONALNE — to celowe,
+  // żeby nie zmieniać zachowania pozostałych wywołań tej funkcji w innych miejscach
+  // (BackgroundMatchProcessorPolishCup.ts, BackgroundPlayOffMatchPolishCup.ts, testy),
+  // które przekazują mniejszy, już wcześniej przefiltrowany zestaw klubów (np. tylko
+  // uczestników danej rundy pucharu) i nie wywołują się codziennie dla WSZYSTKICH
+  // klubów w grze — tam to ograniczenie nie jest potrzebne i nie miałoby sensu.
+  //
+  // Jedyne miejsce, które faktycznie miało problem: BackgroundMatchProcessor.ts —
+  // ta funkcja była tam wywoływana CODZIENNIE, bezwarunkowo, dla WSZYSTKICH ~650
+  // klubów AI, bez żadnego stagger'u/cache'a (jedyne tak duże miejsce w całym
+  // pipeline'ie AI, którego nie dotykaliśmy wcześniejszymi poprawkami). W środku,
+  // determineBestStartingTactic → calculateTopLineStrength woła kosztowne
+  // PlayerMoraleService.ensurePlayerState (pełny klon zawodnika + przeliczenie
+  // całego mindsetu od zera) WEWNĄTRZ komparatora .sort() (2x na porównanie) i
+  // jeszcze raz w reduce() zaraz potem dla tych samych zawodników — to był
+  // prawdopodobnie główny, niewyjaśniony wcześniej wkład w setki tysięcy dziennych
+  // wywołań ensurePlayerState/clamp widocznych w PerfProfilerService.
+  //
+  // FIX: skład drużyny ma realne znaczenie dopiero tuż przed meczem — nie ma
+  // powodu przygotowywać go codziennie dla klubu, który gra za 2 tygodnie. Gdy
+  // `fixtures`+`currentDate` są podane, funkcja przygotowuje skład TYLKO dla
+  // klubów, które mają zaplanowany mecz DZIŚ LUB JUTRO. "Jutro" realizuje wymóg
+  // "1 dzień przed meczem" — dzięki `{...currentLineups}` niżej, skład przygotowany
+  // wczoraj (gdy dziś było dla tego klubu "jutro") zostaje zachowany i jest gotowy
+  // na dzisiejszy mecz. "Dziś" to czysta siatka bezpieczeństwa (np. pierwszy dzień
+  // gry, gdzie nie było "wczoraj") — symulacja meczu w tym samym pliku bezpośrednio
+  // odczytuje newLineups[home.id]/[away.id] i CAŁKOWICIE POMIJA mecz, jeśli składu
+  // brakuje (patrz `if (!hLineup || !aLineup) return;` w processLeagueEvent), więc
+  // brak siatki bezpieczeństwa mógłby po cichu psuć symulację.
   prepareAllTeams: (
     clubs: Club[],
     playersMap: Record<string, Player[]>,
     currentLineups: Record<string, Lineup>,
     userTeamId: string | null,
-    coaches: Record<string, Coach> = {}
+    coaches: Record<string, Coach> = {},
+    fixtures?: Fixture[],
+    currentDate?: Date
   ): Record<string, Lineup> => {
-    
+
     const updatedLineups: Record<string, Lineup> = { ...currentLineups };
+
+    // Budowane RAZ na całe wywołanie (nie per klub) — zbiór ID klubów mających
+    // zaplanowany mecz dziś lub jutro. undefined (fixtures/currentDate nieprzekazane)
+    // = brak filtrowania, dokładnie stare zachowanie (wszystkie kluby).
+    let relevantClubIds: Set<string> | null = null;
+    if (fixtures && currentDate) {
+      relevantClubIds = new Set<string>();
+      const todayStr = currentDate.toDateString();
+      const tomorrow = new Date(currentDate);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toDateString();
+      fixtures.forEach(f => {
+        if (f.status !== MatchStatus.SCHEDULED) return;
+        const fDateStr = f.date.toDateString();
+        if (fDateStr !== todayStr && fDateStr !== tomorrowStr) return;
+        relevantClubIds!.add(f.homeTeamId);
+        relevantClubIds!.add(f.awayTeamId);
+      });
+    }
 
     clubs.forEach(club => {
       // Nie zmieniaj składu gracza tutaj, to dzieje się w GameContext lub przed meczem
       if (club.id === userTeamId) return;
+      if (relevantClubIds && !relevantClubIds.has(club.id)) return;
 
       const squad = playersMap[club.id];
    if (!squad || squad.length === 0) return;

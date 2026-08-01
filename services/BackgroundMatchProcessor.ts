@@ -523,7 +523,7 @@ export const BackgroundMatchProcessor = {
     DebugLoggerService.log('BMP', `processLeagueEvent: ${dateStr} | SCHEDULED: ${todayFixtures.length} | TOTAL fixtures: ${fixtures.length}`, true);
     const playersAfterFourthLeagueEnsure = ensureFourthLeagueSquads(clubs, playersMap, userTeamId);
     const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures, currentDate, userTeamId);
-    const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersAfterEmergencyGoalkeepers, lineups, userTeamId, coaches);
+    const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersAfterEmergencyGoalkeepers, lineups, userTeamId, coaches, fixtures, currentDate);
 if (todayFixtures.length === 0) {
       const contractUpdate = AiContractService.processClubsContracts(clubs, playersAfterEmergencyGoalkeepers, currentDate, userTeamId);
       const preContractUpdate = AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);

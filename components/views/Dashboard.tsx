@@ -634,6 +634,7 @@ const boardConfidence = useMemo(() => {
 
   const getGameDebugStats = () => ({
     totalPlayers: Object.values(players).flat().length,
+    totalFreeAgents: (players['FREE_AGENTS'] || []).length,
     totalCoaches: Object.keys(coaches).length,
     totalStaff: Object.keys(staffMembers).length,
     totalReferees: RefereeService.pool.length,
@@ -2122,6 +2123,7 @@ const boardConfidence = useMemo(() => {
               <div className="space-y-1 text-xs">
                 <p>Sezon: {seasonNumber}</p>
                 <p>Zawodnicy razem (kluby + wolni agenci): {stats.totalPlayers}</p>
+                <p>Wolni agenci (FREE_AGENTS): {stats.totalFreeAgents}</p>
                 <p>Trenerzy: {stats.totalCoaches}</p>
                 <p>Sztab (staff): {stats.totalStaff}</p>
                 <p>Sędziowie: {stats.totalReferees}</p>
