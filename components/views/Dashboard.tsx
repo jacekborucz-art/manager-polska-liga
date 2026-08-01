@@ -17,6 +17,7 @@ import { getClubLogo } from '../../resources/ClubLogoAssets';
 import saveButton from '../../Graphic/buttons/save.png';
 import { exportSaveToFile } from '../../services/SaveGameService';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { SaveArchiveService } from '../../services/SaveArchiveService';
 import { RefereeService } from '../../services/RefereeService';
 import edytorButton from '../../Graphic/buttons/edytor.png';
 import instrukcjaButton from '../../Graphic/buttons/instrukcja.png';
@@ -95,6 +96,8 @@ export const Dashboard: React.FC = () => {
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
   const [activeMailboxTab, setActiveMailboxTab] = useState<'main' | 'transfers' | 'trash'>('main');
   const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
+  const [mailCleanupThresholdMonths, setMailCleanupThresholdMonths] = useState(12);
+  const [showMailCleanupConfirm, setShowMailCleanupConfirm] = useState(false);
   const [isWinterCampLocationOpen, setIsWinterCampLocationOpen] = useState(false);
   const [isWinterCampProgramOpen, setIsWinterCampProgramOpen] = useState(false);
   const [isSummerCampLocationOpen, setIsSummerCampLocationOpen] = useState(false);
@@ -753,6 +756,12 @@ const boardConfidence = useMemo(() => {
   const confirmEmptyTrash = () => {
     setMessages(prev => prev.filter(m => !m.isTrashed));
     setShowEmptyTrashConfirm(false);
+  };
+  const confirmMailCleanup = () => {
+    const cutoff = new Date(currentDate);
+    cutoff.setMonth(cutoff.getMonth() - mailCleanupThresholdMonths);
+    setMessages(prev => SaveArchiveService.archiveMessagesBefore(prev, cutoff));
+    setShowMailCleanupConfirm(false);
   };
   const markAllAsRead = () => {
     const idsToMark = new Set(activeMailboxMessages.map(m => m.id));
@@ -1762,6 +1771,12 @@ const boardConfidence = useMemo(() => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowMailCleanupConfirm(true)}
+                    className="text-[9px] text-rose-300 bg-rose-500/10 px-3 py-1.5 rounded-full border border-rose-500/20 shadow-inner font-black italic uppercase tracking-tighter hover:bg-rose-500/20 transition-colors"
+                  >
+                    Usuń stare maile
+                  </button>
                   {activeMailboxTab === 'trash' ? (
                     <button
                       onClick={emptyTrash}
@@ -2055,6 +2070,41 @@ const boardConfidence = useMemo(() => {
                 ANULUJ
               </button>
               <button onClick={confirmEmptyTrash}
+                className="flex-1 py-3 rounded-[20px] bg-red-600 border border-red-400 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-500 transition-all">
+                USUŃ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMailCleanupConfirm && (
+        <div className="fixed inset-0 z-[2000] bg-black/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-slate-900 border border-white/10 rounded-[32px] p-8 flex flex-col items-center gap-6 shadow-2xl w-80">
+            <span className="text-4xl">🗑️</span>
+            <div className="text-center">
+              <p className="text-sm font-black uppercase tracking-widest text-white mb-2">USUŃ STARE MAILE</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider">Usunie wszystkie maile (główna, transfery, kosz) starsze niż wybrany próg. Podsumowania sezonu zawsze zostają. Ta decyzja jest nieodwracalna</p>
+            </div>
+            <select
+              value={mailCleanupThresholdMonths}
+              onChange={e => setMailCleanupThresholdMonths(Number(e.target.value))}
+              className="w-full text-[10px] bg-white/5 text-white px-3 py-2.5 rounded-[16px] border border-white/10 shadow-inner font-black uppercase tracking-widest text-center"
+            >
+              <option value={1} className="text-slate-900">Starsze niż 1 miesiąc</option>
+              <option value={3} className="text-slate-900">Starsze niż 3 miesiące</option>
+              <option value={6} className="text-slate-900">Starsze niż 6 miesięcy</option>
+              <option value={9} className="text-slate-900">Starsze niż 9 miesięcy</option>
+              <option value={12} className="text-slate-900">Starsze niż 1 rok</option>
+              <option value={24} className="text-slate-900">Starsze niż 2 lata</option>
+              <option value={36} className="text-slate-900">Starsze niż 3 lata</option>
+            </select>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setShowMailCleanupConfirm(false)}
+                className="flex-1 py-3 rounded-[20px] bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:border-white/20 transition-all">
+                ANULUJ
+              </button>
+              <button onClick={confirmMailCleanup}
                 className="flex-1 py-3 rounded-[20px] bg-red-600 border border-red-400 text-[10px] font-black uppercase tracking-widest text-white hover:bg-red-500 transition-all">
                 USUŃ
               </button>
