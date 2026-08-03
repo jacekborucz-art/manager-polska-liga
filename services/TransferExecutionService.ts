@@ -3,6 +3,7 @@ import { FinanceService } from './FinanceService';
 import { PlayerCareerService } from './PlayerCareerService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerReputationGrowthService } from './PlayerReputationGrowthService';
+import { PlayerClubAdaptationService } from './PlayerClubAdaptationService';
 
 interface TransferExecutionResult {
   updatedClubs: Club[];
@@ -83,10 +84,14 @@ export const TransferExecutionService = {
       transferLockoutUntil: transferLockoutDate.toISOString(),
       transferOfferBanUntil: transferOfferBanDate.toISOString()
     };
-    const transferredPlayer = PlayerReputationGrowthService.applyTransferUpgrade(
-      transferredPlayerBase,
-      sellerClub.reputation,
-      buyerClub.reputation
+    const transferredPlayer = PlayerClubAdaptationService.beginForClub(
+      PlayerReputationGrowthService.applyTransferUpgrade(
+        transferredPlayerBase,
+        sellerClub.reputation,
+        buyerClub.reputation
+      ),
+      buyerClub.id,
+      currentDate
     );
 
     const updatedPlayers: Record<string, Player[]> = {

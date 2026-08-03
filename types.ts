@@ -845,6 +845,21 @@ export interface PlayerStats {
   ratingHistory: number[]; 
 }
 
+export interface PlayerClubAdaptation {
+  /** Klub, którego dotyczy bieżący proces adaptacji. */
+  clubId: string;
+  /** Dzień rozpoczęcia adaptacji po zameldowaniu się w klubie. */
+  startedAt: string;
+  /** Ostatni dzień, za który naliczono wzrost kalendarzowy. */
+  lastUpdatedAt: string;
+  /** Wylosowany bazowy czas dojścia od poziomu początkowego do 100%. */
+  durationDays: number;
+  /** Wylosowany poziom adaptacji w chwili przyjścia. */
+  initialLevel: number;
+  /** Aktualny poziom adaptacji w zakresie 0–100. */
+  level: number;
+}
+
 export type PlayerMoralePersonality =
   | 'PROFESSIONAL'
   | 'AMBITIOUS'
@@ -1376,6 +1391,7 @@ export interface Player {
   morale?: number;
   moralePersonality?: PlayerMoralePersonality;
   moraleHistory?: PlayerMoraleHistoryEntry[];
+  clubAdaptation?: PlayerClubAdaptation | null;
   playerMindset?: PlayerMindsetState;
   lastIndividualTalkDate?: string | null;
   promisedMinutesUntil?: string | null;

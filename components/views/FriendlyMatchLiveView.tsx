@@ -66,6 +66,7 @@ import { FinanceService } from '@/services/FinanceService';
 import { HalftimeTalkModal } from '../modals/HalftimeTalkModal';
 import { TalkEffect } from '../../services/HalftimeTalkService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
+import { PlayerClubAdaptationService } from '../../services/PlayerClubAdaptationService';
 import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
@@ -1003,7 +1004,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (!id) return null;
               const player = playersList.find(p => p.id === id);
               const role = tactic.slots[idx]?.role ?? player?.position;
-              return player && role ? PlayerPositionFitService.getEffectiveRoleOverall(player, role, true) : null;
+              if (!player || !role) return null;
+              const roleOverall = PlayerPositionFitService.getEffectiveRoleOverall(player, role, true);
+              return PlayerClubAdaptationService.getEffectiveOverall(player, roleOverall);
             })
             .filter((value): value is number => value !== null);
           if (activeRoleOveralls.length === 0) return 62;
@@ -2568,7 +2571,15 @@ const summary: MatchSummary = {
         updatedPlayers,
         roundResults: finalRoundResults,
         seasonNumber,
-        ratings: undefined
+        ratings: undefined,
+        adaptationMatch: {
+          date: currentDate.toISOString(),
+          competition: 'FRIENDLY' as const,
+          minutesByPlayerId: {
+            ...PlayerClubAdaptationService.buildMinutesByPlayerId(matchState.homeLineup.startingXI, matchState.homeSubsHistory, 90, PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.homePlayers, 'HOME')),
+            ...PlayerClubAdaptationService.buildMinutesByPlayerId(matchState.awayLineup.startingXI, matchState.awaySubsHistory, 90, PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.awayPlayers, 'AWAY')),
+          },
+        },
       },
       matchHistoryArgs,
       summary,

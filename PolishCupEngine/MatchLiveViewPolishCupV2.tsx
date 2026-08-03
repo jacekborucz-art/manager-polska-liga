@@ -749,6 +749,7 @@ import { BriefingEffect, BriefingMatchStage, calculateAiCoachBriefingEffect } fr
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
+import { PlayerClubAdaptationService } from '../services/PlayerClubAdaptationService';
 import { PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { TacticalMatchupService } from '../services/TacticalMatchupService';
 import { TeamFormImpactService } from '../services/TeamFormImpactService';
@@ -3199,7 +3200,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (!id) return null;
               const player = playersList.find(p => p.id === id);
               const role = tactic.slots[idx]?.role ?? player?.position;
-              return player && role ? PlayerPositionFitService.getEffectiveRoleOverall(player, role, true) : null;
+              if (!player || !role) return null;
+              const roleOverall = PlayerPositionFitService.getEffectiveRoleOverall(player, role, true);
+              return PlayerClubAdaptationService.getEffectiveOverall(player, roleOverall);
             })
             .filter((value): value is number => value !== null);
           if (activeRoleOveralls.length === 0) return 62;
@@ -6280,7 +6283,23 @@ const summary: MatchSummary = {
       // PRZENIESIONE Z PUCHARU: brak pola `ratings` w applyArgs (w odróżnieniu od ligi) — Puchar celowo
       // nie wpycha ocen z meczu pucharowego do historii formy/ratingów zawodnika (applySimulationResult
       // robi to tylko gdy `ratings` jest obecne). `finalRatingsMap` służy tylko do summary/matchHistoryArgs.
-      applyArgs: { updatedFixtures, updatedClubs, updatedPlayers, updatedLineups: {}, newOffers: [], roundResults: null, seasonNumber },
+      applyArgs: {
+        updatedFixtures,
+        updatedClubs,
+        updatedPlayers,
+        updatedLineups: {},
+        newOffers: [],
+        roundResults: null,
+        seasonNumber,
+        adaptationMatch: {
+          date: currentDate.toISOString(),
+          competition: 'CUP' as const,
+          minutesByPlayerId: {
+            ...PlayerClubAdaptationService.buildMinutesByPlayerId(matchState.homeLineup.startingXI, matchState.homeSubsHistory, matchState.isExtraTime ? 120 : 90, PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.homePlayers, 'HOME')),
+            ...PlayerClubAdaptationService.buildMinutesByPlayerId(matchState.awayLineup.startingXI, matchState.awaySubsHistory, matchState.isExtraTime ? 120 : 90, PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.awayPlayers, 'AWAY')),
+          },
+        },
+      },
       matchHistoryArgs,
       debriefContext: debriefCtx,
       debriefMatchStage: getCupDebriefMatchStage(ctx.fixture.id, activePlayoffMatch?.matchType),
@@ -8137,5 +8156,3 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
   </div>
   );
 };
-
-

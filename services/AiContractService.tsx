@@ -7,6 +7,7 @@ import { PlayerCareerService } from './PlayerCareerService';
 import { PlayerContractMindflowService } from './PlayerContractMindflowService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerReputationGrowthService } from './PlayerReputationGrowthService';
+import { PlayerClubAdaptationService } from './PlayerClubAdaptationService';
 import { AiClubTransferStrategy, AiClubTransferStrategyService } from './AiClubTransferStrategyService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { NameGeneratorService } from './NameGeneratorService';
@@ -2433,7 +2434,7 @@ processAiRecruitment: (
           currentMonth
         );
 
-        const signedPlayer: Player = {
+        const signedPlayerBase: Player = {
           ...PlayerMoraleService.applyContractSigningMindflowReset(
             PlayerCareerService.resetClubStatsForNewEntry(fa),
             currentDate
@@ -2448,6 +2449,7 @@ processAiRecruitment: (
           transferLockoutUntil: _buildTransferLockoutUntil(currentDate),
           retirementLockUntil: gulfStarOffer ? newEndDate : fa.retirementLockUntil
         };
+        const signedPlayer = PlayerClubAdaptationService.beginForClub(signedPlayerBase, aiClub.id, currentDate);
 
         updatedPlayersMap[aiClub.id] = [...(updatedPlayersMap[aiClub.id] || []), signedPlayer];
 
@@ -3551,10 +3553,14 @@ processAiRecruitment: (
           transferLockoutUntil: _buildTransferLockoutUntil(currentDate),
           transferOfferBanUntil: _buildTransferOfferBanUntil(currentDate)
         };
-        const transferredPlayer = PlayerReputationGrowthService.applyTransferUpgrade(
-          transferredPlayerBase,
-          sellerClub.reputation,
-          buyerClub.reputation
+        const transferredPlayer = PlayerClubAdaptationService.beginForClub(
+          PlayerReputationGrowthService.applyTransferUpgrade(
+            transferredPlayerBase,
+            sellerClub.reputation,
+            buyerClub.reputation
+          ),
+          buyerClubId,
+          currentDate
         );
 
         // Przenieś zawodnika

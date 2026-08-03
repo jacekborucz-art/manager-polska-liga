@@ -136,6 +136,7 @@ import { WCQPlayoffService } from '../services/WCQPlayoffService';
 import { WorldCupService } from '../services/WorldCupService';
 import { WorldCupHistoryBackfillService } from '../services/WorldCupHistoryBackfillService';
 import { PlayerCareerService } from '../services/PlayerCareerService';
+import { ClubAdaptationCompetition, PlayerClubAdaptationService } from '../services/PlayerClubAdaptationService';
 import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
 import { PlayerMarketVisibilityService } from '../services/PlayerMarketVisibilityService';
@@ -917,7 +918,7 @@ const processAiToAiLoanMoves = (
           toYear: null,
           toMonth: null,
         }];
-    const loanedPlayer: Player = {
+    const loanedPlayerBase: Player = {
       ...currentPlayer,
       clubId: buyerClub.id,
       loan: loanInfo,
@@ -929,6 +930,7 @@ const processAiToAiLoanMoves = (
       isUntouchable: false,
       interestedClubs: [],
     };
+    const loanedPlayer = PlayerClubAdaptationService.beginForClub(loanedPlayerBase, buyerClub.id, loanInfo.startDate);
 
     const sellerSquadAfterLoan = currentSellerSquad.filter(squadPlayer => squadPlayer.id !== currentPlayer.id);
     const buyerSquadAfterLoan = [
@@ -1015,6 +1017,11 @@ interface SimulationOutput {
   // TUTAJ WSTAW TEN KOD
   newOffers: PendingNegotiation[];
   ratings?: Record<string, number>;
+  adaptationMatch?: {
+    date: string;
+    competition: ClubAdaptationCompetition;
+    minutesByPlayerId: Record<string, number>;
+  };
   // KONIEC KODU
   seasonNumber: number;
   roundResults: LeagueRoundResults | null;
@@ -4335,6 +4342,14 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     let finalClubs = simulation.updatedClubs;
 
    let finalPlayers = simulation.updatedPlayers;
+    if (simulation.adaptationMatch) {
+      finalPlayers = PlayerClubAdaptationService.applyMatchToPlayers(
+        finalPlayers,
+        simulation.adaptationMatch.minutesByPlayerId,
+        simulation.adaptationMatch.competition,
+        simulation.adaptationMatch.date
+      );
+    }
     let fitnessCoachQuality: number | undefined = undefined;
 
  if (simulation.ratings) {
@@ -5559,7 +5574,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     const contractEnd = new Date(currentDate);
     contractEnd.setFullYear(contractEnd.getFullYear() + contract.years);
 
-    const signedPlayer: Player = {
+    const signedPlayerBase: Player = {
       ...PlayerMoraleService.applyContractSigningMindflowReset(
         PlayerCareerService.resetClubStatsForNewEntry(player),
         currentDate
@@ -5575,6 +5590,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       mysteryAgentProspect: true,
       freeAgentClubLockouts: {},
     };
+    const signedPlayer = PlayerClubAdaptationService.beginForClub(signedPlayerBase, userTeamId, currentDate);
 
     setPlayers(prev => {
       const existingSquad = prev[userTeamId] || [];
@@ -10222,6 +10238,13 @@ Asystent`,
     );
     postReviewPlayers = aiTrainingEarly.updatedPlayers;
     postReviewClubs = aiTrainingEarly.updatedClubs;
+
+    postReviewPlayers = Object.fromEntries(
+      Object.entries(postReviewPlayers).map(([clubId, squad]) => [
+        clubId,
+        squad.map(player => PlayerClubAdaptationService.advanceDaily(player, dateToProcess)),
+      ])
+    );
 
 const finalResult: SimulationOutput = {
       ...simulation,
@@ -15143,7 +15166,7 @@ const finalResult: SimulationOutput = {
           toYear: null,
           toMonth: null,
         }];
-    const loanedPlayer: Player = {
+    const loanedPlayerBase: Player = {
       ...loanSourcePlayer,
       clubId: buyerClub.id,
       loan: loanInfo,
@@ -15155,6 +15178,7 @@ const finalResult: SimulationOutput = {
       isUntouchable: false,
       interestedClubs: [],
     };
+    const loanedPlayer = PlayerClubAdaptationService.beginForClub(loanedPlayerBase, buyerClub.id, loanInfo.startDate);
 
     setPlayers(prev => {
       const sellerSquad = (prev[sellerClub.id] || []).filter(p => p.id !== player.id);
@@ -16545,7 +16569,7 @@ const finalResult: SimulationOutput = {
           toYear: null,
           toMonth: null,
         }];
-    const loanedPlayer: Player = {
+    const loanedPlayerBase: Player = {
       ...targetPlayer,
       clubId: buyerClub.id,
       loan: loanInfo,
@@ -16557,6 +16581,7 @@ const finalResult: SimulationOutput = {
       isUntouchable: false,
       interestedClubs: [],
     };
+    const loanedPlayer = PlayerClubAdaptationService.beginForClub(loanedPlayerBase, buyerClub.id, loanInfo.startDate);
 
     setPlayers(prev => ({
       ...prev,
@@ -17206,7 +17231,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       currentMonth
     );
 
-    const updatedPlayer = {
+    const updatedPlayerBase: Player = {
       ...PlayerMoraleService.applyContractSigningMindflowReset(
         PlayerCareerService.resetClubStatsForNewEntry(resolvedPlayer),
         currentDate
@@ -17227,6 +17252,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       history: updatedHistory, // Podpinamy zaktualizowaną historię
       transferReportDate: faArrivalDate.toISOString()
     };
+    const updatedPlayer = PlayerClubAdaptationService.beginForClub(updatedPlayerBase, userTeamId, faArrivalDate);
 
     // 3. Przenieś piłkarza: usuń z wolnych, dodaj do klubu
     setPlayers(prev => ({

@@ -138,6 +138,7 @@ import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/P
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
+import { PlayerClubAdaptationService } from '../../services/PlayerClubAdaptationService';
 import { PreMatchPressConferenceService } from '../../services/PreMatchPressConferenceService';
 import { TacticalMatchupService } from '../../services/TacticalMatchupService';
 import { TeamFormImpactService } from '../../services/TeamFormImpactService';
@@ -2298,7 +2299,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               if (!id) return null;
               const player = playersList.find(p => p.id === id);
               const role = tactic.slots[idx]?.role ?? player?.position;
-              return player && role ? PlayerPositionFitService.getEffectiveRoleOverall(player, role, true) : null;
+              if (!player || !role) return null;
+              const roleOverall = PlayerPositionFitService.getEffectiveRoleOverall(player, role, true);
+              return PlayerClubAdaptationService.getEffectiveOverall(player, roleOverall);
             })
             .filter((value): value is number => value !== null);
           if (activeRoleOveralls.length === 0) return 62;
@@ -5422,7 +5425,23 @@ const summary: MatchSummary = {
 
     setLastMatchSummary(summary);
     setPendingFinishPayload({
-      simResultMerged: { ...simResult, updatedClubs, updatedFixtures, updatedPlayers, roundResults: finalRoundResults, seasonNumber, ratings: finalRatingsMap },
+      simResultMerged: {
+        ...simResult,
+        updatedClubs,
+        updatedFixtures,
+        updatedPlayers,
+        roundResults: finalRoundResults,
+        seasonNumber,
+        ratings: finalRatingsMap,
+        adaptationMatch: {
+          date: currentDate.toISOString(),
+          competition: 'LEAGUE' as const,
+          minutesByPlayerId: {
+            ...PlayerClubAdaptationService.buildMinutesByPlayerId(matchState.homeLineup.startingXI, matchState.homeSubsHistory, 90, PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.homePlayers, 'HOME')),
+            ...PlayerClubAdaptationService.buildMinutesByPlayerId(matchState.awayLineup.startingXI, matchState.awaySubsHistory, 90, PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.awayPlayers, 'AWAY')),
+          },
+        },
+      },
       matchHistoryArgs,
       summary,
       userTeamId: userTeamId!,
