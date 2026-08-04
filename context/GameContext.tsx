@@ -7863,7 +7863,11 @@ Asystent`,
             if (processedDrawIds.includes(slot.id)) break;
             let participants: string[] = [];
             if (slot.label.includes('1/64')) {
-              participants = PolishCupDrawService.getInitialParticipants(clubs);
+              participants = PolishCupDrawService.getInitialParticipants(
+                clubs,
+                sessionSeed,
+                seasonTemplate?.seasonStartYear ?? dateToProcess.getFullYear()
+              );
             } else {
               participants = clubs.filter(c => c.isInPolishCup).map(c => c.id);
               if (participants.length === 0) participants = cupParticipants;

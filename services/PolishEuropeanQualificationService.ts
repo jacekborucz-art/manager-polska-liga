@@ -1,3 +1,5 @@
+import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
+
 export interface PolishEuropeanQualificationInput {
   leagueTableIds: string[];
   cupWinnerId?: string | null;
@@ -38,13 +40,19 @@ const INITIAL_QUALIFICATION_2026_27: InitialPolishEuropeanQualification = {
 const firstAvailable = (teamIds: Array<string | null | undefined>, excludedIds: Set<string>): string | null =>
   teamIds.find((teamId): teamId is string => !!teamId && !excludedIds.has(teamId)) ?? null;
 
+const getEuropeanRepresentativeId = (teamId?: string | null): string | null => {
+  if (!teamId) return null;
+  return ReserveTeamLeagueService.getParentClubId(teamId) ?? teamId;
+};
+
 /**
  * Przydziela polskim klubom miejsca w europejskich pucharach.
  *
  * Priorytet miejsc:
  * 1. mistrz Polski -> Liga Mistrzów R2,
  * 2. wicemistrz Polski -> Liga Mistrzów R1,
- * 3. zdobywca Pucharu Polski -> Liga Europy R2,
+ * 3. zdobywca Pucharu Polski -> Liga Europy R2; jeśli puchar wygrały rezerwy,
+ *    miejsce otrzymuje pierwsza drużyna tego klubu,
  * 4. dwa najwyżej sklasyfikowane wolne kluby od 3. miejsca -> Liga Konferencji R2.
  *
  * Jeżeli zdobywca Pucharu Polski jest już w Lidze Mistrzów, miejsce w Lidze Europy
@@ -78,8 +86,13 @@ export const PolishEuropeanQualificationService = {
       [championsLeagueR2TeamId, championsLeagueR1TeamId].filter((teamId): teamId is string => !!teamId),
     );
 
+    // Rezerwy zachowują trofeum i wynik finału, ale nie mogą reprezentować klubu
+    // w Europie. Dotyczy to również finalisty używanego jako kandydat rezerwowy.
+    const europeanCupWinnerId = getEuropeanRepresentativeId(cupWinnerId);
+    const europeanCupRunnerUpId = getEuropeanRepresentativeId(cupRunnerUpId);
+
     const europaLeagueR2TeamId = firstAvailable(
-      [cupWinnerId, cupRunnerUpId, ...uniqueLeagueTableIds.slice(2)],
+      [europeanCupWinnerId, europeanCupRunnerUpId, ...uniqueLeagueTableIds.slice(2)],
       championsLeagueIds,
     );
 

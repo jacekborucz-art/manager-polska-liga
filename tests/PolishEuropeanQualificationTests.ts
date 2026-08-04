@@ -51,6 +51,33 @@ const cupFinalBetweenChampionsLeagueTeams = PolishEuropeanQualificationService.r
 assert.equal(cupFinalBetweenChampionsLeagueTeams.europaLeagueR2TeamId, 'THIRD');
 assert.deepEqual(cupFinalBetweenChampionsLeagueTeams.conferenceLeagueR2TeamIds, ['FOURTH', 'FIFTH']);
 
+const reserveCupWinner = PolishEuropeanQualificationService.resolve({
+  leagueTableIds: table,
+  cupWinnerId: 'PL_LEGIA_WARSZAWA_II',
+  cupRunnerUpId: 'SIXTH',
+});
+assert.equal(
+  reserveCupWinner.europaLeagueR2TeamId,
+  'PL_LEGIA_WARSZAWA',
+  'po zwycięstwie rezerw w Pucharze Polski miejsce w Europie musi otrzymać pierwsza drużyna',
+);
+assert.equal(
+  Object.values(reserveCupWinner).flat().includes('PL_LEGIA_WARSZAWA_II'),
+  false,
+  'rezerwy nie mogą zostać zgłoszone do europejskich pucharów',
+);
+
+const reserveCupWinnerWithParentInChampionsLeague = PolishEuropeanQualificationService.resolve({
+  leagueTableIds: ['PL_LEGIA_WARSZAWA', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH', 'SIXTH'],
+  cupWinnerId: 'PL_LEGIA_WARSZAWA_II',
+  cupRunnerUpId: 'SIXTH',
+});
+assert.equal(
+  reserveCupWinnerWithParentInChampionsLeague.europaLeagueR2TeamId,
+  'SIXTH',
+  'pierwsza drużyna nie może jednocześnie trafić do Ligi Mistrzów i Ligi Europy',
+);
+
 const allQualifiedIds = [
   cupWinnerFourth.championsLeagueR2TeamId,
   cupWinnerFourth.championsLeagueR1TeamId,

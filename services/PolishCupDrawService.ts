@@ -1,19 +1,48 @@
 import { Club, Fixture, MatchStatus, CompetitionType } from '../types';
 
+const createSeededRandom = (seedText: string): (() => number) => {
+  let hash = 0;
+  for (let i = 0; i < seedText.length; i++) {
+    hash = ((hash << 5) - hash) + seedText.charCodeAt(i);
+    hash |= 0;
+  }
+
+  return () => {
+    const x = Math.sin(hash++) * 10000;
+    return x - Math.floor(x);
+  };
+};
+
+const shuffleWithSeed = <T>(items: T[], seedText: string): T[] => {
+  const shuffled = [...items];
+  const seededRandom = createSeededRandom(seedText);
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 export const PolishCupDrawService = {
   /**
    * Przygotowuje listę 128 uczestników dla rundy 1/64.
    */
-  getInitialParticipants: (clubs: Club[]): string[] => {
+  getInitialParticipants: (clubs: Club[], sessionSeed: number, seasonStartYear: number): string[] => {
     const tier1 = clubs.filter(c => c.leagueId === 'L_PL_1').map(c => c.id);
     const tier2 = clubs.filter(c => c.leagueId === 'L_PL_2').map(c => c.id);
     const tier3 = clubs.filter(c => c.leagueId === 'L_PL_3').map(c => c.id);
     const tier4Pool = clubs.filter(c => c.leagueId === 'L_PL_4');
 
-    // 18 + 18 + 18 = 54. Potrzebujemy 128 - 54 = 74 z Tier 4.
-    const selectedTier4 = [...tier4Pool]
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .slice(0, 74)
+    // Wszystkie kluby trzech najwyższych lig mają gwarantowane miejsce.
+    // Pozostałe miejsca do 128 są losowane z całej puli L_PL_4. Ziarno kariery
+    // i sezonu zapewnia inne zestawy w różnych grach, ale stabilny wynik po LOAD.
+    const guaranteedCount = tier1.length + tier2.length + tier3.length;
+    const tier4Places = Math.max(0, 128 - guaranteedCount);
+    const selectedTier4 = shuffleWithSeed(
+      tier4Pool,
+      `POLISH_CUP_INITIAL_${seasonStartYear}_${sessionSeed}`
+    )
+      .slice(0, tier4Places)
       .map(c => c.id);
 
     return [...tier1, ...tier2, ...tier3, ...selectedTier4];
@@ -25,17 +54,7 @@ export const PolishCupDrawService = {
    */
   drawPairs: (participantIds: string[], clubs: Club[], date: Date, roundLabel: string, sessionSeed: number): Fixture[] => {
     // Iniekcja unikalnego ziarna sesji dla pełnej losowości przy każdym starcie nowej gry
-    const seedStr = roundLabel + date.getFullYear() + sessionSeed;
-    let hash = 0;
-    for (let i = 0; i < seedStr.length; i++) {
-      hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
-      hash |= 0;
-    }
-
-    const seededRandom = () => {
-      const x = Math.sin(hash++) * 10000;
-      return x - Math.floor(x);
-    };
+    const seededRandom = createSeededRandom(roundLabel + date.getFullYear() + sessionSeed);
 
     // Fisher-Yates Shuffle (Senior Grade) - eliminuje bias standardowego sortowania
     const shuffled = [...participantIds];

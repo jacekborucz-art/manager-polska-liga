@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import { STATIC_CLUBS } from '../constants';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
+import { PolishCupDrawService } from '../services/PolishCupDrawService';
 
 const clubs2025 = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, 2025);
 assert.equal(clubs2025.filter(club => club.leagueId === 'L_PL_1').length, 18);
@@ -191,6 +192,30 @@ assert.equal(
   ),
   true,
   'awans pierwszej drużyny do 1. Ligi musi pozwolić rezerwom wejść do 2. Ligi'
+);
+
+const guaranteedCupClubIds = clubs2025
+  .filter(club => ['L_PL_1', 'L_PL_2', 'L_PL_3'].includes(club.leagueId))
+  .map(club => club.id);
+const cupParticipantsSeedA = PolishCupDrawService.getInitialParticipants(clubs2025, 12345, 2025);
+const cupParticipantsSeedARepeat = PolishCupDrawService.getInitialParticipants(clubs2025, 12345, 2025);
+const cupParticipantsSeedB = PolishCupDrawService.getInitialParticipants(clubs2025, 98765, 2025);
+
+assert.equal(cupParticipantsSeedA.length, 128, 'Puchar Polski musi rozpoczynać 128 klubów');
+assert.equal(new Set(cupParticipantsSeedA).size, 128, 'uczestnicy Pucharu Polski nie mogą się powtarzać');
+assert.ok(
+  guaranteedCupClubIds.every(clubId => cupParticipantsSeedA.includes(clubId)),
+  'wszystkie kluby Ekstraklasy, 1. Ligi i 2. Ligi muszą mieć gwarantowany udział'
+);
+assert.deepEqual(
+  cupParticipantsSeedA,
+  cupParticipantsSeedARepeat,
+  'to samo ziarno kariery i sezonu musi odtwarzać tę samą pulę po LOAD'
+);
+assert.notDeepEqual(
+  cupParticipantsSeedA.slice(guaranteedCupClubIds.length),
+  cupParticipantsSeedB.slice(guaranteedCupClubIds.length),
+  'inna kariera powinna losować inny zestaw klubów z L_PL_4'
 );
 
 console.log('PolishLeagueSeasonTests: OK');
