@@ -1037,6 +1037,8 @@ export interface PlayerHistoryEntry {
   parentClubId?: string;
   parentClubName?: string;
   loanEndDate?: string;
+  /** Distinguishes a fee-free move between a parent club and its reserve team from a market transfer. */
+  movementType?: 'TRANSFER' | 'LOAN' | 'INTERNAL_RESERVE';
 }
 
 export enum NegotiationStatus {
@@ -1470,6 +1472,12 @@ export interface Player {
   transferPendingContractYears?: number;
   /** Data ISO kiedy zawodnik "melduje się" w nowym klubie (currentDate + 3 dni) */
   transferReportDate?: string;
+  /** ISO date of the latest fee-free move between a parent first team and its linked reserve team. */
+  lastInternalSquadMoveDate?: string | null;
+  /** Direction of the latest internal move; used for diagnostics and anti-oscillation rules. */
+  lastInternalSquadMoveDirection?: 'TO_FIRST_TEAM' | 'TO_RESERVES' | null;
+  /** ISO date when an unused first-team player first became eligible for a reserve-team assignment. */
+  firstTeamSurplusSince?: string | null;
   retirementLockUntil?: string | null;
   trainingFocus?: keyof PlayerAttributes | null;
   trainingIntensity?: TrainingIntensity | null;
@@ -1851,6 +1859,10 @@ export interface Club {
   reserveTeamSeasonGrantRate?: number;
   reserveTeamSeasonGrantYear?: number;
   reserveTeamEmergencySupportYear?: number;
+  /** Calendar-month id (YYYY-MM) of the latest completed parent/reserve squad review. */
+  reserveSquadLastReviewMonth?: string;
+  /** ISO date of the latest emergency call-up from this club's reserve team. */
+  reserveSquadLastEmergencyMoveDate?: string;
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
   oneTimePlayerBonusesThisSeason?: number;

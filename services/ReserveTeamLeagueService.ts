@@ -23,6 +23,11 @@ const RESERVE_PARENT_CLUB_BY_ID: Readonly<Record<string, string>> = {
   PL_LKS_II_LODZ: 'PL_LKS_LODZ',
 };
 
+export interface ReserveParentClubPair {
+  reserveClubId: string;
+  parentClubId: string;
+}
+
 const getLeagueId = (
   clubId: string,
   clubs: Club[],
@@ -48,6 +53,19 @@ export const ReserveTeamLeagueService = {
 
   getParentClubId(reserveClubId: string): string | null {
     return RESERVE_PARENT_CLUB_BY_ID[reserveClubId] ?? null;
+  },
+
+  /**
+   * Returns every configured parent/reserve relationship as immutable-looking
+   * value objects. Squad-integration services use this method instead of
+   * duplicating club ids, so promotion restrictions, finances and internal
+   * player movement always refer to the same source of truth.
+   */
+  getParentReservePairs(): ReserveParentClubPair[] {
+    return Object.entries(RESERVE_PARENT_CLUB_BY_ID).map(([reserveClubId, parentClubId]) => ({
+      reserveClubId,
+      parentClubId,
+    }));
   },
 
   isReserveClub(clubId: string): boolean {

@@ -16,6 +16,7 @@
     "test:ai-opponent-analysis": "esbuild tests/AiOpponentAnalysisTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-opponent-analysis-tests.cjs && node tmp/ai-opponent-analysis-tests.cjs",
     "test:club-adaptation": "esbuild tests/PlayerClubAdaptationTests.ts --bundle --platform=node --format=cjs --outfile=tmp/player-club-adaptation-tests.cjs && node tmp/player-club-adaptation-tests.cjs",
     "test:polish-league-seasons": "esbuild tests/PolishLeagueSeasonTests.ts --bundle --platform=node --format=cjs --outfile=tmp/polish-league-season-tests.cjs && node tmp/polish-league-season-tests.cjs",
+    "test:reserve-squad-movement": "esbuild tests/ReserveTeamSquadMovementTests.ts --bundle --platform=node --format=cjs --outfile=tmp/reserve-squad-movement-tests.cjs && node tmp/reserve-squad-movement-tests.cjs",
     "test:cup-v2-balance": "esbuild tests/CupMatchEngineV2BalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-balance-tests.cjs && node tmp/cup-v2-balance-tests.cjs",
     "test:cup-v2-adapter": "esbuild tests/CupMatchEngineV2AdapterTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-adapter-tests.cjs && node tmp/cup-v2-adapter-tests.cjs",
     "test:cup-v2-shadow-audit": "esbuild tests/CupMatchEngineV2ShadowAuditTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-shadow-audit-tests.cjs && node tmp/cup-v2-shadow-audit-tests.cjs",

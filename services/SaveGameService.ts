@@ -624,6 +624,15 @@ export function normalizeSaveState(data: SaveState): SaveState {
       reserveTeamEmergencySupportYear: Number.isFinite(club.reserveTeamEmergencySupportYear)
         ? club.reserveTeamEmergencySupportYear
         : undefined,
+      // Parent/reserve squad integration is idempotent only when its monthly
+      // review and emergency-call-up timestamps survive SAVE/LOAD. Old saves
+      // omit these optional fields and safely begin with no completed review.
+      reserveSquadLastReviewMonth: typeof club.reserveSquadLastReviewMonth === 'string'
+        ? club.reserveSquadLastReviewMonth
+        : undefined,
+      reserveSquadLastEmergencyMoveDate: typeof club.reserveSquadLastEmergencyMoveDate === 'string'
+        ? club.reserveSquadLastEmergencyMoveDate
+        : undefined,
       boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
       boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
       boardBudgetMonitorState: club.boardBudgetMonitorState ?? 'NORMAL',
@@ -676,6 +685,19 @@ export function normalizeSaveState(data: SaveState): SaveState {
           transferPendingSalary: hasPendingTransfer ? asPositiveNumber(player.transferPendingSalary) : undefined,
           transferPendingBonus: hasPendingTransfer ? asPositiveNumber(player.transferPendingBonus) : undefined,
           transferPendingContractYears: hasPendingTransfer ? asPositiveNumber(player.transferPendingContractYears) : undefined,
+          // Internal-movement state is deliberately optional for backward
+          // compatibility. Invalid legacy values are discarded so cooldown and
+          // surplus-age calculations never operate on malformed dates/flags.
+          lastInternalSquadMoveDate: typeof player.lastInternalSquadMoveDate === 'string'
+            ? player.lastInternalSquadMoveDate
+            : null,
+          lastInternalSquadMoveDirection:
+            player.lastInternalSquadMoveDirection === 'TO_FIRST_TEAM' || player.lastInternalSquadMoveDirection === 'TO_RESERVES'
+              ? player.lastInternalSquadMoveDirection
+              : null,
+          firstTeamSurplusSince: typeof player.firstTeamSurplusSince === 'string'
+            ? player.firstTeamSurplusSince
+            : null,
           freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
           freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
           reputacja: player.reputacja ?? 50,

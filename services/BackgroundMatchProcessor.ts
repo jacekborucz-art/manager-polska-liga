@@ -20,6 +20,7 @@ import { PlayerFormService } from './PlayerFormService';
 import { ThirdLeagueBackgroundService } from './ThirdLeagueBackgroundService';
 import { SquadGeneratorService } from './SquadGeneratorService';
 import { ReserveTeamFinanceService } from './ReserveTeamFinanceService';
+import { ReserveTeamSquadMovementService } from './ReserveTeamSquadMovementService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
   const lastName = player.lastName.trim();
@@ -524,9 +525,37 @@ export const BackgroundMatchProcessor = {
     DebugLoggerService.log('BMP', `processLeagueEvent: ${dateStr} | SCHEDULED: ${todayFixtures.length} | TOTAL fixtures: ${fixtures.length}`, true);
     const playersAfterFourthLeagueEnsure = ensureFourthLeagueSquads(clubs, playersMap, userTeamId);
     const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures, currentDate, userTeamId);
-    const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersAfterEmergencyGoalkeepers, lineups, userTeamId, coaches, fixtures, currentDate);
+    // Internal parent/reserve movement must run before AI lineup preparation.
+    // This guarantees that an emergency call-up is available for today's match
+    // and that both source and destination lineups are rebuilt from the updated
+    // squads. The service is idempotent, so this common hook safely covers both
+    // match days and days without scheduled fixtures.
+    const internalSquadMovement = ReserveTeamSquadMovementService.processDailyAiMovements(
+      clubs,
+      playersAfterEmergencyGoalkeepers,
+      currentDate,
+      userTeamId
+    );
+    internalSquadMovement.movements.forEach(movement => {
+      DebugLoggerService.log(
+        'RESERVE_SQUAD_MOVEMENT',
+        `${movement.reason}: ${movement.playerName} (${movement.position}) ${movement.sourceClubId} -> ${movement.destinationClubId}`,
+        true
+      );
+    });
+    const clubsAfterInternalMovement = internalSquadMovement.updatedClubs;
+    const playersAfterInternalMovement = internalSquadMovement.updatedPlayers;
+    const newLineups = AiMatchPreparationService.prepareAllTeams(
+      clubsAfterInternalMovement,
+      playersAfterInternalMovement,
+      lineups,
+      userTeamId,
+      coaches,
+      fixtures,
+      currentDate
+    );
 if (todayFixtures.length === 0) {
-      const contractUpdate = AiContractService.processClubsContracts(clubs, playersAfterEmergencyGoalkeepers, currentDate, userTeamId);
+      const contractUpdate = AiContractService.processClubsContracts(clubsAfterInternalMovement, playersAfterInternalMovement, currentDate, userTeamId);
       const preContractUpdate = AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
       const depthUpdate = AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, preContractUpdate.updatedPlayers, currentDate, userTeamId);
       const recruitmentUpdate = AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate, userTeamId);
@@ -592,7 +621,7 @@ if (todayFixtures.length === 0) {
 
     // 1. Obliczamy rankingi dla wszystkich lig przed symulacją
     const getStandings = (leagueId: string) => {
-      return [...clubs]
+      return [...clubsAfterInternalMovement]
         .filter(c => c.leagueId === leagueId)
         .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     };
@@ -604,8 +633,8 @@ if (todayFixtures.length === 0) {
     };
 
     let currentFixtures = [...fixtures];
-    let currentClubs = [...clubs];
-    let currentPlayers = playersAfterEmergencyGoalkeepers;
+    let currentClubs = [...clubsAfterInternalMovement];
+    let currentPlayers = playersAfterInternalMovement;
     const aiPresidentMotivation = applyAiPresidentPreMatchMotivation(
       currentClubs,
       currentPlayers,
