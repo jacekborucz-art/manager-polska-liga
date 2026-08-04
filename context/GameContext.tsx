@@ -94,6 +94,8 @@ import { AiWeeklyTrainingService } from '../services/AiWeeklyTrainingService';
 import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
+import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
+import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
 import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
 import { FinanceService } from '../services/FinanceService';
@@ -1570,16 +1572,18 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       const sortedL2 = [...sourceClubs]
         .filter(c => c.leagueId === 'L_PL_2')
         .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
-      const pos = sortedL2.findIndex(c => c.id === userTeamId);
-      if (pos >= 0 && pos <= 1 && hasClinchedAboveBoundary(sortedL2[2])) {
+      const promotionPlaces = ReserveTeamLeagueService.selectPromotionPlaces(sortedL2, 'L_PL_1', sourceClubs);
+      const hasDirectPromotionPlace = promotionPlaces.direct.some(candidate => candidate.club.id === userTeamId);
+      if (hasDirectPromotionPlace && hasClinchedAboveBoundary(promotionPlaces.playoffs[0]?.club)) {
         celebration = 'promotion-ekst';
       }
     } else if (userClub.leagueId === 'L_PL_3') {
       const sortedL3 = [...sourceClubs]
         .filter(c => c.leagueId === 'L_PL_3')
         .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
-      const pos = sortedL3.findIndex(c => c.id === userTeamId);
-      if (pos >= 0 && pos <= 1 && hasClinchedAboveBoundary(sortedL3[2])) {
+      const promotionPlaces = ReserveTeamLeagueService.selectPromotionPlaces(sortedL3, 'L_PL_2', sourceClubs);
+      const hasDirectPromotionPlace = promotionPlaces.direct.some(candidate => candidate.club.id === userTeamId);
+      if (hasDirectPromotionPlace && hasClinchedAboveBoundary(promotionPlaces.playoffs[0]?.club)) {
         celebration = 'promotion-1liga';
       }
     }
@@ -2180,7 +2184,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // FIX: never bring back an id that is currently active anywhere else in the world.
     const allIdsInUse = new Set(Object.values(players).flat().map(player => player.id));
     const newSquad = withMoraleState(
-      SquadGeneratorService.generateSquadForClub(clubId).filter(player => !allIdsInUse.has(player.id))
+      SquadGeneratorService.generateSquadForClub(clubId, clubs.find(club => club.id === clubId)).filter(player => !allIdsInUse.has(player.id))
     );
     return queueGeneratedSquad(newSquad);
 }, [players, clubs, currentDate, userTeamId]);
@@ -2257,8 +2261,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setSessionSeed(newSessionSeed);
     setRuntimeSimulationSeed(newRuntimeSimulationSeed);
     const template = SeasonTemplateGenerator.generate(startYear);
+    const seasonPolishClubs = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, startYear);
     // -> tutaj wstaw kod
-    const coachData = CoachService.generateInitialCoaches([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
+    const coachData = CoachService.generateInitialCoaches([...seasonPolishClubs, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
     setCoaches(coachData.coaches);
    
 
@@ -2269,7 +2274,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
     setSeasonTemplate(template);
     setSeasonNumber(1);
-    const initialSchedules = generateSchedules(template, STATIC_CLUBS);
+    const initialSchedules = generateSchedules(template, seasonPolishClubs);
     setLeagueSchedules(initialSchedules);
 
  // Generuj składy dla klubów Ligi Mistrzów
@@ -2310,8 +2315,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const { updatedTeams: teamsWithCoaches, updatedCoaches: assignedNtCoaches } =
       NationalTeamService.assignCoachesToNationalTeams(allNationalTeams, ntCoachList);
     const polishPlayers: Record<string, Player[]> = {};
-    STATIC_CLUBS.forEach(club => {
-      polishPlayers[club.id] = withMoraleState(SquadGeneratorService.generateSquadForClub(club.id));
+    seasonPolishClubs.forEach(club => {
+      polishPlayers[club.id] = withMoraleState(SquadGeneratorService.generateSquadForClub(club.id, club));
     });
     setPlayers(prev => ({ ...prev, ...polishPlayers }));
 
@@ -2411,10 +2416,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setCurrentPolishCupWinnerId(initialPolishEuropeanQualification.europaLeagueR2TeamId);
     setConfR1QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR1TeamIds);
     setConfR2QPolishTeamIds(initialPolishEuropeanQualification.conferenceLeagueR2TeamIds);
-    const initialSuperCup = SuperCupService.generateFixture(startYear, STATIC_CLUBS);
-    const initialUEFASuperCup = UEFASuperCupService.generateFixture(startYear, STATIC_CLUBS);
+    const initialSuperCup = SuperCupService.generateFixture(startYear, seasonPolishClubs);
+    const initialUEFASuperCup = UEFASuperCupService.generateFixture(startYear, seasonPolishClubs);
     setGlobalFixtures([initialSuperCup, initialUEFASuperCup]);
-    const finalClubs = [...STATIC_CLUBS.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
+    const finalClubs = [...seasonPolishClubs.map(c => ({ ...c, isInPolishCup: false })), ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
     const staffData = StaffGenerationService.generateInitialStaff(finalClubs);
     setStaffMembers(staffData.staffMembers);
     const clubsWithManagement = ClubManagementService.generateForAllClubs(staffData.updatedClubs);
@@ -2464,10 +2469,83 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const potentialL4 = clubs.filter(c => c.leagueId === 'L_PL_4');
 
     const relegatedTeamsL1 = standingsL1.slice(15, 18);
-    const promotedTeamsL2 = standingsL2.slice(0, 2);
     const relegatedTeamsL2 = standingsL2.slice(15, 18);
-    const promotedTeamsL3 = standingsL3.slice(0, 2);
     const relegatedTeamsL3 = standingsL3.slice(14, 18); // miejsca 15-18 — automatyczny spadek
+    const relegateFromL1Ids = relegatedTeamsL1.map(c => c.id);
+    const relegateFromL2Ids = relegatedTeamsL2.map(c => c.id);
+
+    // Najpierw rozstrzygamy ruch między Ekstraklasą i 1. Ligą. Rezerwy nigdy
+    // nie mogą wejść do Ekstraklasy, więc ten etap nie zależy od niższych lig.
+    const promotionPlacesL2 = ReserveTeamLeagueService.selectPromotionPlaces(standingsL2, 'L_PL_1', clubs);
+    const promoteFromL2Ids = promotionPlacesL2.direct.map(candidate => candidate.club.id);
+    const ekstraklasaPlayoffWinnerId = ReserveTeamLeagueService.resolvePlayoffWinner(
+      promotionPlayoffFinalResults?.ekstraklasaFinal,
+      'L_PL_1',
+      clubs,
+      new Set(promoteFromL2Ids)
+    );
+    if (ekstraklasaPlayoffWinnerId && !promoteFromL2Ids.includes(ekstraklasaPlayoffWinnerId)) {
+      promoteFromL2Ids.push(ekstraklasaPlayoffWinnerId);
+    }
+    ReserveTeamLeagueService.getEligibleCandidates(standingsL2, 'L_PL_1', clubs).forEach(candidate => {
+      if (promoteFromL2Ids.length < 3 && !promoteFromL2Ids.includes(candidate.club.id)) {
+        promoteFromL2Ids.push(candidate.club.id);
+      }
+    });
+
+    // Projekcja zawiera już ostateczne ruchy pierwszych zespołów w dwóch
+    // najwyższych ligach. Dopiero względem niej wolno rozstrzygać awans z 2. Ligi.
+    const projectedLeagueByClubId = ReserveTeamLeagueService.createLeagueProjection(clubs, [
+      { clubIds: relegateFromL1Ids, targetLeagueId: 'L_PL_2' },
+      { clubIds: promoteFromL2Ids, targetLeagueId: 'L_PL_1' },
+      { clubIds: relegateFromL2Ids, targetLeagueId: 'L_PL_3' },
+    ]);
+
+    // Jeżeli pierwszy zespół spada do ligi, w której już grają jego rezerwy,
+    // rezerwy muszą zejść poziom niżej. Dodatkowe wolne miejsce uzupełni kolejny
+    // uprawniony klub z niższej ligi.
+    const forcedReserveRelegationsFromL2 = clubs.filter(club =>
+      club.leagueId === 'L_PL_2' &&
+      ReserveTeamLeagueService.isReserveClub(club.id) &&
+      ReserveTeamLeagueService.findSameLeagueConflicts(clubs, projectedLeagueByClubId)
+        .some(conflict => conflict.reserveClubId === club.id && conflict.leagueId === 'L_PL_2')
+    );
+    const additionalL2Vacancies = forcedReserveRelegationsFromL2.filter(club => !relegateFromL2Ids.includes(club.id)).length;
+    forcedReserveRelegationsFromL2.forEach(club => {
+      if (!relegateFromL2Ids.includes(club.id)) relegateFromL2Ids.push(club.id);
+    });
+    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, relegateFromL2Ids, 'L_PL_3');
+
+    const promotionPlacesL3 = ReserveTeamLeagueService.selectPromotionPlaces(
+      standingsL3,
+      'L_PL_2',
+      clubs,
+      2,
+      4,
+      projectedLeagueByClubId
+    );
+    const promoteFromL3Ids = promotionPlacesL3.direct.map(candidate => candidate.club.id);
+    const ligaOnePlayoffWinnerId = ReserveTeamLeagueService.resolvePlayoffWinner(
+      promotionPlayoffFinalResults?.ligaOneFinal,
+      'L_PL_2',
+      clubs,
+      new Set(promoteFromL3Ids),
+      projectedLeagueByClubId
+    );
+    if (ligaOnePlayoffWinnerId && !promoteFromL3Ids.includes(ligaOnePlayoffWinnerId)) {
+      promoteFromL3Ids.push(ligaOnePlayoffWinnerId);
+    }
+    const requiredL3Promotions = 3 + additionalL2Vacancies;
+    ReserveTeamLeagueService.getEligibleCandidates(standingsL3, 'L_PL_2', clubs, projectedLeagueByClubId)
+      .forEach(candidate => {
+        if (promoteFromL3Ids.length < requiredL3Promotions && !promoteFromL3Ids.includes(candidate.club.id)) {
+          promoteFromL3Ids.push(candidate.club.id);
+        }
+      });
+    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, promoteFromL3Ids, 'L_PL_2');
+
+    const relegateFromL3Ids = [...new Set(relegatedTeamsL3.map(c => c.id))];
+    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, relegateFromL3Ids, 'L_PL_4');
 
     // ── BARAŻE O UTRZYMANIE — integracja z awansami/spadkami ────────────────
     // Wynik barażów (miejsca 13-14 w 2.Lidze vs los. drużyny 3.Ligi) jest znany po 29 maja.
@@ -2480,35 +2558,54 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         if (!outcome) return;
         const loserClub = clubs.find(c => c.id === outcome.loserId);
         const winnerClub = clubs.find(c => c.id === outcome.winnerId);
-        // Jeśli przegrany to klub z L_PL_3 → spada do L_PL_4
-        if (loserClub?.leagueId === 'L_PL_3') playoffRelegatedL3Ids.push(outcome.loserId);
+        const eligibleL4Winner = winnerClub?.leagueId === 'L_PL_4' &&
+          ReserveTeamLeagueService.canEnterLeague(winnerClub.id, 'L_PL_3', clubs, projectedLeagueByClubId);
+        // Klub z L_PL_3 spada tylko wtedy, gdy zastępuje go uprawniony zwycięzca z L_PL_4.
+        if (loserClub?.leagueId === 'L_PL_3' && eligibleL4Winner) playoffRelegatedL3Ids.push(outcome.loserId);
         if (loserClub?.leagueId === 'L_PL_4') playoffL4ParticipantIds.add(outcome.loserId);
         // Jeśli wygrany to klub z L_PL_4 → awansuje do L_PL_3
         if (winnerClub?.leagueId === 'L_PL_4') {
           playoffL4ParticipantIds.add(outcome.winnerId);
-          playoffPromotedL4Ids.push(outcome.winnerId);
+          if (eligibleL4Winner) playoffPromotedL4Ids.push(outcome.winnerId);
         }
       });
     }
 
+    playoffRelegatedL3Ids.forEach(clubId => {
+      if (!relegateFromL3Ids.includes(clubId)) relegateFromL3Ids.push(clubId);
+    });
+    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, playoffRelegatedL3Ids, 'L_PL_4');
+    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, playoffPromotedL4Ids, 'L_PL_3');
+
+    const l3ConflictsBeforeLowerPromotions = ReserveTeamLeagueService
+      .findSameLeagueConflicts(clubs, projectedLeagueByClubId)
+      .filter(conflict => conflict.leagueId === 'L_PL_3');
+    let additionalL3Vacancies = 0;
+    l3ConflictsBeforeLowerPromotions.forEach(conflict => {
+      if (!relegateFromL3Ids.includes(conflict.reserveClubId)) {
+        relegateFromL3Ids.push(conflict.reserveClubId);
+        additionalL3Vacancies++;
+      }
+      ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, [conflict.reserveClubId], 'L_PL_4');
+    });
+
     // Losowanie z L_PL_4: 4 automatyczne awanse + dodatkowi zwycięzcy baraży.
     // Uczestnik barażu nie może dostać drugiej szansy przez zwykłe losowanie awansu.
-    const remainingL4Pool = potentialL4.filter(c => !playoffL4ParticipantIds.has(c.id));
-    const randomPromotionsNeeded = 4;
+    const remainingL4Pool = potentialL4.filter(c =>
+      !playoffL4ParticipantIds.has(c.id) &&
+      ReserveTeamLeagueService.canEnterLeague(c.id, 'L_PL_3', clubs, projectedLeagueByClubId)
+    );
+    const randomPromotionsNeeded = 4 + additionalL3Vacancies;
     const promotedFromL4Teams = [...remainingL4Pool].sort(() => Math.random() - 0.5).slice(0, randomPromotionsNeeded);
-
-    const relegateFromL1Ids = relegatedTeamsL1.map(c => c.id);
-    const promoteFromL2Ids = promotedTeamsL2.map(c => c.id);
-    const relegateFromL2Ids = relegatedTeamsL2.map(c => c.id);
-    const promoteFromL3Ids = promotedTeamsL3.map(c => c.id);
-    if (promotionPlayoffFinalResults) {
-      const ekstraklasaWinnerId = promotionPlayoffFinalResults.ekstraklasaFinal.winnerId;
-      const ligaOneWinnerId = promotionPlayoffFinalResults.ligaOneFinal.winnerId;
-      if (!promoteFromL2Ids.includes(ekstraklasaWinnerId)) promoteFromL2Ids.push(ekstraklasaWinnerId);
-      if (!promoteFromL3Ids.includes(ligaOneWinnerId)) promoteFromL3Ids.push(ligaOneWinnerId);
-    }
-    const relegateFromL3Ids = [...new Set([...relegatedTeamsL3.map(c => c.id), ...playoffRelegatedL3Ids])]; // 15-18 + barażowi przegrani
     const promoteFromL4Ids = [...new Set([...promotedFromL4Teams.map(c => c.id), ...playoffPromotedL4Ids])]; // losowi + barażowi zwycięzcy
+    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, promoteFromL4Ids, 'L_PL_3');
+
+    const unresolvedReserveConflicts = ReserveTeamLeagueService.findSameLeagueConflicts(clubs, projectedLeagueByClubId);
+    if (unresolvedReserveConflicts.length > 0) {
+      throw new Error(`Nierozwiązany konflikt pierwszej drużyny i rezerw: ${unresolvedReserveConflicts
+        .map(conflict => `${conflict.parentClubId}/${conflict.reserveClubId} (${conflict.leagueId})`)
+        .join(', ')}`);
+    }
 
     if (userTeamId && !celebrationAlreadyFiredRef.current) {
       if (champion?.id === userTeamId) {
@@ -2568,7 +2665,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       ],
       relegations: [
         { from: 'Ekstraklasy', to: '1. Ligi', teams: relegatedTeamsL1.map(t => t.name) },
-        { from: '1. Ligi', to: '2. Ligi', teams: relegatedTeamsL2.map(t => t.name) },
+        { from: '1. Ligi', to: '2. Ligi', teams: [...new Set(relegateFromL2Ids
+          .map(id => clubs.find(c => c.id === id)?.name)
+          .filter((name): name is string => !!name))] },
         { from: '2. Ligi', to: 'Regionalnej', teams: [...new Set(relegateFromL3Ids
           .map(id => clubs.find(c => c.id === id)?.name)
           .filter((name): name is string => !!name))] }
@@ -7850,20 +7949,57 @@ Asystent`,
         case CompetitionType.PLAYOFF_DRAW_CEREMONY: {
           if (processedDrawIds.includes(slot.id)) break;
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
+          const sL1 = [...clubs].filter(c => c.leagueId === 'L_PL_1')
+            .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
           const sL2 = [...clubs].filter(c => c.leagueId === 'L_PL_2')
             .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
           const sL3 = [...clubs].filter(c => c.leagueId === 'L_PL_3')
             .sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
-          const l4Pool = [...clubs].filter(c => c.leagueId === 'L_PL_4')
+          const l2PromotionPlaces = ReserveTeamLeagueService.selectPromotionPlaces(sL2, 'L_PL_1', clubs);
+          const playoffDrawProjection = ReserveTeamLeagueService.createLeagueProjection(clubs, [
+            { clubIds: sL1.slice(15, 18).map(club => club.id), targetLeagueId: 'L_PL_2' },
+            {
+              // Uczestnicy baraży są traktowani jako potencjalnie awansujący. Dzięki temu
+              // rezerwy mogą wejść do niższego barażu, jeśli pierwszy zespół ma szansę
+              // opuścić ich ligę. Wynik jest obowiązkowo weryfikowany 30 czerwca.
+              clubIds: [...l2PromotionPlaces.direct, ...l2PromotionPlaces.playoffs].map(candidate => candidate.club.id),
+              targetLeagueId: 'L_PL_1',
+            },
+            { clubIds: sL2.slice(15, 18).map(club => club.id), targetLeagueId: 'L_PL_3' },
+          ]);
+          const l3PromotionPlaces = ReserveTeamLeagueService.selectPromotionPlaces(
+            sL3,
+            'L_PL_2',
+            clubs,
+            2,
+            4,
+            playoffDrawProjection
+          );
+          ReserveTeamLeagueService.applyLeagueProjection(
+            playoffDrawProjection,
+            [...l3PromotionPlaces.direct, ...l3PromotionPlaces.playoffs].map(candidate => candidate.club.id),
+            'L_PL_2'
+          );
+          ReserveTeamLeagueService.applyLeagueProjection(
+            playoffDrawProjection,
+            sL3.slice(14, 18).map(club => club.id),
+            'L_PL_4'
+          );
+          const l2Playoffs = l2PromotionPlaces.playoffs;
+          const l3Playoffs = l3PromotionPlaces.playoffs;
+          const l4Pool = [...clubs].filter(c =>
+            c.leagueId === 'L_PL_4' &&
+            ReserveTeamLeagueService.canEnterLeague(c.id, 'L_PL_3', clubs, playoffDrawProjection)
+          )
             .sort(() => Math.random() - 0.5);
           setActivePlayoffDraw({
             ekstraklasaPlayoffs: [
-              { homeId: sL2[2]?.id || '', awayId: sL2[5]?.id || '', homePos: 3, awayPos: 6 },
-              { homeId: sL2[3]?.id || '', awayId: sL2[4]?.id || '', homePos: 4, awayPos: 5 },
+              { homeId: l2Playoffs[0]?.club.id || '', awayId: l2Playoffs[3]?.club.id || '', homePos: l2Playoffs[0]?.tablePosition || 0, awayPos: l2Playoffs[3]?.tablePosition || 0 },
+              { homeId: l2Playoffs[1]?.club.id || '', awayId: l2Playoffs[2]?.club.id || '', homePos: l2Playoffs[1]?.tablePosition || 0, awayPos: l2Playoffs[2]?.tablePosition || 0 },
             ],
             ligaOnePlayoffs: [
-              { homeId: sL3[2]?.id || '', awayId: sL3[5]?.id || '', homePos: 3, awayPos: 6 },
-              { homeId: sL3[3]?.id || '', awayId: sL3[4]?.id || '', homePos: 4, awayPos: 5 },
+              { homeId: l3Playoffs[0]?.club.id || '', awayId: l3Playoffs[3]?.club.id || '', homePos: l3Playoffs[0]?.tablePosition || 0, awayPos: l3Playoffs[3]?.tablePosition || 0 },
+              { homeId: l3Playoffs[1]?.club.id || '', awayId: l3Playoffs[2]?.club.id || '', homePos: l3Playoffs[1]?.tablePosition || 0, awayPos: l3Playoffs[2]?.tablePosition || 0 },
             ],
             relegationPlayoffs: [
               { homeId: sL3[12]?.id || '', awayId: l4Pool[0]?.id || '', homePos: 13, awayPos: 0 },

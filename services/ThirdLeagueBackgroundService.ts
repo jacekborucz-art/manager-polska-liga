@@ -68,7 +68,7 @@ const ensureHiddenMatchReadySquad = (club: Club, squad: Player[], idsInUseElsewh
   // computed by the caller from the whole players map minus this club's own squad).
   const baseSquad = squad.length >= 18
     ? squad
-    : SquadGeneratorService.generateSquadForClub(club.id).filter(player => !idsInUseElsewhere.has(player.id));
+    : SquadGeneratorService.generateSquadForClub(club.id, club).filter(player => !idsInUseElsewhere.has(player.id));
   const readyPlayers = baseSquad.filter(canPlayHiddenMatch);
   const hasReadyGk = readyPlayers.some(player => player.position === PlayerPosition.GK);
   if (readyPlayers.length >= 11 && hasReadyGk) return baseSquad;

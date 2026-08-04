@@ -338,10 +338,10 @@ export function calcReputacja(overall: number, clubRep: number): number {
 }
 
 export const SquadGeneratorService = {
-  generateSquadForClub: (clubId: string): Player[] => {
+  generateSquadForClub: (clubId: string, clubOverride?: Club): Player[] => {
     const usedNames = new Set<string>();
 
-    const clubInfo = STATIC_CLUBS.find(c => c.id === clubId);
+    const clubInfo = clubOverride ?? STATIC_CLUBS.find(c => c.id === clubId);
     let leagueTier = 4;
     let clubRep = 1;
 

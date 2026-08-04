@@ -382,7 +382,7 @@ const ensureFourthLeagueSquads = (
       const squad = nextPlayers[club.id] || [];
       if (squad.length >= 18) return;
       const ownIds = new Set(squad.map(player => player.id));
-      nextPlayers[club.id] = SquadGeneratorService.generateSquadForClub(club.id)
+      nextPlayers[club.id] = SquadGeneratorService.generateSquadForClub(club.id, club)
         .filter(player => ownIds.has(player.id) || !allIdsInUse.has(player.id))
         .map(player => PlayerMoraleService.ensurePlayerState(player));
       changed = true;

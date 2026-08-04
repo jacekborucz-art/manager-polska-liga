@@ -84,6 +84,11 @@ export const RAW_PL_CLUBS: RawClubData[] = [
   { name: "Rekord Bielsko-Biała", tier: 3, colors: ['#FFFFFF', '#008000', '#FFFF00'], stadium: "Stadion Miejski", capacity: 800, reputation: 2, logoFile: 'Rekord_Bielsko-Biała.png' },
 
   // --- TIER 4 (3. Liga i niższe) ---
+  // Drużyny rezerw są osobnymi klubami AI. Integracja sportowa i kadrowa z
+  // pierwszym zespołem zostanie dodana w osobnym etapie.
+  { name: "Legia Warszawa II", tier: 4, colors: ['#007a25', '#ffffff', '#a80e0e'], stadium: "Legia Training Center", capacity: 1000, reputation: 3, logoFile: 'legia-warsaw-2019-logo.png' },
+  { name: "Śląsk Wrocław II", tier: 4, colors: ['#008000', '#FFFFFF', '#FF0000'], stadium: "Stadion Oporowska", capacity: 8346, reputation: 3, logoFile: 'Slask_Wroclaw.png' },
+  { name: "ŁKS II Łódź", tier: 4, colors: ['#FFFFFF', '#FF0000', '#FFFFFF'], stadium: "Akademia ŁKS", capacity: 3000, reputation: 3, logoFile: 'lks_lodz.png' },
   { name: "GKS Bełchatów", tier: 4, colors: ['#06830c', '#ffffff', '#000000'], stadium: "GIEKSA Arena", capacity: 5264, reputation: 5, logoFile: 'gksbelchatow.png' },
   { name: "Wigry Suwałki", tier: 4, colors: ['#FFFFFF', '#0000FF', '#FF0000'], stadium: "Stadion Miejski w Suwałkach", capacity: 3060, reputation: 3 },
   { name: "Olimpia Elbląg", tier: 4, colors: ['#FFFF00', '#FFFFFF', '#0000FF'], stadium: "Stadion Miejski w Elblągu", capacity: 3000, reputation: 3 },
