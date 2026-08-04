@@ -156,6 +156,36 @@ function asClampedRating(value: unknown): number | undefined {
     : undefined;
 }
 
+function normalizePlayerClubAdaptation(value: unknown, playerClubId: string): import('../types').PlayerClubAdaptation | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || !value || typeof value !== 'object') return null;
+
+  const adaptation = value as Record<string, unknown>;
+  const clubId = typeof adaptation.clubId === 'string' ? adaptation.clubId : '';
+  const startedAt = asDateOnlyString(adaptation.startedAt);
+  const lastUpdatedAt = asDateOnlyString(adaptation.lastUpdatedAt, startedAt);
+  const durationDays = typeof adaptation.durationDays === 'number' ? adaptation.durationDays : Number.NaN;
+  const initialLevel = typeof adaptation.initialLevel === 'number' ? adaptation.initialLevel : Number.NaN;
+  const level = typeof adaptation.level === 'number' ? adaptation.level : Number.NaN;
+
+  if (
+    !clubId || clubId !== playerClubId || !startedAt || !lastUpdatedAt ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(startedAt) || !/^\d{4}-\d{2}-\d{2}$/.test(lastUpdatedAt) ||
+    !Number.isFinite(durationDays) || !Number.isFinite(initialLevel) || !Number.isFinite(level)
+  ) {
+    return null;
+  }
+
+  return {
+    clubId,
+    startedAt,
+    lastUpdatedAt,
+    durationDays: Math.max(1, Math.round(durationDays)),
+    initialLevel: Math.max(0, Math.min(100, initialLevel)),
+    level: Math.max(0, Math.min(100, level)),
+  };
+}
+
 function reviveDate(_key: string, value: unknown): unknown {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
     const d = new Date(value);
@@ -569,7 +599,7 @@ function reconcileEuroRatingHistoryFromHistory(players: Record<string, any[]>, m
   );
 }
 
-function normalizeSaveState(data: SaveState): SaveState {
+export function normalizeSaveState(data: SaveState): SaveState {
   const normalizedMatchHistory = normalizeMatchHistory(data.matchHistory);
   const normalizedClubs = (data.clubs || []).map((rawClub: any) => {
     const club = normalizeClubManagementSource(rawClub);
@@ -596,6 +626,7 @@ function normalizeSaveState(data: SaveState): SaveState {
     Object.entries(asRecord<any[]>(data.players)).map(([clubId, squad]) => [
       clubId,
       asArray(squad).map((player: any) => {
+        const playerClubId = typeof player.clubId === 'string' && player.clubId.length > 0 ? player.clubId : clubId;
         const secondaryPosition = typeof player.secondaryPosition === 'string' && player.secondaryPosition !== player.position
           ? player.secondaryPosition
           : null;
@@ -603,7 +634,8 @@ function normalizeSaveState(data: SaveState): SaveState {
 
         const normalizedPlayer = {
           ...player,
-          clubId: typeof player.clubId === 'string' && player.clubId.length > 0 ? player.clubId : clubId,
+          clubId: playerClubId,
+          clubAdaptation: normalizePlayerClubAdaptation(player.clubAdaptation, playerClubId),
           secondaryPosition,
           secondaryPositionRating: secondaryPosition ? asClampedRating(player.secondaryPositionRating) : undefined,
           friendlyStats: player.friendlyStats ?? {

@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { MailType, MatchHistoryEntry } from '../types';
 import { MatchHistoryService } from '../services/MatchHistoryService';
 import { SaveArchiveService } from '../services/SaveArchiveService';
-import { getSaveFileName, SaveState, serializeSaveState } from '../services/SaveGameService';
+import { getSaveFileName, normalizeSaveState, SaveState, serializeSaveState } from '../services/SaveGameService';
 
 assert.equal(SaveArchiveService.shouldArchiveAfterSeason(4), false);
 assert.equal(SaveArchiveService.shouldArchiveAfterSeason(5), true);
@@ -56,6 +56,43 @@ assert.equal(serializedFullSave.matchHistory[0].timeline.length, 1);
 assert.equal(serializedFullSave.aiFriendlyPairs.length, 1);
 assert.equal(serializedFullSave.aiFriendlyReports.length, 1);
 assert.equal(getSaveFileName(new Date('2030-07-01T00:00:00.000Z')), 'futbol_manager_2030-07-01.json');
+
+const adaptation = {
+  clubId: 'CLUB_A',
+  startedAt: '2030-07-01',
+  lastUpdatedAt: '2030-07-10',
+  durationDays: 90,
+  initialLevel: 25,
+  level: 41.5,
+};
+const adaptationSave = {
+  version: '3.0',
+  savedAt: '2030-07-10T12:00:00.000Z',
+  currentDate: '2030-07-10T12:00:00.000Z',
+  clubs: [],
+  players: {
+    CLUB_A: [{ id: 'adapted-player', clubId: 'CLUB_A', position: 'MID', clubAdaptation: adaptation }],
+    CLUB_B: [{ id: 'legacy-player', clubId: 'CLUB_B', position: 'DEF' }],
+  },
+  userTeamId: 'CLUB_A',
+} as unknown as SaveState;
+const importedAdaptationSave = normalizeSaveState(JSON.parse(serializeSaveState(adaptationSave)) as SaveState);
+assert.deepEqual(importedAdaptationSave.players.CLUB_A[0].clubAdaptation, adaptation);
+assert.equal(importedAdaptationSave.players.CLUB_B[0].clubAdaptation, undefined);
+
+const invalidAdaptationSave = {
+  ...adaptationSave,
+  players: {
+    CLUB_A: [{
+      id: 'invalid-adaptation-player',
+      clubId: 'CLUB_A',
+      position: 'MID',
+      clubAdaptation: { ...adaptation, clubId: 'WRONG_CLUB', level: Number.NaN },
+    }],
+  },
+} as unknown as SaveState;
+const importedInvalidAdaptationSave = normalizeSaveState(invalidAdaptationSave);
+assert.equal(importedInvalidAdaptationSave.players.CLUB_A[0].clubAdaptation, null);
 
 const match = (season: number): MatchHistoryEntry => ({
   matchId: `match-${season}`,

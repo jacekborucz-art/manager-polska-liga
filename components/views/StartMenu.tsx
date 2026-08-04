@@ -118,6 +118,7 @@ export const StartMenu: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [showResolutionNotice, setShowResolutionNotice] = useState(false);
+  const [isLoadingSave, setIsLoadingSave] = useState(false);
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -178,22 +179,30 @@ export const StartMenu: React.FC = () => {
   }, []);
 
   const handleFileLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
     const file = e.target.files?.[0];
     if (!file) return;
     requestFullscreenSafely();
+    setIsLoadingSave(true);
     try {
+      // Dwie klatki dają Reactowi i przeglądarce czas na pokazanie okna przed
+      // synchronicznym parsowaniem i odtwarzaniem dużego stanu gry.
+      await new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
       const data = await importSaveFromFile(file);
       loadGameFromFile(data);
       requestAnimationFrame(requestFullscreenSafely);
       window.setTimeout(requestFullscreenSafely, 150);
     } catch {
+      setIsLoadingSave(false);
       showGameNotification({
         title: 'Nieprawidłowy zapis',
         message: 'Wybrany plik nie wygląda jak prawidłowy zapis gry.',
         tone: 'error'
       });
     }
-    e.target.value = '';
+    input.value = '';
   };
 
   const handleFullPackLoad = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,6 +315,31 @@ export const StartMenu: React.FC = () => {
 
   return (
     <div className="h-screen w-full flex flex-col items-center justify-end bg-slate-950 overflow-hidden relative">
+
+      {isLoadingSave && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl cursor-wait" role="status" aria-live="assertive" aria-busy="true">
+          <div className="w-full max-w-2xl mx-6 rounded-[32px] border border-emerald-400/30 bg-slate-900/90 p-10 shadow-[0_0_80px_rgba(16,185,129,0.18)]">
+            <div className="flex items-center gap-5 mb-7">
+              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10">
+                <div className="absolute inset-2 rounded-full border-2 border-emerald-300/20 border-t-emerald-300 animate-spin" />
+                <span className="text-2xl" aria-hidden="true">💾</span>
+              </div>
+              <div>
+                <p className="font-black italic uppercase tracking-tighter text-2xl text-white">Zapis jest wczytywany</p>
+                <p className="font-black italic uppercase tracking-tighter mt-1 text-sm text-emerald-300">Prosimy o cierpliwość</p>
+              </div>
+            </div>
+
+            <div className="h-3 w-full overflow-hidden rounded-full border border-white/10 bg-slate-950">
+              <div className="save-loading-progress h-full w-1/3 rounded-full bg-gradient-to-r from-emerald-500 via-cyan-300 to-emerald-500 shadow-[0_0_18px_rgba(52,211,153,0.8)]" />
+            </div>
+
+            <p className="font-black italic uppercase tracking-tighter mt-7 text-center text-sm leading-relaxed text-slate-300">
+              Nie przejmuj się, jeśli przeglądarka wyświetli komunikat „The page is not responding”. Wybierz opcję poczekaj i nie zamykaj strony.
+            </p>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={toggleFullscreen}
@@ -575,6 +609,12 @@ export const StartMenu: React.FC = () => {
           to { stroke-dashoffset: -100; }
         }
         .menu-run-stroke { animation: menu-run-stroke 1.2s linear infinite; }
+
+        @keyframes save-loading-progress {
+          from { transform: translateX(-110%); }
+          to { transform: translateX(310%); }
+        }
+        .save-loading-progress { animation: save-loading-progress 1.35s ease-in-out infinite; }
       `}</style>
     </div>
   );
