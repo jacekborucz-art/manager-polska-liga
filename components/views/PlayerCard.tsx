@@ -161,7 +161,7 @@ const PlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> 
 };
 
 export const PlayerCard: React.FC = () => {
- const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, resolvePlayerTransferListObjection, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, pendingOpenTransferListObjection, setPendingOpenTransferListObjection, submitLoanOffer, sessionSeed, getOrGenerateSquad } = useGame();
+ const { viewedPlayerId, players, reserves, clubs, navigateTo, navigateWithoutHistory, previousViewState, userTeamId, toggleTransferList, toggleLoanAvailability, toggleUntouchable, setSquadRole, currentDate, transferOffers, isResigned, setContractManagementInitialMode, conductIndividualTalk, resolvePlayerRoleConversation, resolvePlayerTransferConversation, resolvePlayerTransferRequestDialog, resolvePlayerTransferListObjection, pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow, pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, pendingOpenTransferListObjection, setPendingOpenTransferListObjection, submitLoanOffer, sessionSeed, getOrGenerateSquad, managedReserveClubId } = useGame();
   const [showPricePanel, setShowPricePanel] = useState(false);
   const [transferPrice, setTransferPrice] = useState(0);
   const [priceStep, setPriceStep] = useState(50000);
@@ -236,7 +236,7 @@ export const PlayerCard: React.FC = () => {
             budget: 0, boardStrictness: 0, signingBonusPool: 0, transferBudget: 0
           };
         }
-        return { player, club: clubData!, isReserve: false };
+        return { player, club: clubData!, isReserve: clubId === managedReserveClubId };
       }
     }
     const reservePlayer = reserves.find(p => p.id === viewedPlayerId);
@@ -245,7 +245,7 @@ export const PlayerCard: React.FC = () => {
       return { player: reservePlayer, club: clubData!, isReserve: true };
     }
     return null;
-  }, [viewedPlayerId, players, reserves, clubs]);
+  }, [viewedPlayerId, players, reserves, clubs, managedReserveClubId]);
 
   useEffect(() => {
     if (data?.player.clubId && data.player.clubId !== 'FREE_AGENTS') {

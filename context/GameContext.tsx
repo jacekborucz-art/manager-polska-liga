@@ -96,6 +96,7 @@ import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
+import { ManagedReserveTeamService } from '../services/ManagedReserveTeamService';
 import { ReserveTeamFinanceService } from '../services/ReserveTeamFinanceService';
 import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
@@ -1276,6 +1277,8 @@ finalizeFreeAgentContract: (mailId: string) => void;
   setEuroState: React.Dispatch<React.SetStateAction<WCState | null>>;
   reserves: Player[];
   setReserves: React.Dispatch<React.SetStateAction<Player[]>>;
+  /** Official reserve club managed through the reserve UI, or null for the generated fallback. */
+  managedReserveClubId: string | null;
   reserveReleaseDirective: ReserveReleaseDirective | null;
   setReserveReleaseDirective: React.Dispatch<React.SetStateAction<ReserveReleaseDirective | null>>;
   resolveReserveReleaseDirective: (playerIds: string[]) => { success: boolean; message: string };
@@ -1359,9 +1362,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [clubs, setClubs] = useState<Club[]>([...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB]);
   const [leagues, setLeagues] = useState<League[]>(STATIC_LEAGUES);
   const [players, setPlayers] = useState<Record<string, Player[]>>({});
-  const [reserves, setReserves] = useState<Player[]>([]);
+  // Clubs without an official database reserve side still use this fallback
+  // array. Linked clubs never read from it after selection or SAVE migration.
+  const [legacyReserves, setLegacyReserves] = useState<Player[]>([]);
   const [reserveReleaseDirective, setReserveReleaseDirective] = useState<ReserveReleaseDirective | null>(null);
-  const [reserveCoachId, setReserveCoachId] = useState<string | null>(null);
+  const [legacyReserveCoachId, setLegacyReserveCoachId] = useState<string | null>(null);
   const [reserveFixtures, setReserveFixtures] = useState<ReserveFixture[]>([]);
   const [reserveMatchResults, setReserveMatchResults] = useState<ReserveMatchResult[]>([]);
   const [academy, setAcademy] = useState<ClubAcademy | null>(null);
@@ -1373,6 +1378,158 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mysteryAgentOffer, setMysteryAgentOffer] = useState<MysteryAgentOfferState | null>(null);
   const [lineups, setLineups] = useState<Record<string, Lineup>>({});
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
+  /**
+   * A database reserve club replaces the generated reserve system only while
+   * it actually participates in one of the three simulated Polish leagues.
+   * The clubs array is season-dependent, so the adapter also reacts when later
+   * promotions or relegations move that reserve side into or out of scope.
+   */
+  const managedReserveClubId = useMemo(
+    () => userTeamId
+      ? ReserveTeamLeagueService.getPlayableReserveClubId(userTeamId, clubs)
+      : null,
+    [clubs, userTeamId]
+  );
+
+  /**
+   * Compatibility adapter for the existing reserve UI. Linked clubs expose
+   * the official squad from the global player map; every old setReserves call
+   * is redirected to that same map. This removes the duplicate source of truth
+   * without forcing every consumer component to be rewritten in one release.
+   * The clubId normalization is an additional invariant: a player sent down
+   * by an older UI handler cannot remain falsely owned by the parent club.
+   */
+  const reserves = managedReserveClubId
+    ? (players[managedReserveClubId] ?? [])
+    : legacyReserves;
+  const setReserves = useCallback<React.Dispatch<React.SetStateAction<Player[]>>>((action) => {
+    if (!managedReserveClubId) {
+      setLegacyReserves(action);
+      return;
+    }
+
+    setPlayers(previousPlayers => {
+      const previousSquad = previousPlayers[managedReserveClubId] ?? [];
+      const nextSquad = typeof action === 'function'
+        ? action(previousSquad)
+        : action;
+      return {
+        ...previousPlayers,
+        [managedReserveClubId]: nextSquad.map(player => ({
+          ...player,
+          clubId: managedReserveClubId,
+        })),
+      };
+    });
+  }, [managedReserveClubId]);
+  // The official reserve coach belongs to the reserve Club record and follows
+  // normal AI hiring/firing. Only fallback reserves retain their private coach.
+  const reserveCoachId = managedReserveClubId
+    ? (clubs.find(club => club.id === managedReserveClubId)?.coachId ?? null)
+    : legacyReserveCoachId;
+
+  /**
+   * Tracks a real mode boundary during an existing career. A change of the
+   * selected club is ignored because selectUserTeam/loadGameFromFile already
+   * initialize the appropriate reserve source themselves. With the same club,
+   * however, promotion or relegation may move its official reserve side into
+   * or out of the simulated L_PL_1/L_PL_2/L_PL_3 pyramid between seasons.
+   */
+  const previousReserveIntegrationRef = React.useRef<{
+    userTeamId: string | null;
+    linkedReserveClubId: string | null;
+  }>({ userTeamId: null, linkedReserveClubId: null });
+
+  useEffect(() => {
+    const previousIntegration = previousReserveIntegrationRef.current;
+    previousReserveIntegrationRef.current = {
+      userTeamId,
+      linkedReserveClubId: managedReserveClubId,
+    };
+
+    if (
+      !userTeamId ||
+      previousIntegration.userTeamId !== userTeamId ||
+      previousIntegration.linkedReserveClubId === managedReserveClubId
+    ) {
+      return;
+    }
+
+    if (managedReserveClubId) {
+      // The official reserve side has entered a simulated league. Move unique
+      // generated players into that database squad and retire every synthetic
+      // fixture/coach field so the UI cannot display two reserve teams.
+      const migration = ManagedReserveTeamService.migrateLoadedSave({
+        userTeamId,
+        clubs,
+        players,
+        legacyReserves,
+        lineups,
+        currentDate,
+      });
+      setPlayers(migration.players);
+      setLineups(migration.lineups);
+      setLegacyReserves(migration.legacyReserves);
+      setReserveReleaseDirective(null);
+      setLegacyReserveCoachId(null);
+      setReserveFixtures([]);
+      setReserveMatchResults([]);
+      setClubs(previousClubs => previousClubs.map(club => (
+        club.id === managedReserveClubId
+          ? { ...club, rosterIds: (migration.players[managedReserveClubId] ?? []).map(player => player.id) }
+          : club
+      )));
+      return;
+    }
+
+    // The official reserve side has left the simulated pyramid. Its database
+    // squad remains an independent L_PL_4 background team; the user's reserve
+    // screen must receive a new generated squad instead of exposing that club.
+    // Existing fallback data is preserved, which also keeps SAVE/LOAD safe.
+    if (legacyReserves.length > 0) return;
+    const userClub = clubs.find(club => club.id === userTeamId);
+    if (!userClub) return;
+
+    const leagueTier = userClub.leagueId === 'L_PL_1'
+      ? 1
+      : userClub.leagueId === 'L_PL_2'
+      ? 2
+      : userClub.leagueId === 'L_PL_3'
+      ? 3
+      : 4;
+    setLegacyReserves(SquadGeneratorService.generateReservesSquad(
+      userClub.id,
+      userClub.name,
+      leagueTier,
+      userClub.reputation || 5,
+      userClub.budget || 5000000
+    ));
+    setReserveReleaseDirective(null);
+    setReserveFixtures([]);
+    setReserveMatchResults([]);
+
+    const newReserveCoach = CoachService.createRandomCoach(Math.random() < 0.75);
+    const reserveHiredDate = currentDate.toISOString();
+    setCoaches(previousCoaches => ({
+      ...previousCoaches,
+      [newReserveCoach.id]: {
+        ...newReserveCoach,
+        currentClubId: userClub.id,
+        hiredDate: reserveHiredDate,
+        contractEndDate: CoachService.getDefaultContractEndDate(reserveHiredDate),
+        annualSalary: CoachService.calculateAnnualSalaryForClub(userClub, newReserveCoach),
+      },
+    }));
+    setLegacyReserveCoachId(newReserveCoach.id);
+  }, [
+    clubs,
+    currentDate,
+    legacyReserves,
+    lineups,
+    managedReserveClubId,
+    players,
+    userTeamId,
+  ]);
   const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
   const [leagueSchedules, setLeagueSchedules] = useState<Record<number, LeagueSchedule>>({});
   const [nextEvent, setNextEvent] = useState<PlayerNextEvent | null>(null);
@@ -2248,9 +2405,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setManagerProfile(options?.preserveManagerProfile ?? null);
     setManagerJobOffers([]);
     setLineups({});
-    setReserves([]);
+    setLegacyReserves([]);
     setReserveReleaseDirective(null);
-    setReserveCoachId(null);
+    setLegacyReserveCoachId(null);
     setReserveFixtures([]);
     setReserveMatchResults([]);
     setAcademy(null);
@@ -3475,11 +3632,16 @@ if (userTeamId) {
     clubs,
     leagues,
     players,
-    reserves,
-    reserveReleaseDirective,
-    reserveCoachId,
-    reserveFixtures,
-    reserveMatchResults: SaveArchiveService.archiveReserveResultsBefore(reserveMatchResults, saveArchiveFirstDetailedSeason),
+    // Linked reserve players are already present in `players[reserveClubId]`.
+    // Writing the compatibility view into `reserves` as well would recreate
+    // the exact duplicate ownership which this migration removes.
+    reserves: managedReserveClubId ? [] : legacyReserves,
+    reserveReleaseDirective: managedReserveClubId ? null : reserveReleaseDirective,
+    reserveCoachId: managedReserveClubId ? null : legacyReserveCoachId,
+    reserveFixtures: managedReserveClubId ? [] : reserveFixtures,
+    reserveMatchResults: managedReserveClubId
+      ? []
+      : SaveArchiveService.archiveReserveResultsBefore(reserveMatchResults, saveArchiveFirstDetailedSeason),
     academy,
     scoutPool,
     scoutMarket,
@@ -3758,19 +3920,52 @@ if (userTeamId) {
     const retainedReserveResults = data.reserveMatchResults ?? [];
     const retainedAiFriendlyPairs = data.aiFriendlyPairs ?? [];
     const retainedAiFriendlyReports = data.aiFriendlyReports ?? [];
+    const repairedWorldPlayers = repairDuplicatePlayerIds(repairedNationalData.players);
+    const linkedReserveMigration = ManagedReserveTeamService.migrateLoadedSave({
+      userTeamId: data.userTeamId,
+      clubs: ensuredNationalCoachData.updatedClubs,
+      players: repairedWorldPlayers,
+      legacyReserves: data.reserves ?? [],
+      lineups: data.lineups ?? {},
+      currentDate: loadedDate,
+    });
+    const loadedClubsWithReserveRosters = linkedReserveMigration.linkedReserveClubId
+      ? ensuredNationalCoachData.updatedClubs.map(club => (
+          club.id === linkedReserveMigration.linkedReserveClubId
+            ? {
+                ...club,
+                rosterIds: (linkedReserveMigration.players[club.id] ?? []).map(player => player.id),
+              }
+            : club
+        ))
+      : ensuredNationalCoachData.updatedClubs;
+
+    if (linkedReserveMigration.migratedPlayerCount > 0) {
+      console.info(
+        `[SAVE migration] Moved ${linkedReserveMigration.migratedPlayerCount} legacy reserve players ` +
+        `into ${linkedReserveMigration.linkedReserveClubId}.`
+      );
+    }
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
-    setClubs(ensuredNationalCoachData.updatedClubs);
+    setClubs(loadedClubsWithReserveRosters);
     setLeagues(data.leagues);
     // FIX: see repairDuplicatePlayerIds above — cleans up any duplicate-player-id corruption
     // already baked into the save being loaded (from before the write-site fixes).
-    setPlayers(repairDuplicatePlayerIds(repairedNationalData.players));
-    setReserves(data.reserves);
-    setReserveReleaseDirective(data.reserveReleaseDirective ?? null);
-    setReserveCoachId(data.reserveCoachId);
-    setReserveFixtures(data.reserveFixtures ?? []);
-    setReserveMatchResults(retainedReserveResults);
+    setPlayers(linkedReserveMigration.players);
+    setLegacyReserves(linkedReserveMigration.legacyReserves);
+    setReserveReleaseDirective(
+      linkedReserveMigration.linkedReserveClubId ? null : (data.reserveReleaseDirective ?? null)
+    );
+    setLegacyReserveCoachId(
+      linkedReserveMigration.linkedReserveClubId ? null : data.reserveCoachId
+    );
+    // Official reserve teams use leagueSchedules/globalFixtures and the normal
+    // match history. Retaining their old synthetic schedule would show every
+    // match twice and could simulate a second, fictitious game on the same day.
+    setReserveFixtures(linkedReserveMigration.linkedReserveClubId ? [] : (data.reserveFixtures ?? []));
+    setReserveMatchResults(linkedReserveMigration.linkedReserveClubId ? [] : retainedReserveResults);
     setAcademy(data.academy);
     setScoutPool(data.scoutPool);
     setScoutMarket(data.scoutMarket);
@@ -3778,7 +3973,7 @@ if (userTeamId) {
     setScoutMarketManualRefreshCount(data.scoutMarketManualRefreshCount ?? 0);
     setScoutMarketPeriodStart(data.scoutMarketPeriodStart ?? '');
     setMysteryAgentOffer(data.mysteryAgentOffer ?? null);
-    setLineups(data.lineups);
+    setLineups(linkedReserveMigration.lineups);
     setUserTeamId(data.userTeamId);
     setSeasonTemplate(data.seasonTemplate);
     setLeagueSchedules(data.leagueSchedules);
@@ -4139,9 +4334,9 @@ if (userTeamId) {
     setWorldCupQualifiersState(null);
     setWcState(null);
     setEuroState(null);
-    setReserves([]);
+    setLegacyReserves([]);
     setReserveReleaseDirective(null);
-    setReserveCoachId(null);
+    setLegacyReserveCoachId(null);
     setReserveFixtures([]);
     setReserveMatchResults([]);
     setAcademy(null);
@@ -4163,10 +4358,30 @@ if (userTeamId) {
   };
 
 const selectUserTeam = (clubId: string) => {
+    const club = clubs.find(c => c.id === clubId);
+    if (!club) {
+      showGameNotification({
+        title: 'Nie można wybrać klubu',
+        message: 'Nie znaleziono danych wybranej drużyny.',
+        tone: 'warning',
+      });
+      return;
+    }
+    if (!ReserveTeamLeagueService.canBeSelectedAsUserClub(clubId)) {
+      // This guard intentionally duplicates the TeamSelection filter. Career
+      // selection can also be reached from job offers and future UI routes, so
+      // enforcing the domain rule only in the visible list would be fragile.
+      showGameNotification({
+        title: 'Drużyna rezerw',
+        message: 'Oficjalne drużyny rezerw są zarządzane przez pierwszy zespół i nie mogą rozpocząć osobnej kariery.',
+        tone: 'warning',
+      });
+      return;
+    }
+
     setUserTeamId(clubId);
     setIsResigned(false);
     setManagerEmploymentStatus('EMPLOYED');
-    const club = clubs.find(c => c.id === clubId)!;
     const squad = getOrGenerateSquad(clubId);
     const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
     if (club.coachId) {
@@ -4179,24 +4394,41 @@ const selectUserTeam = (clubId: string) => {
     setClubs(prev => prev.map(c => c.id === clubId ? { ...c, coachId: undefined, sportingDirector } : c));
     const selectedClub = { ...club, coachId: undefined, sportingDirector };
 
-    const leagueTier = club?.leagueId === 'L_PL_1' ? 1 : club?.leagueId === 'L_PL_2' ? 2 : club?.leagueId === 'L_PL_3' ? 3 : 4;
-    const generatedReserves = SquadGeneratorService.generateReservesSquad(clubId, club?.name || '', leagueTier, club?.reputation || 5, club?.budget || 5000000);
-    setReserves(generatedReserves);
+    // A configured relationship alone is insufficient here: season setup keeps
+    // non-participating database clubs in L_PL_4. Only an official reserve side
+    // currently assigned to L_PL_1/L_PL_2/L_PL_3 replaces generated reserves.
+    const officialReserveClubId = ReserveTeamLeagueService.getPlayableReserveClubId(clubId, clubs);
+    const leagueTier = club.leagueId === 'L_PL_1' ? 1 : club.leagueId === 'L_PL_2' ? 2 : club.leagueId === 'L_PL_3' ? 3 : 4;
+    const generatedReserves = officialReserveClubId
+      ? []
+      : SquadGeneratorService.generateReservesSquad(clubId, club.name, leagueTier, club.reputation || 5, club.budget || 5000000);
+    setLegacyReserves(generatedReserves);
     setReserveReleaseDirective(null);
+    setReserveFixtures([]);
+    setReserveMatchResults([]);
 
-    // Generuj trenera rezerw: 75% szansy na Polaka, 25% na zagranicznego
-    const isPolish = Math.random() < 0.75;
-    const newReserveCoach = CoachService.createRandomCoach(isPolish);
-    const reserveHiredDate = currentDate.toISOString();
-    const reserveCoachWithClub = {
-      ...newReserveCoach,
-      currentClubId: clubId,
-      hiredDate: reserveHiredDate,
-      contractEndDate: CoachService.getDefaultContractEndDate(reserveHiredDate),
-      annualSalary: CoachService.calculateAnnualSalaryForClub(club, newReserveCoach),
-    };
-    setCoaches(prev => ({ ...prev, [newReserveCoach.id]: reserveCoachWithClub }));
-    setReserveCoachId(newReserveCoach.id);
+    if (officialReserveClubId) {
+      // The linked reserve club was initialized with the rest of the Polish
+      // league database. Its own coach, squad, fixtures and finances must be
+      // reused; generating another coach here would recreate the duplicate
+      // reserve system under a different field name.
+      setLegacyReserveCoachId(null);
+    } else {
+      // Generated fallback reserves need a private coach because no official
+      // Club record exists for them.
+      const isPolish = Math.random() < 0.75;
+      const newReserveCoach = CoachService.createRandomCoach(isPolish);
+      const reserveHiredDate = currentDate.toISOString();
+      const reserveCoachWithClub = {
+        ...newReserveCoach,
+        currentClubId: clubId,
+        hiredDate: reserveHiredDate,
+        contractEndDate: CoachService.getDefaultContractEndDate(reserveHiredDate),
+        annualSalary: CoachService.calculateAnnualSalaryForClub(club, newReserveCoach),
+      };
+      setCoaches(prev => ({ ...prev, [newReserveCoach.id]: reserveCoachWithClub }));
+      setLegacyReserveCoachId(newReserveCoach.id);
+    }
 
     const presetLevel = CLUBS_WITH_PRESET_ACADEMY[clubId] as ClubAcademy['level'] | undefined;
     if (presetLevel) {
@@ -4568,7 +4800,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         finalPlayers = TrainingService.applyAiTrainingFocuses(finalPlayers, userTeamId);
 
         // Trening rezerw — automatyczny plan trenera rezerw
-        if (reserves.length > 0) {
+        if (!managedReserveClubId && reserves.length > 0) {
           const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
           const coachTrainingAttr = reserveCoach?.attributes.training ?? 50;
           const coachExperience = reserveCoach?.attributes.experience ?? 50;
@@ -4909,7 +5141,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       allFixtures,
       userTeamId
     ));
-  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber]);
+  }, [currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber, managedReserveClubId]);
 
   const processCLMatchDay = useCallback(() => {
     // null zamiast userTeamId — gracz kliknął "Symuluj", więc symulujemy WSZYSTKIE mecze
@@ -5448,7 +5680,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     const youth = academy.youthPlayers.find(yp => yp.id === youthId);
     if (!youth) return;
     const club = clubs.find(c => c.id === userTeamId);
-    const promoted = AcademyService.promoteToPlayer(
+    let promoted = AcademyService.promoteToPlayer(
       youth,
       userTeamId,
       currentDate,
@@ -5457,9 +5689,44 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       club?.country,
       academy.level
     );
+    if (target === 'RESERVES' && managedReserveClubId) {
+      const officialReserveClub = clubs.find(candidate => candidate.id === managedReserveClubId);
+      if (officialReserveClub) {
+        // Academy graduates assigned to an official reserve side must be
+        // registered to that Club record immediately. Leaving the parent id
+        // here would recreate split ownership after the next SAVE/LOAD cycle.
+        promoted = {
+          ...promoted,
+          clubId: managedReserveClubId,
+          history: PlayerCareerService.reopenOrCreateEntry(
+            promoted.history ?? [],
+            promoted,
+            { clubId: managedReserveClubId, clubName: officialReserveClub.name },
+            currentDate.getFullYear(),
+            currentDate.getMonth() + 1
+          ),
+          lastInternalSquadMoveDate: currentDate.toISOString(),
+          lastInternalSquadMoveDirection: 'TO_RESERVES',
+        };
+      }
+    }
     const overallRating = promoted.overallRating;
     if (target === 'RESERVES') {
       setReserves(prev => [...prev, promoted]);
+      if (managedReserveClubId) {
+        setClubs(previousClubs => previousClubs.map(club => (
+          club.id === managedReserveClubId
+            ? { ...club, rosterIds: Array.from(new Set([...club.rosterIds, promoted.id])) }
+            : club
+        )));
+        const officialLineup = lineups[managedReserveClubId];
+        if (officialLineup) {
+          updateLineup(managedReserveClubId, {
+            ...officialLineup,
+            reserves: Array.from(new Set([...officialLineup.reserves, promoted.id])),
+          });
+        }
+      }
     } else {
       setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), promoted] }));
     }
@@ -5494,7 +5761,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       priority: 60,
     };
     setMessages(prev => [infoMail, ...prev]);
-  }, [academy, userTeamId, currentDate, clubs]);
+  }, [academy, userTeamId, currentDate, clubs, managedReserveClubId, lineups]);
 
   const dismissYouthPlayer = useCallback((youthId: string) => {
     if (!academy) return;
@@ -10474,7 +10741,7 @@ const finalResult: SimulationOutput = {
     }
 
     // 4c. Generowanie terminarza rezerw (4 lipca każdego sezonu)
-    if (dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 4 && userTeamId) {
+    if (!managedReserveClubId && dateToProcess.getMonth() === 6 && dateToProcess.getDate() === 4 && userTeamId) {
       const userClub = clubs.find(c => c.id === userTeamId);
       const alreadyGenerated = reserveFixtures.some(f => f.id.startsWith(`res_r1_${seasonNumber}_`));
       if (userClub && !alreadyGenerated) {
@@ -10487,7 +10754,7 @@ const finalResult: SimulationOutput = {
     }
 
     // 4d. Symulacja meczu rezerw w tle
-    if (userTeamId && reserves.length > 0 && reserveCoachId) {
+    if (!managedReserveClubId && userTeamId && reserves.length > 0 && reserveCoachId) {
       const todayIso = dateToProcess.toISOString().split('T')[0];
       const reserveFixture = reserveFixtures.find(f => !f.resultId && (typeof f.date === 'string' ? f.date : new Date(f.date).toISOString().split('T')[0]).startsWith(todayIso));
       if (reserveFixture) {
@@ -10582,7 +10849,7 @@ const finalResult: SimulationOutput = {
     }
 
     // 4e. Regeneracja kondycji rezerw
-    if (reserves.length > 0) {
+    if (!managedReserveClubId && reserves.length > 0) {
       setReserves(prev => {
         const reservesMap = { RES: prev };
         return RecoveryService.applyDailyRecovery(reservesMap, dateToProcess, TrainingIntensity.NORMAL, recoveryDelta, 1.0)['RES'];
@@ -10865,7 +11132,7 @@ const finalResult: SimulationOutput = {
     nextDay.setDate(nextDay.getDate() + 1);
     const nextDayIso = nextDay.toISOString().split('T')[0];
 
-    if (userTeamId && !isResigned) {
+    if (userTeamId && !isResigned && !managedReserveClubId) {
       const reserveOverflow = reserves.length - RESERVE_SQUAD_LIMIT;
       if (reserveOverflow <= 0) {
         if (reserveReleaseDirective) setReserveReleaseDirective(null);
@@ -13210,7 +13477,7 @@ const finalResult: SimulationOutput = {
 
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();
@@ -18031,7 +18298,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     activePlayoffMatch, setActivePlayoffMatch,
     setRelegationPlayoffFirstLegResults, setRelegationPlayoffFinalResult,
     setPromotionPlayoffSemiResults, setPromotionPlayoffFinalResults,
-    reserves, setReserves, reserveReleaseDirective, setReserveReleaseDirective, resolveReserveReleaseDirective, reserveCoachId,
+    reserves, setReserves, managedReserveClubId, reserveReleaseDirective, setReserveReleaseDirective, resolveReserveReleaseDirective, reserveCoachId,
     reserveFixtures, setReserveFixtures,
     reserveMatchResults, setReserveMatchResults,
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,

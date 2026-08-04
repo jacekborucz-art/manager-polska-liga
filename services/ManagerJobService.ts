@@ -1,4 +1,5 @@
 import { Club, Coach, ManagerEmploymentStatus, ManagerProfile } from '../types';
+import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
 export interface ManagerJobEvaluation {
   requiredExp: number;
@@ -49,7 +50,12 @@ function getReviewPressure(club: Club, clubs: Club[]): number {
 }
 
 export function isPolishManagerJobClub(club: Club): boolean {
-  return POLISH_LEAGUE_IDS.has(String(club.leagueId)) && club.id !== 'UNEMPLOYED_MANAGER';
+  // Reserve teams can change their AI coach, but they must never appear as a
+  // separate destination on the user's job market. Managing the parent club
+  // already grants access to the linked development squad.
+  return POLISH_LEAGUE_IDS.has(String(club.leagueId)) &&
+    club.id !== 'UNEMPLOYED_MANAGER' &&
+    ReserveTeamLeagueService.canBeSelectedAsUserClub(club.id);
 }
 
 export function evaluateManagerJob(

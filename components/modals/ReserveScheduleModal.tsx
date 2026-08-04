@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useModalClose } from '../ui/useModalClose';
 import { useGame } from '../../context/GameContext';
 import { Player, PlayerPosition, ReserveFixture, ReserveMatchPlayerEntry, ReserveMatchResult, Club } from '../../types';
+import { ManagedReserveTeamService } from '../../services/ManagedReserveTeamService';
+import { MatchHistoryService } from '../../services/MatchHistoryService';
 
 interface Props {
   onClose: () => void;
@@ -34,6 +36,7 @@ interface MatchDetailModalProps {
   reserves: Player[];
   clubs: Club[];
   userTeamId: string | null;
+  managedReserveClubId: string | null;
   fixture: ReserveFixture | null;
   onClose: () => void;
 }
@@ -41,12 +44,16 @@ interface MatchDetailModalProps {
 type MatchTeamId = 'HOME' | 'AWAY';
 type EventKind = 'goal' | 'yellow' | 'red' | 'sub' | 'injury' | 'missed_penalty';
 
-const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, clubs, userTeamId, fixture, onClose }) => {
+const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, clubs, userTeamId, managedReserveClubId, fixture, onClose }) => {
   const { closeModal: closeMatchDetail, exitClass: matchDetailExitClass } = useModalClose(onClose);
   const userTeamSide: MatchTeamId = result.isUserHome ? 'HOME' : 'AWAY';
-  const userClub = clubs.find(c => c.id === userTeamId);
-  const userFullName = userClub ? `${userClub.name} II` : (result.isUserHome ? result.homeTeamName : result.awayTeamName);
-  const oppFullName = fixture ? `${fixture.opponentClubName} II` : (result.isUserHome ? result.awayTeamName : result.homeTeamName);
+  const userClub = clubs.find(c => c.id === (managedReserveClubId ?? userTeamId));
+  const userFullName = userClub
+    ? (managedReserveClubId ? userClub.name : `${userClub.name} II`)
+    : (result.isUserHome ? result.homeTeamName : result.awayTeamName);
+  const oppFullName = fixture
+    ? (managedReserveClubId ? fixture.opponentClubName : `${fixture.opponentClubName} II`)
+    : (result.isUserHome ? result.awayTeamName : result.homeTeamName);
   const fullHomeTeamName = result.isUserHome ? userFullName : oppFullName;
   const fullAwayTeamName = result.isUserHome ? oppFullName : userFullName;
   const oppClub = clubs.find(c => c.id === fixture?.opponentClubId);
@@ -422,17 +429,28 @@ const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ result, reserves, c
 
 export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
   const { closeModal, exitClass } = useModalClose(onClose);
-  const { reserveFixtures, reserveMatchResults, reserves, seasonNumber, clubs, userTeamId } = useGame();
+  const { reserveFixtures, reserveMatchResults, reserves, seasonNumber, clubs, userTeamId, managedReserveClubId, fixtures } = useGame();
   const [selectedResult, setSelectedResult] = useState<ReserveMatchResult | null>(null);
   const [selectedFixture, setSelectedFixture] = useState<ReserveFixture | null>(null);
 
-  const seasonFixtures = reserveFixtures.filter(f => {
-    const result = f.resultId ? reserveMatchResults.find(r => r.id === f.resultId) : null;
+  const officialSchedule = managedReserveClubId
+    ? ManagedReserveTeamService.buildOfficialSchedule(
+        managedReserveClubId,
+        fixtures,
+        clubs,
+        seasonNumber,
+        MatchHistoryService.getAll()
+      )
+    : null;
+  const displayedFixtures = officialSchedule?.fixtures ?? reserveFixtures;
+  const displayedResults = officialSchedule?.results ?? reserveMatchResults;
+  const seasonFixtures = displayedFixtures.filter(f => {
+    const result = f.resultId ? displayedResults.find(r => r.id === f.resultId) : null;
     return !result || result.season === seasonNumber || f.id.includes(`_${seasonNumber}_`);
   });
 
   const getResult = (f: ReserveFixture): ReserveMatchResult | undefined =>
-    f.resultId ? reserveMatchResults.find(r => r.id === f.resultId) : undefined;
+    f.resultId ? displayedResults.find(r => r.id === f.resultId) : undefined;
 
   const getResultLabel = (f: ReserveFixture): { text: string; color: string } | null => {
     const r = getResult(f);
@@ -489,7 +507,7 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
                     {roundFixtures.map((f) => {
                       const resultLabel = getResultLabel(f);
                       const result = getResult(f);
-                      const oppLabel = `${f.opponentClubName} II`;
+                      const oppLabel = managedReserveClubId ? f.opponentClubName : `${f.opponentClubName} II`;
                       const oppColors = getOppColors(f.opponentClubId);
                       const gradient = makeGradient(oppColors);
                       return (
@@ -511,7 +529,7 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
                                 <span className="text-gray-500 text-xs italic">-</span>
                               )}
                             </div>
-                            <span className="text-white text-xs italic uppercase tracking-tighter">{oppLabel}</span>
+                            <span className="text-white text-xs font-black italic uppercase tracking-tighter">{oppLabel}</span>
                           </div>
                         </div>
                       );
@@ -530,6 +548,7 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
           reserves={reserves}
           clubs={clubs}
           userTeamId={userTeamId}
+          managedReserveClubId={managedReserveClubId}
           fixture={selectedFixture}
           onClose={() => { setSelectedResult(null); setSelectedFixture(null); }}
         />

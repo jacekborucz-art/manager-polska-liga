@@ -23,6 +23,19 @@ const RESERVE_PARENT_CLUB_BY_ID: Readonly<Record<string, string>> = {
   PL_LKS_II_LODZ: 'PL_LKS_LODZ',
 };
 
+/**
+ * Only clubs assigned to one of the three simulated Polish league levels may
+ * replace the player's generated reserve squad. Season setup deliberately
+ * moves database clubs which are absent from a selected season to L_PL_4, so
+ * checking whether a Club record merely exists would incorrectly activate
+ * teams such as Legia Warszawa II in the 2025/26 career start.
+ */
+const PLAYABLE_POLISH_LEAGUE_IDS: ReadonlySet<string> = new Set([
+  'L_PL_1',
+  'L_PL_2',
+  'L_PL_3',
+]);
+
 export interface ReserveParentClubPair {
   reserveClubId: string;
   parentClubId: string;
@@ -53,6 +66,50 @@ export const ReserveTeamLeagueService = {
 
   getParentClubId(reserveClubId: string): string | null {
     return RESERVE_PARENT_CLUB_BY_ID[reserveClubId] ?? null;
+  },
+
+  /**
+   * Resolves the configured reserve-club relationship without deciding if the
+   * reserve side participates in the currently selected season. Callers which
+   * control the player's reserve screen must use getPlayableReserveClubId;
+   * promotion, finance and ownership rules may still need this raw relation
+   * even while the reserve team temporarily plays below the simulated leagues.
+   */
+  getReserveClubId(parentClubId: string): string | null {
+    const pair = Object.entries(RESERVE_PARENT_CLUB_BY_ID)
+      .find(([, configuredParentClubId]) => configuredParentClubId === parentClubId);
+    return pair?.[0] ?? null;
+  },
+
+  /**
+   * Resolves an official reserve side only when it is an actual participant in
+   * a simulated league for the current career state. This is intentionally a
+   * runtime check against the supplied clubs rather than a static season list:
+   * promotions and relegations can make the answer change in later seasons.
+   *
+   * When the configured reserve club is missing or currently sits in L_PL_4,
+   * null instructs GameContext to keep using the generated reserve squad. A
+   * club with no configured database reserve side, such as Polonia Warszawa,
+   * naturally follows the same fallback path.
+   */
+  getPlayableReserveClubId(parentClubId: string, clubs: Club[]): string | null {
+    const reserveClubId = this.getReserveClubId(parentClubId);
+    if (!reserveClubId) return null;
+
+    const reserveClub = clubs.find(club => club.id === reserveClubId);
+    if (!reserveClub || !PLAYABLE_POLISH_LEAGUE_IDS.has(reserveClub.leagueId)) return null;
+
+    return reserveClubId;
+  },
+
+  /**
+   * Official reserve teams are database-controlled development sides, not
+   * independent career entry points. The defensive predicate is shared by
+   * the selection screen and GameContext so a future UI regression cannot
+   * bypass the restriction by calling selectUserTeam directly.
+   */
+  canBeSelectedAsUserClub(clubId: string): boolean {
+    return !this.isReserveClub(clubId);
   },
 
   /**
@@ -114,7 +171,7 @@ export const ReserveTeamLeagueService = {
     const parentClubId = this.getParentClubId(clubId);
     if (!parentClubId) return true;
 
-    // Drużyna rezerw nigdy nie może występować w Ekstraklasie.
+    // A reserve team may never participate in the Ekstraklasa.
     if (targetLeagueId === 'L_PL_1') return false;
 
     return getLeagueId(parentClubId, clubs, projectedLeagueByClubId) !== targetLeagueId;

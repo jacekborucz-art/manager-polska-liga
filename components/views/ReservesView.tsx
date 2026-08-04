@@ -8,6 +8,8 @@ import { ReserveScheduleModal } from '../modals/ReserveScheduleModal';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
+import { ManagedReserveTeamService } from '../../services/ManagedReserveTeamService';
+import { MatchHistoryService } from '../../services/MatchHistoryService';
 
 const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]: 'BR',
@@ -476,11 +478,11 @@ function generateCoachReport(players: Player[], seed: number): CoachReport {
 }
 
 export const ReservesView: React.FC = () => {
-  const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, currentDate, seasonNumber,
+  const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, setClubs, currentDate, seasonNumber,
           players, setPlayers, setReserves, lineups, updateLineup,
           coaches, viewCoachDetails, reserveCoachId, reserveProgressHistory,
           reserveFixtures, reserveMatchResults, reserveReleaseDirective, resolveReserveReleaseDirective,
-          showGameNotification } = useGame();
+          showGameNotification, managedReserveClubId, fixtures } = useGame();
   const [showReport, setShowReport] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -504,20 +506,54 @@ export const ReservesView: React.FC = () => {
       month
     );
     const moralePlayer = PlayerMoraleService.ensurePlayerState(player);
+    // Manual moves between linked squads are internal registrations: they do
+    // not create a transfer fee, loan or adaptation period. The audit fields
+    // are shared with the AI movement service and prevent future automation
+    // from immediately reversing the manager's decision.
+    const playerInFirstTeam = {
+      ...player,
+      clubId: userTeamId,
+      lastInternalSquadMoveDate: currentDate.toISOString(),
+      lastInternalSquadMoveDirection: 'TO_FIRST_TEAM' as const,
+      firstTeamSurplusSince: null,
+    };
     const updatedPlayer = player.reserveProtestUntil
       ? {
           ...PlayerMoraleService.withMoraleChange(
-            moralePlayer,
+            { ...moralePlayer, clubId: userTeamId },
             5,
             'Powrót do pierwszego zespołu po proteście',
             currentDate
           ),
           history: newHistory,
           reserveProtestUntil: null,
+          lastInternalSquadMoveDate: currentDate.toISOString(),
+          lastInternalSquadMoveDirection: 'TO_FIRST_TEAM' as const,
+          firstTeamSurplusSince: null,
         }
-      : { ...player, history: newHistory };
+      : { ...playerInFirstTeam, history: newHistory };
     setReserves(prev => prev.filter(p => p.id !== player.id));
     setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] ?? []), updatedPlayer] }));
+    if (managedReserveClubId) {
+      setClubs(previousClubs => previousClubs.map(club => {
+        if (club.id === managedReserveClubId) {
+          return { ...club, rosterIds: club.rosterIds.filter(id => id !== player.id) };
+        }
+        if (club.id === userTeamId) {
+          return { ...club, rosterIds: Array.from(new Set([...club.rosterIds, player.id])) };
+        }
+        return club;
+      }));
+      const linkedLineup = lineups[managedReserveClubId];
+      if (linkedLineup) {
+        updateLineup(managedReserveClubId, {
+          ...linkedLineup,
+          startingXI: linkedLineup.startingXI.map(id => id === player.id ? null : id),
+          bench: linkedLineup.bench.filter(id => id !== player.id),
+          reserves: linkedLineup.reserves.filter(id => id !== player.id),
+        });
+      }
+    }
     const currentLineup = lineups[userTeamId];
     if (currentLineup) {
       updateLineup(userTeamId, { ...currentLineup, reserves: [...currentLineup.reserves, updatedPlayer.id] });
@@ -525,6 +561,10 @@ export const ReservesView: React.FC = () => {
   };
 
   const myClub = clubs.find(c => c.id === userTeamId);
+  const officialReserveClub = managedReserveClubId
+    ? clubs.find(c => c.id === managedReserveClubId)
+    : null;
+  const reserveDisplayClub = officialReserveClub ?? myClub;
   const reserveCoach = reserveCoachId ? coaches[reserveCoachId] : null;
   const reserveReleaseCandidates = useMemo(() => {
     if (!reserveReleaseDirective) return [];
@@ -631,18 +671,32 @@ export const ReservesView: React.FC = () => {
     };
   };
 
+  const officialSchedule = useMemo(() => (
+    managedReserveClubId
+      ? ManagedReserveTeamService.buildOfficialSchedule(
+          managedReserveClubId,
+          fixtures,
+          clubs,
+          seasonNumber,
+          MatchHistoryService.getAll()
+        )
+      : null
+  ), [clubs, fixtures, managedReserveClubId, seasonNumber]);
+  const displayedReserveFixtures = officialSchedule?.fixtures ?? reserveFixtures;
+  const displayedReserveResults = officialSchedule?.results ?? reserveMatchResults;
+
   const seasonReserveFixtures = useMemo(() => (
-    reserveFixtures.filter(fixture => {
-      const result = fixture.resultId ? reserveMatchResults.find(match => match.id === fixture.resultId) : null;
+    displayedReserveFixtures.filter(fixture => {
+      const result = fixture.resultId ? displayedReserveResults.find(match => match.id === fixture.resultId) : null;
       return !result || result.season === seasonNumber || fixture.id.includes(`_${seasonNumber}_`);
     })
-  ), [reserveFixtures, reserveMatchResults, seasonNumber]);
+  ), [displayedReserveFixtures, displayedReserveResults, seasonNumber]);
 
   const reservePanelMatches = useMemo(() => {
     const withResults = seasonReserveFixtures
       .map(fixture => ({
         fixture,
-        result: fixture.resultId ? reserveMatchResults.find(match => match.id === fixture.resultId) ?? null : null,
+        result: fixture.resultId ? displayedReserveResults.find(match => match.id === fixture.resultId) ?? null : null,
       }));
 
     const played = withResults
@@ -656,17 +710,23 @@ export const ReservesView: React.FC = () => {
       .slice(0, 3);
 
     return { played, upcoming };
-  }, [currentDate, reserveMatchResults, seasonReserveFixtures]);
+  }, [currentDate, displayedReserveResults, seasonReserveFixtures]);
 
   const reserveHighlights = useMemo(() => {
+    const getGoals = (player: Player) => managedReserveClubId
+      ? (player.stats.goals ?? 0)
+      : (player.reserveStats?.goals ?? 0);
+    const getAssists = (player: Player) => managedReserveClubId
+      ? (player.stats.assists ?? 0)
+      : (player.reserveStats?.assists ?? 0);
     const topPlayers = [...reserves]
       .sort((a, b) => getReserveTopPlayerScore(b) - getReserveTopPlayerScore(a))
       .slice(0, 3);
 
     const topScorer = [...reserves]
-      .sort((a, b) => (b.reserveStats?.goals ?? 0) - (a.reserveStats?.goals ?? 0) || b.overallRating - a.overallRating)[0] ?? null;
+      .sort((a, b) => getGoals(b) - getGoals(a) || b.overallRating - a.overallRating)[0] ?? null;
     const topAssistant = [...reserves]
-      .sort((a, b) => (b.reserveStats?.assists ?? 0) - (a.reserveStats?.assists ?? 0) || b.overallRating - a.overallRating)[0] ?? null;
+      .sort((a, b) => getAssists(b) - getAssists(a) || b.overallRating - a.overallRating)[0] ?? null;
     const topRated = [...reserves]
       .filter(player => getReserveAverageRating(player) > 0)
       .sort((a, b) => getReserveAverageRating(b) - getReserveAverageRating(a) || b.overallRating - a.overallRating)[0] ?? null;
@@ -686,13 +746,13 @@ export const ReservesView: React.FC = () => {
 
     return {
       topPlayers,
-      topScorer: topScorer && (topScorer.reserveStats?.goals ?? 0) > 0 ? topScorer : null,
-      topAssistant: topAssistant && (topAssistant.reserveStats?.assists ?? 0) > 0 ? topAssistant : null,
+      topScorer: topScorer && getGoals(topScorer) > 0 ? topScorer : null,
+      topAssistant: topAssistant && getAssists(topAssistant) > 0 ? topAssistant : null,
       topRated,
       progressPlayers,
       firstTeamReady,
     };
-  }, [reserves]);
+  }, [managedReserveClubId, reserves]);
 
   const reserveAverageProfile = useMemo(() => {
     if (reserves.length === 0) {
@@ -855,16 +915,18 @@ export const ReservesView: React.FC = () => {
       <div className="max-w-full mx-auto">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
-            {myClub && getClubLogo(myClub.id) && (
+            {reserveDisplayClub && getClubLogo(reserveDisplayClub.id) && (
               <img
-                src={getClubLogo(myClub.id)}
-                alt={myClub.name}
+                src={getClubLogo(reserveDisplayClub.id)}
+                alt={reserveDisplayClub.name}
                 className="w-16 h-16 object-contain drop-shadow-2xl shrink-0"
               />
             )}
             <div>
-              {myClub && (
-                <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-1">{myClub.name} II</p>
+              {reserveDisplayClub && (
+                <p className="text-[10px] font-black italic uppercase tracking-tighter text-blue-500 tracking-[0.3em] mb-1">
+                  {officialReserveClub ? officialReserveClub.name : `${reserveDisplayClub.name} II`}
+                </p>
               )}
               <h1 className="text-5xl font-black italic uppercase tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-400 to-slate-600">REZERWY</h1>
               {myClub && (
@@ -1121,14 +1183,14 @@ export const ReservesView: React.FC = () => {
               'Top strzelec',
               reserveHighlights.topScorer,
               reserveHighlights.topScorer
-                ? [`${reserveHighlights.topScorer.age} lat`, `${reserveHighlights.topScorer.reserveStats?.goals ?? 0} goli`]
+                ? [`${reserveHighlights.topScorer.age} lat`, `${managedReserveClubId ? (reserveHighlights.topScorer.stats.goals ?? 0) : (reserveHighlights.topScorer.reserveStats?.goals ?? 0)} goli`]
                 : []
             )}
             {renderReserveHighlightCard(
               'Top asystent',
               reserveHighlights.topAssistant,
               reserveHighlights.topAssistant
-                ? [`${reserveHighlights.topAssistant.age} lat`, `${reserveHighlights.topAssistant.reserveStats?.assists ?? 0} asyst`]
+                ? [`${reserveHighlights.topAssistant.age} lat`, `${managedReserveClubId ? (reserveHighlights.topAssistant.stats.assists ?? 0) : (reserveHighlights.topAssistant.reserveStats?.assists ?? 0)} asyst`]
                 : []
             )}
           </div>
@@ -1417,7 +1479,9 @@ export const ReservesView: React.FC = () => {
               </svg>
               <h2 className="text-[13px] font-black italic uppercase tracking-[0.45em] leading-none text-amber-200/90">Progres Rezerw</h2>
               <span className="mx-1 text-emerald-900/60 select-none">|</span>
-              <span className="text-[10px] font-black italic uppercase tracking-[0.2em] text-slate-500">{myClub?.name || 'Klub'} II · {reserves.length} zawodników</span>
+              <span className="text-[10px] font-black italic uppercase tracking-tighter tracking-[0.2em] text-slate-500">
+                {officialReserveClub?.name ?? `${myClub?.name || 'Klub'} II`} · {reserves.length} zawodników
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <div className="rounded-lg border border-emerald-600/30 bg-emerald-900/25 px-3 py-1.5 text-center">

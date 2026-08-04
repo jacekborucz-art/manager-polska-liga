@@ -4,6 +4,7 @@ import { useGame } from '../../context/GameContext';
 import { Button } from '../ui/Button';
 import { ViewState } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { ReserveTeamLeagueService } from '../../services/ReserveTeamLeagueService';
 
 const CAREER_START_OPTIONS = [
   { year: 2025, label: '2025/26', description: 'Start od 1 lipca 2025' },
@@ -48,6 +49,10 @@ export const TeamSelection: React.FC = () => {
   const filteredClubs = useMemo(() => {
     return clubs.filter(c =>
       c.isDefaultActive &&
+      // Official reserve sides remain visible throughout the simulated league
+      // world, but a career must begin with their parent first team. The same
+      // rule is checked again in GameContext as a domain-level safeguard.
+      ReserveTeamLeagueService.canBeSelectedAsUserClub(c.id) &&
       ((selectedLeagueTier === 1 && c.leagueId === 'L_PL_1') ||
        (selectedLeagueTier === 2 && c.leagueId === 'L_PL_2') ||
        (selectedLeagueTier === 3 && c.leagueId === 'L_PL_3') ||

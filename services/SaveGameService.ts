@@ -3,7 +3,9 @@ import { FinanceService } from './FinanceService';
 import { ManagerExperienceService } from './ManagerExperienceService';
 import { PlayerFormService } from './PlayerFormService';
 
-export const SAVE_VERSION = '3.0';
+// Version 3.1 stores official user reserve squads exclusively in the global
+// players map. Version 3.0 remains loadable and is migrated by GameContext.
+export const SAVE_VERSION = '3.1';
 
 export interface SaveState {
   version: string;

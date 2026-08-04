@@ -357,7 +357,8 @@ export const SquadView: React.FC = () => {
   const { players, userTeamId, clubs, setClubs, navigateTo, lineups, updateLineup, viewPlayerDetails, currentDate,
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
-          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails, setMessages } = useGame();
+          toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails, setMessages,
+          managedReserveClubId } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -737,14 +738,29 @@ export const SquadView: React.FC = () => {
     let updatedPlayer = player;
     if (clubData) {
       const d = currentDate instanceof Date ? currentDate : new Date(currentDate);
+      const reserveClub = managedReserveClubId
+        ? clubs.find(candidate => candidate.id === managedReserveClubId)
+        : null;
       const newHistory = PlayerCareerService.reopenOrCreateEntry(
         player.history || [],
         player,
-        { clubId: userTeamId, clubName: `${clubData.name} II` },
+        {
+          clubId: managedReserveClubId ?? userTeamId,
+          clubName: reserveClub?.name ?? `${clubData.name} II`,
+        },
         d.getFullYear(),
         d.getMonth() + 1
       );
-      updatedPlayer = { ...player, history: newHistory };
+      updatedPlayer = {
+        ...player,
+        clubId: managedReserveClubId ?? userTeamId,
+        history: newHistory,
+        // Keep manual and AI internal moves on one audit/cooldown model. No
+        // market transaction is created for this registration change.
+        lastInternalSquadMoveDate: currentDate.toISOString(),
+        lastInternalSquadMoveDirection: 'TO_RESERVES',
+        firstTeamSurplusSince: null,
+      };
     }
     if (isAboveFirstTeamLevel) {
       const moralePlayer = PlayerMoraleService.ensurePlayerState(updatedPlayer);
@@ -791,6 +807,27 @@ export const SquadView: React.FC = () => {
       setMessages(prev => prev.some(mail => mail.id === protestMail.id) ? prev : [protestMail, ...prev]);
     }
     setReserves(prev => [...prev, updatedPlayer]);
+    if (managedReserveClubId) {
+      // Club.rosterIds is a lightweight index used by several AI and editor
+      // paths. Keep it synchronized with the canonical players map whenever a
+      // manager performs an internal registration change.
+      setClubs(previousClubs => previousClubs.map(club => {
+        if (club.id === userTeamId) {
+          return { ...club, rosterIds: club.rosterIds.filter(id => id !== updatedPlayer.id) };
+        }
+        if (club.id === managedReserveClubId) {
+          return { ...club, rosterIds: Array.from(new Set([...club.rosterIds, updatedPlayer.id])) };
+        }
+        return club;
+      }));
+      const linkedLineup = lineups[managedReserveClubId];
+      if (linkedLineup) {
+        updateLineup(managedReserveClubId, {
+          ...linkedLineup,
+          reserves: Array.from(new Set([...linkedLineup.reserves, updatedPlayer.id])),
+        });
+      }
+    }
   };
 
   const currentTactic = useMemo(() => {

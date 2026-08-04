@@ -31,7 +31,8 @@ const MINDSET_LABELS: Record<ContractMindsetState, string> = {
 export const ContractManagementView: React.FC = () => {
   const {
     viewedPlayerId, players, reserves, clubs, navigateTo, coaches,
-    currentDate, setPlayers, setReserves, setClubs, lineups, updateLineup, setMessages, addFinanceLog, contractManagementInitialMode
+    currentDate, setPlayers, setReserves, setClubs, lineups, updateLineup, setMessages, addFinanceLog, contractManagementInitialMode,
+    managedReserveClubId
   } = useGame();
   
   const [isProcessing, setIsProcessing] = useState(false);
@@ -71,7 +72,13 @@ export const ContractManagementView: React.FC = () => {
     if (!viewedPlayerId) return null;
     for (const clubId in players) {
       const player = players[clubId].find(p => p.id === viewedPlayerId);
-      if (player) return { player, club: clubs.find(c => c.id === clubId)!, isReserve: false };
+      if (player) return {
+        player,
+        club: clubs.find(c => c.id === clubId)!,
+        // Linked reserve players now live in the global map, so collection
+        // membership alone no longer distinguishes them from a first team.
+        isReserve: clubId === managedReserveClubId,
+      };
     }
     const reservePlayer = reserves.find(p => p.id === viewedPlayerId);
     if (reservePlayer) {
@@ -79,7 +86,7 @@ export const ContractManagementView: React.FC = () => {
       if (club) return { player: reservePlayer, club, isReserve: true };
     }
     return null;
-  }, [viewedPlayerId, players, reserves, clubs]);
+  }, [viewedPlayerId, players, reserves, clubs, managedReserveClubId]);
 
   // FIX: Dependency changed to viewedPlayerId to prevent reset on state update
   React.useEffect(() => {
@@ -579,7 +586,16 @@ export const ContractManagementView: React.FC = () => {
     if (!boardDecision || (boardDecision.status !== 'APPROVED' && boardDecision.status !== 'WARNING')) return;
 
     const previousBudget = club.budget; // Saldo PRZED zmianą
-    setClubs(prev => prev.map(c => c.id === club.id ? { ...c, budget: c.budget - penaltyAmount } : c));
+    setClubs(prev => prev.map(c => c.id === club.id
+      ? {
+          ...c,
+          budget: c.budget - penaltyAmount,
+          // Official reserve players are normal Club-owned records. Removing
+          // the roster index together with the canonical squad prevents stale
+          // editor/AI lookups after a contract termination.
+          rosterIds: c.rosterIds.filter(id => id !== viewedPlayerId),
+        }
+      : c));
     
     // 💼 Log zwolnienia zawodnika z poprzednim saldem
     addFinanceLog(
