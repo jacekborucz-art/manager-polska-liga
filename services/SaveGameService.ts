@@ -3,9 +3,9 @@ import { FinanceService } from './FinanceService';
 import { ManagerExperienceService } from './ManagerExperienceService';
 import { PlayerFormService } from './PlayerFormService';
 
-// Version 3.1 stores official user reserve squads exclusively in the global
-// players map. Version 3.0 remains loadable and is migrated by GameContext.
-export const SAVE_VERSION = '3.1';
+// Version 4.0 uses a compact player-history payload and GZIP for newly exported
+// saves. The active values needed by the simulation remain lossless.
+export const SAVE_VERSION = '4.0';
 
 export interface SaveState {
   version: string;
@@ -832,28 +832,85 @@ export function normalizeSaveState(data: SaveState): SaveState {
   };
 }
 
-export function serializeSaveState(state: SaveState, savedAt = new Date()): string {
-  return JSON.stringify({ ...state, version: SAVE_VERSION, savedAt: savedAt.toISOString() });
+const PROTECTED_MORALE_HISTORY_REASONS = new Set([
+  'Matematycznie zapewnione mistrzostwo kraju',
+  'Matematycznie zapewniony awans do wyższej ligi',
+]);
+
+/**
+ * Bieżące morale i osiem wartości playerMindset są pełnym stanem symulacji.
+ * Rozbudowane historie służą wyłącznie jako ślad diagnostyczny; wyjątkiem są
+ * dwa wpisy osiągnięć używane jako blokada ponownego naliczenia premii.
+ *
+ * WeakSet pozwala pominąć ciężkie tablice bez klonowania całego świata graczy
+ * przed JSON.stringify. To jest kluczowe dla niskiego szczytu użycia pamięci.
+ */
+function createSaveReplacer(state: SaveState): (this: any, key: string, value: any) => any {
+  const playerObjects = new WeakSet<object>();
+  const mindsetObjects = new WeakSet<object>();
+
+  Object.values(state.players ?? {}).forEach(squad => {
+    (squad ?? []).forEach(player => {
+      if (!player || typeof player !== 'object') return;
+      playerObjects.add(player);
+      if (player.playerMindset && typeof player.playerMindset === 'object') {
+        mindsetObjects.add(player.playerMindset);
+      }
+    });
+  });
+
+  return function saveReplacer(this: any, key: string, value: any): any {
+    if (mindsetObjects.has(this) && key === 'history') return undefined;
+
+    if (playerObjects.has(this) && key === 'moraleHistory') {
+      if (!Array.isArray(value)) return undefined;
+      const protectedEntries = value.filter(entry =>
+        entry && PROTECTED_MORALE_HISTORY_REASONS.has(entry.reason)
+      );
+      return protectedEntries.length > 0 ? protectedEntries : undefined;
+    }
+
+    return value;
+  };
 }
 
-export function getSaveFileName(savedAt = new Date()): string {
-  return `futbol_manager_${savedAt.toISOString().slice(0, 10)}.json`;
+export function serializeSaveState(state: SaveState, savedAt = new Date()): string {
+  const envelope = { ...state, version: SAVE_VERSION, savedAt: savedAt.toISOString() };
+  return JSON.stringify(envelope, createSaveReplacer(state));
+}
+
+export function getSaveFileName(savedAt = new Date(), compressed = true): string {
+  const extension = compressed ? '.json.gz' : '.json';
+  return `futbol_manager_${savedAt.toISOString().slice(0, 10)}${extension}`;
 }
 
 export async function exportSaveToFile(state: SaveState): Promise<SaveExportResult> {
-  const json = serializeSaveState(state);
-  const originalBytes = new TextEncoder().encode(json).byteLength;
-  const blob = new Blob([json], { type: 'application/json' });
+  let json: string | null = serializeSaveState(state);
+  const sourceBlob = new Blob([json], { type: 'application/json' });
+  const originalBytes = sourceBlob.size;
+  json = null;
+
+  // Oddajemy sterowanie przeglądarce, aby mogła zwolnić duży łańcuch JSON przed
+  // kompresją i namalować komunikat „Zapisywanie gry”.
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+
+  let blob: Blob = sourceBlob;
+  let compressed = false;
+  if (typeof CompressionStream !== 'undefined') {
+    const compressedStream = sourceBlob.stream().pipeThrough(new CompressionStream('gzip'));
+    blob = await new Response(compressedStream).blob();
+    compressed = true;
+  }
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const fileName = getSaveFileName();
+  const fileName = getSaveFileName(new Date(), compressed);
   a.download = fileName;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
   return {
-    compressed: false,
+    compressed,
     fileName,
     originalBytes,
     savedBytes: blob.size,

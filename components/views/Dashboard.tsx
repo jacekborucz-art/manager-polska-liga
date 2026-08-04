@@ -112,6 +112,12 @@ export const Dashboard: React.FC = () => {
     });
 
     try {
+      // Zapis uruchamiamy dopiero po dwóch klatkach. React może wtedy zatwierdzić
+      // ostatni dzień symulacji, a Chromium zwolnić poprzedni graf stanu graczy
+      // przed synchronicznym JSON.stringify.
+      await new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
       const result = await exportSaveToFile(getSaveState());
       showGameNotification({
         title: 'Gra zapisana',

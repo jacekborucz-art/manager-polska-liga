@@ -55,7 +55,62 @@ assert.equal(serializedFullSave.reserveMatchResults.length, 2);
 assert.equal(serializedFullSave.matchHistory[0].timeline.length, 1);
 assert.equal(serializedFullSave.aiFriendlyPairs.length, 1);
 assert.equal(serializedFullSave.aiFriendlyReports.length, 1);
-assert.equal(getSaveFileName(new Date('2030-07-01T00:00:00.000Z')), 'futbol_manager_2030-07-01.json');
+assert.equal(getSaveFileName(new Date('2030-07-01T00:00:00.000Z')), 'futbol_manager_2030-07-01.json.gz');
+assert.equal(getSaveFileName(new Date('2030-07-01T00:00:00.000Z'), false), 'futbol_manager_2030-07-01.json');
+
+const largeMoraleHistory = Array.from({ length: 40 }, (_, index) => ({
+  id: `morale-${index}`,
+  date: `2030-07-${String((index % 28) + 1).padStart(2, '0')}`,
+  delta: index % 2 === 0 ? 1 : -1,
+  reason: `Zmiana diagnostyczna ${index}`,
+  moraleAfter: 50,
+}));
+largeMoraleHistory.push({
+  id: 'championship-guard',
+  date: '2030-07-01',
+  delta: 10,
+  reason: 'Matematycznie zapewnione mistrzostwo kraju',
+  moraleAfter: 90,
+});
+const compactPlayerState = {
+  version: '3.1',
+  savedAt: '2030-07-10T12:00:00.000Z',
+  userTeamId: 'CLUB_A',
+  players: {
+    CLUB_A: [{
+      id: 'player-a',
+      clubId: 'CLUB_A',
+      morale: 77,
+      moraleHistory: largeMoraleHistory,
+      playerMindset: {
+        coachTrust: 70,
+        clubHappiness: 71,
+        squadBelonging: 72,
+        roleClarity: 73,
+        playingTimeSatisfaction: 74,
+        developmentSatisfaction: 75,
+        transferOpenness: 20,
+        conflictLevel: 10,
+        history: Array.from({ length: 30 }, (_, index) => ({
+          id: `mindset-${index}`,
+          date: '2030-07-01',
+          reason: `Mindset ${index}`,
+          deltas: { coachTrust: 1 },
+        })),
+      },
+    }],
+  },
+} as unknown as SaveState;
+const rawCompactPlayerBytes = Buffer.byteLength(JSON.stringify(compactPlayerState));
+const compactPlayerJson = serializeSaveState(compactPlayerState);
+const parsedCompactPlayerState = JSON.parse(compactPlayerJson);
+const savedPlayer = parsedCompactPlayerState.players.CLUB_A[0];
+assert.equal(parsedCompactPlayerState.version, '4.0');
+assert.equal(savedPlayer.morale, 77);
+assert.equal(savedPlayer.playerMindset.coachTrust, 70);
+assert.equal(savedPlayer.playerMindset.history, undefined);
+assert.deepEqual(savedPlayer.moraleHistory.map((entry: any) => entry.id), ['championship-guard']);
+assert.ok(Buffer.byteLength(compactPlayerJson) < rawCompactPlayerBytes * 0.25);
 
 const adaptation = {
   clubId: 'CLUB_A',

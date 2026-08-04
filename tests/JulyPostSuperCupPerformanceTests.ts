@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { gzipSync } from 'node:zlib';
 import {
   STATIC_AFRICAN_CLUBS,
   STATIC_ASIAN_CLUBS,
@@ -14,6 +15,7 @@ import { CoachService } from '../services/CoachService';
 import { EuropeanPlayerStatsService } from '../services/EuropeanPlayerStatsService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
+import { SaveState, serializeSaveState } from '../services/SaveGameService';
 import { SquadGeneratorService } from '../services/SquadGeneratorService';
 import { Club, Player } from '../types';
 
@@ -131,5 +133,22 @@ assert.deepEqual(
   'processing 15 July twice must not advance foreign league progress twice'
 );
 
-console.log(`JulyPostSuperCupPerformanceTests: ${Math.round(elapsedMs)}ms, ${clubs.length} clubs, ${playerCountAfter} players`);
+// SAVE wykonywany po 14 lipca nie może ponownie materializować historii
+// wszystkich zawodników ani tworzyć pliku o rozmiarze setek megabajtów.
+const saveStartedAt = performance.now();
+const serializedSave = serializeSaveState({
+  currentDate: julyFifteenth,
+  clubs: updatedClubs,
+  players,
+  userTeamId: USER_CLUB_ID,
+  seasonNumber: 2,
+} as unknown as SaveState, julyFifteenth);
+const saveElapsedMs = performance.now() - saveStartedAt;
+const saveSizeMb = Buffer.byteLength(serializedSave) / 1_048_576;
+const compressedSaveSizeMb = gzipSync(serializedSave).byteLength / 1_048_576;
+assert.ok(saveElapsedMs < 4_000, `15 July SAVE serialization took ${Math.round(saveElapsedMs)}ms`);
+assert.ok(saveSizeMb < 50, `15 July compact SAVE payload grew to ${saveSizeMb.toFixed(2)} MB`);
+assert.ok(compressedSaveSizeMb < 10, `15 July GZIP SAVE grew to ${compressedSaveSizeMb.toFixed(2)} MB`);
+
+console.log(`JulyPostSuperCupPerformanceTests: ${Math.round(elapsedMs)}ms, SAVE ${saveSizeMb.toFixed(2)} MB -> ${compressedSaveSizeMb.toFixed(2)} MB GZIP/${Math.round(saveElapsedMs)}ms, ${clubs.length} clubs, ${playerCountAfter} players`);
 console.log('JulyPostSuperCupPerformanceTests: OK');

@@ -653,6 +653,34 @@ const hasBrokenContractPromise = (player: Player): boolean =>
 
 const CLINCHED_CHAMPIONSHIP_MORALE_REASON = 'Matematycznie zapewnione mistrzostwo kraju';
 const CLINCHED_PROMOTION_MORALE_REASON = 'Matematycznie zapewniony awans do wyższej ligi';
+const MAX_RECENT_MORALE_HISTORY_ENTRIES = 4;
+const MAX_PROTECTED_MORALE_HISTORY_ENTRIES = 2;
+const MAX_MINDSET_HISTORY_ENTRIES = 2;
+
+type MoraleHistoryEntry = NonNullable<Player['moraleHistory']>[number];
+type MindsetHistoryEntry = NonNullable<PlayerMindsetState['history']>[number];
+
+const isProtectedMoraleHistoryEntry = (entry: MoraleHistoryEntry): boolean =>
+  entry.reason === CLINCHED_CHAMPIONSHIP_MORALE_REASON ||
+  entry.reason === CLINCHED_PROMOTION_MORALE_REASON;
+
+/**
+ * Historia jest diagnostycznym śladem, a nie źródłem bieżącego morale. Trzymamy
+ * kilka ostatnich zmian oraz dwa wpisy osiągnięć, które chronią przed ponownym
+ * naliczeniem premii po SAVE/LOAD. Dzięki temu każdy zawodnik zajmuje stałą,
+ * małą ilość pamięci także po wielu sezonach.
+ */
+const compactMoraleHistory = (entries: MoraleHistoryEntry[]): MoraleHistoryEntry[] => {
+  const recent = entries.slice(0, MAX_RECENT_MORALE_HISTORY_ENTRIES);
+  const recentIds = new Set(recent.map(entry => entry.id));
+  const protectedEntries = entries
+    .filter(entry => isProtectedMoraleHistoryEntry(entry) && !recentIds.has(entry.id))
+    .slice(0, MAX_PROTECTED_MORALE_HISTORY_ENTRIES);
+  return [...recent, ...protectedEntries];
+};
+
+const compactMindsetHistory = (entries: MindsetHistoryEntry[]): MindsetHistoryEntry[] =>
+  entries.slice(0, MAX_MINDSET_HISTORY_ENTRIES);
 
 const MORALE_BAND_FLOORS = [0, 25, 45, 60, 80, 100] as const;
 
@@ -757,7 +785,7 @@ export const PlayerMoraleService = {
       transferOpenness: PlayerMoraleService.clamp(existing.transferOpenness ?? initial.transferOpenness),
       conflictLevel: PlayerMoraleService.clamp(existing.conflictLevel ?? initial.conflictLevel),
       lastUpdatedAt: existing.lastUpdatedAt,
-      history: existing.history ?? [],
+      history: compactMindsetHistory(existing.history ?? []),
     };
   },
 
@@ -838,7 +866,7 @@ export const PlayerMoraleService = {
       playerMindset: {
         ...next,
         lastUpdatedAt: toDateKey(date),
-        history: [entry, ...(current.history ?? [])].slice(0, 16),
+        history: compactMindsetHistory([entry, ...(current.history ?? [])]),
       },
     };
   },
@@ -848,7 +876,7 @@ export const PlayerMoraleService = {
     form: typeof player.form === 'number' ? player.form : PlayerFormService.calculate(player).score,
     morale: player.morale ?? PlayerMoraleService.getInitialMorale(player),
     moralePersonality: player.moralePersonality ?? PlayerMoraleService.getInitialPersonality(player),
-    moraleHistory: player.moraleHistory ?? [],
+    moraleHistory: compactMoraleHistory(player.moraleHistory ?? []),
     playerMindset: PlayerMoraleService.normalizeMindset(player),
     lastIndividualTalkDate: player.lastIndividualTalkDate ?? null,
     promisedMinutesUntil: player.promisedMinutesUntil ?? null,
@@ -1327,7 +1355,7 @@ export const PlayerMoraleService = {
       ...withMorale,
       playerMindset: withUpdatedMindset.playerMindset,
       morale: nextMorale,
-      moraleHistory: [entry, ...(withMorale.moraleHistory ?? [])].slice(0, 12),
+      moraleHistory: compactMoraleHistory([entry, ...(withMorale.moraleHistory ?? [])]),
     });
   },
 
