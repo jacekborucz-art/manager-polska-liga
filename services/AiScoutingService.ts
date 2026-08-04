@@ -4,6 +4,15 @@ import { FinanceService } from './FinanceService';
 import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
 /**
+ * Squad arrays are immutable snapshots throughout the transfer-interest pass.
+ * Several candidate channels ask for the same average thousands of times, so
+ * recalculating it with Array.reduce for every player multiplied the workload
+ * by the buyer squad size. A WeakMap keeps the value only as long as that exact
+ * array is alive and therefore cannot retain an old SAVE or season in memory.
+ */
+const squadAverageCache = new WeakMap<Player[], number>();
+
+/**
  * Raport zwiadowczy AI — co trener AI MYŚLI o drużynie gracza przed meczem.
  * Dokładność zależy od atrybutu `experience` trenera (Option B: progresywny z podłogą).
  *
@@ -160,17 +169,70 @@ export const AiScoutingService = {
     const allPlayers: Player[] = Object.values(playersMap).flat();
     if (allPlayers.length === 0) return playersMap;
 
+    /**
+     * PERFORMANCE SAFETY (July season-start crash):
+     *
+     * The world database currently contains roughly 650 clubs and more than
+     * 20,000 players. The previous implementation called allClubs.find(...)
+     * for almost every player examined by almost every buying club. That turns
+     * a monthly scouting refresh into billions of id comparisons and creates
+     * enough short-lived arrays to make Chromium terminate the tab with an
+     * Out of memory message on 2 July.
+     *
+     * Build all read-only indexes once per monthly pass. Candidate helpers use
+     * O(1) club lookup and receive only the broad pool relevant to their channel
+     * (position, young talent, L_PL_4 or expiring contract). Every original
+     * eligibility check remains inside the helper, so this changes execution
+     * cost without relaxing transfer, quality, budget or reserve-team rules.
+     */
+    const clubById = new Map(clubs.map(club => [club.id, club]));
+    const tier4ClubIds = new Set(clubs.filter(club => club.leagueId === 'L_PL_4').map(club => club.id));
+    const playersByPosition = new Map<PlayerPosition, Player[]>([
+      [PlayerPosition.GK, []],
+      [PlayerPosition.DEF, []],
+      [PlayerPosition.MID, []],
+      [PlayerPosition.FWD, []],
+    ]);
+    const youngTalentPool: Player[] = [];
+    const tier4CandidatePool: Player[] = [];
+    const contractOpportunityPool: Player[] = [];
+
+    for (const player of allPlayers) {
+      playersByPosition.get(player.position)?.push(player);
+      if (player.age >= 17 && player.age <= 21) youngTalentPool.push(player);
+      if (tier4ClubIds.has(player.clubId || '')) tier4CandidatePool.push(player);
+
+      if (player.clubId && player.clubId !== 'FREE_AGENTS') {
+        const daysToExpiry = Math.floor(
+          (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
+        );
+        // Preserve the helper's historical handling of malformed legacy dates:
+        // NaN passed its original range guards and is revalidated later.
+        if (Number.isNaN(daysToExpiry) || (daysToExpiry > 0 && daysToExpiry <= 365)) {
+          contractOpportunityPool.push(player);
+        }
+      }
+    }
+
     // --- KROK 2: Wyczyść poprzednie zainteresowania we wszystkich zawodnikach ---
     // Budujemy nową mapę z pustymi listami zainteresowań,
     // żeby nie kumulować przestarzałych rekordów z poprzedniego miesiąca
     const updatedMap: Record<string, Player[]> = {};
     for (const clubId in playersMap) {
-      updatedMap[clubId] = playersMap[clubId].map(p => ({ ...p, interestedClubs: [] }));
+      /**
+       * Do not clone every Player in the world merely to represent an empty
+       * optional list. Consumers already treat undefined and [] identically.
+       * Only players carrying stale interests need a new object here; selected
+       * candidates are cloned later when their new club id is appended.
+       */
+      updatedMap[clubId] = playersMap[clubId].map(player => (
+        player.interestedClubs && player.interestedClubs.length > 0
+          ? { ...player, interestedClubs: [] }
+          : player
+      ));
     }
 
     // --- KROK 3: Dla każdego AI-klubu wygeneruj listę obserwowanych zawodników ---
-    const tier4ClubIds = new Set(clubs.filter(c => c.leagueId === 'L_PL_4').map(c => c.id));
-
     for (const club of clubs) {
       // Pomijamy drużynę gracza — gracz sam zarządza swoimi transferami
       if (club.id === userTeamId) continue;
@@ -201,8 +263,8 @@ export const AiScoutingService = {
           need.urgency,
           club,
           squad,
-          allPlayers,
-          clubs,
+          playersByPosition.get(need.position) ?? [],
+          clubById,
           coachSeed,
           currentDate
         );
@@ -212,26 +274,26 @@ export const AiScoutingService = {
       // E) Jeśli klub nie ma pilnych potrzeb ale ma budżet → "okazjonalne scouting"
       //    Symuluje sytuację gdy skaut natknął się na ciekawego zawodnika przypadkowo
       if (needs.length === 0 && club.budget > 300_000) {
-        const opportunistic = AiScoutingService._opportunisticScouting(club, squad, allPlayers, coachSeed, clubs);
+        const opportunistic = AiScoutingService._opportunisticScouting(club, squad, allPlayers, coachSeed, clubById);
         candidates.push(...opportunistic);
       }
 
       // F) Scouting młodych talentów — zawsze aktywny, niezależnie od pilności potrzeb.
       //    Klub może wziąć na oko perspektywicznego gracza z gorszego klubu,
       //    nawet jeśli aktualna kadra jest kompletna.
-      const youngTalents = AiScoutingService._youngTalentScouting(club, squad, allPlayers, clubs, coachSeed, currentDate);
+      const youngTalents = AiScoutingService._youngTalentScouting(club, squad, youngTalentPool, clubById, coachSeed, currentDate);
       candidates.push(...youngTalents);
 
       // G) Scouting gemów z tier 4 — zawodnik zbyt dobry na swoją ligę.
       //    Losowość: nie każdy klub odkryje go w danym miesiącu.
-      const tier4Gems = AiScoutingService._tier4GemScouting(club, squad, allPlayers, tier4ClubIds, clubs, coachSeed, currentDate);
+      const tier4Gems = AiScoutingService._tier4GemScouting(club, squad, tier4CandidatePool, tier4ClubIds, clubById, coachSeed, currentDate);
       candidates.push(...tier4Gems);
 
       const contractOpportunities = AiScoutingService._contractOpportunityScouting(
         club,
         squad,
-        allPlayers,
-        clubs,
+        contractOpportunityPool,
+        clubById,
         coachSeed,
         currentDate,
         needs
@@ -295,7 +357,12 @@ export const AiScoutingService = {
    */
   _getSquadAverageOverall: (squad: Player[]): number => {
     if (squad.length === 0) return 0;
-    return squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+    const cachedAverage = squadAverageCache.get(squad);
+    if (cachedAverage !== undefined) return cachedAverage;
+
+    const average = squad.reduce((sum, player) => sum + player.overallRating, 0) / squad.length;
+    squadAverageCache.set(squad, average);
+    return average;
   },
 
   _meetsSquadQualityFloor: (
@@ -404,7 +471,7 @@ export const AiScoutingService = {
     club: Club,
     buyerSquad: Player[],
     allPlayers: Player[],
-    allClubs: Club[],
+    clubById: ReadonlyMap<string, Club>,
     coachSeed: number,
     currentDate: Date
   ): { player: Player; score: number }[] => {
@@ -432,7 +499,7 @@ export const AiScoutingService = {
       if (p.overallRating < minOvr || p.overallRating > maxOvr) return false;
       // W zasięgu finansowym (wartość rynkowa lub wynagrodzenie * 3 jako proxy)
       const estimatedCost = p.marketValue || p.annualSalary * 3;
-      const sellerClub = allClubs.find(c => c.id === p.clubId);
+      const sellerClub = clubById.get(p.clubId || '');
       const affordabilityMultiplier = AiScoutingService._getTransferListAffordabilityMultiplier(
         p,
         club,
@@ -455,7 +522,7 @@ export const AiScoutingService = {
     // Oceń każdego kandydata
     return candidates.map(player => {
       let score = 0;
-      const sellerClub = allClubs.find(c => c.id === player.clubId);
+      const sellerClub = clubById.get(player.clubId || '');
 
       // 1. Dopasowanie OVR (max 40 pkt)
       const ovrDiff = Math.abs(player.overallRating - idealOvr);
@@ -525,7 +592,7 @@ export const AiScoutingService = {
     buyerSquad: Player[],
     allPlayers: Player[],
     coachSeed: number,
-    allClubs: Club[]
+    clubById: ReadonlyMap<string, Club>
   ): { player: Player; score: number }[] => {
 
     const idealOvr = 30 + club.reputation * 4.5;
@@ -542,7 +609,7 @@ export const AiScoutingService = {
       // Filtr reputacyjny: nie "przypadkowo odkrywamy" zawodników z klubów o znacznie wyższej reputacji.
       // 2% szansy na pominięcie filtru — rzadki "transfer życia".
       if (p.clubId !== 'FREE_AGENTS' && Math.random() >= 0.02) {
-        const playerClub = allClubs.find(c => c.id === p.clubId);
+        const playerClub = clubById.get(p.clubId || '');
         if (playerClub && playerClub.reputation > club.reputation + 4) return false;
       }
       return true;
@@ -630,7 +697,7 @@ export const AiScoutingService = {
     club: Club,
     buyerSquad: Player[],
     allPlayers: Player[],
-    allClubs: Club[],
+    clubById: ReadonlyMap<string, Club>,
     coachSeed: number,
     currentDate: Date
   ): { player: Player; score: number }[] => {
@@ -648,7 +715,7 @@ export const AiScoutingService = {
       // OVR musi być sensowny dla obserwującego klubu (nie poniżej progu)
       if (p.overallRating < idealOvr - 10) return false;
       // Kluczowy warunek: gracz jest "za dobry" jak na swój klub
-      const playerClub = allClubs.find(c => c.id === p.clubId);
+      const playerClub = clubById.get(p.clubId || '');
       // Wolny agent kwalifikuje się zawsze (nie ma klubu)
       if (!playerClub) return true;
       // Obserwujący musi być wyraźnie silniejszy (min. 2 pkt reputacji wyżej)
@@ -707,7 +774,7 @@ export const AiScoutingService = {
     buyerSquad: Player[],
     allPlayers: Player[],
     tier4ClubIds: Set<string>,
-    allClubs: Club[],
+    clubById: ReadonlyMap<string, Club>,
     coachSeed: number,
     currentDate: Date
   ): { player: Player; score: number }[] => {
@@ -721,7 +788,7 @@ export const AiScoutingService = {
       if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       // Wyklucz zawodników z aktywnym zakazem ofert (świeżo transferowani)
       if (p.transferOfferBanUntil && currentDate < new Date(p.transferOfferBanUntil)) return false;
-      const playerClub = allClubs.find(c => c.id === p.clubId);
+      const playerClub = clubById.get(p.clubId || '');
       if (!playerClub) return false;
       const clubIdealOvr = 30 + playerClub.reputation * 4.5;
       if (p.overallRating < clubIdealOvr + 12) return false;
@@ -741,7 +808,8 @@ export const AiScoutingService = {
       const discoverySeed = coachSeed + AiScoutingService._hashString(player.id) + monthKey;
       if (AiScoutingService._seededRandom(discoverySeed) > discoveryChance) continue;
 
-      const playerClub = allClubs.find(c => c.id === player.clubId)!;
+      const playerClub = clubById.get(player.clubId || '');
+      if (!playerClub) continue;
       const clubIdealOvr = 30 + playerClub.reputation * 4.5;
 
       let score = 30;
@@ -773,7 +841,7 @@ export const AiScoutingService = {
     buyingClub: Club,
     buyerSquad: Player[],
     allPlayers: Player[],
-    allClubs: Club[],
+    clubById: ReadonlyMap<string, Club>,
     coachSeed: number,
     currentDate: Date,
     needs: { position: PlayerPosition; urgency: number }[]
@@ -786,6 +854,23 @@ export const AiScoutingService = {
     const monthKey = currentDate.getFullYear() * 100 + currentDate.getMonth() + 1;
     const hasSquadRoom = buyerSquad.length < 30;
 
+    /**
+     * Position averages depend only on the buyer squad. Computing filter() and
+     * reduce() inside the world-player loop created another hidden multiplier.
+     * Precomputing four values makes every contract candidate check constant
+     * time while preserving the exact comparison thresholds.
+     */
+    const positionAverages = new Map<PlayerPosition, number>();
+    for (const position of [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD]) {
+      const positionPlayers = buyerSquad.filter(player => player.position === position);
+      positionAverages.set(
+        position,
+        positionPlayers.length > 0
+          ? AiScoutingService._getSquadAverageOverall(positionPlayers)
+          : squadAverage
+      );
+    }
+
     if (!hasSquadRoom && needMap.size === 0) return [];
 
     const candidates: { player: Player; score: number }[] = [];
@@ -796,7 +881,7 @@ export const AiScoutingService = {
       if (player.transferPendingClubId) continue;
       if (player.transferOfferBanUntil && currentDate < new Date(player.transferOfferBanUntil)) continue;
 
-      const sellerClub = allClubs.find(club => club.id === player.clubId);
+      const sellerClub = clubById.get(player.clubId || '');
       if (!sellerClub) continue;
 
       const daysToExpiry = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
@@ -804,10 +889,7 @@ export const AiScoutingService = {
 
       if (player.health.status === HealthStatus.INJURED && (player.health.injury?.daysRemaining || 0) > 60) continue;
 
-      const samePosition = buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
-      const positionAverage = samePosition.length > 0
-        ? AiScoutingService._getSquadAverageOverall(samePosition)
-        : squadAverage;
+      const positionAverage = positionAverages.get(player.position) ?? squadAverage;
       const positionalNeed = needMap.get(player.position) || 0;
       const clearUpgrade = player.overallRating >= positionAverage + 2;
       const usefulDepth = hasSquadRoom && player.overallRating >= squadAverage;

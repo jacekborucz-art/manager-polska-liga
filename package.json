@@ -14,6 +14,7 @@
     "test:euro-qualifiers-schedule": "esbuild tests/EuroQualifiersScheduleTests.ts --bundle --platform=node --format=cjs --outfile=tmp/euro-qualifiers-schedule-tests.cjs && node tmp/euro-qualifiers-schedule-tests.cjs",
     "test:market-balance": "esbuild tests/MarketValueBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/market-balance-tests.cjs && node tmp/market-balance-tests.cjs",
     "test:ai-opponent-analysis": "esbuild tests/AiOpponentAnalysisTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-opponent-analysis-tests.cjs && node tmp/ai-opponent-analysis-tests.cjs",
+    "test:ai-scouting-performance": "esbuild tests/AiScoutingPerformanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-scouting-performance-tests.cjs && node tmp/ai-scouting-performance-tests.cjs",
     "test:club-adaptation": "esbuild tests/PlayerClubAdaptationTests.ts --bundle --platform=node --format=cjs --outfile=tmp/player-club-adaptation-tests.cjs && node tmp/player-club-adaptation-tests.cjs",
     "test:polish-league-seasons": "esbuild tests/PolishLeagueSeasonTests.ts --bundle --platform=node --format=cjs --outfile=tmp/polish-league-season-tests.cjs && node tmp/polish-league-season-tests.cjs",
     "test:reserve-squad-movement": "esbuild tests/ReserveTeamSquadMovementTests.ts --bundle --platform=node --format=cjs --outfile=tmp/reserve-squad-movement-tests.cjs && node tmp/reserve-squad-movement-tests.cjs",

@@ -10354,7 +10354,21 @@ Asystent`,
       const youthIntake = AiContractService.generateSeasonYouthIntakeForAiClubs(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId);
       postReviewClubs = youthIntake.updatedClubs;
       postReviewPlayers = youthIntake.updatedPlayers;
-      postReviewPlayers = AiScoutingService.updateTransferInterests(postReviewClubs, postReviewPlayers, dateToProcess, userTeamId, sessionSeed);
+      /**
+       * Do not run a second full-world transfer-interest refresh here.
+       * BackgroundMatchProcessor already performs the monthly refresh while
+       * processing 1 July, immediately before this season-start review. The
+       * duplicate 2 July call scanned roughly 20,000 players for 650 clubs for
+       * a second consecutive day, retained another large graph of temporary
+       * candidate arrays and caused Chromium to terminate the game tab with
+       * Out of memory before React could report a JavaScript exception.
+       *
+       * The 2 July block still updates contracts, squad needs, youth intake and
+       * transfer-list decisions. Those changes are consumed by normal daily AI
+       * recruitment, while transfer interests remain the valid list generated
+       * on 1 July. January keeps its separate refresh on 12 January because it
+       * opens a different transfer window and is not adjacent to a duplicate.
+       */
       const seasonDecision = AiTransferDecisionService.processSeasonStart(postReviewClubs, postReviewPlayers, updatedCoachesJuly, dateToProcess, userTeamId);
       postReviewClubs = seasonDecision.updatedClubs;
       postReviewPlayers = AiContractService.enforceTransferListLimits(seasonDecision.updatedPlayers, dateToProcess, userTeamId);
