@@ -14,6 +14,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { pickNationalityForRegion } from './NationalityService';
 import { calcReputacja } from './SquadGeneratorService';
 import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
+import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
 /**
  * Sprawdza czy aktualnie trwa okno transferowe.
@@ -1017,6 +1018,11 @@ const _buildInterestedPlayerTargets = (
 ): Player[] => {
   return pool.filter(p => {
     if (p.loan) return false;
+    // Apply the club-structure rule before any quality, reputation or budget
+    // calculations. This prevents a first team from treating a player from
+    // its own reserves as an external market target and keeps the scouting
+    // cache free of an offer that can never be legally completed.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(club.id, p.clubId || 'FREE_AGENTS')) return false;
     if (_hasActiveTransferLockout(p, currentDate)) return false;
     if (_hasActiveTransferOfferBan(p, currentDate)) return false;
     if (p.isOnTransferList || p.transferPendingClubId) return false;
@@ -2530,6 +2536,7 @@ processAiRecruitment: (
 
     for (const club of updatedClubs) {
       if (club.id === userTeamId) continue;
+      if (!ReserveTeamLeagueService.canParticipateAsTransferBuyer(club.id)) continue;
       const finStagger = _isTransferWindowOpen(currentDate) ? 5 : 14;
       if ((dayOfYear + hashClubFin(club.id)) % finStagger !== 0) continue;
 
@@ -2645,6 +2652,7 @@ processAiRecruitment: (
       item => item.id
     )) {
       if (club.id === userTeamId) continue;
+      if (!ReserveTeamLeagueService.canParticipateAsTransferBuyer(club.id)) continue;
 
       // Stagger: w oknie co 2 dni (pilność), poza oknem co 12 dni (przyszłe okno)
       const stagger = windowOpen ? 2 : 12;
@@ -2671,6 +2679,11 @@ processAiRecruitment: (
       const candidates = available.filter(p => {
         if (p.loan) return false;
         if (p.clubId === club.id) return false;
+        // Transfer-listed reserve players remain available to unrelated clubs,
+        // but the parent first team must not negotiate a paid transfer for its
+        // own player. Filtering here avoids unnecessary seller negotiations
+        // and prevents any temporary budget reservation.
+        if (!ReserveTeamLeagueService.canRecruitPlayerFrom(club.id, p.clubId || 'FREE_AGENTS')) return false;
         if (_hasActiveTransferLockout(p, currentDate)) return false;
         if (_hasActiveTransferOfferBan(p, currentDate)) return false;
         const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
@@ -2962,6 +2975,7 @@ processAiRecruitment: (
       item => item.id
     )) {
       if (club.id === userTeamId) continue;
+      if (!ReserveTeamLeagueService.canParticipateAsTransferBuyer(club.id)) continue;
       const transferSpendingPower = _getAiTransferSpendingPower(club);
       if (transferSpendingPower <= 500_000) continue;
 
@@ -3230,8 +3244,13 @@ processAiRecruitment: (
         if (daysLeft <= 0 || daysLeft > PRE_CONTRACT_PRIORITY_DAYS) continue;
         const isEliteWatchlistOpportunity = _isElitePreContractWatchlistPlayer(player, currentDate);
 
+        // Pre-contracts are also market transactions, even when the fee is
+        // zero. Use the same source-specific rule so an expiring contract in
+        // the reserve team cannot cause its parent first team to create a
+        // market agreement instead of a future internal squad movement.
         const candidateBuyers = clubs
           .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
+          .filter(buyer => ReserveTeamLeagueService.canRecruitPlayerFrom(buyer.id, sellerClub.id))
           .filter(buyer => {
             // PERF (2026-07-30): stagger przeniesiony na sam początek callbacku — dokładnie
             // ten sam warunek co wcześniej (dayOfYear + hash(buyer_player), modulo 3/9),
@@ -3401,9 +3420,19 @@ processAiRecruitment: (
           continue;
         }
 
-        // Spójna z logiką negocjacji: bonus zależy od kierunku ruchu reputacyjnego
-        const prestigeBlockReason = PrestigeTransferGuardService.getBlockedReason(player, buyerClub);
-        if (prestigeBlockReason) {
+        // This is the defensive execution layer for AI transfers. Candidate
+        // filters normally stop the invalid agreement much earlier, but an old
+        // SAVE may already contain a pending transfer created before the rule
+        // existed. In that case the agreement is cancelled and the previously
+        // charged fee is refunded by the block below.
+        const clubStructureBlockReason = ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClubId, sellerClubId)
+          ? null
+          : 'Drużyny rezerw nie uczestniczą w zakupach, a ruchy między pierwszą drużyną i jej rezerwami nie są transferami rynkowymi.';
+        // Club-structure restrictions take priority over the normal prestige
+        // rule because an internal parent/reserve transfer is invalid regardless
+        // of the clubs' reputations or the player's willingness to move.
+        const transferBlockReason = clubStructureBlockReason ?? PrestigeTransferGuardService.getBlockedReason(player, buyerClub);
+        if (transferBlockReason) {
           const refundFee = player.transferPendingFee ?? 0;
           if (refundFee > 0) {
             updatedClubs = updatedClubs.map(c => {
@@ -3442,7 +3471,7 @@ processAiRecruitment: (
             fromClub: sellerClub.name,
             toClub: buyerClub.name,
             status: 'PLAYER_REJECTED',
-            reason: prestigeBlockReason,
+            reason: transferBlockReason,
             fee: refundFee,
             playerId: player.id,
             fromClubId: sellerClub.id,

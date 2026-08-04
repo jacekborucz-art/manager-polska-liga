@@ -9,6 +9,7 @@ import {
   Region,
 } from '../types';
 import { FinanceService } from './FinanceService';
+import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
 const TIMING_LABELS: Record<TransferTiming, string> = {
   [TransferTiming.IMMEDIATE]: 'Natychmiast',
@@ -237,6 +238,12 @@ export const IncomingTransferService = {
     currentDate: Date | string,
     buyerPlayers?: Player[]
   ): { shouldGenerate: boolean; category: 'LOWER_LEAGUE' | 'SAME_LEAGUE' | 'FOREIGN_LOWER_REP' | null } {
+    // Validate the relationship between buyer and seller before calculating
+    // squad need or generating loan terms. This blocks both reserve-team buyers
+    // and a parent first team attempting to loan from its own reserve team.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+      return { shouldGenerate: false, category: null };
+    }
     if (!player.isAvailableForLoan || player.loan || player.transferPendingClubId) {
       return { shouldGenerate: false, category: null };
     }
@@ -628,6 +635,12 @@ export const IncomingTransferService = {
     sellerPlayers?: Player[],
     buyerPlayers?: Player[]
   ): { shouldGenerate: boolean; source: 'SHORTLIST' | 'SPONTANEOUS' | null } {
+    // Permanent incoming offers use the same central rule as AI-to-AI transfers
+    // and loans. Keeping the check at the generator boundary guarantees that an
+    // invalid parent/reserve offer never reaches the user's inbox.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+      return { shouldGenerate: false, source: null };
+    }
     const hasActiveOffer = activeIncomingOffers.some(
       o =>
         o.playerId === player.id &&

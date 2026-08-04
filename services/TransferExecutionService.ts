@@ -4,6 +4,7 @@ import { PlayerCareerService } from './PlayerCareerService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerReputationGrowthService } from './PlayerReputationGrowthService';
 import { PlayerClubAdaptationService } from './PlayerClubAdaptationService';
+import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
 interface TransferExecutionResult {
   updatedClubs: Club[];
@@ -38,6 +39,15 @@ export const TransferExecutionService = {
     const player = sellerSquad.find(p => p.id === offer.playerId);
 
     if (!buyerClub || !sellerClub || !player || !offer.salary || offer.bonus === undefined || !offer.years) {
+      return { updatedClubs: clubs, updatedPlayers: playersMap };
+    }
+
+    // Final defensive gate: every normal generator should already have rejected
+    // this relationship, but execution can also be reached from an older SAVE,
+    // a manually created offer or a future transfer path. Returning the original
+    // state prevents money and the player from moving between a parent first
+    // team and its own reserve team through the market system.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
       return { updatedClubs: clubs, updatedPlayers: playersMap };
     }
 

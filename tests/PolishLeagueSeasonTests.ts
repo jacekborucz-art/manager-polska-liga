@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import { STATIC_CLUBS } from '../constants';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
+import { ReserveTeamFinanceService } from '../services/ReserveTeamFinanceService';
 import { PolishCupDrawService } from '../services/PolishCupDrawService';
 
 const clubs2025 = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, 2025);
@@ -88,6 +89,131 @@ assert.equal(
   ReserveTeamLeagueService.canEnterLeague('PL_LKS_II_LODZ', 'L_PL_1', clubs2025),
   false,
   'rezerwy nigdy nie mogą awansować do Ekstraklasy'
+);
+
+assert.equal(
+  ReserveTeamLeagueService.canParticipateAsTransferBuyer('PL_LEGIA_WARSZAWA_II'),
+  false,
+  'rezerwy nie mogą kupować zawodników'
+);
+
+// Transfer-policy matrix for reserve teams and their parent clubs:
+// - a reserve team cannot buy from another club,
+// - it can still sign a free agent,
+// - an ordinary first-team transfer remains valid,
+// - a parent first team cannot buy or loan from its own reserves,
+// - an unrelated club may still purchase a player owned by the reserves.
+// These assertions protect the asymmetric rule from being accidentally reduced
+// to a blanket ban on every outgoing transfer involving a reserve team.
+assert.equal(
+  ReserveTeamLeagueService.canRecruitPlayerFrom('PL_LEGIA_WARSZAWA_II', 'PL_LECH_POZNAN'),
+  false,
+  'rezerwy nie mogą pozyskiwać zawodników należących do innych klubów'
+);
+assert.equal(
+  ReserveTeamLeagueService.canRecruitPlayerFrom('PL_LEGIA_WARSZAWA_II', 'FREE_AGENTS'),
+  true,
+  'rezerwy mogą podpisywać wolnych agentów'
+);
+assert.equal(
+  ReserveTeamLeagueService.canRecruitPlayerFrom('PL_LEGIA_WARSZAWA', 'PL_LECH_POZNAN'),
+  true,
+  'zakaz nie może blokować rynku transferowego pierwszym drużynom'
+);
+assert.equal(
+  ReserveTeamLeagueService.canRecruitPlayerFrom('PL_LEGIA_WARSZAWA', 'PL_LEGIA_WARSZAWA_II'),
+  false,
+  'pierwsza drużyna nie może kupować ani wypożyczać zawodników ze swoich rezerw'
+);
+assert.equal(
+  ReserveTeamLeagueService.canRecruitPlayerFrom('PL_LECH_POZNAN', 'PL_LEGIA_WARSZAWA_II'),
+  true,
+  'rezerwy nadal mogą sprzedawać swoich zawodników innym klubom'
+);
+
+const financeParent = {
+  ...clubs2025.find(club => club.id === 'PL_LEGIA_WARSZAWA')!,
+  budget: 10_000_000,
+  financeHistory: [],
+};
+const financeReserve = {
+  ...clubs2025.find(club => club.id === 'PL_LEGIA_WARSZAWA_II')!,
+  budget: 5_000_000,
+  transferBudget: 2_000_000,
+  financeHistory: [],
+  reserveTeamSeasonGrant: undefined,
+  reserveTeamSeasonGrantRate: undefined,
+  reserveTeamSeasonGrantYear: undefined,
+  reserveTeamEmergencySupportYear: undefined,
+};
+const clubsAfterReserveFunding = ReserveTeamFinanceService.allocateSeasonFunding(
+  [financeParent, financeReserve],
+  {
+    seasonStartYear: 2025,
+    sessionSeed: 12345,
+    date: new Date(2025, 6, 1),
+    resetReserveBalances: true,
+  }
+);
+const fundedParent = clubsAfterReserveFunding.find(club => club.id === financeParent.id)!;
+const fundedReserve = clubsAfterReserveFunding.find(club => club.id === financeReserve.id)!;
+assert.ok(
+  fundedReserve.budget >= 200_000 && fundedReserve.budget <= 500_000,
+  'rezerwy muszą otrzymać losowe 2–5% budżetu pierwszej drużyny'
+);
+assert.equal(
+  fundedParent.budget + fundedReserve.budget,
+  financeParent.budget,
+  'dotacja dla rezerw musi zostać odjęta od budżetu pierwszej drużyny'
+);
+assert.equal(fundedReserve.transferBudget, 0, 'rezerwy nie mogą otrzymać budżetu transferowego');
+assert.ok(
+  fundedParent.financeHistory?.some(log =>
+    log.type === 'EXPENSE' &&
+    log.amount === -fundedReserve.budget &&
+    log.description.includes('Finansowanie drużyny rezerw')
+  ),
+  'raport finansowy pierwszej drużyny musi pokazać wydatek na rezerwy'
+);
+const clubsAfterLoadFundingCheck = ReserveTeamFinanceService.ensureSeasonFunding(
+  clubsAfterReserveFunding,
+  {
+    seasonStartYear: 2025,
+    sessionSeed: 12345,
+    date: new Date(2025, 10, 1),
+    resetReserveBalances: true,
+  }
+);
+assert.equal(
+  clubsAfterLoadFundingCheck.find(club => club.id === financeParent.id)!.budget,
+  fundedParent.budget,
+  'LOAD nie może ponownie pobierać dotacji z budżetu pierwszej drużyny'
+);
+
+const reserveWithLowBalance = clubsAfterReserveFunding.map(club =>
+  club.id === fundedReserve.id ? { ...club, budget: 0 } : club
+);
+const clubsAfterEmergencySupport = ReserveTeamFinanceService.applyEmergencySupport(
+  reserveWithLowBalance,
+  new Date(2025, 9, 15)
+);
+const emergencyParent = clubsAfterEmergencySupport.find(club => club.id === financeParent.id)!;
+const emergencyReserve = clubsAfterEmergencySupport.find(club => club.id === financeReserve.id)!;
+assert.ok(emergencyReserve.budget > 0, 'znaczny spadek salda rezerw musi uruchomić wsparcie pierwszej drużyny');
+assert.ok(
+  emergencyParent.financeHistory?.some(log =>
+    log.type === 'EXPENSE' && log.description.includes('Awaryjne wsparcie finansowe drużyny rezerw')
+  ),
+  'awaryjne wsparcie rezerw musi znaleźć się w wydatkach pierwszej drużyny'
+);
+const clubsAfterRepeatedEmergencyCheck = ReserveTeamFinanceService.applyEmergencySupport(
+  clubsAfterEmergencySupport,
+  new Date(2025, 9, 16)
+);
+assert.equal(
+  clubsAfterRepeatedEmergencyCheck.find(club => club.id === financeParent.id)!.budget,
+  emergencyParent.budget,
+  'wsparcie awaryjne może zostać przyznane tylko raz w sezonie'
 );
 assert.equal(
   ReserveTeamLeagueService.canEnterLeague('PL_SLASK_WROCLAW_II', 'L_PL_2', clubs2025),

@@ -1,6 +1,7 @@
 import { Club, Player, Lineup, HealthStatus, InjurySeverity, PlayerPosition } from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { FinanceService } from './FinanceService';
+import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
 /**
  * Raport zwiadowczy AI — co trener AI MYŚLI o drużynie gracza przed meczem.
@@ -173,6 +174,10 @@ export const AiScoutingService = {
     for (const club of clubs) {
       // Pomijamy drużynę gracza — gracz sam zarządza swoimi transferami
       if (club.id === userTeamId) continue;
+      // Reserve teams may inspect free agents through the recruitment process,
+      // but they must never create market interest in players owned by a club.
+      // Skipping them here also prevents misleading "interested clubs" entries.
+      if (!ReserveTeamLeagueService.canParticipateAsTransferBuyer(club.id)) continue;
 
       const squad = updatedMap[club.id] || [];
 
@@ -238,6 +243,11 @@ export const AiScoutingService = {
       const topCandidates = candidates
         .sort((a, b) => b.score - a.score)
         .filter(c => {
+          // Apply the source-specific parent/reserve restriction before the
+          // maximum-interest limit is consumed. Otherwise an illegal internal
+          // target could occupy one of the club's limited scouting slots and
+          // reduce the number of valid external players being observed.
+          if (!ReserveTeamLeagueService.canRecruitPlayerFrom(club.id, c.player.clubId || 'FREE_AGENTS')) return false;
           if (seen.has(c.player.id)) return false;
           seen.add(c.player.id);
           return true;

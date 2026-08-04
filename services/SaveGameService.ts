@@ -612,6 +612,18 @@ export function normalizeSaveState(data: SaveState): SaveState {
       reserveBudget: Number.isFinite(club.reserveBudget)
         ? Math.max(0, club.reserveBudget)
         : FinanceService.calculateInitialReserveBudget(club.budget || 0, club.reputation || 1),
+      reserveTeamSeasonGrant: Number.isFinite(club.reserveTeamSeasonGrant)
+        ? Math.max(0, club.reserveTeamSeasonGrant)
+        : undefined,
+      reserveTeamSeasonGrantRate: Number.isFinite(club.reserveTeamSeasonGrantRate)
+        ? Math.max(0, club.reserveTeamSeasonGrantRate)
+        : undefined,
+      reserveTeamSeasonGrantYear: Number.isFinite(club.reserveTeamSeasonGrantYear)
+        ? club.reserveTeamSeasonGrantYear
+        : undefined,
+      reserveTeamEmergencySupportYear: Number.isFinite(club.reserveTeamEmergencySupportYear)
+        ? club.reserveTeamEmergencySupportYear
+        : undefined,
       boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
       boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
       boardBudgetMonitorState: club.boardBudgetMonitorState ?? 'NORMAL',

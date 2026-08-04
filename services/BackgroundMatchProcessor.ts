@@ -19,6 +19,7 @@ import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerFormService } from './PlayerFormService';
 import { ThirdLeagueBackgroundService } from './ThirdLeagueBackgroundService';
 import { SquadGeneratorService } from './SquadGeneratorService';
+import { ReserveTeamFinanceService } from './ReserveTeamFinanceService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
   const lastName = player.lastName.trim();
@@ -574,6 +575,7 @@ if (todayFixtures.length === 0) {
         scoutedPlayers = weakReviewWinter.updatedPlayers;
       }
       scoutedPlayers = AiContractService.enforceTransferListLimits(scoutedPlayers, currentDate, userTeamId);
+      scoutedClubs = ReserveTeamFinanceService.applyEmergencySupport(scoutedClubs, currentDate);
 
       return {
         updatedFixtures: fixtures,
@@ -1123,6 +1125,7 @@ if (todayFixtures.length === 0) {
       currentPlayers = weakReviewWinterMatch.updatedPlayers;
     }
     currentPlayers = AiContractService.enforceTransferListLimits(currentPlayers, currentDate, userTeamId);
+    currentClubs = ReserveTeamFinanceService.applyEmergencySupport(currentClubs, currentDate);
 
     return {
       updatedFixtures: currentFixtures,

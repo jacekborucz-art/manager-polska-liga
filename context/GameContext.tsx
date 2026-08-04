@@ -96,6 +96,7 @@ import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
+import { ReserveTeamFinanceService } from '../services/ReserveTeamFinanceService';
 import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
 import { LeagueStatsService } from '../services/LeagueStatsService';
 import { FinanceService } from '../services/FinanceService';
@@ -771,6 +772,10 @@ const processAiToAiLoanMoves = (
       .forEach(player => {
         aiClubs.forEach(buyerClub => {
           if (buyerClub.id === sellerClub.id) return;
+          // AI-to-AI loans must follow the same ownership rule as permanent
+          // transfers. In particular, a parent first team cannot loan a player
+          // from its own reserves through the external loan market.
+          if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) return;
           const buyerSquad = players[buyerClub.id] || [];
           if (buyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
           if (buyerSquad.length >= 32) return;
@@ -2261,7 +2266,15 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setSessionSeed(newSessionSeed);
     setRuntimeSimulationSeed(newRuntimeSimulationSeed);
     const template = SeasonTemplateGenerator.generate(startYear);
-    const seasonPolishClubs = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, startYear);
+    const seasonPolishClubs = ReserveTeamFinanceService.allocateSeasonFunding(
+      PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, startYear),
+      {
+        seasonStartYear: startYear,
+        sessionSeed: newSessionSeed,
+        date: careerStartDate,
+        resetReserveBalances: true,
+      }
+    );
     // -> tutaj wstaw kod
     const coachData = CoachService.generateInitialCoaches([...seasonPolishClubs, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
     setCoaches(coachData.coaches);
@@ -2867,7 +2880,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       c.seasonStats = [...(c.seasonStats || []).slice(-4), stat];
     });
 
-    const updatedClubs = clubs.map(club => {
+    let updatedClubs = clubs.map(club => {
       let newLeagueId = club.leagueId;
       let newReputation = club.reputation;
       const isUser = club.id === userTeamId;
@@ -2979,7 +2992,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       const seasonalAwardRank = leagueRanking;
       const sponsorshipMult = 0.85 + ((club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20) * 0.30;
       const isPolishClub = newLeagueId.startsWith('L_PL_');
-      let nextSeasonInjection = isPolishClub
+      const isReserveTeam = ReserveTeamLeagueService.isReserveClub(club.id);
+      let nextSeasonInjection = isReserveTeam
+        ? 0
+        : isPolishClub
         ? FinanceService.calculateSeasonalIncome(newTier, newReputation, seasonalAwardRank, sponsorshipMult)
         : FinanceService.calculateEuropeanInitialBudget(newTier, newReputation, club.country ?? '', club.name, club.stadiumCapacity ?? 15000);
       
@@ -3124,6 +3140,12 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         nextSponsorCheckDate: undefined,
         ownerRescueThisSeason: false
       };
+    });
+
+    updatedClubs = ReserveTeamFinanceService.allocateSeasonFunding(updatedClubs, {
+      seasonStartYear: newYear,
+      sessionSeed,
+      date: new Date(newYear, 6, 1),
     });
 
     setCoaches(updatedCoaches);
@@ -3429,7 +3451,7 @@ if (userTeamId) {
         tone: 'info',
       });
     }
-  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, showGameNotification]);
+  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, sessionSeed, showGameNotification]);
 
   // PERF/ROZMIAR ZAPISU (dodane 2026-08-01): przy KAŻDYM zapisie do pliku (nie tylko
   // co 5 sezonów jak automatyczna archiwizacja w startNextSeason powyżej) dane starsze
@@ -3695,7 +3717,18 @@ if (userTeamId) {
   };
 
   const loadGameFromFile = (data: SaveState): void => {
-    const loadedClubs = SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId);
+    const loadedDate = data.currentDate instanceof Date ? data.currentDate : new Date(data.currentDate);
+    const loadedSeasonStartYear = data.seasonTemplate?.seasonStartYear
+      ?? ReserveTeamFinanceService.getSeasonStartYear(loadedDate);
+    const loadedClubs = ReserveTeamFinanceService.ensureSeasonFunding(
+      SportingDirectorService.ensureForUserClub(data.clubs, data.userTeamId),
+      {
+        seasonStartYear: loadedSeasonStartYear,
+        sessionSeed: data.sessionSeed ?? 0,
+        date: loadedDate,
+        resetReserveBalances: true,
+      }
+    );
     const loadedClubById = new Map(loadedClubs.map(club => [club.id, club]));
     const loadedNationalTeams = Array.isArray(data.nationalTeams) && data.nationalTeams.length > 0
       ? data.nationalTeams
@@ -3713,7 +3746,7 @@ if (userTeamId) {
       loadedNationalTeams,
       loadedCoaches,
       loadedClubs,
-      data.currentDate instanceof Date ? data.currentDate : new Date(data.currentDate),
+      loadedDate,
       data.userTeamId
     );
     const repairedNationalData = repairNationalTeamSquadsForLoadedData(
@@ -11921,7 +11954,16 @@ const finalResult: SimulationOutput = {
           const start = Math.floor(IncomingTransferService.seededRandom(nextDay.getTime() + seedOffset) * items.length);
           return [...items.slice(start), ...items.slice(0, start)];
         };
-        const aiClubs = rotateBySeed(clubs.filter(c => c.id !== userTeamId), 911);
+        // Filter buyers before incoming offers are generated. Besides excluding
+        // reserve buyers, this prevents the user's reserve club from receiving
+        // an artificial offer from its own parent first team.
+        const aiClubs = rotateBySeed(
+          clubs.filter(c =>
+            c.id !== userTeamId &&
+            ReserveTeamLeagueService.canRecruitPlayerFrom(c.id, userTeamId ?? '')
+          ),
+          911
+        );
         const offerCandidateSquad = rotateBySeed(userSquad, 1301);
         aiClubs.forEach(aiClub => {
           if (newOffersToAdd.length >= maxDailyNewOffers) return;
@@ -12002,9 +12044,13 @@ const finalResult: SimulationOutput = {
               }),
             4301
           );
+          // The talent-raid path is a separate offer generator and therefore
+          // needs the same central ownership rule. Unrelated clubs may still
+          // buy reserve players; only the parent first team is excluded.
           const reserveRaidClubs = rotateBySeed(
             clubs.filter(club =>
               club.id !== userTeamId &&
+              ReserveTeamLeagueService.canRecruitPlayerFrom(club.id, userTeamId ?? '') &&
               club.reputation >= userClub.reputation + 2 &&
               club.transferBudget > 0 &&
               (players[club.id]?.length ?? club.rosterIds.length) < 30
@@ -16116,6 +16162,17 @@ const finalResult: SimulationOutput = {
       return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu sprzedającego.' };
     }
 
+    // User-created permanent offers are checked before negotiation starts. The
+    // final execution service repeats this check defensively, but rejecting here
+    // gives the player an immediate explanation and creates no offer history.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Nie możesz kupić zawodnika z rezerw własnego klubu. Taki ruch nie jest transferem rynkowym.'
+      };
+    }
+
     const buyerSquad = players[userTeamId] || [];
     const sellerSquad = players[sellerClubId] || [];
     const sellerCoachFavoriteIds = sellerClub.coachId ? coaches[sellerClub.coachId]?.favoritePlayerIds : undefined;
@@ -16534,6 +16591,17 @@ const finalResult: SimulationOutput = {
       return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu macierzystego zawodnika.' };
     }
 
+    // Loans move the player and money immediately, so the ownership relationship
+    // must be validated before squad-need, wage and fee calculations are run.
+    // Internal movement from reserves will be handled by a dedicated system.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Nie możesz wypożyczyć zawodnika z rezerw własnego klubu. Taki ruch nie jest transferem rynkowym.'
+      };
+    }
+
     if (!targetPlayer.isAvailableForLoan) {
       return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest dostępny do wypożyczenia.` };
     }
@@ -16859,6 +16927,17 @@ const finalResult: SimulationOutput = {
     const sellerClub = clubs.find(c => c.id === transferOffer.sellerClubId);
     if (!buyerClub || !sellerClub) {
       return { ok: false, status: 'VALIDATION_ERROR', message: 'Brakuje danych jednego z klubow.' };
+    }
+
+    // A negotiation may have been restored from a SAVE created before this rule
+    // was introduced. Rechecking at contract finalization prevents that legacy
+    // offer from bypassing the validation used when new offers are submitted.
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+      return {
+        ok: false,
+        status: 'VALIDATION_ERROR',
+        message: 'Ta negocjacja dotyczy zawodnika rezerw własnego klubu i nie może zostać sfinalizowana jako transfer.'
+      };
     }
 
     const buyerSquad = players[buyerClub.id] || [];
@@ -17426,6 +17505,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     let nextPlayers = players;
     let nextLineups = { ...lineups };
     const completedIds = new Set<string>();
+    const blockedIds = new Set<string>();
     const completionMessages: MailMessage[] = [];
 
     duePreContracts.forEach(offer => {
@@ -17448,6 +17528,45 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
         offer.timing === TransferTiming.CONTRACT_END &&
         new Date(currentDate).setHours(0, 0, 0, 0) < new Date(executionDate).setHours(0, 0, 0, 0)
       ) return;
+
+      // Legacy SAVE compatibility: a deferred or pre-contract transfer may have
+      // been agreed before the shared parent/reserve restriction existed. Do not
+      // let it execute on its scheduled date. Mark the agreement as blocked,
+      // clear every pending-transfer field from the player and send an explicit
+      // system message so the user understands why the old agreement vanished.
+      // No SAVE schema migration is required because only existing fields are
+      // cleared and the normal transfer status enum is reused.
+      if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+        blockedIds.add(offer.id);
+        nextPlayers = {
+          ...nextPlayers,
+          [sellerClub.id]: sellerSquad.map(player =>
+            player.id === targetPlayer.id
+              ? {
+                  ...player,
+                  transferPendingClubId: undefined,
+                  transferReportDate: undefined,
+                  transferPendingFee: undefined,
+                  transferPendingSalary: undefined,
+                  transferPendingBonus: undefined,
+                  transferPendingContractYears: undefined,
+                }
+              : player
+          ),
+        };
+        completionMessages.push({
+          id: `MAIL_TRANSFER_RESERVE_BLOCK_${offer.id}`,
+          sender: 'Centrum transferowe',
+          role: 'System rejestracji transferów',
+          subject: `Transfer anulowany: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+          body: `Transfer pomiędzy ${sellerClub.name} i ${buyerClub.name} został anulowany. Pierwsza drużyna nie kupuje ani nie wypożycza zawodników własnych rezerw przez rynek transferowy.`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 97
+        });
+        return;
+      }
 
       const execution = TransferExecutionService.finalizeTransfer(
         offer,
@@ -17494,13 +17613,15 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       });
     });
 
-    if (completedIds.size === 0) return;
+    if (completedIds.size === 0 && blockedIds.size === 0) return;
 
     setClubs(nextClubs);
     setPlayers(nextPlayers);
     setLineups(nextLineups);
     setTransferOffers(prev => prev.map(offer =>
-      completedIds.has(offer.id)
+      blockedIds.has(offer.id)
+        ? { ...offer, status: TransferOfferStatus.SELLER_REJECTED }
+        : completedIds.has(offer.id)
         ? { ...offer, status: TransferOfferStatus.COMPLETED }
         : offer
     ));

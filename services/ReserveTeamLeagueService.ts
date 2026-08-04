@@ -54,6 +54,39 @@ export const ReserveTeamLeagueService = {
     return Object.prototype.hasOwnProperty.call(RESERVE_PARENT_CLUB_BY_ID, clubId);
   },
 
+  /**
+   * Reports whether a club may act as a buyer in a club-to-club transaction.
+   * Reserve teams return false because they may sell players and sign free
+   * agents, but they are not allowed to purchase or loan players from clubs.
+   * Source-specific parent/reserve validation belongs to canRecruitPlayerFrom.
+   */
+  canParticipateAsTransferBuyer(clubId: string): boolean {
+    return !this.isReserveClub(clubId);
+  },
+
+  /**
+   * Central market-eligibility rule shared by permanent transfers, loans,
+   * pre-contracts, scouting and final transfer execution.
+   *
+   * The order of these checks is intentional:
+   * 1. Reserve teams may still sign free agents because no selling club is
+   *    involved and this is their only permitted recruitment channel.
+   * 2. A reserve team may never act as a buyer on the club-to-club market.
+   * 3. A first team may not buy or loan a player from its own reserve team.
+   *    Such a move belongs to the future internal squad-integration system
+   *    and must not create a fee, negotiation or market transfer record.
+   *
+   * Players owned by a reserve team may still be sold to every unrelated
+   * club. This preserves the rule that reserve teams can sell players even
+   * though they cannot purchase players from other clubs.
+   */
+  canRecruitPlayerFrom(buyerClubId: string, sellerClubId: string): boolean {
+    if (sellerClubId === 'FREE_AGENTS') return true;
+    if (!this.canParticipateAsTransferBuyer(buyerClubId)) return false;
+
+    return this.getParentClubId(sellerClubId) !== buyerClubId;
+  },
+
   canEnterLeague(
     clubId: string,
     targetLeagueId: PolishPlayableLeagueId,

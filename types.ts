@@ -1847,6 +1847,10 @@ export interface Club {
   budget: number;
   transferBudget: number;
   reserveBudget?: number;
+  reserveTeamSeasonGrant?: number;
+  reserveTeamSeasonGrantRate?: number;
+  reserveTeamSeasonGrantYear?: number;
+  reserveTeamEmergencySupportYear?: number;
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
   oneTimePlayerBonusesThisSeason?: number;
