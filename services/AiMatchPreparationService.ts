@@ -5,12 +5,12 @@ import { PlayerMoraleService } from './PlayerMoraleService';
 
 export const AiMatchPreparationService = {
 
-  // PERF (dodane 2026-08-01): `fixtures`/`currentDate` są OPCJONALNE — to celowe,
-  // żeby nie zmieniać zachowania pozostałych wywołań tej funkcji w innych miejscach
-  // (BackgroundMatchProcessorPolishCup.ts, BackgroundPlayOffMatchPolishCup.ts, testy),
-  // które przekazują mniejszy, już wcześniej przefiltrowany zestaw klubów (np. tylko
-  // uczestników danej rundy pucharu) i nie wywołują się codziennie dla WSZYSTKICH
-  // klubów w grze — tam to ograniczenie nie jest potrzebne i nie miałoby sensu.
+  // PERFORMANCE CONTRACT: fixtures/currentDate are optional because callers
+  // which already own a small, explicitly filtered club list (for example a cup
+  // or playoff processor) may pass only those participants. A caller must never
+  // omit fixtures/currentDate while also passing the complete world. The Polish
+  // Cup processor previously violated that contract on 12 July and prepared all
+  // ~650 clubs for a two-team Super Cup; it now filters participants first.
   //
   // Jedyne miejsce, które faktycznie miało problem: BackgroundMatchProcessor.ts —
   // ta funkcja była tam wywoływana CODZIENNIE, bezwarunkowo, dla WSZYSTKICH ~650

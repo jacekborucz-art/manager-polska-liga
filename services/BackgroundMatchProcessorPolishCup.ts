@@ -528,15 +528,45 @@ export const BackgroundMatchProcessorPolishCup = {
       f.awayTeamId !== userTeamId
     );
 
+    /**
+     * Exit before preparing lineups when there is no background cup match to
+     * simulate. The old order called prepareAllTeams for the complete world even
+     * on a no-op day, creating hundreds of unnecessary lineup and morale graphs.
+     */
+    if (todayCupFixtures.length === 0) {
+      return { updatedFixtures: fixtures, updatedPlayers: playersMap, updatedLineups: lineups, updatedClubs: clubs };
+    }
+
     let currentFixtures = [...fixtures];
     let currentPlayers = { ...playersMap };
     let currentClubs = [...clubs];
 
-    const newLineups = AiMatchPreparationService.prepareAllTeams(clubs, playersMap, lineups, userTeamId);
-
-    if (todayCupFixtures.length === 0) {
-      return { updatedFixtures: fixtures, updatedPlayers: playersMap, updatedLineups: newLineups, updatedClubs: currentClubs };
-    }
+    /**
+     * Prepare only clubs which actually participate in today's cup fixtures.
+     * This is especially important for the AI-versus-AI Polish Super Cup on
+     * 12 July. The previous call passed all roughly 650 clubs to
+     * prepareAllTeams, although the match had only two participants. The result
+     * screen could still render, but hundreds of freshly generated lineups and
+     * the temporary morale calculations remained live when the user clicked
+     * Continue and started the normal daily pipeline, pushing Chromium into an
+     * Out of memory crash.
+     *
+     * A normal Polish Cup round can contain many simultaneous fixtures, so the
+     * participant set is derived from every scheduled background match rather
+     * than being hard-coded to the first pair. Existing lineups for all other
+     * clubs remain untouched because prepareAllTeams starts from the supplied
+     * lineups map and only updates the filtered participant clubs.
+     */
+    const participantClubIds = new Set(
+      todayCupFixtures.flatMap(fixture => [fixture.homeTeamId, fixture.awayTeamId])
+    );
+    const participantClubs = clubs.filter(club => participantClubIds.has(club.id));
+    const newLineups = AiMatchPreparationService.prepareAllTeams(
+      participantClubs,
+      playersMap,
+      lineups,
+      userTeamId
+    );
 
     todayCupFixtures.forEach(fixture => {
       const home = currentClubs.find(c => c.id === fixture.homeTeamId)!;

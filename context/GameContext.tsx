@@ -8990,27 +8990,6 @@ Asystent`,
     }
 
     // ── OBÓZ ZIMOWY: ZAPROSZENIE (11 grudnia) ────────────────────────────────
-    if (dateToProcess.getDate() === 1 || dateToProcess.getDate() === 15) {
-      const foreignBackgroundClubs = clubs.filter(isForeignBackgroundStatsClub);
-      if (foreignBackgroundClubs.length > 0) {
-        setPlayers(prev => {
-          let changed = false;
-          const next = { ...prev };
-          foreignBackgroundClubs.forEach(club => {
-            const squad = prev[club.id] ?? generatedSquadCacheRef.current[club.id];
-            if (!squad?.length) return;
-            const updatedSquad = applyForeignBackgroundForm(squad, club, dateToProcess);
-            generatedSquadCacheRef.current[club.id] = updatedSquad;
-            if (prev[club.id]) {
-              next[club.id] = updatedSquad;
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
-        });
-      }
-    }
-
     if (hasCompetitionToday(CompetitionType.WINTER_CAMP_INVITE) && userTeamId && !isResigned) {
       const campInviteKey = `WINTER_CAMP_INVITE_${seasonNumber}`;
       if (!sentMailIdsRef.current.has(campInviteKey)) {
@@ -10247,6 +10226,49 @@ Asystent`,
     // 2 lipca: automatyczny przegląd składów AI na początku sezonu
     let postReviewPlayers = recoveredPlayers;
     let postReviewClubs = simulation.updatedClubs;
+
+    /**
+     * Refresh foreign background-league statistics inside the single daily
+     * player pipeline instead of scheduling an independent React setPlayers
+     * update near the beginning of advanceDay.
+     *
+     * The old 1st/15th-day implementation queued a functional setPlayers update
+     * which rebuilt almost every foreign squad (roughly twenty thousand player
+     * records). Later in the same advanceDay call, applySimulationResult queued
+     * the complete post-market player map as a replacement. React therefore had
+     * to materialize and retain two full-world player graphs during one render,
+     * and the first graph was immediately overwritten. On 15 July that memory
+     * spike coincided with Champions League return legs and the active summer
+     * transfer market, which could terminate the browser tab with Out of memory
+     * a few days after the Polish Super Cup.
+     *
+     * Applying the refresh to postReviewPlayers keeps the result (the old update
+     * was effectively discarded), passes it through the remaining daily stages,
+     * and commits exactly one final player graph at the end of the day. Squads
+     * which exist only in the lazy cache are still refreshed there, but they are
+     * deliberately not copied into the main state until the user opens the club.
+     */
+    if (dateToProcess.getDate() === 1 || dateToProcess.getDate() === 15) {
+      const nextPlayers = { ...postReviewPlayers };
+      let stateSquadChanged = false;
+
+      postReviewClubs
+        .filter(isForeignBackgroundStatsClub)
+        .forEach(club => {
+          const stateSquad = postReviewPlayers[club.id];
+          const squad = stateSquad ?? generatedSquadCacheRef.current[club.id];
+          if (!squad?.length) return;
+
+          const updatedSquad = applyForeignBackgroundForm(squad, club, dateToProcess);
+          generatedSquadCacheRef.current[club.id] = updatedSquad;
+          if (stateSquad) {
+            nextPlayers[club.id] = updatedSquad;
+            stateSquadChanged = true;
+          }
+        });
+
+      if (stateSquadChanged) postReviewPlayers = nextPlayers;
+    }
 
     if (dateToProcess.getDate() === 1) {
       // MIESIĘCZNA DECYZYJNOŚĆ KLUBÓW AI DLA LISTY WYPOŻYCZEŃ:

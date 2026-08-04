@@ -954,6 +954,51 @@ const _pickDiscoveredMarketPlayer = <T extends Player>(
   return visible[pickIndex]?.player ?? null;
 };
 
+type AiMarketSquadSnapshot = {
+  coreAverage: number;
+  positionAverages: Map<PlayerPosition, number>;
+  positionCounts: Map<PlayerPosition, number>;
+  weakestByPosition: Map<PlayerPosition, Player>;
+};
+
+/**
+ * Precompute the squad values reused while one AI club evaluates hundreds or
+ * thousands of market candidates. Previously every candidate sorted the same
+ * squad to obtain its core average and filtered/sorted it again to find the
+ * weakest player at the candidate's position. During the summer window this
+ * produced millions of short-lived arrays and was a major contributor to the
+ * July browser-memory spike. The snapshot is immutable for one buyer pass; a
+ * completed deal is only marked pending and does not alter that buyer's squad
+ * until a later report date, so all values remain valid for the entire pass.
+ */
+const _buildAiMarketSquadSnapshot = (squad: Player[]): AiMarketSquadSnapshot => {
+  const positionTotals = new Map<PlayerPosition, number>();
+  const positionCounts = new Map<PlayerPosition, number>();
+  const weakestByPosition = new Map<PlayerPosition, Player>();
+
+  squad.forEach(player => {
+    positionTotals.set(player.position, (positionTotals.get(player.position) ?? 0) + player.overallRating);
+    positionCounts.set(player.position, (positionCounts.get(player.position) ?? 0) + 1);
+    const weakest = weakestByPosition.get(player.position);
+    if (!weakest || player.overallRating < weakest.overallRating) {
+      weakestByPosition.set(player.position, player);
+    }
+  });
+
+  const positionAverages = new Map<PlayerPosition, number>();
+  positionTotals.forEach((total, position) => {
+    positionAverages.set(position, total / Math.max(1, positionCounts.get(position) ?? 0));
+  });
+
+  const sortedRatings = squad.map(player => player.overallRating).sort((a, b) => b - a);
+  const coreSize = Math.min(Math.max(11, Math.ceil(squad.length * 0.55)), squad.length);
+  const coreAverage = coreSize > 0
+    ? sortedRatings.slice(0, coreSize).reduce((sum, rating) => sum + rating, 0) / coreSize
+    : 0;
+
+  return { coreAverage, positionAverages, positionCounts, weakestByPosition };
+};
+
 // PERF (dodane 2026-08-01, refaktor bez zmiany zachowania): wydzielone z pętli filtrującej
 // w processAiRecruitment. Przyjmuje `pool` jako PARAMETR (a nie zawsze całą listę
 // FREE_AGENTS) właśnie po to, żeby ta sama logika obsługiwała zarówno:
@@ -972,11 +1017,12 @@ const _buildFreeAgentCandidates = (
   idealOvr: number,
   currentDate: Date
 ): Player[] => {
+  const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
   return pool.filter(fa => {
     const needFA = needsFA.find(n => n.position === fa.position);
     if (!needFA) return false;
     if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
-    if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA)) return false;
+    if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA, marketSnapshot)) return false;
     const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
     const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
     const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
@@ -984,9 +1030,9 @@ const _buildFreeAgentCandidates = (
     if (fa.aiNegotiationClubId) return false;
     if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) return false;
 
-    const posSquad = squad.filter(p => p.position === fa.position);
-    const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
-    const hasShortage = posSquad.length < minCounts[fa.position];
+    const positionCount = marketSnapshot.positionCounts.get(fa.position) ?? 0;
+    const weakestExisting = marketSnapshot.weakestByPosition.get(fa.position);
+    const hasShortage = positionCount < minCounts[fa.position];
     const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
     const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
 
@@ -1016,6 +1062,7 @@ const _buildInterestedPlayerTargets = (
   currentDate: Date,
   sellerClubMap: Map<string, Club>
 ): Player[] => {
+  const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
   return pool.filter(p => {
     if (p.loan) return false;
     // Apply the club-structure rule before any quality, reputation or budget
@@ -1039,10 +1086,10 @@ const _buildInterestedPlayerTargets = (
     const isShortlisted = (p.interestedClubs || []).includes(club.id);
     const need = needsITMap.get(p.position);
     if (!need) return false;
-    if (_isBelowAiMarketQualityFloor(p, club, squad, need)) return false;
+    if (_isBelowAiMarketQualityFloor(p, club, squad, need, marketSnapshot)) return false;
     if (!_canAddBalancedDepth(squad, p.position) && need.reason !== 'SHORTAGE') return false;
 
-    const buyerPositionAverage = _getPositionAverageOverall(squad, p.position);
+    const buyerPositionAverage = marketSnapshot.positionAverages.get(p.position) ?? 0;
     const isQuantityNeed = _isQuantityDepthNeed(need, squad, p.position);
     const isOpenMarketTarget =
       !isShortlisted &&
@@ -1115,12 +1162,13 @@ const _getAiMarketQualityFloor = (
   club: Club,
   squad: Player[],
   position: PlayerPosition,
-  need?: ClubNeedAssessment
+  need?: ClubNeedAssessment,
+  snapshot?: AiMarketSquadSnapshot
 ): number => {
   if (squad.length === 0) return 35;
 
-  const coreAverage = _getCoreSquadAverageOverall(squad);
-  const positionAverage = _getPositionAverageOverall(squad, position);
+  const coreAverage = snapshot?.coreAverage ?? _getCoreSquadAverageOverall(squad);
+  const positionAverage = snapshot?.positionAverages.get(position) ?? _getPositionAverageOverall(squad, position);
   const referenceAverage = Math.max(coreAverage, positionAverage || coreAverage);
   const isQuantityNeed = need ? _isQuantityDepthNeed(need, squad, position) : false;
   const tolerance =
@@ -1137,9 +1185,10 @@ const _isBelowAiMarketQualityFloor = (
   player: Player,
   club: Club,
   squad: Player[],
-  need?: ClubNeedAssessment
+  need?: ClubNeedAssessment,
+  snapshot?: AiMarketSquadSnapshot
 ): boolean =>
-  player.overallRating < _getAiMarketQualityFloor(club, squad, player.position, need);
+  player.overallRating < _getAiMarketQualityFloor(club, squad, player.position, need, snapshot);
 
 const _getAiSquadOutlierFloor = (club: Club, squad: Player[]): number => {
   if (squad.length < 11) return 0;
@@ -2641,8 +2690,19 @@ processAiRecruitment: (
 
     if (transferListed.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap, logEntries };
 
-    // Mutable kopia listy by usuwać zajętych kandydatów w trakcie pętli
-    const available = [...transferListed];
+    /**
+     * Partition transfer-listed players once by position. Every buyer only has
+     * needs at a subset of positions, so scanning the complete list for every
+     * club wasted most candidate checks. The per-position arrays remain mutable:
+     * once a player accepts a pending move, that player is removed from the
+     * relevant array and cannot be selected by another club in this daily pass.
+     */
+    const availableByPosition = new Map<PlayerPosition, Player[]>();
+    transferListed.forEach(player => {
+      const positionPool = availableByPosition.get(player.position) ?? [];
+      positionPool.push(player);
+      availableByPosition.set(player.position, positionPool);
+    });
 
     const sellerClubMap = new Map(updatedClubs.map(c => [c.id, c]));
 
@@ -2674,9 +2734,15 @@ processAiRecruitment: (
       if (needsTL.length === 0) continue;
       const hasCriticalShortageTL = needsTL.some(n => n.urgency === 'CRITICAL' && n.reason === 'SHORTAGE');
       const needsTLMap = new Map(needsTL.map(n => [n.position as string, n]));
+      const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
 
-      // Oceń kandydatów
-      const candidates = available.filter(p => {
+      // Only materialize candidates from positions this club actually needs.
+      // Each player has exactly one primary position, therefore no candidate can
+      // appear twice even if needsTL contains several independent requirements.
+      const relevantAvailable = Array.from(needsTLMap.keys()).flatMap(position =>
+        availableByPosition.get(position as PlayerPosition) ?? []
+      );
+      const candidates = relevantAvailable.filter(p => {
         if (p.loan) return false;
         if (p.clubId === club.id) return false;
         // Transfer-listed reserve players remain available to unrelated clubs,
@@ -2690,7 +2756,7 @@ processAiRecruitment: (
         if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
         const needTL = needsTLMap.get(p.position);
         if (!needTL) return false;
-        if (_isBelowAiMarketQualityFloor(p, club, squad, needTL)) return false;
+        if (_isBelowAiMarketQualityFloor(p, club, squad, needTL, marketSnapshot)) return false;
         if (!_canAddBalancedDepth(squad, p.position) && needTL.reason !== 'SHORTAGE') return false;
 
         // OVR range zależy od pilności: CRITICAL szuka szerzej (desperacja), LOW tylko wąski upgrade
@@ -2707,9 +2773,9 @@ processAiRecruitment: (
         if (!normalRange && !bargainRange) return false;
 
         // Kandydat musi być lepszy od obecnego najsłabszego na tej pozycji (upgrade check)
-        const posSquad = (updatedPlayersMap[club.id] || []).filter(sq => sq.position === p.position);
-        const weakestExisting = [...posSquad].sort((a, b) => a.overallRating - b.overallRating)[0];
-        if (!isQuantityNeed && posSquad.length >= minCounts[p.position] && weakestExisting && p.overallRating <= weakestExisting.overallRating) return false;
+        const positionCount = marketSnapshot.positionCounts.get(p.position) ?? 0;
+        const weakestExisting = marketSnapshot.weakestByPosition.get(p.position);
+        if (!isQuantityNeed && positionCount >= minCounts[p.position] && weakestExisting && p.overallRating <= weakestExisting.overallRating) return false;
 
         const sellerClub = sellerClubMap.get(p.clubId || '');
         if (!sellerClub) return false;
@@ -2917,9 +2983,11 @@ processAiRecruitment: (
         toClubId: club.id,
       });
 
-      // Usuń zawodnika z dostępnej listy by inne kluby go nie wybrały w tej samej iteracji
-      const idx = available.findIndex(p => p.id === best.id);
-      if (idx !== -1) available.splice(idx, 1);
+      // Remove the accepted player from the position pool so another club cannot
+      // create a second pending agreement for the same player on this date.
+      const positionPool = availableByPosition.get(best.position);
+      const idx = positionPool?.findIndex(p => p.id === best.id) ?? -1;
+      if (positionPool && idx !== -1) positionPool.splice(idx, 1);
 
       // Opłata transferowa płatna natychmiast przy podpisaniu umowy
       updatedClubs = updatedClubs.map(c => {

@@ -307,7 +307,16 @@ const addBackgroundAppearance = (player: Player, club: Club, round: number, seed
   if (outcome.cleanSheet) stats.cleanSheets += 1;
   stats.ratingHistory.push(getBackgroundRating(player, club, round, seedBase, outcome));
 
-  return PlayerFormService.withUpdatedForm({ ...player, stats });
+  /**
+   * Do not recalculate form after every synthetic appearance. A 15 July refresh
+   * can add an appearance to thousands of foreign players at once, and the old
+   * implementation rebuilt the combined league/cup/European rating arrays for
+   * every intermediate round. applyBackgroundLeagueStatsToSquad recalculates
+   * form once after all missing rounds have been appended, so returning the
+   * statistics-only player here preserves the final result while avoiding a
+   * large burst of short-lived arrays and Player objects.
+   */
+  return { ...player, stats };
 };
 
 const rebalanceExistingBackgroundStats = (
@@ -359,7 +368,10 @@ const rebalanceExistingBackgroundStats = (
     },
   };
 
-  return PlayerFormService.withUpdatedForm({ ...player, stats: calibratedStats });
+  // Form is recalculated once by the caller after calibration and any missing
+  // appearances have both been applied. This avoids retaining intermediate
+  // player graphs during a full-world background-statistics refresh.
+  return { ...player, stats: calibratedStats };
 };
 
 const applyBackgroundLeagueStatsToSquad = (
@@ -373,12 +385,20 @@ const applyBackgroundLeagueStatsToSquad = (
   const seasonStartYear = getSeasonStartYear(date);
   const progressKey = getBackgroundProgressKey(club.id, seasonStartYear);
 
-  const rankedIds = [...squad]
-    .sort((a, b) => (b.overallRating ?? 0) - (a.overallRating ?? 0))
-    .map(player => player.id);
+  /**
+   * Build the rank lookup once. The previous rankedIds.indexOf(player.id) made
+   * rank resolution quadratic inside every squad. Individual squads are small,
+   * but the 1st/15th-day refresh runs for hundreds of clubs in one browser task,
+   * so eliminating the repeated searches materially reduces temporary work.
+   */
+  const rankByPlayerId = new Map(
+    [...squad]
+      .sort((a, b) => (b.overallRating ?? 0) - (a.overallRating ?? 0))
+      .map((player, rank) => [player.id, rank])
+  );
 
   return squad.map(player => {
-    const rank = Math.max(0, rankedIds.indexOf(player.id));
+    const rank = rankByPlayerId.get(player.id) ?? 0;
     const targetAppearances = getPlayerTargetAppearances(targetRounds, rank, player);
     const currentAppearances = getCurrentBackgroundAppearances(player, progressKey);
     let updated = rebalanceExistingBackgroundStats(player, club, currentAppearances, seasonStartYear, seedBase);
