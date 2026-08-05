@@ -171,99 +171,6 @@ import { ManagerJobService } from '../services/ManagerJobService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
 import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { MediaInterviewService, SeasonInterviewSituation } from '../services/MediaInterviewService';
-import { PerfProfilerService } from '../services/PerfProfilerService';
-
-// ── DIAGNOSTYKA WYDAJNOŚCI (tymczasowe, do usunięcia po znalezieniu wąskiego gardła) ──
-// Owija metody poniższych serwisów pomiarem czasu. Użycie w konsoli:
-//   showPerfReport()  -> lista serwis.metoda wg łącznego czasu
-//   resetPerfReport() -> wyczyść zebrane dane
-[
-  ['StadiumExpansionService', StadiumExpansionService],
-  ['TrainingFacilityService', TrainingFacilityService],
-  ['AiFriendlyGeneratorService', AiFriendlyGeneratorService],
-  ['AiFriendlyMatchSimulator', AiFriendlyMatchSimulator],
-  ['AcademyService', AcademyService],
-  ['ScoutService', ScoutService],
-  ['NationalTeamService', NationalTeamService],
-  ['ELDrawService', ELDrawService],
-  ['CONFDrawService', CONFDrawService],
-  ['SeasonTemplateGenerator', SeasonTemplateGenerator],
-  ['LeagueScheduleGenerator', LeagueScheduleGenerator],
-  ['CalendarEngine', CalendarEngine],
-  ['SquadGeneratorService', SquadGeneratorService],
-  ['LineupService', LineupService],
-  ['BackgroundMatchProcessor', BackgroundMatchProcessor],
-  ['RelegationPlayoffSimulator', RelegationPlayoffSimulator],
-  ['BackgroundPlayOffMatchPolishCup', BackgroundPlayOffMatchPolishCup],
-  ['BackgroundMatchProcessorPolishCup', BackgroundMatchProcessorPolishCup],
-  ['RecoveryService', RecoveryService],
-  ['MailService', MailService],
-  ['TrainingService', TrainingService],
-  ['TrainingAssistantService', TrainingAssistantService],
-  ['AiWeeklyTrainingService', AiWeeklyTrainingService],
-  ['WeeklyMotivationService', WeeklyMotivationService],
-  ['SeasonTransitionService', SeasonTransitionService],
-  ['PolishEuropeanQualificationService', PolishEuropeanQualificationService],
-  ['PlayerReputationGrowthService', PlayerReputationGrowthService],
-  ['LeagueStatsService', LeagueStatsService],
-  ['FinanceService', FinanceService],
-  ['BoardFinanceMonitorService', BoardFinanceMonitorService],
-  ['PolishCupDrawService', PolishCupDrawService],
-  ['CLDrawService', CLDrawService],
-  ['SuperCupService', SuperCupService],
-  ['UEFASuperCupService', UEFASuperCupService],
-  ['CoachService', CoachService],
-  ['StaffGenerationService', StaffGenerationService],
-  ['ClubManagementService', ClubManagementService],
-  ['SportingDirectorService', SportingDirectorService],
-  ['RefereeService', RefereeService],
-  ['FreeAgentService', FreeAgentService],
-  ['AiContractService', AiContractService],
-  ['AiScoutingService', AiScoutingService],
-  ['AiTransferDecisionService', AiTransferDecisionService],
-  ['BackgroundMatchProcessorCL', BackgroundMatchProcessorCL],
-  ['BackgroundMatchUEFASuperCup', BackgroundMatchUEFASuperCup],
-  ['SaveArchiveService', SaveArchiveService],
-  ['ScoutAssistantService', ScoutAssistantService],
-  ['ChampionshipHistoryService', ChampionshipHistoryService],
-  ['TransferBuyerLogicService', TransferBuyerLogicService],
-  ['TransferSellerLogicService', TransferSellerLogicService],
-  ['TransferPlayerDecisionService', TransferPlayerDecisionService],
-  ['TransferExecutionService', TransferExecutionService],
-  ['IncomingTransferService', IncomingTransferService],
-  ['FreeAgentNegotiationService', FreeAgentNegotiationService],
-  ['PrestigeTransferGuardService', PrestigeTransferGuardService],
-  ['NationalTeamSimulator', NationalTeamSimulator],
-  ['WorldNationalFriendlyService', WorldNationalFriendlyService],
-  ['NationsLeagueService', NationsLeagueService],
-  ['EuroQualifiersService', EuroQualifiersService],
-  ['WorldCupQualifiersService', WorldCupQualifiersService],
-  ['EuroTournamentService', EuroTournamentService],
-  ['UefaNationalRankingService', UefaNationalRankingService],
-  ['WCQPlayoffService', WCQPlayoffService],
-  ['WorldCupService', WorldCupService],
-  ['WorldCupHistoryBackfillService', WorldCupHistoryBackfillService],
-  ['PlayerCareerService', PlayerCareerService],
-  ['LoanDevelopmentService', LoanDevelopmentService],
-  ['PlayerContractMindflowService', PlayerContractMindflowService],
-  ['PlayerMarketVisibilityService', PlayerMarketVisibilityService],
-  ['MysteryAgentService', MysteryAgentService],
-  ['ReserveScheduleService', ReserveScheduleService],
-  ['ReserveOpponentGeneratorService', ReserveOpponentGeneratorService],
-  ['ReserveMatchEngine', ReserveMatchEngine],
-  ['PlayerAttributesGenerator', PlayerAttributesGenerator],
-  ['PlayerDevelopmentService', PlayerDevelopmentService],
-  ['PlayerFormService', PlayerFormService],
-  ['EuropeanPlayerStatsService', EuropeanPlayerStatsService],
-  ['PlayerMoraleService', PlayerMoraleService],
-  ['PlayerTransferRequestDialogService', PlayerTransferRequestDialogService],
-  ['PzpnDisciplinaryService', PzpnDisciplinaryService],
-  ['ManagerExperienceService', ManagerExperienceService],
-  ['ManagerJobService', ManagerJobService],
-  ['LeagueTeamOfWeekService', LeagueTeamOfWeekService],
-  ['PreMatchPressConferenceService', PreMatchPressConferenceService],
-  ['MediaInterviewService', MediaInterviewService],
-].forEach(([name, svc]) => PerfProfilerService.instrument(svc, name as string));
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -6919,6 +6826,7 @@ Asystent`,
     // --- END OF EMERGENCY GK PROTOCOL ---
 
     // ── Dzienny przegląd kontuzji w reprezentacjach narodowych ────────────────
+    DebugLoggerService.checkpoint('DAY_PHASE', `NT_DAILY_START ${dateToProcess.toDateString()}`);
     if (nationalTeams.length > 0) {
       const ntReview = NationalTeamService.reviewDailyInjuries(nationalTeams, players, dateToProcess);
       const anyChanged = ntReview.updatedTeams.some((t, i) => t !== nationalTeams[i]);
@@ -6932,21 +6840,44 @@ Asystent`,
       if (ntReview.playerUpdates.length > 0) {
         const updateMap: Record<string, string> = {};
         ntReview.playerUpdates.forEach(u => { updateMap[u.id] = u.assignedNationalTeamId; });
+        // Only a handful of players (national-team call-ups) ever change here,
+        // but rebuilding every club's squad array regardless used to briefly
+        // double the whole player world in memory on days this ran. Skipping
+        // clubs with no affected player keeps the result identical while
+        // reusing their existing array/player references.
         setPlayers(prev => {
-          const updated: Record<string, Player[]> = {};
+          const updated: Record<string, Player[]> = { ...prev };
+          let changed = false;
           for (const [clubId, squad] of Object.entries(prev)) {
+            if (!squad.some(p => updateMap[p.id])) continue;
+            changed = true;
             updated[clubId] = squad.map(p =>
               updateMap[p.id] ? { ...p, assignedNationalTeamId: updateMap[p.id] } : p
             );
           }
-          return updated;
+          return changed ? updated : prev;
         });
       }
 
       // ── Tygodniowy przegląd kadry (każdy poniedziałek, poza oknem zamrożenia NT) ─
       const ntSeasonYear = dateToProcess.getMonth() >= 6 ? dateToProcess.getFullYear() : dateToProcess.getFullYear() - 1;
       if (dateToProcess.getDay() === 1 && !NationalTeamService.isSquadFrozen(dateToProcess, ntSeasonYear)) {
+        // Diagnostyka: czy kadry reprezentacji faktycznie tracą wcześniej
+        // dogenerowanych zawodników między tygodniami (co zmuszałoby do
+        // ciągłego generowania nowych), czy chodzi o coś innego. Liczymy to
+        // PRZED wywołaniem serwisu, na tych samych danych, które on dostanie.
+        const allKnownPlayerIds = new Set(Object.values(players).flat().map(p => p.id));
+        const totalSquadSlotsRaw = nationalTeams.reduce((sum, t) => sum + t.squadPlayerIds.length, 0);
+        const totalSquadSlotsResolved = nationalTeams.reduce(
+          (sum, t) => sum + t.squadPlayerIds.filter(id => allKnownPlayerIds.has(id)).length, 0
+        );
+        const freeAgentsBefore = (players['FREE_AGENTS'] || []).length;
+        DebugLoggerService.checkpoint(
+          'DAY_PHASE',
+          `NT_WEEKLY_BEFORE_REVIEW ${dateToProcess.toDateString()} teams=${nationalTeams.length} squadSlotsRaw=${totalSquadSlotsRaw} squadSlotsResolved=${totalSquadSlotsResolved} freeAgents=${freeAgentsBefore}`
+        );
         const ntMonthly = NationalTeamService.reviewMonthlySquad(nationalTeams, coaches, players);
+        DebugLoggerService.checkpoint('DAY_PHASE', `NT_WEEKLY_AFTER_REVIEW playerUpdates=${ntMonthly.playerUpdates.length} newPlayers=${ntMonthly.newPlayers.length}`);
         const monthlyAnyChanged = ntMonthly.updatedTeams.some((t, i) => t !== nationalTeams[i]);
         if (monthlyAnyChanged) setNationalTeams(ntMonthly.updatedTeams);
         if (ntMonthly.newPlayers.length > 0) {
@@ -6958,16 +6889,22 @@ Asystent`,
         if (ntMonthly.playerUpdates.length > 0) {
           const monthlyUpdateMap: Record<string, string | null> = {};
           ntMonthly.playerUpdates.forEach(u => { monthlyUpdateMap[u.id] = u.assignedNationalTeamId; });
+          // Same fix as the daily review above: this ran every Monday and used
+          // to rebuild all 653 clubs' squad arrays for a handful of call-ups.
           setPlayers(prev => {
-            const updated: Record<string, Player[]> = {};
+            const updated: Record<string, Player[]> = { ...prev };
+            let changed = false;
             for (const [clubId, squad] of Object.entries(prev)) {
+              if (!squad.some(p => p.id in monthlyUpdateMap)) continue;
+              changed = true;
               updated[clubId] = squad.map(p =>
                 p.id in monthlyUpdateMap ? { ...p, assignedNationalTeamId: monthlyUpdateMap[p.id] } : p
               );
             }
-            return updated;
+            return changed ? updated : prev;
           });
         }
+        DebugLoggerService.checkpoint('DAY_PHASE', `NT_WEEKLY_AFTER_SETPLAYERS ${dateToProcess.toDateString()}`);
         if (userTeamId && ntMonthly.calledUpFromClub.length > 0) {
           const userSquad = players[userTeamId] || [];
           const callupMails: MailMessage[] = [];
@@ -8730,6 +8667,7 @@ Asystent`,
       return;
     }
     DebugLoggerService.log('GUARD', `advanceDay PRZECHODZI dla: ${dateKey}`);
+    DebugLoggerService.checkpoint('DAY_PHASE', `DAY_START ${dateKey}`);
     lastProcessedLeagueDateRef.current = dateKey;
 
     // ── YOUTH REFILL: EUROPA + POLSKA (3 lipca) ──────────────────────────────
@@ -10147,7 +10085,9 @@ Asystent`,
       }
     }
 
+    DebugLoggerService.checkpoint('DAY_PHASE', `LEAGUE_BEFORE ${dateToProcess.toDateString()}`);
     const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, playersAfterWorldCup, lineups, seasonNumber, coaches, matchSimulationSeed);
+    DebugLoggerService.checkpoint('DAY_PHASE', `LEAGUE_AFTER ${dateToProcess.toDateString()}`);
 
     if (userTeamId && !celebrationAlreadyFiredRef.current) {
       const userClubNow = simulation.updatedClubs.find(c => c.id === userTeamId);
@@ -10641,13 +10581,17 @@ Asystent`,
     postLoanLineups = aiAiLoanMoves.updatedLineups;
 
     // Wygasłe kontrakty (mid-season) → wolni agenci, każdy klub
+    DebugLoggerService.checkpoint('DAY_PHASE', `CONTRACT_EXPIRY_BEFORE ${dateToProcess.toDateString()}`);
     const contractExpiryMails: MailMessage[] = [];
     {
       let anyExpired = false;
-      const nextPlayersExp: Record<string, Player[]> = {};
-      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
-        nextPlayersExp[clubId] = [...squad];
-      });
+      // This block runs every single day. Pre-copying every club's squad array
+      // up front (even on the vast majority of days when nobody's contract
+      // expires) was pure daily waste across ~650 clubs. Starting from a shallow
+      // record copy and only allocating a new array for a club once a player of
+      // theirs actually expires keeps the result identical at a fraction of the
+      // cost.
+      const nextPlayersExp: Record<string, Player[]> = { ...postReviewPlayers };
       if (!nextPlayersExp['FREE_AGENTS']) nextPlayersExp['FREE_AGENTS'] = [];
 
       Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
@@ -10701,6 +10645,7 @@ Asystent`,
         postReviewPlayers = nextPlayersExp;
       }
     }
+    DebugLoggerService.checkpoint('DAY_PHASE', `CONTRACT_EXPIRY_AFTER ${dateToProcess.toDateString()}`);
 
     const aiTrainingEarly = AiWeeklyTrainingService.processWeeklyTraining(
       postReviewPlayers,
@@ -10715,12 +10660,26 @@ Asystent`,
     postReviewPlayers = aiTrainingEarly.updatedPlayers;
     postReviewClubs = aiTrainingEarly.updatedClubs;
 
-    postReviewPlayers = Object.fromEntries(
-      Object.entries(postReviewPlayers).map(([clubId, squad]) => [
-        clubId,
-        squad.map(player => PlayerClubAdaptationService.advanceDaily(player, dateToProcess)),
-      ])
-    );
+    {
+      // Also runs every day for every club. Club adaptation only ever applies to
+      // a small, recently-transferred subset of players — advanceDaily() already
+      // returns the same player reference once adaptation is inactive or maxed
+      // out, but rebuilding every club's array/record regardless still allocated
+      // ~650 new arrays daily for nothing. Skipping clubs with no eligible player
+      // keeps the result identical.
+      let anyAdaptationChanged = false;
+      const nextPlayersAdapt: Record<string, Player[]> = { ...postReviewPlayers };
+      Object.entries(postReviewPlayers).forEach(([clubId, squad]) => {
+        const hasActiveAdaptation = squad.some(p =>
+          p.clubAdaptation && p.clubAdaptation.clubId === p.clubId && p.clubAdaptation.level < 100
+        );
+        if (!hasActiveAdaptation) return;
+        nextPlayersAdapt[clubId] = squad.map(player => PlayerClubAdaptationService.advanceDaily(player, dateToProcess));
+        anyAdaptationChanged = true;
+      });
+      if (anyAdaptationChanged) postReviewPlayers = nextPlayersAdapt;
+    }
+    DebugLoggerService.checkpoint('DAY_PHASE', `ADAPTATION_AFTER ${dateToProcess.toDateString()}`);
 
 const finalResult: SimulationOutput = {
       ...simulation,
@@ -13063,9 +13022,11 @@ const finalResult: SimulationOutput = {
 
     // ── ULUBIEŃCY TRENERÓW AI: aktualizacja (1. dzień miesiąca) ─────────────
     if (nextDay.getDate() === 1) {
+      DebugLoggerService.checkpoint('DAY_PHASE', `MONTHLY_CLUSTER_START ${nextDay.toDateString()}`);
       const updatedCoachesMonthly = AiTransferDecisionService.updateCoachFavorites(clubs, players, coaches, nextDay, sessionSeed, userTeamId);
       setCoaches(updatedCoachesMonthly);
       setPlayers(prev => AiContractService.updateClubStars(clubs, prev, userTeamId, updatedCoachesMonthly, nextDay, sessionSeed));
+      DebugLoggerService.checkpoint('DAY_PHASE', `MONTHLY_CLUSTER_STARS_DONE ${nextDay.toDateString()}`);
     }
 
     // ── KOSZTY OPERACYJNE: odliczenie miesięczne (1. dzień miesiąca) ─────────
@@ -13329,8 +13290,9 @@ const finalResult: SimulationOutput = {
         const reportPlayerIds = new Set(reportRows.map(row => row.player.id));
         setPlayers(prev => {
           let changed = false;
-          const nextPlayers: Record<string, Player[]> = {};
+          const nextPlayers: Record<string, Player[]> = { ...prev };
           Object.entries(prev).forEach(([clubId, squad]) => {
+            if (!squad.some(player => reportPlayerIds.has(player.id) && player.loan)) return;
             nextPlayers[clubId] = squad.map(player => {
               if (!reportPlayerIds.has(player.id) || !player.loan) return player;
               const developedPlayer = loanDevelopmentResults.get(player.id)?.player ?? player;
@@ -13511,6 +13473,7 @@ const finalResult: SimulationOutput = {
       return;
     }
 
+    DebugLoggerService.checkpoint('DAY_PHASE', `DAY_END ${dateToProcess.toDateString()}`);
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
   }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
