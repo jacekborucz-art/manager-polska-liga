@@ -4175,12 +4175,27 @@ performSeasonSquadReview: (
       const coach = club.coachId ? (coachesMap[club.coachId] || null) : null;
       const starIds = new Set(_selectCorePlayerIds(club, squad, coach, currentDate, sessionSeed));
 
-      updatedPlayersMap[club.id] = squad.map(p => ({
-        ...p,
-        isUntouchable: starIds.has(p.id),
-        isOnTransferList: starIds.has(p.id) ? false : p.isOnTransferList,
-        transferListPrice: starIds.has(p.id) ? undefined : p.transferListPrice
-      }));
+      // Rebuilding every player object each month (even unchanged ones) briefly
+      // doubles the in-memory player world across ~650 clubs, which is what was
+      // driving the 1st-of-month Out of Memory crashes. Only players whose
+      // computed flags actually change get a new reference; the rest keep their
+      // existing object so React/GC never has to hold two full copies at once.
+      let squadChanged = false;
+      const updatedSquad = squad.map(p => {
+        const isUntouchable = starIds.has(p.id);
+        const isOnTransferList = isUntouchable ? false : p.isOnTransferList;
+        const transferListPrice = isUntouchable ? undefined : p.transferListPrice;
+        if (
+          p.isUntouchable === isUntouchable &&
+          p.isOnTransferList === isOnTransferList &&
+          p.transferListPrice === transferListPrice
+        ) {
+          return p;
+        }
+        squadChanged = true;
+        return { ...p, isUntouchable, isOnTransferList, transferListPrice };
+      });
+      if (squadChanged) updatedPlayersMap[club.id] = updatedSquad;
     }
 
     return updatedPlayersMap;
