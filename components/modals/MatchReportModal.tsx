@@ -469,8 +469,12 @@ export const MatchReportModal: React.FC<MatchReportModalProps> = ({ matchId, sea
   };
 
   const renderPitch = () => {
-    const homeTactic = match.homeTacticId ? TacticRepository.getById(match.homeTacticId) : null;
-    const awayTactic = match.awayTacticId ? TacticRepository.getById(match.awayTacticId) : null;
+    // Raport rysuje wyjściową jedenastkę, dlatego musi używać formacji startowej.
+    // homeTacticId/awayTacticId pozostają końcową taktyką do analiz pomeczowych.
+    const homeReportTacticId = match.homeStartingTacticId ?? match.homeTacticId;
+    const awayReportTacticId = match.awayStartingTacticId ?? match.awayTacticId;
+    const homeTactic = homeReportTacticId ? TacticRepository.getById(homeReportTacticId) : null;
+    const awayTactic = awayReportTacticId ? TacticRepository.getById(awayReportTacticId) : null;
 
     const homeRawSubs = (match.substitutions?.filter(s => s.teamId === homeClub.id) ?? []) as ReportSubstitution[];
     const awayRawSubs = (match.substitutions?.filter(s => s.teamId === awayClub.id) ?? []) as ReportSubstitution[];

@@ -31,7 +31,9 @@
     "test:save-archive": "esbuild tests/SaveArchiveTests.ts --bundle --platform=node --format=cjs --outfile=tmp/save-archive-tests.cjs && node tmp/save-archive-tests.cjs",
     "test:user-coach-instructions": "esbuild tests/UserCoachInstructionServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-coach-instruction-tests.cjs && node tmp/user-coach-instruction-tests.cjs",
     "test:user-coach-shouts": "esbuild tests/UserCoachShoutServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-coach-shout-tests.cjs && node tmp/user-coach-shout-tests.cjs",
-    "test:ai-coach-commands": "esbuild tests/AiCoachCommandServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-coach-command-tests.cjs && node tmp/ai-coach-command-tests.cjs"
+    "test:ai-coach-commands": "esbuild tests/AiCoachCommandServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-coach-command-tests.cjs && node tmp/ai-coach-command-tests.cjs",
+    "test:european-ai-preparation": "esbuild tests/EuropeanAiMatchPreparationTests.ts --bundle --platform=node --format=cjs --outfile=tmp/european-ai-preparation-tests.cjs && node tmp/european-ai-preparation-tests.cjs",
+    "test:polish-cup-ai-coach": "esbuild tests/PolishCupAiCoachPreparationTests.ts --bundle --platform=node --format=cjs --banner:js=\"globalThis.window=globalThis.window||{};\" --outfile=tmp/polish-cup-ai-coach-tests.cjs && node tmp/polish-cup-ai-coach-tests.cjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

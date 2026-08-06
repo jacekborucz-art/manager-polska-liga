@@ -1,4 +1,4 @@
-import { Fixture, Club, Player, MatchStatus, Lineup, CompetitionType, HealthStatus, InjurySeverity, MatchCardEntry, MatchEventType, MatchGoalEntry, MatchInjuryEntry, MatchSubstitutionEntry, PlayerPosition, PlayerStats, Referee } from '../types';
+import { Fixture, Club, Coach, Player, MatchStatus, Lineup, CompetitionType, HealthStatus, InjurySeverity, MatchCardEntry, MatchEventType, MatchGoalEntry, MatchInjuryEntry, MatchSubstitutionEntry, PlayerPosition, PlayerStats, Referee } from '../types';
 import { PolandWeatherService } from './PolandWeatherService';
 import { PlayerStatsService } from './PlayerStatsService';
 import { AiMatchPreparationService } from './AiMatchPreparationService';
@@ -35,6 +35,46 @@ const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>):
   return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
 };
 
+export interface PolishCupCoachMatchProfile {
+  attackingMultiplier: number;
+  defensiveMultiplier: number;
+  penaltyAdjustment: number;
+}
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+/**
+ * Converts the assigned coach's attributes into deliberately small match
+ * modifiers. The player squad, formation, home advantage, form and match RNG
+ * remain the dominant inputs. A top coach facing a very weak coach can create
+ * at most roughly an eight-percent relative xG edge (1.04 / 0.96), so coaching
+ * matters without replacing football quality or making cup upsets impossible.
+ *
+ * Motivation and training improve attacking execution, while experience and
+ * decision making improve defensive organisation. Shootout preparation uses a
+ * separate capped adjustment. A club without an assigned coach receives a
+ * neutral profile rather than artificial default-coach attributes.
+ */
+export const getPolishCupCoachMatchProfile = (coach: Coach | null): PolishCupCoachMatchProfile => {
+  if (!coach) {
+    return { attackingMultiplier: 1, defensiveMultiplier: 1, penaltyAdjustment: 0 };
+  }
+
+  const experience = coach.attributes.experience ?? 50;
+  const decisionMaking = coach.attributes.decisionMaking ?? 50;
+  const motivation = coach.attributes.motivation ?? 50;
+  const training = coach.attributes.training ?? 50;
+  const attackingScore = motivation * 0.4 + training * 0.35 + decisionMaking * 0.25;
+  const defensiveScore = decisionMaking * 0.45 + experience * 0.35 + training * 0.2;
+  const shootoutScore = motivation * 0.45 + decisionMaking * 0.35 + experience * 0.2;
+
+  return {
+    attackingMultiplier: clamp(1 + (attackingScore - 50) * 0.0008, 0.96, 1.04),
+    defensiveMultiplier: clamp(1 + (defensiveScore - 50) * 0.0008, 0.96, 1.04),
+    penaltyAdjustment: clamp((shootoutScore - 50) * 0.0007, -0.035, 0.035),
+  };
+};
+
 const simulateCupMatch = (
   home: Club,
   away: Club,
@@ -42,6 +82,8 @@ const simulateCupMatch = (
   aPlayers: Player[],
   hLineup: Lineup,
   aLineup: Lineup,
+  homeCoach: Coach | null,
+  awayCoach: Coach | null,
   seed: number,
   weatherEqualizer: number,
   isNeutralVenue: boolean
@@ -95,6 +137,18 @@ const simulateCupMatch = (
   // ── REPUTACJA I TAKTYKA ─────────────────────────────────────
   const hTactic = TacticRepository.getById(hLineup.tacticId);
   const aTactic = TacticRepository.getById(aLineup.tacticId);
+  const homeCoachProfile = getPolishCupCoachMatchProfile(homeCoach);
+  const awayCoachProfile = getPolishCupCoachMatchProfile(awayCoach);
+  const homeCoachXGMultiplier = clamp(
+    homeCoachProfile.attackingMultiplier / awayCoachProfile.defensiveMultiplier,
+    0.92,
+    1.08
+  );
+  const awayCoachXGMultiplier = clamp(
+    awayCoachProfile.attackingMultiplier / homeCoachProfile.defensiveMultiplier,
+    0.92,
+    1.08
+  );
   // Bonus za własne boisko: ~0.2 gola na mecz = 0.002/min (naukowe badania: ok. 0.15-0.25 gola)
   const homeAdvantageBonus = isNeutralVenue ? 0 : 0.0022;
 
@@ -166,8 +220,8 @@ const simulateCupMatch = (
     const awayXGAfterRed = awayXGBase * redCardMultiplier(awayRedCount) * (1 + homeRedCount * 0.28);
 
     // ── Pogoda (zła pogoda wyrównuje nieco szanse — chaos terenu) ──
-    const homeXGWeather = homeXGAfterRed * weatherEqualizer;
-    const awayXGWeather = awayXGAfterRed * weatherEqualizer;
+    const homeXGWeather = homeXGAfterRed * weatherEqualizer * homeCoachXGMultiplier;
+    const awayXGWeather = awayXGAfterRed * weatherEqualizer * awayCoachXGMultiplier;
     const formImpact = TeamFormImpactService.calculateMatchImpact(
       hPlayers,
       aPlayers,
@@ -437,7 +491,8 @@ const simulateCupMatch = (
     const simulatePenaltySeries = (
       shooters: Player[],
       shooterXI: (string | null)[],
-      keeper: Player | undefined
+      keeper: Player | undefined,
+      coachProfile: PolishCupCoachMatchProfile
     ): number => {
       const activeShooters = shooterXI
         .filter(id => id !== null)
@@ -450,7 +505,7 @@ const simulateCupMatch = (
         const finishing = shooter.attributes.finishing || 50;
         const keeperSave = keeper?.attributes.goalkeeping || 50;
         // Bazowa szansa na gola z karnego ~75%, modyfikowana atrybutami
-        const penChance = 0.75 + (finishing - keeperSave) / 200;
+        const penChance = 0.75 + (finishing - keeperSave) / 200 + coachProfile.penaltyAdjustment;
         if (rng() < Math.min(0.95, Math.max(0.40, penChance))) {
           scored++;
         }
@@ -461,8 +516,8 @@ const simulateCupMatch = (
     const homeGK = hPlayers.find(p => p.id === homeXI[0]);
     const awayGK = aPlayers.find(p => p.id === awayXI[0]);
 
-    penaltyHome = simulatePenaltySeries(hPlayers, homeXI, awayGK);
-    penaltyAway = simulatePenaltySeries(aPlayers, awayXI, homeGK);
+    penaltyHome = simulatePenaltySeries(hPlayers, homeXI, awayGK, homeCoachProfile);
+    penaltyAway = simulatePenaltySeries(aPlayers, awayXI, homeGK, awayCoachProfile);
 
     // Jeśli po serii nadal remis — dogrywka jeden na jednego aż do rozstrzygnięcia
     while (penaltyHome === penaltyAway) {
@@ -473,8 +528,8 @@ const simulateCupMatch = (
       const hSave = awayGK?.attributes.goalkeeping || 50;
       const aSave = homeGK?.attributes.goalkeeping || 50;
 
-      const hScored = rng() < Math.min(0.95, Math.max(0.40, 0.75 + (hFinishing - hSave) / 200));
-      const aScored = rng() < Math.min(0.95, Math.max(0.40, 0.75 + (aFinishing - aSave) / 200));
+      const hScored = rng() < Math.min(0.95, Math.max(0.40, 0.75 + (hFinishing - hSave) / 200 + homeCoachProfile.penaltyAdjustment));
+      const aScored = rng() < Math.min(0.95, Math.max(0.40, 0.75 + (aFinishing - aSave) / 200 + awayCoachProfile.penaltyAdjustment));
 
       if (hScored && !aScored) penaltyHome! += 1;
       else if (!hScored && aScored) penaltyAway! += 1;
@@ -511,7 +566,8 @@ export const BackgroundMatchProcessorPolishCup = {
     playersMap: Record<string, Player[]>,
     lineups: Record<string, Lineup>,
     careerSeed: number,
-    seasonNumber: number
+    seasonNumber: number,
+    coaches: Record<string, Coach> = {}
   ): {
     updatedFixtures: Fixture[],
     updatedPlayers: Record<string, Player[]>,
@@ -554,19 +610,47 @@ export const BackgroundMatchProcessorPolishCup = {
      * A normal Polish Cup round can contain many simultaneous fixtures, so the
      * participant set is derived from every scheduled background match rather
      * than being hard-coded to the first pair. Existing lineups for all other
-     * clubs remain untouched because prepareAllTeams starts from the supplied
-     * lineups map and only updates the filtered participant clubs.
+     * clubs remain untouched because the copied lineup map is updated only for
+     * the home and away clubs found in today's fixtures.
      */
-    const participantClubIds = new Set(
-      todayCupFixtures.flatMap(fixture => [fixture.homeTeamId, fixture.awayTeamId])
-    );
-    const participantClubs = clubs.filter(club => participantClubIds.has(club.id));
-    const newLineups = AiMatchPreparationService.prepareAllTeams(
-      participantClubs,
-      playersMap,
-      lineups,
-      userTeamId
-    );
+    const newLineups: Record<string, Lineup> = { ...lineups };
+
+    /**
+     * Prepare every AI participant from the concrete cup fixture instead of
+     * using the context-free bulk fallback. This makes cup suspensions,
+     * injuries and condition part of formation feasibility before the coach
+     * selects a plan. The strict flag guarantees natural GK/DEF/MID/FWD slot
+     * coverage whenever at least one registered formation fits the available
+     * squad. Only today's participants are touched, preserving the memory fix
+     * which prevents hundreds of unrelated lineups from being regenerated.
+     */
+    todayCupFixtures.forEach(fixture => {
+      const home = currentClubs.find(club => club.id === fixture.homeTeamId);
+      const away = currentClubs.find(club => club.id === fixture.awayTeamId);
+      if (!home || !away) return;
+
+      const prepare = (club: Club, opponent: Club, isHome: boolean): Lineup | null => {
+        const squad = currentPlayers[club.id] ?? [];
+        if (squad.length === 0) return null;
+        const coach = AiMatchPreparationService.getClubCoach(club, coaches);
+        return AiMatchPreparationService.prepareTeamForMatch(
+          club,
+          opponent,
+          squad,
+          coach,
+          fixture,
+          isHome,
+          `${fixture.id}_${club.id}_polish_cup_background`,
+          undefined,
+          true
+        );
+      };
+
+      const homeLineup = prepare(home, away, true);
+      const awayLineup = prepare(away, home, false);
+      if (homeLineup) newLineups[home.id] = homeLineup;
+      if (awayLineup) newLineups[away.id] = awayLineup;
+    });
 
     todayCupFixtures.forEach(fixture => {
       const home = currentClubs.find(c => c.id === fixture.homeTeamId)!;
@@ -575,6 +659,8 @@ export const BackgroundMatchProcessorPolishCup = {
       const aPlayers = currentPlayers[away.id] || [];
       const hLineup = newLineups[home.id];
       const aLineup = newLineups[away.id];
+      const homeCoach = AiMatchPreparationService.getClubCoach(home, coaches);
+      const awayCoach = AiMatchPreparationService.getClubCoach(away, coaches);
 
       if (!hLineup || !aLineup) return;
 
@@ -595,7 +681,7 @@ export const BackgroundMatchProcessorPolishCup = {
 
       // ── SYMULACJA MECZU ────────────────────────────────────
       const result = simulateCupMatch(
-        home, away, hPlayers, aPlayers, hLineup, aLineup,
+        home, away, hPlayers, aPlayers, hLineup, aLineup, homeCoach, awayCoach,
         seed, weatherEqualizer, isNeutralVenue
       );
 
@@ -698,6 +784,8 @@ export const BackgroundMatchProcessorPolishCup = {
         homeLineup: hLineup.startingXI.filter((id): id is string => !!id),
         awayLineup: aLineup.startingXI.filter((id): id is string => !!id),
         ratings,
+        homeStartingTacticId: hLineup.tacticId,
+        awayStartingTacticId: aLineup.tacticId,
         homeTacticId: hLineup.tacticId,
         awayTacticId: aLineup.tacticId,
         kits: KitSelectionService.selectOptimalKits(home, away),

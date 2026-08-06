@@ -6,6 +6,7 @@ import { EuropeanWeatherService } from './EuropeanWeatherService';
 import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { TeamFormImpactService } from './TeamFormImpactService';
+import { AiMatchPreparationService } from './AiMatchPreparationService';
 
 const emptyEuroStats = (): PlayerStats => ({
   goals: 0,
@@ -880,8 +881,28 @@ export const BackgroundMatchUEFASuperCup = {
 
       const homePlayers = updatedPlayersMap[fixture.homeTeamId] ?? [];
       const awayPlayers = updatedPlayersMap[fixture.awayTeamId] ?? [];
-      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers, '4-4-2', null, { competitionId: fixture.leagueId as string, formAware: true, selectionSeed: `${fixture.id}_home` });
-      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers, '4-4-2', null, { competitionId: fixture.leagueId as string, formAware: true, selectionSeed: `${fixture.id}_away` });
+
+      const assignedHomeCoach = AiMatchPreparationService.getClubCoach(home, coaches);
+      const assignedAwayCoach = AiMatchPreparationService.getClubCoach(away, coaches);
+      const prepareLineup = (club: Club, opponent: Club, squad: Player[], coach: Coach | null, isHome: boolean): Lineup => {
+        const existing = lineups[club.id];
+        if (!coach && existing) {
+          return LineupService.repairLineup(existing, squad, { competitionId: fixture.leagueId as string });
+        }
+        return AiMatchPreparationService.prepareTeamForMatch(
+          club,
+          opponent,
+          squad,
+          coach,
+          fixture,
+          isHome,
+          `${fixture.id}_${club.id}_uefa_super_cup`,
+          undefined,
+          true
+        );
+      };
+      const homeLineup = prepareLineup(home, away, homePlayers, assignedHomeCoach, true);
+      const awayLineup = prepareLineup(away, home, awayPlayers, assignedAwayCoach, false);
 
       // Superpuchar Europy: zawsze mecz finaÅ‚owy, brak rewanÅ¼u
       const isFinal = true;
@@ -897,8 +918,8 @@ export const BackgroundMatchUEFASuperCup = {
       usedRefereeIds.add(referee.id);
 
       const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
-      const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
-      const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const homeCoach: Coach = assignedHomeCoach ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const awayCoach: Coach = assignedAwayCoach ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
 
       // Superpuchar Europy — neutralny stadion, rotacja co sezon
       const venueIndex = ((seasonNumber - 1) % SUPER_CUP_VENUES.length + SUPER_CUP_VENUES.length) % SUPER_CUP_VENUES.length;
@@ -985,10 +1006,18 @@ export const BackgroundMatchUEFASuperCup = {
         goals: result.goals,
         cards: result.cards,
         substitutions: result.substitutions,
+        injuries: result.injuries,
         refereeName: `${referee.firstName} ${referee.lastName}`,
         attendance,
         venue: `${venue.name}, ${venue.city}`,
         weather,
+        homeLineup: homeLineup.startingXI.filter((id): id is string => id !== null),
+        awayLineup: awayLineup.startingXI.filter((id): id is string => id !== null),
+        homeStartingTacticId: homeLineup.tacticId,
+        awayStartingTacticId: awayLineup.tacticId,
+        homeTacticId: homeLineup.tacticId,
+        awayTacticId: awayLineup.tacticId,
+        ratings: result.ratings,
       });
     });
 

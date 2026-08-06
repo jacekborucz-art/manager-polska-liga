@@ -1,9 +1,99 @@
 
 import { Club, Player, PlayerPosition, Lineup, HealthStatus, Coach, Fixture, MatchStatus } from '../types';
-import { LineupService } from './LineupService';
+import { CoachTacticalIntent, LineupService } from './LineupService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 
 export const AiMatchPreparationService = {
+
+  getClubCoach: (club: Club, coaches: Record<string, Coach>): Coach | null =>
+    club.coachId ? (coaches[club.coachId] ?? null) : null,
+
+  determineMatchIntent: (
+    club: Club,
+    opponent: Club | null,
+    coach: Coach | null,
+    isHome: boolean,
+    aggregateGoalDifference?: number
+  ): CoachTacticalIntent => {
+    // Wynik dwumeczu ma pierwszeństwo. Trener przegrywający musi szukać bramki,
+    // a wyraźnie prowadzący może zabezpieczyć przewagę.
+    if (aggregateGoalDifference !== undefined) {
+      if (aggregateGoalDifference <= -1) return 'OFFENSIVE';
+      if (aggregateGoalDifference >= 2) return 'DEFENSIVE';
+    }
+
+    if (!opponent) return 'NEUTRAL';
+
+    const coachRead = coach
+      ? ((coach.attributes.decisionMaking ?? 50) + (coach.attributes.experience ?? 50)) / 2
+      : 50;
+    // Dobry trener reaguje już na mniejszą przewagę profilu drużyny. Słabszy nie
+    // wybiera przeciwnej, absurdalnej strategii — po prostu częściej zostaje przy
+    // swoim bezpiecznym planie neutralnym.
+    const adaptationThreshold = coachRead >= 80 ? 2 : coachRead >= 60 ? 3 : coachRead >= 40 ? 4 : 5;
+    const strengthDifference = (club.reputation ?? 5) - (opponent.reputation ?? 5) + (isHome ? 0.75 : 0);
+
+    if (strengthDifference >= adaptationThreshold) return 'OFFENSIVE';
+    if (strengthDifference <= -adaptationThreshold) return 'DEFENSIVE';
+    return 'NEUTRAL';
+  },
+
+  prepareTeamForMatch: (
+    club: Club,
+    opponent: Club | null,
+    squad: Player[],
+    coach: Coach | null,
+    fixture: Fixture,
+    isHome: boolean,
+    selectionSeed: string,
+    aggregateGoalDifference?: number,
+    requireNaturalPositionFit: boolean = false
+  ): Lineup => {
+    const competitionId = fixture.leagueId as string;
+    const matchEligibleSquad = LineupService.getMatchEligiblePlayers(squad, { competitionId });
+    const readySquad = squad.filter(player => player.condition >= 87);
+    const analysisSquad = readySquad.length >= 14
+      ? readySquad
+      : squad.filter(player => player.condition >= 75);
+
+    /**
+     * European background matches use a strict coach workflow. Formation
+     * feasibility is evaluated only against players who can actually take part
+     * in this competition on this date: suspended, seriously injured and
+     * critically unfit players have already been removed. Consequently a
+     * coach's preferred formation can be selected only when every natural
+     * positional slot (GK/DEF/MID/FWD) can be filled. If it cannot, the tactic
+     * resolver walks through the coach's other preferred plans and then through
+     * squad-compatible alternatives. The non-strict branch is retained for
+     * existing domestic callers until their match-preparation pipelines are
+     * migrated separately.
+     */
+    const tacticalSquad = requireNaturalPositionFit
+      ? matchEligibleSquad
+      : (analysisSquad.length >= 11 ? analysisSquad : squad);
+    const baselineTacticId = AiMatchPreparationService.determineBestStartingTactic(club, tacticalSquad);
+    const intent = AiMatchPreparationService.determineMatchIntent(
+      club,
+      opponent,
+      coach,
+      isHome,
+      aggregateGoalDifference
+    );
+    const tacticId = LineupService.resolveCoachTacticId(coach, tacticalSquad, intent, baselineTacticId);
+    const lineup = LineupService.autoPickLineup(club.id, squad, tacticId, coach, {
+      competitionId,
+      formAware: true,
+      selectionSeed,
+      respectRequestedTactic: true,
+    });
+
+    // autoPickLineup fills natural roles across all fitness pools. Running the
+    // legacy repair cascade afterwards could replace a tired natural player with
+    // a fresh player from the wrong line, defeating the strict formation check.
+    return requireNaturalPositionFit
+      ? lineup
+      : LineupService.repairLineup(lineup, squad, { competitionId });
+  },
 
   // PERFORMANCE CONTRACT: fixtures/currentDate are optional because callers
   // which already own a small, explicitly filtered club list (for example a cup
@@ -50,6 +140,7 @@ export const AiMatchPreparationService = {
     // zaplanowany mecz dziś lub jutro. undefined (fixtures/currentDate nieprzekazane)
     // = brak filtrowania, dokładnie stare zachowanie (wszystkie kluby).
     let relevantClubIds: Set<string> | null = null;
+    const relevantFixturesByClubId = new Map<string, Fixture>();
     if (fixtures && currentDate) {
       relevantClubIds = new Set<string>();
       const todayStr = currentDate.toDateString();
@@ -62,6 +153,14 @@ export const AiMatchPreparationService = {
         if (fDateStr !== todayStr && fDateStr !== tomorrowStr) return;
         relevantClubIds!.add(f.homeTeamId);
         relevantClubIds!.add(f.awayTeamId);
+        const existingHomeFixture = relevantFixturesByClubId.get(f.homeTeamId);
+        const existingAwayFixture = relevantFixturesByClubId.get(f.awayTeamId);
+        if (!existingHomeFixture || f.date.getTime() < existingHomeFixture.date.getTime()) {
+          relevantFixturesByClubId.set(f.homeTeamId, f);
+        }
+        if (!existingAwayFixture || f.date.getTime() < existingAwayFixture.date.getTime()) {
+          relevantFixturesByClubId.set(f.awayTeamId, f);
+        }
       });
     }
 
@@ -72,37 +171,32 @@ export const AiMatchPreparationService = {
 
       const squad = playersMap[club.id];
    if (!squad || squad.length === 0) return;
-      // --- STAGE 1 PRO: FRESHNESS POOL ---
-      const AI_FRESH_THRESHOLD = 87;
-      const readySquad = squad.filter(p => p.condition >= AI_FRESH_THRESHOLD);
-      const analysisSquad = readySquad.length >= 14 ? readySquad : squad.filter(p => p.condition >= 75);
-
-      // 1. Wybierz najlepszą taktykę startową na podstawie dostępnych zdrowych graczy
-     const bestTacticId = AiMatchPreparationService.determineBestStartingTactic(club, analysisSquad);
-
-      // 2. Pobierz aktualny skład lub stwórz nowy z inteligentnie dobraną taktyką
       const clubCoach = club.coachId ? (coaches[club.coachId] ?? null) : null;
-      const seedParts = [
-        club.id,
-        bestTacticId,
-        club.stats?.played ?? 0,
-        club.stats?.points ?? 0,
-        club.stats?.goalsFor ?? 0,
-        club.stats?.goalsAgainst ?? 0
-      ];
-      let lineup = LineupService.autoPickLineup(club.id, squad, bestTacticId, clubCoach, {
-        formAware: true,
-        selectionSeed: seedParts.join('_')
-      });
-      if (!lineup) {
-        // Brak składu lub utknięcie w domyślnym 4-4-2 — trener dobiera skład pod swoje taktyki
-        lineup = LineupService.autoPickLineup(club.id, squad, bestTacticId, clubCoach, {
-          formAware: true,
-          selectionSeed: seedParts.join('_')
-        });
+      const fixture = relevantFixturesByClubId.get(club.id);
+      if (fixture) {
+        const opponentId = fixture.homeTeamId === club.id ? fixture.awayTeamId : fixture.homeTeamId;
+        const opponent = clubs.find(candidate => candidate.id === opponentId) ?? null;
+        updatedLineups[club.id] = AiMatchPreparationService.prepareTeamForMatch(
+          club,
+          opponent,
+          squad,
+          clubCoach,
+          fixture,
+          fixture.homeTeamId === club.id,
+          `${fixture.id}_${club.id}_ai_match_preparation`
+        );
+        return;
       }
 
-      // 3. Napraw skład (wywal zawieszonych/rannych i wypełnij luki inteligentnie)
+      // Zachowanie dla wywołań bez terminarza: trener nadal wybiera ulubioną
+      // formację, ale bez kontekstu konkretnego przeciwnika.
+      const bestTacticId = AiMatchPreparationService.determineBestStartingTactic(club, squad);
+      const tacticId = LineupService.resolveCoachTacticId(clubCoach, squad, 'NEUTRAL', bestTacticId);
+      const lineup = LineupService.autoPickLineup(club.id, squad, tacticId, clubCoach, {
+        formAware: true,
+        selectionSeed: `${club.id}_${tacticId}_ai_match_preparation`,
+        respectRequestedTactic: true,
+      });
       updatedLineups[club.id] = LineupService.repairLineup(lineup, squad);
     });
 

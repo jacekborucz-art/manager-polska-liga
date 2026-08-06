@@ -421,6 +421,8 @@ const isPausedForSevereInjury = useMemo(() => {
         fixtureId: ctx.fixture.id, minute: 0, period: 1, addedTime: 0, isPaused: true,
         isPausedForEvent: false, isHalfTime: false, isFinished: false, speed: 1, momentum: 0, momentumPulse: 0,
         homeScore: 0, awayScore: 0, homeLineup: homeLineupData, awayLineup: awayLineupData,
+        initialHomeTacticId: homeLineupData.tacticId,
+        initialAwayTacticId: awayLineupData.tacticId,
         // TUTAJ WSTAW TEN KOD
         homeFatigue: ctx.homePlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
         awayFatigue: ctx.awayPlayers.reduce((acc, p) => ({ ...acc, [p.id]: p.condition }), {}),
@@ -2558,7 +2560,7 @@ return {
 
     const updatedFixtures = simResult.updatedFixtures.map(f => f.id === ctx.fixture.id ? { ...f, status: 'FINISHED' as any, homeScore: matchState.homeScore, awayScore: matchState.awayScore, ...(matchState.homePenaltyScore !== undefined && { homePenaltyScore: matchState.homePenaltyScore, awayPenaltyScore: matchState.awayPenaltyScore }) } : f);
 
-    const clBgResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(currentDate, userTeamId, updatedFixtures, clubs, players, lineups, seasonNumber, sessionSeed);
+    const clBgResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(currentDate, userTeamId, updatedFixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches);
     clBgResult.matchHistoryEntries.forEach(entry => MatchHistoryService.logMatch(entry));
 
     const timeline: MatchSummaryEvent[] = [];
@@ -2688,6 +2690,50 @@ const summary: MatchSummary = {
     });
     // KONIEC WSTAWKI
 
+    const buildReportLineup = (lineup: Lineup, subs: SubstitutionRecord[]) => {
+      const reportLineup = [...lineup.startingXI];
+      [...subs].sort((a, b) => b.minute - a.minute).forEach(sub => {
+        const idx = reportLineup.indexOf(sub.playerInId);
+        if (idx !== -1) reportLineup[idx] = sub.playerOutId;
+      });
+      return reportLineup.filter((id): id is string => !!id);
+    };
+    const buildReportSubs = (side: 'HOME' | 'AWAY') => {
+      const subs = side === 'HOME' ? matchState.homeSubsHistory : matchState.awaySubsHistory;
+      const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const teamId = side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+      return subs.map(sub => {
+        const playerOut = teamPlayers.find(player => player.id === sub.playerOutId);
+        const playerIn = teamPlayers.find(player => player.id === sub.playerInId);
+        return {
+          playerOutId: sub.playerOutId,
+          playerOutName: playerOut ? `${playerOut.firstName.charAt(0)}. ${playerOut.lastName}` : '',
+          playerInId: sub.playerInId,
+          playerInName: playerIn ? `${playerIn.firstName.charAt(0)}. ${playerIn.lastName}` : '',
+          minute: sub.minute,
+          teamId,
+        };
+      });
+    };
+    const buildReportInjuries = (side: 'HOME' | 'AWAY') => {
+      const injuries = side === 'HOME' ? matchState.homeInjuries : matchState.awayInjuries;
+      const injuryMinutes = side === 'HOME' ? matchState.homeInjuryMin : matchState.awayInjuryMin;
+      const teamPlayers = side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const teamId = side === 'HOME' ? ctx.homeClub.id : ctx.awayClub.id;
+      return Object.entries(injuries).map(([playerId, severity]) => {
+        const player = teamPlayers.find(candidate => candidate.id === playerId);
+        return {
+          playerId,
+          playerName: player ? `${player.firstName.charAt(0)}. ${player.lastName}` : '',
+          minute: injuryMinutes[playerId] ?? 0,
+          teamId,
+          severity,
+          days: severity === InjurySeverity.SEVERE ? 30 : 7,
+          type: severity,
+        };
+      });
+    };
+
     const matchHistoryArgs = {
       matchId: ctx.fixture.id,
       date: currentDate.toDateString(),
@@ -2698,6 +2744,16 @@ const summary: MatchSummary = {
       homeScore: matchState.homeScore,
       awayScore: matchState.awayScore,
       attendance: attendance,
+      ratings: finalRatingsMap,
+      substitutions: buildReportSubs('HOME').concat(buildReportSubs('AWAY')),
+      injuries: buildReportInjuries('HOME').concat(buildReportInjuries('AWAY')),
+      timeline,
+      homeLineup: buildReportLineup(matchState.homeLineup, matchState.homeSubsHistory),
+      awayLineup: buildReportLineup(matchState.awayLineup, matchState.awaySubsHistory),
+      homeStartingTacticId: matchState.initialHomeTacticId ?? matchState.homeLineup.tacticId,
+      awayStartingTacticId: matchState.initialAwayTacticId ?? matchState.awayLineup.tacticId,
+      homeTacticId: matchState.homeLineup.tacticId,
+      awayTacticId: matchState.awayLineup.tacticId,
       goals: summary.homeGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.homeClub.id, isPenalty: g.isPenalty }))
         .concat(summary.awayGoals.map(g => ({ playerName: g.playerName, minute: g.minute, teamId: ctx.awayClub.id, isPenalty: g.isPenalty }))),
      cards: (() => {

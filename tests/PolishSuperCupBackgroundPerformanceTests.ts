@@ -57,7 +57,8 @@ const result = BackgroundMatchProcessorPolishCup.processCupEvent(
   players,
   {},
   123456,
-  1
+  1,
+  coaches
 );
 const elapsedMs = performance.now() - startedAt;
 const finishedFixture = result.updatedFixtures.find(candidate => candidate.id === fixture.id);
@@ -91,7 +92,8 @@ const replay = BackgroundMatchProcessorPolishCup.processCupEvent(
   result.updatedPlayers,
   result.updatedLineups,
   123456,
-  1
+  1,
+  coaches
 );
 assert.equal(replay.updatedLineups, result.updatedLineups, 'an already-finished Super Cup must not rebuild lineups');
 assert.equal(replay.updatedPlayers, result.updatedPlayers, 'an already-finished Super Cup must not rebuild the player world');

@@ -5034,8 +5034,8 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
   }, [addRoundResults, userTeamId, activeTrainingId, lastMatchSummary, lineups, coaches, currentDate, sessionSeed, matchSimulationSeed, seasonNumber, pzpnDisciplinaryEvents, prependUniqueMessages, queueLeagueTeamOfWeekMail, triggerSeasonCelebrationIfClinched, allFixtures]);
 
   const processBackgroundCupMatches = useCallback(() => {
-    // Added sessionSeed as the 7th argument
-    const result = BackgroundMatchProcessorPolishCup.processCupEvent(currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber);
+    // The cup processor needs the real coach map for formation and match impact.
+    const result = BackgroundMatchProcessorPolishCup.processCupEvent(currentDate, userTeamId, allFixtures, clubs, players, lineups, matchSimulationSeed, seasonNumber, coaches);
     
     setGlobalFixtures(prev => prev.map(f => result.updatedFixtures.find(uf => uf.id === f.id) || f));
     setPlayers(result.updatedPlayers);
@@ -10482,7 +10482,10 @@ Asystent`,
     }
 
     const loanReturnMails: MailMessage[] = [];
-    let postLoanLineups = lineups;
+    // Zachowujemy składy przygotowane dzisiaj przez trenerów AI. Poprzednio ten
+    // punkt wracał do starego stanu `lineups`, przez co wynik prepareAllTeams
+    // znikał przed applySimulationResult, a kluby zostawały przy startowym 4-4-2.
+    let postLoanLineups = simulation.updatedLineups;
     {
       let loanPlayersChanged = false;
       let loanLineupsChanged = false;

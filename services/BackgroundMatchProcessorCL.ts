@@ -6,6 +6,7 @@ import { EuropeanWeatherService } from './EuropeanWeatherService';
 import { RefereeService } from './RefereeService';
 import { rollInjuryBySeverity } from './InjuryCatalog';
 import { TeamFormImpactService } from './TeamFormImpactService';
+import { AiMatchPreparationService } from './AiMatchPreparationService';
 
 // ============================================================
 //  NEUTRALNE STADIONY FINAŁÓW
@@ -1109,11 +1110,9 @@ export const BackgroundMatchProcessorCL = {
       const matchHash = fixture.id.split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0);
       const seed = (matchHash ^ sessionSeed) ^ (currentDate.getTime() / 1000 | 0);
 
-      // Pobierz lub wygeneruj składy
+      // Pobierz kadry. Składy powstaną po ustaleniu kontekstu dwumeczu.
       const homePlayers = updatedPlayersMap[fixture.homeTeamId] ?? [];
       const awayPlayers = updatedPlayersMap[fixture.awayTeamId] ?? [];
-      const homeLineup = lineups[fixture.homeTeamId] ?? LineupService.autoPickLineup(fixture.homeTeamId, homePlayers, '4-4-2', null, { competitionId: fixture.leagueId as string, formAware: true, selectionSeed: `${fixture.id}_home` });
-      const awayLineup = lineups[fixture.awayTeamId] ?? LineupService.autoPickLineup(fixture.awayTeamId, awayPlayers, '4-4-2', null, { competitionId: fixture.leagueId as string, formAware: true, selectionSeed: `${fixture.id}_away` });
 
       const isReturnLeg = fixture.leagueId === CompetitionType.CL_R1Q_RETURN
                        || fixture.leagueId === CompetitionType.CL_R2Q_RETURN
@@ -1155,10 +1154,45 @@ export const BackgroundMatchProcessorCL = {
       );
       usedRefereeIds.add(referee.id);
 
-      // ── Trenerzy (opcjonalni — domyślne atrybuty 50 jeśli brak) ──────
+      // Trenerzy są indeksowani przez coach.id, przechowywane w club.coachId.
       const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
-      const homeCoach: Coach = coaches[fixture.homeTeamId] ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
-      const awayCoach: Coach = coaches[fixture.awayTeamId] ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const assignedHomeCoach = AiMatchPreparationService.getClubCoach(home, coaches);
+      const assignedAwayCoach = AiMatchPreparationService.getClubCoach(away, coaches);
+      const homeCoach: Coach = assignedHomeCoach ?? { id: 'default_h', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+      const awayCoach: Coach = assignedAwayCoach ?? { id: 'default_a', firstName: '', lastName: '', age: 0, nationality: '', nationalityFlag: '', attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: '', contractEndDate: '', annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: '', neutral: '', defensive: '' } };
+
+      // W rewanżu leg1Diff jest zapisane z perspektywy gospodarza pierwszego
+      // meczu, czyli obecnego gościa. Odwracamy znak dla obecnego gospodarza.
+      const homeAggregateGoalDifference = isReturnLeg && leg1Diff !== undefined ? -leg1Diff : undefined;
+      const awayAggregateGoalDifference = homeAggregateGoalDifference !== undefined ? -homeAggregateGoalDifference : undefined;
+      const prepareLineup = (
+        club: Club,
+        opponent: Club,
+        squad: Player[],
+        coach: Coach | null,
+        isHome: boolean,
+        aggregateGoalDifference: number | undefined
+      ): Lineup => {
+        const existing = lineups[club.id];
+        // Klub bez przypisanego trenera (najczęściej drużyna gracza przy ręcznej
+        // symulacji) zachowuje ustawienie użytkownika. Klub AI dostaje plan swojego trenera.
+        if (!coach && existing) {
+          return LineupService.repairLineup(existing, squad, { competitionId: fixture.leagueId as string });
+        }
+        return AiMatchPreparationService.prepareTeamForMatch(
+          club,
+          opponent,
+          squad,
+          coach,
+          fixture,
+          isHome,
+          `${fixture.id}_${club.id}_european_background`,
+          aggregateGoalDifference,
+          true
+        );
+      };
+      const homeLineup = prepareLineup(home, away, homePlayers, assignedHomeCoach, true, homeAggregateGoalDifference);
+      const awayLineup = prepareLineup(away, home, awayPlayers, assignedAwayCoach, false, awayAggregateGoalDifference);
 
       // ── Frekwencja i stadion ──────────────────────────────────────────
       const pseudoRng = ((seed * 9301 + 49297) % 233280) / 233280;
@@ -1328,6 +1362,8 @@ export const BackgroundMatchProcessorCL = {
         weather,
         homeLineup: homeLineup.startingXI.filter((id): id is string => id !== null),
         awayLineup: awayLineup.startingXI.filter((id): id is string => id !== null),
+        homeStartingTacticId: homeLineup.tacticId,
+        awayStartingTacticId: awayLineup.tacticId,
         homeTacticId: homeLineup.tacticId,
         awayTacticId: awayLineup.tacticId,
         ratings: result.ratings,

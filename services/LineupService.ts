@@ -68,6 +68,8 @@ export const FAVORITE_TACTIC_MAP: Record<string, string> = {
 };
 
 const checkTacticFeasibility = (players: Player[], tacticId: string): boolean => {
+  if (players.length < 11 || !players.some(player => player.position === PlayerPosition.GK)) return false;
+
   const tactic = TacticRepository.getById(tacticId);
   const required: Record<string, number> = {};
   // Zliczamy wymagane pozycje (pomijamy slot 0 = GK)
@@ -82,6 +84,42 @@ const checkTacticFeasibility = (players: Player[], tacticId: string): boolean =>
     }
   });
   return Object.entries(required).every(([pos, count]) => (available[pos] || 0) >= count);
+};
+
+export type CoachTacticalIntent = 'OFFENSIVE' | 'NEUTRAL' | 'DEFENSIVE';
+
+const normalizeCoachTacticId = (value: string | undefined): string | null => {
+  if (!value) return null;
+  const mapped = FAVORITE_TACTIC_MAP[value];
+  if (mapped) return mapped;
+  const direct = TacticRepository.getAll().find(tactic => tactic.id === value || tactic.name === value);
+  return direct?.id ?? null;
+};
+
+const resolveCoachTacticId = (
+  coach: Coach | null,
+  players: Player[],
+  intent: CoachTacticalIntent,
+  fallbackTacticId: string
+): string => {
+  const preferenceOrder: Array<keyof Coach['favoriteTactics']> = intent === 'OFFENSIVE'
+    ? ['offensive', 'neutral', 'defensive']
+    : intent === 'DEFENSIVE'
+      ? ['defensive', 'neutral', 'offensive']
+      : ['neutral', 'offensive', 'defensive'];
+
+  if (coach?.favoriteTactics) {
+    for (const preference of preferenceOrder) {
+      const tacticId = normalizeCoachTacticId(coach.favoriteTactics[preference]);
+      if (tacticId && checkTacticFeasibility(players, tacticId)) return tacticId;
+    }
+  }
+
+  const normalizedFallback = normalizeCoachTacticId(fallbackTacticId) ?? fallbackTacticId;
+  if (checkTacticFeasibility(players, normalizedFallback)) return normalizedFallback;
+
+  return TacticRepository.getAll().find(tactic => checkTacticFeasibility(players, tactic.id))?.id
+    ?? TacticRepository.getDefault().id;
 };
 
 const hashString = (value: string): number => {
@@ -230,11 +268,29 @@ const isUnavailableForLineup = (player: Player, competitionId?: string): boolean
   );
 };
 
+const isMatchEligibleForLineup = (player: Player, competitionId?: string): boolean =>
+  !isUnavailableForLineup(player, competitionId) &&
+  player.condition >= 60 &&
+  (player.health.status === HealthStatus.HEALTHY || (player.health.injury?.daysRemaining ?? 0) <= 2);
+
 export const LineupService = {
   getSuspensionMatchesForCompetition,
 
+  resolveCoachTacticId: (
+    coach: Coach | null,
+    players: Player[],
+    intent: CoachTacticalIntent,
+    fallbackTacticId: string = '4-4-2'
+  ): string => resolveCoachTacticId(coach, players, intent, fallbackTacticId),
+
   isUnavailableForLineup: (player: Player, options: LineupAvailabilityOptions = {}): boolean =>
     isUnavailableForLineup(player, options.competitionId),
+
+  getMatchEligiblePlayers: (players: Player[], options: LineupAvailabilityOptions = {}): Player[] =>
+    players.filter(player => isMatchEligibleForLineup(player, options.competitionId)),
+
+  isTacticFeasible: (players: Player[], tacticId: string): boolean =>
+    checkTacticFeasibility(players, tacticId),
 
   /**
    * Deterministyczny wybór składu.
@@ -248,27 +304,12 @@ export const LineupService = {
     // Trener próbuje dobrać skład pod swoje ulubione taktyki (neutral → offensive → defensive),
     // chyba że analiza tego konkretnego spotkania wybrała już docelową formację.
     if (coach?.favoriteTactics && !options.respectRequestedTactic) {
-      const preferred = [
-        coach.favoriteTactics.neutral,
-        coach.favoriteTactics.offensive,
-        coach.favoriteTactics.defensive,
-      ];
-      for (const favName of preferred) {
-        const mappedId = FAVORITE_TACTIC_MAP[favName];
-        if (mappedId && checkTacticFeasibility(players, mappedId)) {
-          tacticId = mappedId;
-          break;
-        }
-      }
+      tacticId = resolveCoachTacticId(coach, players, 'NEUTRAL', tacticId);
     }
     const tactic = TacticRepository.getById(tacticId);
     
     // Na start wybieramy tylko tych, którzy są w stanie grać (nie SEVERE, nie zawieszeni, daysRemaining <= 2, kondycja >= 60)
-    const availablePlayers = players.filter(p =>
-      !isUnavailableForLineup(p, competitionId) &&
-      p.condition >= 60 &&
-      (p.health.status === HealthStatus.HEALTHY || (p.health.injury?.daysRemaining ?? 0) <= 2)
-    );
+    const availablePlayers = players.filter(p => isMatchEligibleForLineup(p, competitionId));
         const COND_XI    = 90;
     const COND_BENCH = 85;
     const sortedAll   = [...availablePlayers].sort((a, b) =>
