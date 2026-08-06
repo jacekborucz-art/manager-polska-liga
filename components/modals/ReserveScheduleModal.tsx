@@ -482,7 +482,7 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
           onClick={e => e.stopPropagation()}
         >
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-white text-lg italic uppercase tracking-tighter">Terminarz Rezerw - Sezon {seasonNumber}</h2>
+            <h2 className="text-white text-lg italic uppercase tracking-tighter">Centralna Liga Juniorów - Sezon {seasonNumber}</h2>
             <button onClick={closeModal} className="text-gray-400 hover:text-white text-xl">x</button>
           </div>
 
