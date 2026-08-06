@@ -29,6 +29,11 @@ import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulat
 import { PostMatchCommentSelector } from './PostMatchCommentSelector';
 import { MailService } from '../services/MailService';
 import { PolishCupVenueService } from '../services/PolishCupVenueService';
+import {
+  getPolishCupExhaustionInjuryChance,
+  getPolishCupResumeClock,
+  hasPolishCupWalkoverPlayerCount,
+} from '../services/PolishCupLivePhaseService';
 
 // --- PRZENIESIONE Z PolishCupEngine/MatchLiveViewPolishCupSimulation.tsx: warstwa czystych funkcji kalkulacyjnych Pucharu (moc drużyn, morale/leadership, ocena instrukcji, deformacja pozycyjna, seria karna, nazwy graczy) ---
 const getCupDebriefMatchStage = (fixtureId: string, playoffMatchType?: string): DebriefMatchStage => {
@@ -1940,7 +1945,7 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
   const getActionLabel = () => {
     if (!matchState) return "";
     if (hasMandatorySub) return "WYMAGANA ZMIANA";
-    if (matchState.isHalfTime) return "II POŁOWA";
+    if (matchState.isHalfTime) return matchState.isExtraTime ? "II CZĘŚĆ DOGRYWKI" : "II POŁOWA";
     return matchState.isPaused ? "START" : "PAUZA";
   };
 
@@ -2778,8 +2783,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            };
         }
 
-        // PRZENIESIONE Z PUCHARU: dogrywka — przerwa w 105. minucie.
-        if (prev.period === 3 && prev.isExtraTime && nextMinute === 105) {
+        // Pierwsza część dogrywki rozgrywa pełne minuty 91-105. Przerwa jest
+        // ustawiana przy następnym ticku, a wznowienie przechodzi do period 4.
+        if (prev.period === 3 && prev.isExtraTime && nextMinute > 105) {
           return {
             ...prev,
             minute: 105,
@@ -2790,12 +2796,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         }
 
         // PRZENIESIONE Z PUCHARU: koniec dogrywki w 121. minucie — remis → karne, inaczej koniec meczu.
-        if (prev.period === 3 && prev.isExtraTime && nextMinute >= 121) {
+        if (prev.period === 4 && prev.isExtraTime && nextMinute >= 121) {
           const isDrawAfterEt = requiresExtraTime(prev.homeScore, prev.awayScore);
           if (isDrawAfterEt) {
             return {
               ...prev,
               minute: 120,
+              period: 5,
               isPenalties: true,
               isFinished: false,
               isPaused: false,
@@ -5348,14 +5355,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (!id || injuries[id]) return;
             const stamina = fatMap[id] ?? 100;
             if (stamina >= 64) return;
-            let pStamina = 0;
-            if (stamina >= 50) {
-              pStamina = ((70 - stamina) / 20) * 0.50;
-            } else if (stamina >= 15) {
-              pStamina = 0.50 + ((50 - stamina) / 35) * 0.40;
-            } else {
-              pStamina = 0.90;
-            }
+            const pStamina = getPolishCupExhaustionInjuryChance(stamina);
             if (seededRng(currentSeed, rngMinute, 5000 + sideIdx * 100 + slotIdx) < pStamina) {
               const p = pool.find(px => px.id === id);
               if (!p) return;
@@ -5663,8 +5663,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         // WALKOWER: drużyna z ≤7 zawodnikami i bez dostępnych zmian przegrywa 3-0
         const homeOnPitch = nextHomeLineup.startingXI.filter(id => id !== null).length;
         const awayOnPitch = nextAwayLineup.startingXI.filter(id => id !== null).length;
-        const homeWalkover = homeOnPitch <= 7 && nextSubsCountHome >= 5;
-        const awayWalkover = awayOnPitch <= 7 && nextSubsCountAway >= 5;
+        const homeWalkover = hasPolishCupWalkoverPlayerCount(homeOnPitch) && nextSubsCountHome >= 5;
+        const awayWalkover = hasPolishCupWalkoverPlayerCount(awayOnPitch) && nextSubsCountAway >= 5;
 
         if (homeWalkover || awayWalkover) {
           const walText = (homeWalkover && awayWalkover)
@@ -7794,7 +7794,21 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
 
         <button
           disabled={hasMandatorySub}
-          onClick={() => matchState.isHalfTime ? setMatchState(s => s ? {...s, isHalfTime: false, isPaused: false, period: 2, minute: 45, addedTime: 0, momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0) + (s.oppHalftimeMomentumBonus || 0))), halftimeMomentumBonus: 0, oppHalftimeMomentumBonus: 0} : s) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
+          onClick={() => matchState.isHalfTime ? setMatchState(s => {
+            if (!s) return s;
+            const resumeClock = getPolishCupResumeClock(s);
+            return {
+              ...s,
+              isHalfTime: false,
+              isPaused: false,
+              period: resumeClock.period,
+              minute: resumeClock.minute,
+              addedTime: 0,
+              momentum: Math.max(-100, Math.min(100, s.momentum + (s.halftimeMomentumBonus || 0) + (s.oppHalftimeMomentumBonus || 0))),
+              halftimeMomentumBonus: 0,
+              oppHalftimeMomentumBonus: 0,
+            };
+          }) : setMatchState(s => s ? {...s, isPaused: !s.isPaused, isPausedForEvent: false, flashMessage: null} : s)}
           className={`relative min-w-[132px] py-2 px-5 rounded-xl font-black italic uppercase tracking-widest text-sm transition-all hover:scale-105 active:translate-y-[2px] border-t border-x border-b
             ${hasMandatorySub
               ? 'bg-red-600/20 border-t-red-400/40 border-x-red-500/20 border-b-black/60 text-red-500 hover:bg-red-600/30'
