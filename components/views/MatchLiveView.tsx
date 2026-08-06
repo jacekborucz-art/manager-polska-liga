@@ -8,14 +8,19 @@ import {
   Lineup,
   PlayerPerformance,
   MatchEvent,
+  GoalTickerInfo,
   PlayerLiveInstructions,
+  TacticalInstructions,
   InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack, InstructionMarking,
+  UserCoachInstructionId,
+  UserCoachShoutId,
   Referee,
   Fixture,
   WeatherSnapshot
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
+import { CoachCommandsPanel } from '../match/CoachCommandsPanel';
 
 const getPlayerPenaltyImpact = (player: Player, side: 'HOME' | 'AWAY', state: any) => {
   const ownGoals = side === 'HOME' ? state.homeGoals : state.awayGoals;
@@ -121,6 +126,9 @@ import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { InjuryUpgradeService } from '../../services/InjuryUpgradeService';
 import { MatchActionService } from '../../services/MatchActionService';
 import { LiveMatchInstructionBalanceService } from '../../services/LiveMatchInstructionBalanceService';
+import { UserCoachInstructionService } from '../../services/UserCoachInstructionService';
+import { UserCoachShoutService } from '../../services/UserCoachShoutService';
+import { AiCoachCommandService } from '../../services/AiCoachCommandService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 import { LineupService } from '../../services/LineupService';
@@ -863,6 +871,8 @@ export const MatchLiveView = () => {
   const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
   const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [aiCoachBubble, setAiCoachBubble] = useState<{ text: string; fading: boolean } | null>(null);
+  const lastAiCoachAnnouncementRef = useRef<string | null>(null);
   const [pendingFinishPayload, setPendingFinishPayload] = useState<{
     simResultMerged: any;
     matchHistoryArgs: any;
@@ -882,6 +892,21 @@ export const MatchLiveView = () => {
     document.addEventListener('click', closeTacticalSelect);
     return () => document.removeEventListener('click', closeTacticalSelect);
   }, []);
+
+  useEffect(() => {
+    const announcement = matchState?.aiCoachShoutAnnouncement;
+    if (!announcement || announcement.id === lastAiCoachAnnouncementRef.current) return;
+    lastAiCoachAnnouncementRef.current = announcement.id;
+    setAiCoachBubble({ text: announcement.text, fading: false });
+    const fadeTimer = window.setTimeout(() => {
+      setAiCoachBubble(current => current ? { ...current, fading: true } : null);
+    }, 1600);
+    const removeTimer = window.setTimeout(() => setAiCoachBubble(null), 2000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, [matchState?.aiCoachShoutAnnouncement?.id]);
 
   const getContrastColor = (hexColor: string): string => {
     const hex = hexColor.replace('#', '');
@@ -1026,6 +1051,79 @@ const isPausedForSevereInjury = useMemo(() => {
     const onPitchIds = [...matchState.homeLineup.startingXI, ...matchState.awayLineup.startingXI];
     return onPitchIds.some(id => id && allInjuries[id] === 'SEVERE');
   }, [matchState]);
+
+  const handleUserCoachInstruction = (instructionId: UserCoachInstructionId | null) => {
+    setMatchState(prev => {
+      if (!prev || prev.isFinished || prev.minute < 1) return prev;
+      if (instructionId === null) {
+        return { ...prev, userCoachInstruction: null };
+      }
+      const issued = UserCoachInstructionService.issue({
+        id: instructionId,
+        minute: prev.minute,
+        sessionSeed: prev.sessionSeed,
+        previousActive: prev.userCoachInstruction,
+        memory: prev.userCoachInstructionMemory,
+      });
+      return {
+        ...prev,
+        userCoachInstruction: issued.active,
+        userCoachInstructionMemory: issued.memory,
+      };
+    });
+  };
+
+  const handleUserCoachShout = (shoutId: UserCoachShoutId | null) => {
+    setMatchState(prev => {
+      if (!prev || !ctx || prev.isFinished || prev.minute < 1) return prev;
+      if (shoutId === null) {
+        return { ...prev, userCoachShout: null };
+      }
+
+      const userPlayers = userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+      const userLineup = userSide === 'HOME' ? prev.homeLineup : prev.awayLineup;
+      const userFatigue = userSide === 'HOME' ? prev.homeFatigue : prev.awayFatigue;
+      const userStats = userSide === 'HOME' ? prev.liveStats.home : prev.liveStats.away;
+      const opponentStats = userSide === 'HOME' ? prev.liveStats.away : prev.liveStats.home;
+      const userGoals = userSide === 'HOME' ? prev.homeGoals : prev.awayGoals;
+      const opponentGoals = userSide === 'HOME' ? prev.awayGoals : prev.homeGoals;
+      const activeIds = userLineup.startingXI.filter((id): id is string => id !== null);
+      const activePlayers = userPlayers.filter(player => activeIds.includes(player.id));
+      const averageFatigue = activeIds.length > 0
+        ? activeIds.reduce((sum, id) => sum + (userFatigue[id] ?? 100), 0) / activeIds.length
+        : 100;
+      const averageMorale = activePlayers.length > 0
+        ? activePlayers.reduce((sum, player) => sum + (player.morale ?? 50), 0) / activePlayers.length
+        : 50;
+      const isRecentValidGoal = (goal: GoalTickerInfo) =>
+        !goal.varDisallowed && !goal.isMiss && prev.minute - goal.minute <= 3;
+      const rngState = prev.userCoachShoutRng ?? UserCoachShoutService.createRngState();
+      const issued = UserCoachShoutService.issue({
+        id: shoutId,
+        minute: prev.minute,
+        rngState,
+        previousActive: prev.userCoachShout,
+        memory: prev.userCoachShoutMemory,
+        situation: {
+          scoreDiff: userSide === 'HOME' ? prev.homeScore - prev.awayScore : prev.awayScore - prev.homeScore,
+          shotDiff: userStats.shots - opponentStats.shots,
+          shotsOnTargetDiff: userStats.shotsOnTarget - opponentStats.shotsOnTarget,
+          userMomentum: userSide === 'HOME' ? prev.momentum : -prev.momentum,
+          recentlyScored: userGoals.some(isRecentValidGoal),
+          recentlyConceded: opponentGoals.some(isRecentValidGoal),
+          averageFatigue,
+          averageMorale,
+          yellowCardCount: activeIds.reduce((sum, id) => sum + Math.min(1, prev.playerYellowCards[id] ?? 0), 0),
+        },
+      });
+      return {
+        ...prev,
+        userCoachShout: issued.active,
+        userCoachShoutMemory: issued.memory,
+        userCoachShoutRng: issued.rngState,
+      };
+    });
+  };
 
 
   const env = useMemo(() => {
@@ -1242,6 +1340,38 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           counterAttackResponseFactor: 1.0,
           markingResponseFactor: 1.0,
           lastChangeMinute: -5,},
+          userCoachInstruction: null,
+          userCoachInstructionMemory: {
+            lastId: null,
+            lastIssuedMinute: -99,
+            repeatCount: 0,
+            issueCount: 0,
+          },
+          userCoachShout: null,
+          userCoachShoutMemory: {
+            lastId: null,
+            lastIssuedMinute: -99,
+            repeatCount: 0,
+            issueCount: 0,
+          },
+          userCoachShoutRng: UserCoachShoutService.createRngState(),
+          aiCoachInstruction: null,
+          aiCoachInstructionMemory: {
+            lastId: null,
+            lastIssuedMinute: -99,
+            repeatCount: 0,
+            issueCount: 0,
+          },
+          aiCoachShout: null,
+          aiCoachShoutMemory: {
+            lastId: null,
+            lastIssuedMinute: -99,
+            repeatCount: 0,
+            issueCount: 0,
+          },
+          aiCoachCommandRng: AiCoachCommandService.createRngState(),
+          aiCoachNextCommandMinute: 7,
+          aiCoachShoutAnnouncement: null,
           homeIndividualInstructions: {},
           awayIndividualInstructions: {},
           playedPlayerIds: [],
@@ -2023,6 +2153,23 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         let localHomeFatigue = { ...prev.homeFatigue };
         let localAwayFatigue = { ...prev.awayFatigue };
         let nextActionContributions = { ...(prev.actionContributions ?? {}) };
+        const nextUserCoachInstruction = prev.userCoachInstruction && nextMinute <= prev.userCoachInstruction.expiryMinute
+          ? prev.userCoachInstruction
+          : null;
+        const nextUserCoachShout = prev.userCoachShout && nextMinute <= prev.userCoachShout.expiryMinute
+          ? prev.userCoachShout
+          : null;
+        let nextAiCoachInstruction = prev.aiCoachInstruction && nextMinute <= prev.aiCoachInstruction.expiryMinute
+          ? prev.aiCoachInstruction
+          : null;
+        let nextAiCoachShout = prev.aiCoachShout && nextMinute <= prev.aiCoachShout.expiryMinute
+          ? prev.aiCoachShout
+          : null;
+        let nextAiCoachInstructionMemory = prev.aiCoachInstructionMemory;
+        let nextAiCoachShoutMemory = prev.aiCoachShoutMemory;
+        let nextAiCoachCommandRng = prev.aiCoachCommandRng ?? AiCoachCommandService.createRngState();
+        let nextAiCoachNextCommandMinute = prev.aiCoachNextCommandMinute ?? 7;
+        let nextAiCoachShoutAnnouncement = prev.aiCoachShoutAnnouncement ?? null;
 
         const getSideInjuryMap = (side: 'HOME' | 'AWAY') => side === 'HOME' ? nextHomeInjuries : nextAwayInjuries;
         const getSidePlayers = (side: 'HOME' | 'AWAY') => side === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
@@ -2256,6 +2403,115 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const homeScoreDiff = prev.homeScore - prev.awayScore;
         const awayScoreDiff = prev.awayScore - prev.homeScore;
         const userScoreDiff = userSide === 'HOME' ? homeScoreDiff : awayScoreDiff;
+        const aiScoreDiffForCoachCommands = -userScoreDiff;
+        const aiPlayersForCoachCommands = userSide === 'HOME' ? ctx.awayPlayers : ctx.homePlayers;
+        const aiLineupForCoachCommands = userSide === 'HOME' ? nextAwayLineup : nextHomeLineup;
+        const aiFatigueForCoachCommands = userSide === 'HOME' ? localAwayFatigue : localHomeFatigue;
+        const aiStatsForCoachCommands = userSide === 'HOME' ? nextLiveStats.away : nextLiveStats.home;
+        const userStatsForCoachCommands = userSide === 'HOME' ? nextLiveStats.home : nextLiveStats.away;
+        const aiGoalsForCoachCommands = userSide === 'HOME' ? newAwayGoals : newHomeGoals;
+        const userGoalsForCoachCommands = userSide === 'HOME' ? newHomeGoals : newAwayGoals;
+        const aiActiveIdsForCoachCommands = aiLineupForCoachCommands.startingXI.filter((id): id is string => id !== null);
+        const aiActivePlayersForCoachCommands = aiPlayersForCoachCommands.filter(player => aiActiveIdsForCoachCommands.includes(player.id));
+        const aiAverageFatigueForCoachCommands = aiActiveIdsForCoachCommands.length > 0
+          ? aiActiveIdsForCoachCommands.reduce((sum, id) => sum + (aiFatigueForCoachCommands[id] ?? 100), 0) / aiActiveIdsForCoachCommands.length
+          : 100;
+        const aiAverageMoraleForCoachCommands = aiActivePlayersForCoachCommands.length > 0
+          ? aiActivePlayersForCoachCommands.reduce((sum, player) => sum + (player.morale ?? 50), 0) / aiActivePlayersForCoachCommands.length
+          : 50;
+        const aiTacticForCoachCommands = TacticRepository.getById(aiLineupForCoachCommands.tacticId);
+        const userTacticForCoachCommands = TacticRepository.getById(
+          userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId
+        );
+        const aiCoachTacticalInstructions: TacticalInstructions = {
+          tempo: prev.aiActiveShout?.tempo ?? 'NORMAL',
+          mindset: prev.aiActiveShout?.mindset ?? 'NEUTRAL',
+          intensity: prev.aiActiveShout?.intensity ?? 'NORMAL',
+          passing: prev.aiActiveShout?.passing ?? 'MIXED',
+          pressing: prev.aiActiveShout?.pressing ?? 'NORMAL',
+          counterAttack: prev.aiActiveShout?.counterAttack ?? 'NORMAL',
+          marking: prev.aiActiveShout?.marking ?? 'NONE',
+          lastChangeMinute: -5,
+          expiryMinute: -1,
+          tempoExpiry: -1,
+          mindsetExpiry: -1,
+          intensityExpiry: -1,
+          tempoCooldown: 0,
+          mindsetCooldown: 0,
+          intensityCooldown: 0,
+          passingCooldown: 0,
+          pressingCooldown: 0,
+          counterAttackCooldown: 0,
+          markingCooldown: 0,
+          tempoResponseFactor: prev.aiActiveShout?.tempoResponseFactor ?? 1,
+          mindsetResponseFactor: prev.aiActiveShout?.mindsetResponseFactor ?? 1,
+          intensityResponseFactor: prev.aiActiveShout?.intensityResponseFactor ?? 1,
+          passingResponseFactor: 1,
+          pressingResponseFactor: 1,
+          counterAttackResponseFactor: 1,
+          markingResponseFactor: prev.aiActiveShout?.markingResponseFactor ?? 1,
+        };
+        const aiShoutSituation = {
+          scoreDiff: aiScoreDiffForCoachCommands,
+          shotDiff: aiStatsForCoachCommands.shots - userStatsForCoachCommands.shots,
+          shotsOnTargetDiff: aiStatsForCoachCommands.shotsOnTarget - userStatsForCoachCommands.shotsOnTarget,
+          userMomentum: userSide === 'HOME' ? -prev.momentum : prev.momentum,
+          recentlyScored: aiGoalsForCoachCommands.some(goal =>
+            !goal.varDisallowed && !goal.isMiss && nextMinute - goal.minute >= 0 && nextMinute - goal.minute <= 3
+          ),
+          recentlyConceded: userGoalsForCoachCommands.some(goal =>
+            !goal.varDisallowed && !goal.isMiss && nextMinute - goal.minute >= 0 && nextMinute - goal.minute <= 3
+          ),
+          averageFatigue: aiAverageFatigueForCoachCommands,
+          averageMorale: aiAverageMoraleForCoachCommands,
+          yellowCardCount: aiActiveIdsForCoachCommands.reduce(
+            (sum, id) => sum + Math.min(1, nextPlayerYellowCards[id] ?? 0),
+            0
+          ),
+        };
+
+        const latestCoachRelevantGoalMinute = [...aiGoalsForCoachCommands, ...userGoalsForCoachCommands]
+          .filter(goal => !goal.varDisallowed && !goal.isMiss)
+          .reduce((latest, goal) => Math.max(latest, goal.minute), -1);
+        const aiCoachMustReactToGoal = latestCoachRelevantGoalMinute >= 0
+          && (nextAiCoachShoutMemory?.lastIssuedMinute ?? -99) < latestCoachRelevantGoalMinute;
+
+        // Goals bypass the routine decision clock once. The shout memory records the issue minute,
+        // therefore the same goal cannot retrigger the coach on every following simulation tick.
+        if (nextMinute >= nextAiCoachNextCommandMinute || aiCoachMustReactToGoal) {
+          const aiClubForCommands = userSide === 'HOME' ? ctx.awayClub : ctx.homeClub;
+          const aiCoachForCommands = aiClubForCommands.coachId ? coaches[aiClubForCommands.coachId] : null;
+          const aiCommandDecision = AiCoachCommandService.decide({
+            minute: nextMinute,
+            coachAttributes: aiCoachForCommands?.attributes ?? {
+              experience: 50,
+              decisionMaking: 50,
+              motivation: 50,
+              training: 50,
+            },
+            rngState: nextAiCoachCommandRng,
+            aiInstructions: aiCoachTacticalInstructions,
+            aiTactic: aiTacticForCoachCommands,
+            userTactic: userTacticForCoachCommands,
+            aiScoreDiff: aiScoreDiffForCoachCommands,
+            userTempo: prev.userInstructions.tempo,
+            userPassing: prev.userInstructions.passing,
+            situation: aiShoutSituation,
+            previousInstruction: nextAiCoachInstruction,
+            instructionMemory: nextAiCoachInstructionMemory,
+            previousShout: nextAiCoachShout,
+            shoutMemory: nextAiCoachShoutMemory,
+          });
+          if (aiCommandDecision.instruction) nextAiCoachInstruction = aiCommandDecision.instruction;
+          if (aiCommandDecision.shout) nextAiCoachShout = aiCommandDecision.shout;
+          nextAiCoachInstructionMemory = aiCommandDecision.instructionMemory;
+          nextAiCoachShoutMemory = aiCommandDecision.shoutMemory;
+          nextAiCoachCommandRng = aiCommandDecision.rngState;
+          nextAiCoachNextCommandMinute = aiCommandDecision.nextDecisionMinute;
+          if (aiCommandDecision.shoutAnnouncement) {
+            nextAiCoachShoutAnnouncement = aiCommandDecision.shoutAnnouncement;
+          }
+        }
         const hLivePressure = getLivePressureModifiers(
           getPressureProfileForSide(livePressureContext, 'HOME'),
           homeScoreDiff,
@@ -2388,6 +2644,113 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
          * do not yet alter the probability, so this step keeps match balance stable while preparing the
          * next stage where profile-based modifiers can be introduced behind tests.
          */
+        /**
+         * HUMAN-TEAM TOUCHLINE INSTRUCTION PIPELINE
+         * -----------------------------------------
+         * The service receives only the human user's tactical state, current XI and fatigue map. Its
+         * result is calculated once for this simulated minute and reused by all relevant engine stages,
+         * keeping one coherent RNG/alignment outcome instead of rolling independently for every event.
+         *
+         * Application rules below are deliberately asymmetric:
+         * - initiative is added when the user is HOME and sign-inverted when the user is AWAY;
+         * - shot modifiers distinguish between user attacks and opponent attacks;
+         * - turnover risk and additional fatigue are added only to the user's team;
+         * - foul and injury multipliers are guarded by `activeSide === userSide` or an explicit side
+         *   comparison.
+         *
+         * Do not reuse these values for the AI side. AI touchline behaviour will have a separate hidden
+         * decision layer later. Emotional coach shouts are calculated independently immediately below;
+         * they do not read the tactical matrix or the main match seed.
+         */
+        const userCoachInstructionEffects = UserCoachInstructionService.getEffects({
+          active: nextUserCoachInstruction,
+          minute: nextMinute,
+          instructions: prev.userInstructions,
+          tactic: TacticRepository.getById(userSide === 'HOME' ? nextHomeLineup.tacticId : nextAwayLineup.tacticId),
+          opponentTactic: TacticRepository.getById(userSide === 'HOME' ? nextAwayLineup.tacticId : nextHomeLineup.tacticId),
+          players: userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+          startingXI: userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+          fatigueMap: userSide === 'HOME' ? localHomeFatigue : localAwayFatigue,
+          scoreDiff: userScoreDiff,
+          opponentTempo: prev.aiActiveShout?.tempo ?? 'NORMAL',
+          opponentPassing: prev.aiActiveShout?.passing ?? 'MIXED',
+        });
+        /**
+         * HUMAN-TEAM EMOTIONAL SHOUT PIPELINE
+         * -----------------------------------
+         * This calculation uses the dedicated hidden emotional RNG state saved in MatchLiveState. The
+         * active XI is evaluated player by player, including persistent match-day disposition, current
+         * morale, mentality, fatigue, personality, cards and recent contribution. It does not advance or
+         * inspect the main match RNG. The resulting team average is reused for this whole simulated minute
+         * and, like tactical instructions, every application below is explicitly guarded by `userSide`.
+         */
+        const userCoachShoutEffects = UserCoachShoutService.getEffects({
+          active: nextUserCoachShout,
+          minute: nextMinute,
+          rngState: prev.userCoachShoutRng,
+          players: userSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers,
+          startingXI: userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI,
+          fatigueMap: userSide === 'HOME' ? localHomeFatigue : localAwayFatigue,
+          yellowCards: nextPlayerYellowCards,
+          actionContributions: nextActionContributions,
+        });
+        /**
+         * AI TOUCHLINE EFFECT PIPELINE
+         * ----------------------------
+         * The same matrix calculators are evaluated from the AI team's perspective, using only the AI
+         * lineup, players, fatigue and tactical snapshot. The AI coach decision service has already
+         * removed illogical candidates before an active command can reach this point. Coach quality is
+         * embedded in instruction responseFactor and shout coachEffectiveness. The separate randomized
+         * 1.01-1.10 advantage scales only the distance from a neutral effect; it is never added directly
+         * as percentage points to initiative, shots, fouls or injuries.
+         */
+        const aiCoachInstructionEffects = UserCoachInstructionService.getEffects({
+          active: nextAiCoachInstruction,
+          minute: nextMinute,
+          instructions: aiCoachTacticalInstructions,
+          tactic: aiTacticForCoachCommands,
+          opponentTactic: userTacticForCoachCommands,
+          players: aiPlayersForCoachCommands,
+          startingXI: aiLineupForCoachCommands.startingXI,
+          fatigueMap: aiFatigueForCoachCommands,
+          scoreDiff: aiScoreDiffForCoachCommands,
+          opponentTempo: prev.userInstructions.tempo,
+          opponentPassing: prev.userInstructions.passing,
+        });
+        const aiCoachShoutEffects = UserCoachShoutService.getEffects({
+          active: nextAiCoachShout,
+          minute: nextMinute,
+          rngState: nextAiCoachCommandRng,
+          players: aiPlayersForCoachCommands,
+          startingXI: aiLineupForCoachCommands.startingXI,
+          fatigueMap: aiFatigueForCoachCommands,
+          yellowCards: nextPlayerYellowCards,
+          actionContributions: nextActionContributions,
+        });
+        const aiInstructionAdvantage = nextAiCoachInstruction?.advantageMultiplier ?? 1;
+        const aiShoutScale = (nextAiCoachShout?.coachEffectiveness ?? 1) *
+          (nextAiCoachShout?.advantageMultiplier ?? 1);
+        const aiCoachInitiativeModifier =
+          aiCoachInstructionEffects.initiativeModifier * aiInstructionAdvantage +
+          aiCoachShoutEffects.initiativeModifier * aiShoutScale;
+        const aiCoachOwnShotModifier =
+          aiCoachInstructionEffects.userShotModifier * aiInstructionAdvantage +
+          aiCoachShoutEffects.userShotModifier * aiShoutScale;
+        const aiCoachOpponentShotModifier =
+          aiCoachInstructionEffects.opponentShotModifier * aiInstructionAdvantage +
+          aiCoachShoutEffects.opponentShotModifier * aiShoutScale;
+        const aiCoachTurnoverRiskModifier =
+          aiCoachInstructionEffects.turnoverRiskModifier * aiInstructionAdvantage +
+          aiCoachShoutEffects.turnoverRiskModifier * aiShoutScale;
+        const aiCoachFatigueExtra =
+          aiCoachInstructionEffects.fatigueExtra * aiInstructionAdvantage +
+          aiCoachShoutEffects.fatigueExtra * aiShoutScale;
+        const aiCoachFoulMultiplier =
+          (1 + (aiCoachInstructionEffects.foulMultiplier - 1) * aiInstructionAdvantage) *
+          (1 + (aiCoachShoutEffects.foulMultiplier - 1) * aiShoutScale);
+        const aiCoachInjuryMultiplier =
+          (1 + (aiCoachInstructionEffects.injuryMultiplier - 1) * aiInstructionAdvantage) *
+          (1 + (aiCoachShoutEffects.injuryMultiplier - 1) * aiShoutScale);
         const initiativeResult = calculateLiveMatchInitiative({
           momentum: prev.momentum,
           minute: nextMinute,
@@ -2411,7 +2774,19 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           homeProfileReadiness: liveTeamProfiles.home.readiness,
           awayProfileReadiness: liveTeamProfiles.away.readiness,
         });
-        const homeAttackChance = initiativeResult.homeAttackChance;
+        const homeAttackChance = clampNumber(
+          initiativeResult.homeAttackChance + (
+            userSide === 'HOME'
+              ? userCoachInstructionEffects.initiativeModifier + userCoachShoutEffects.initiativeModifier
+              : -(userCoachInstructionEffects.initiativeModifier + userCoachShoutEffects.initiativeModifier)
+          ) + (
+            userSide === 'HOME'
+              ? -aiCoachInitiativeModifier
+              : aiCoachInitiativeModifier
+          ),
+          0.28,
+          0.72
+        );
         void legacyInlineHomeAttackChance;
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, rngMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
         const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
@@ -3023,6 +3398,12 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           fatigueMap: uFatigueMap,
           isAttacking: isUserAttacking,
         });
+        shotThreshold += isUserAttacking
+          ? userCoachInstructionEffects.userShotModifier + userCoachShoutEffects.userShotModifier
+          : userCoachInstructionEffects.opponentShotModifier + userCoachShoutEffects.opponentShotModifier;
+        shotThreshold += isUserAttacking
+          ? aiCoachOpponentShotModifier
+          : aiCoachOwnShotModifier;
         // ───────────────────────────────────────────────────────────────────────
 
         // ─── INSTRUKCJE TAKTYCZNE TRENERA AI → MODYFIKATORY SILNIKA ────────────
@@ -3373,8 +3754,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         });
         const activeBuildUpShotModifier = isUserAttacking ? userIndividualBuildUp.shotModifier : 0;
         const activeTurnoverRisk = isUserAttacking
-          ? Math.max(0, Math.min(1, activeBuildUpProfile.turnoverRisk + userIndividualBuildUp.turnoverRiskModifier))
-          : activeBuildUpProfile.turnoverRisk;
+          ? Math.max(0, Math.min(1,
+              activeBuildUpProfile.turnoverRisk +
+              userIndividualBuildUp.turnoverRiskModifier +
+              userCoachInstructionEffects.turnoverRiskModifier +
+              userCoachShoutEffects.turnoverRiskModifier
+            ))
+          : Math.max(0, Math.min(1,
+              activeBuildUpProfile.turnoverRisk + aiCoachTurnoverRiskModifier
+            ));
         shotThreshold += activeBuildUpProfile.shotModifier + activeBuildUpShotModifier;
         const opponentPressingNow = isUserAttacking
           ? nextAiActiveShout?.pressing === 'PRESSING'
@@ -3662,7 +4050,11 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const activeMarkingRisk = activeSide === userSide ? userEffectiveMarkingRisk : aiMarkingProfile;
         const activeIntensityRisk = isUserAttacking ? userIntensityRisk : aiIntensityRisk;
         const uFoulThreshold = calculateLiveFoulThreshold({
-          intensityFoulMultiplier: activeIntensityRisk.foul * activeMarkingRisk.foulMultiplier,
+          intensityFoulMultiplier: activeIntensityRisk.foul * activeMarkingRisk.foulMultiplier * (
+            activeSide === userSide
+              ? userCoachInstructionEffects.foulMultiplier * userCoachShoutEffects.foulMultiplier
+              : aiCoachFoulMultiplier
+          ),
           pressureCardMultiplier: activePressureMods.cardMultiplier,
           rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1,
         });
@@ -3751,7 +4143,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 if (verdict === 'PENALTY') {
                   if (defendingSide === 'HOME') nextLiveStats.home.fouls++;
                   else nextLiveStats.away.fouls++;
-                  const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000));
+                  const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000), attackingSide === userSide ? userCoachInstructionEffects.injuryMultiplier * userCoachShoutEffects.injuryMultiplier : aiCoachInjuryMultiplier);
                   if (injury) processInjury(injury);
                 }
               } else {
@@ -3799,7 +4191,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
 
               if (newLog) {
-                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: MatchEventType.FOUL, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000));
+                const injuredSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
+                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: MatchEventType.FOUL, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000), injuredSide === userSide ? userCoachInstructionEffects.injuryMultiplier * userCoachShoutEffects.injuryMultiplier : aiCoachInjuryMultiplier);
                 if (injury) processInjury(injury);
               }
            }
@@ -4023,7 +4416,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            pauseForEvent = isGoal;
 
            if (newLog) {
-             const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2500));
+             const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2500), activeSide === userSide ? userCoachInstructionEffects.injuryMultiplier * userCoachShoutEffects.injuryMultiplier : aiCoachInjuryMultiplier);
              if (injury) processInjury(injury);
            }
         }
@@ -4353,7 +4746,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           {
             side: 'HOME',
             pressure: hLivePressure,
-            instructionInjuryMod: userSide === 'HOME' ? userIntensityRisk.injury : aiIntensityRisk.injury,
+            instructionInjuryMod: userSide === 'HOME'
+              ? userIntensityRisk.injury * userCoachInstructionEffects.injuryMultiplier * userCoachShoutEffects.injuryMultiplier
+              : aiIntensityRisk.injury * aiCoachInjuryMultiplier,
             rollOffset: 4500,
             pickOffset: 4700,
             severityOffset: 4800,
@@ -4361,7 +4756,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           {
             side: 'AWAY',
             pressure: aLivePressure,
-            instructionInjuryMod: userSide === 'AWAY' ? userIntensityRisk.injury : aiIntensityRisk.injury,
+            instructionInjuryMod: userSide === 'AWAY'
+              ? userIntensityRisk.injury * userCoachInstructionEffects.injuryMultiplier * userCoachShoutEffects.injuryMultiplier
+              : aiIntensityRisk.injury * aiCoachInjuryMultiplier,
             rollOffset: 4550,
             pickOffset: 4750,
             severityOffset: 4850,
@@ -4601,7 +4998,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           uInstr.pressingResponseFactor ?? 1.0,
           uInstr.marking ?? 'NONE',
           uInstr.markingResponseFactor ?? 1.0
-        );
+        ) + userCoachInstructionEffects.fatigueExtra + userCoachShoutEffects.fatigueExtra;
         if (uFatExtra !== 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
@@ -4665,7 +5062,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             uFatTarget[id] = Math.min(100, Math.max(0, (uFatTarget[id] ?? 100) - (extra * multiplier)));
           });
         }
-        const aiFatExtra = nextAiActiveShout
+        const aiFatExtra = (nextAiActiveShout
           ? LiveMatchInstructionBalanceService.getInstructionFatigueExtra(
               nextAiActiveShout.tempo,
               nextAiActiveShout.intensity,
@@ -4676,7 +5073,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               nextAiActiveShout.marking ?? 'NONE',
               aiMarkingRf
             )
-          : 0;
+          : 0) + aiCoachFatigueExtra;
         if (aiFatExtra !== 0) {
           const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;
@@ -4756,6 +5153,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             homeUpgradeProb: nextHomeUpgradeProb, awayUpgradeProb: nextAwayUpgradeProb,
             lightInjuryPrompt: null,
             userInstructions: nextUserInstructions,
+            userCoachInstruction: nextUserCoachInstruction,
+            userCoachShout: nextUserCoachShout,
+            aiCoachInstruction: nextAiCoachInstruction,
+            aiCoachInstructionMemory: nextAiCoachInstructionMemory,
+            aiCoachShout: nextAiCoachShout,
+            aiCoachShoutMemory: nextAiCoachShoutMemory,
+            aiCoachCommandRng: nextAiCoachCommandRng,
+            aiCoachNextCommandMinute: nextAiCoachNextCommandMinute,
+            aiCoachShoutAnnouncement: nextAiCoachShoutAnnouncement,
             activeTacticalBoost: 0, tacticalBoostExpiry: -1, lastGoalBoostMinute: nextLastGoalBoostMinute,
             aiMentalitySurgeBoost: nextAiMentalitySurgeBoost,
             aiMentalitySurgePreviousBoost: nextAiMentalitySurgePreviousBoost,
@@ -4811,6 +5217,15 @@ return {
            homeUpgradeProb: nextHomeUpgradeProb,
            awayUpgradeProb: nextAwayUpgradeProb,
            userInstructions: nextUserInstructions,
+           userCoachInstruction: nextUserCoachInstruction,
+           userCoachShout: nextUserCoachShout,
+           aiCoachInstruction: nextAiCoachInstruction,
+           aiCoachInstructionMemory: nextAiCoachInstructionMemory,
+           aiCoachShout: nextAiCoachShout,
+           aiCoachShoutMemory: nextAiCoachShoutMemory,
+           aiCoachCommandRng: nextAiCoachCommandRng,
+           aiCoachNextCommandMinute: nextAiCoachNextCommandMinute,
+           aiCoachShoutAnnouncement: nextAiCoachShoutAnnouncement,
            activeTacticalBoost: nextActiveTacticalBoost,
            tacticalBoostExpiry: nextTacticalBoostExpiry,
            lastGoalBoostMinute: nextLastGoalBoostMinute,
@@ -5965,6 +6380,31 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 
   return (
     <div className="h-screen min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
+    <CoachCommandsPanel
+      hidden={showBriefing || isTacticsOpen || isHalftimeTalkOpen || showPostMatchDebrief || matchState.isFinished}
+      selectedInstructionId={matchState.userCoachInstruction?.id ?? null}
+      instructionStartsMinute={matchState.userCoachInstruction?.startsMinute}
+      instructionExpiryMinute={matchState.userCoachInstruction?.expiryMinute}
+      selectedShoutId={matchState.userCoachShout?.id ?? null}
+      currentMinute={matchState.minute}
+      onInstructionSelect={handleUserCoachInstruction}
+      onShoutSelect={handleUserCoachShout}
+    />
+    {aiCoachBubble && !showBriefing && !isTacticsOpen && !isHalftimeTalkOpen && !showPostMatchDebrief && !matchState.isFinished && (
+      <div
+        className={`pointer-events-none fixed top-20 z-[440] max-w-[240px] transition-all duration-[400ms] ${
+          userSide === 'HOME' ? 'right-6' : 'left-6'
+        } ${aiCoachBubble.fading ? 'translate-y-1 opacity-0' : 'translate-y-0 opacity-100'}`}
+      >
+        <div className="relative rounded-2xl border border-amber-200/55 bg-slate-950/95 px-4 py-3 text-center text-[11px] font-black italic uppercase tracking-tighter text-amber-100 shadow-[0_14px_38px_rgba(0,0,0,0.65),0_0_22px_rgba(251,191,36,0.16)] backdrop-blur-xl">
+          <div className="mb-1 text-[8px] font-black italic uppercase tracking-tighter text-amber-400">TRENER AI</div>
+          „{aiCoachBubble.text}!”
+          <div className={`absolute top-full h-0 w-0 border-x-[8px] border-x-transparent border-t-[9px] border-t-amber-200/55 ${
+            userSide === 'HOME' ? 'right-6' : 'left-6'
+          }`} />
+        </div>
+      </div>
+    )}
      {/* BACKGROUND (STADION) */}
 <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
   {/* obraz stadionu */}

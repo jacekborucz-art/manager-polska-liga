@@ -2305,6 +2305,107 @@ export interface TacticalInstructions {
   markingResponseFactor?: number;
 }
 
+export type UserCoachInstructionId =
+  | 'NARROW'
+  | 'WIDE'
+  | 'CALM_DOWN'
+  | 'SPEED_UP'
+  | 'KEEP_BALL'
+  | 'TAKE_RISKS'
+  | 'CLOSE_DOWN'
+  | 'DROP_BACK'
+  | 'ALL_FORWARD'
+  | 'TIME_WASTE';
+
+export interface ActiveUserCoachInstruction {
+  id: UserCoachInstructionId;
+  issuedMinute: number;
+  startsMinute: number;
+  expiryMinute: number;
+  responseFactor: number;
+  misunderstandingRoll: number;
+  repeatCount: number;
+  confusionUntilMinute: number;
+}
+
+export interface UserCoachInstructionMemory {
+  lastId: UserCoachInstructionId | null;
+  lastIssuedMinute: number;
+  repeatCount: number;
+  issueCount: number;
+}
+
+export type UserCoachShoutId =
+  | 'MOTIVATE'
+  | 'PRAISE'
+  | 'FOCUS'
+  | 'NO_PANIC'
+  | 'MORE_EFFORT'
+  | 'CALM_EMOTIONS'
+  | 'DO_BETTER'
+  | 'DONT_GIVE_UP';
+
+export type UserCoachShoutContextCategory =
+  | 'LOSING_POORLY'
+  | 'LOSING_WELL'
+  | 'EVEN_MATCH'
+  | 'LEADING_NARROWLY'
+  | 'LEADING_COMFORTABLY'
+  | 'JUST_CONCEDED'
+  | 'JUST_SCORED';
+
+export type UserCoachShoutMentalState =
+  | 'FLAT'
+  | 'NERVOUS'
+  | 'FRUSTRATED'
+  | 'FOCUSED'
+  | 'CONFIDENT'
+  | 'COMPLACENT'
+  | 'EXHAUSTED';
+
+export interface UserCoachShoutRngState {
+  entropySeed: number;
+  streamState: number;
+  drawCount: number;
+}
+
+export interface ActiveUserCoachShout {
+  id: UserCoachShoutId;
+  issuedMinute: number;
+  startsMinute: number;
+  expiryMinute: number;
+  responseSeed: number;
+  unexpectedSeed: number;
+  repeatCount: number;
+  confusionUntilMinute: number;
+  contextCategory: UserCoachShoutContextCategory;
+  mentalState: UserCoachShoutMentalState;
+  contextFit: number;
+  mentalFit: number;
+}
+
+export interface UserCoachShoutMemory {
+  lastId: UserCoachShoutId | null;
+  lastIssuedMinute: number;
+  repeatCount: number;
+  issueCount: number;
+}
+
+export interface ActiveAiCoachInstruction extends ActiveUserCoachInstruction {
+  coachEffectiveness: number;
+  advantageMultiplier: number;
+}
+
+export interface ActiveAiCoachShout extends ActiveUserCoachShout {
+  coachEffectiveness: number;
+  advantageMultiplier: number;
+}
+
+export interface AiCoachShoutAnnouncement {
+  id: string;
+  text: string;
+}
+
 export interface PlayerLiveInstructions {
   tempo?: InstructionTempo;
   mindset?: InstructionMindset;
@@ -2502,6 +2603,18 @@ isPenalties?: boolean;
   };
   aiCupMatchPlan?: AiCupMatchPlan;
   userInstructions: TacticalInstructions;
+  userCoachInstruction?: ActiveUserCoachInstruction | null;
+  userCoachInstructionMemory?: UserCoachInstructionMemory;
+  userCoachShout?: ActiveUserCoachShout | null;
+  userCoachShoutMemory?: UserCoachShoutMemory;
+  userCoachShoutRng?: UserCoachShoutRngState;
+  aiCoachInstruction?: ActiveAiCoachInstruction | null;
+  aiCoachInstructionMemory?: UserCoachInstructionMemory;
+  aiCoachShout?: ActiveAiCoachShout | null;
+  aiCoachShoutMemory?: UserCoachShoutMemory;
+  aiCoachCommandRng?: UserCoachShoutRngState;
+  aiCoachNextCommandMinute?: number;
+  aiCoachShoutAnnouncement?: AiCoachShoutAnnouncement | null;
   homeIndividualInstructions?: Record<string, PlayerLiveInstructions>;
   awayIndividualInstructions?: Record<string, PlayerLiveInstructions>;
 }

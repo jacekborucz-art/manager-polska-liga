@@ -753,6 +753,8 @@ import { PlayerClubAdaptationService } from '../services/PlayerClubAdaptationSer
 import { PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { TacticalMatchupService } from '../services/TacticalMatchupService';
 import { TeamFormImpactService } from '../services/TeamFormImpactService';
+import { LiveCoachCommandRuntimeService } from '../services/LiveCoachCommandRuntimeService';
+import { LiveCoachCommandsOverlay } from '../components/match/LiveCoachCommandsOverlay';
 import {
   adjustBriefingEffectForPressure,
   adjustTalkEffectForPressure,
@@ -3093,6 +3095,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         };
         void liveTeamProfiles;
 
+        const coachCommands = LiveCoachCommandRuntimeService.advance({
+          previousState: prev, minute: nextMinute, ctx, userSide, coaches,
+          homeLineup: nextHomeLineup, awayLineup: nextAwayLineup,
+          homeFatigue: localHomeFatigue, awayFatigue: localAwayFatigue,
+          homeScore: nextHomeScore, awayScore: nextAwayScore,
+          homeGoals: newHomeGoals, awayGoals: newAwayGoals,
+          liveStats: nextLiveStats, playerYellowCards: nextPlayerYellowCards,
+          actionContributions: nextActionContributions,
+        });
         const rngEvent = seededRng(currentSeed, rngMinute, 500);
 
         // ─── KARA ZA ZMĘCZENIE DRUŻYNY (wpływ na inicjatywę i liczbę strzałów) ───
@@ -3312,7 +3323,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           homeProfileReadiness: liveTeamProfiles.home.readiness,
           awayProfileReadiness: liveTeamProfiles.away.readiness,
         });
-        const homeAttackChance = initiativeResult.homeAttackChance;
+        const homeAttackChance = clampNumber(
+          initiativeResult.homeAttackChance +
+            (userSide === 'HOME' ? coachCommands.user.initiativeModifier : -coachCommands.user.initiativeModifier) +
+            (userSide === 'HOME' ? -coachCommands.ai.initiativeModifier : coachCommands.ai.initiativeModifier),
+          0.28,
+          0.72
+        );
         void legacyInlineHomeAttackChance;
         let activeSide: 'HOME' | 'AWAY' = seededRng(currentSeed, rngMinute, 600) < homeAttackChance ? 'HOME' : 'AWAY';
         const firstZeroShotCheckMinute = 34 + Math.floor(seededRng(currentSeed, 0, 641) * 12);
@@ -3477,6 +3494,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
 
    // TUTAJ WSTAW TEN KOD - Logika Nasycenia (Satiety Logic)
         let shotThreshold = 0.11;
+        shotThreshold += activeSide === userSide
+          ? coachCommands.user.ownShotModifier + coachCommands.ai.opponentShotModifier
+          : coachCommands.ai.ownShotModifier + coachCommands.user.opponentShotModifier;
         const goalDiff = Math.abs(prev.homeScore - prev.awayScore);
         const leads = (activeSide === 'HOME' && prev.homeScore > prev.awayScore) || (activeSide === 'AWAY' && prev.awayScore > prev.homeScore);
 
@@ -4273,8 +4293,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         });
         const activeBuildUpShotModifier = isUserAttacking ? userIndividualBuildUp.shotModifier : 0;
         const activeTurnoverRisk = isUserAttacking
-          ? Math.max(0, Math.min(1, activeBuildUpProfile.turnoverRisk + userIndividualBuildUp.turnoverRiskModifier))
-          : activeBuildUpProfile.turnoverRisk;
+          ? Math.max(0, Math.min(1, activeBuildUpProfile.turnoverRisk + userIndividualBuildUp.turnoverRiskModifier + coachCommands.user.turnoverRiskModifier))
+          : Math.max(0, Math.min(1, activeBuildUpProfile.turnoverRisk + coachCommands.ai.turnoverRiskModifier));
         shotThreshold += activeBuildUpProfile.shotModifier + activeBuildUpShotModifier;
         const opponentPressingNow = isUserAttacking
           ? nextAiActiveShout?.pressing === 'PRESSING'
@@ -4581,7 +4601,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         const activeMarkingRisk = activeSide === userSide ? userEffectiveMarkingRisk : aiMarkingProfile;
         const activeIntensityRisk = isUserAttacking ? userIntensityRisk : aiIntensityRisk;
         const uFoulThreshold = calculateLiveFoulThreshold({
-          intensityFoulMultiplier: activeIntensityRisk.foul * activeMarkingRisk.foulMultiplier,
+          intensityFoulMultiplier: activeIntensityRisk.foul * activeMarkingRisk.foulMultiplier *
+            (activeSide === userSide ? coachCommands.user.foulMultiplier : coachCommands.ai.foulMultiplier),
           pressureCardMultiplier: activePressureMods.cardMultiplier,
           rivalryMultiplier: livePressureContext?.rivalryMultiplier ?? 1,
         });
@@ -4670,7 +4691,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
                 if (verdict === 'PENALTY') {
                   if (defendingSide === 'HOME') nextLiveStats.home.fouls++;
                   else nextLiveStats.away.fouls++;
-                  const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000));
+                  const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: attackingSide, type: MatchEventType.PENALTY_AWARDED, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000), attackingSide === userSide ? coachCommands.user.injuryMultiplier : coachCommands.ai.injuryMultiplier);
                   if (injury) processInjury(injury);
                 }
               } else {
@@ -4718,7 +4739,8 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               }
 
               if (newLog) {
-                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: MatchEventType.FOUL, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000));
+                const injuredSide = activeSide === 'HOME' ? 'AWAY' : 'HOME';
+                const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: MatchEventType.FOUL, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2000), injuredSide === userSide ? coachCommands.user.injuryMultiplier : coachCommands.ai.injuryMultiplier);
                 if (injury) processInjury(injury);
               }
            }
@@ -4946,7 +4968,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
            pauseForEvent = isGoal;
 
            if (newLog) {
-             const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2500));
+             const injury = InjuryEventGenerator.maybeGenerateInjury(ctx, prev, { minute: nextMinute, teamSide: activeSide, type: immediateEventType, primaryPlayerId: scorer.id, text: '' } as MatchEvent, () => seededRng(currentSeed, rngMinute, 2500), activeSide === userSide ? coachCommands.user.injuryMultiplier : coachCommands.ai.injuryMultiplier);
              if (injury) processInjury(injury);
            }
         }
@@ -5276,7 +5298,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           {
             side: 'HOME',
             pressure: hLivePressure,
-            instructionInjuryMod: userSide === 'HOME' ? userIntensityRisk.injury : aiIntensityRisk.injury,
+            instructionInjuryMod: userSide === 'HOME'
+              ? userIntensityRisk.injury * coachCommands.user.injuryMultiplier
+              : aiIntensityRisk.injury * coachCommands.ai.injuryMultiplier,
             rollOffset: 4500,
             pickOffset: 4700,
             severityOffset: 4800,
@@ -5284,7 +5308,9 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           {
             side: 'AWAY',
             pressure: aLivePressure,
-            instructionInjuryMod: userSide === 'AWAY' ? userIntensityRisk.injury : aiIntensityRisk.injury,
+            instructionInjuryMod: userSide === 'AWAY'
+              ? userIntensityRisk.injury * coachCommands.user.injuryMultiplier
+              : aiIntensityRisk.injury * coachCommands.ai.injuryMultiplier,
             rollOffset: 4550,
             pickOffset: 4750,
             severityOffset: 4850,
@@ -5521,7 +5547,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
           uInstr.pressingResponseFactor ?? 1.0,
           uInstr.marking ?? 'NONE',
           uInstr.markingResponseFactor ?? 1.0
-        );
+        ) + coachCommands.user.fatigueExtra;
         if (uFatExtra !== 0) {
           const uXIForFat = userSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
           const uFatTarget = userSide === 'HOME' ? fatigue.home : fatigue.away;
@@ -5597,12 +5623,13 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               aiMarkingRf
             )
           : 0;
-        if (aiFatExtra !== 0) {
+        const aiTotalFatExtra = aiFatExtra + coachCommands.ai.fatigueExtra;
+        if (aiTotalFatExtra !== 0) {
           const aiXIForFat = userSide === 'HOME' ? nextAwayLineup.startingXI : nextHomeLineup.startingXI;
           const aiFatTarget = userSide === 'HOME' ? fatigue.away : fatigue.home;
           const aiSubsUsed = userSide === 'HOME' ? nextSubsCountAway : nextSubsCountHome;
           const aiPressing = nextAiActiveShout?.pressing ?? 'NORMAL';
-          const aiFatigueMultiplier = aiFatExtra > 0 && nextAiActiveShout
+          const aiFatigueMultiplier = aiTotalFatExtra > 0 && nextAiActiveShout
             ? getLiveInstructionFatigueMultiplier(
                 nextMinute,
                 nextAiActiveShout.tempo,
@@ -5615,7 +5642,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
               )
             : 1;
           aiXIForFat.filter((id): id is string => id !== null).forEach(id => {
-            aiFatTarget[id] = Math.min(100, Math.max(0, (aiFatTarget[id] ?? 100) - (aiFatExtra * aiFatigueMultiplier)));
+            aiFatTarget[id] = Math.min(100, Math.max(0, (aiFatTarget[id] ?? 100) - (aiTotalFatExtra * aiFatigueMultiplier)));
           });
         }
         if (hLivePressure.fatigueDrainExtra > 0) {
@@ -5690,6 +5717,7 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         
 return {
            ...prev, 
+           ...coachCommands.patch,
            minute: nextMinute, 
            addedTime: currentAddedTime, 
            homeScore: nextHomeScore, 
@@ -6830,6 +6858,13 @@ const SquadList = ({ side, lineup, players, fatigue, injs, subsHistory }: { side
 
   return (
     <div className="h-screen min-h-screen bg-slate-950 text-slate-100 flex flex-col p-6 gap-6 animate-fade-in overflow-hidden relative">
+    <LiveCoachCommandsOverlay
+      matchState={matchState}
+      setMatchState={setMatchState}
+      ctx={ctx}
+      userSide={userSide}
+      hidden={showBriefing || isTacticsOpen || isHalftimeTalkOpen || showPostMatchDebrief || !!matchState.isPenalties || matchState.isFinished}
+    />
      {/* BACKGROUND (STADION) */}
 <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
   {/* obraz stadionu */}

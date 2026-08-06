@@ -10,7 +10,8 @@ export const InjuryEventGenerator = {
     ctx: MatchContext, 
     state: MatchLiveState, 
     triggeringEvent: MatchEvent, 
-    rng: () => number
+    rng: () => number,
+    chanceMultiplier = 1
   ): MatchEvent | null => {
     
     let pInjury = 0;
@@ -92,6 +93,10 @@ export const InjuryEventGenerator = {
     else if (fatigueValue < 50) pInjury *= 1.5;
     const staminaMitigation = 1.0 - (0.25 * staminaNorm);
     pInjury *= staminaMitigation;
+
+    // Touchline commands may change injury exposure, but never player selection or severity RNG.
+    // Applying the multiplier here preserves the random stream and confines it to event probability.
+    pInjury *= Math.max(0.5, Math.min(1.5, chanceMultiplier));
 
     // Final clamp to prevent absurd rates
     pInjury = Math.max(0.0, Math.min(0.20, pInjury));
