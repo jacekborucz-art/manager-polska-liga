@@ -1000,9 +1000,14 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   const displayBody = getSeasonAwareMailBody(mail);
 
   const openContractNegotiationForPlayer = (playerId: string) => {
+    const isFreeAgent = (players['FREE_AGENTS'] || []).some(p => p.id === playerId);
     viewPlayerDetails(playerId);
-    setContractManagementInitialMode('NEGOTIATE');
-    navigateWithoutHistory(ViewState.CONTRACT_MANAGEMENT);
+    if (isFreeAgent) {
+      navigateWithoutHistory(ViewState.FREE_AGENT_NEGOTIATION);
+    } else {
+      setContractManagementInitialMode('NEGOTIATE');
+      navigateWithoutHistory(ViewState.CONTRACT_MANAGEMENT);
+    }
     onClose();
   };
 
