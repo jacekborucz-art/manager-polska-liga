@@ -369,7 +369,7 @@ export const TransferScoutingModal: React.FC<TransferScoutingModalProps> = React
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-[13px] text-white font-black italic uppercase tracking-tighter">{scout.firstName} {scout.lastName}</p>
-                          <p className="mt-0.5 text-[8px] text-cyan-300 font-black italic uppercase tracking-tighter">{getScoutProfile(scout)}</p>
+                          <p className="mt-0.5 text-[8px] text-cyan-300 font-black italic uppercase tracking-tighter">{getScoutProfile(scout)} · {scout.age} lat</p>
                         </div>
                         {active && <span className="rounded border border-amber-400/30 bg-amber-500/15 px-2 py-1 text-[8px] text-amber-300 font-black italic uppercase tracking-tighter">Wysłany</span>}
                       </div>
@@ -395,7 +395,7 @@ export const TransferScoutingModal: React.FC<TransferScoutingModalProps> = React
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-[12px] text-white font-black italic uppercase tracking-tighter">{scout.firstName} {scout.lastName}</p>
-                          <p className="text-[8px] text-cyan-300 font-black italic uppercase tracking-tighter">{getScoutProfile(scout)}</p>
+                          <p className="text-[8px] text-cyan-300 font-black italic uppercase tracking-tighter">{getScoutProfile(scout)} · {scout.age} lat</p>
                         </div>
                         <button disabled={limitReached} onClick={() => {
                           setHireScoutId(scout.id);
@@ -587,12 +587,9 @@ export const TransferScoutingModal: React.FC<TransferScoutingModalProps> = React
                   } else if (result.status === 'WALKED_AWAY') {
                     setHireScoutId(null);
                   }
-                  const cooldownMessage = result.status === 'WALKED_AWAY' && result.unavailableUntil
-                    ? `${result.message} Nie będzie dostępny na rynku do ${result.unavailableUntil}.`
-                    : result.message;
                   showGameNotification({
                     title: result.ok ? 'Kontrakt podpisany' : result.status === 'COUNTER' ? 'Kontroferta skauta' : result.status === 'WALKED_AWAY' ? 'Rozmowy zerwane' : 'Oferta odrzucona',
-                    message: cooldownMessage,
+                    message: result.message,
                     tone: result.ok ? 'success' : 'warning',
                   });
                 }} className="rounded-xl border border-emerald-500/30 bg-emerald-500/20 py-3 text-[9px] text-emerald-200 hover:bg-emerald-500/30 font-black italic uppercase tracking-tighter">Złóż ofertę {Math.min(3, contractAttempts + 1)}/3</button>

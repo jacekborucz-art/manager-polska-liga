@@ -5964,7 +5964,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     const club = clubs.find(entry => entry.id === userTeamId);
     if (!scout || scout.employedByClubId) return { ok: false, status: 'VALIDATION_ERROR', message: 'Ten skaut nie jest już dostępny.' };
     if (scout.unavailableUntil && scout.unavailableUntil > currentDate.toISOString().split('T')[0]) {
-      return { ok: false, status: 'VALIDATION_ERROR', message: `Skaut nie chce wracać do rozmów przed ${scout.unavailableUntil}.` };
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Skaut nie chce obecnie wracać do rozmów z tym klubem.' };
     }
     if (!club) return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu gracza.' };
     const normalizedOffer: TransferScoutContractOffer = {
@@ -13179,6 +13179,37 @@ const finalResult: SimulationOutput = {
       }
     }
     // --- END INCOMING TRANSFER OFFERS ---
+
+    // ── SKAUCI TRANSFEROWI: coroczne starzenie i losowanie emerytury ────────
+    if (nextDay.getMonth() === 0 && nextDay.getDate() === 1) {
+      const annualScoutCareers = TransferScoutingService.processAnnualScoutCareers(
+        transferScoutPool,
+        nextDay.getFullYear(),
+      );
+      if (annualScoutCareers.retiredScouts.length > 0) {
+        setTransferScoutPool(annualScoutCareers.scouts);
+        const retiredFromUserClub = annualScoutCareers.retiredScouts.filter(scout => scout.employedByClubId === userTeamId);
+        if (retiredFromUserClub.length > 0) {
+          const dateOnly = nextDay.toISOString().split('T')[0];
+          setMessages(prev => [
+            ...retiredFromUserClub.map(scout => ({
+              id: `MAIL_TRANSFER_SCOUT_RETIREMENT_${scout.id}_${dateOnly}`,
+              sender: 'Dział kadr',
+              role: 'Kontrakty pracowników',
+              subject: `Skaut zakończył karierę: ${scout.firstName} ${scout.lastName}`,
+              body: `${scout.firstName} ${scout.lastName} w wieku ${scout.age} lat podjął decyzję o zakończeniu kariery skauta. Jego miejsce na rynku pracy zajął nowy kandydat.`,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: 75,
+            })),
+            ...prev,
+          ]);
+        }
+      } else {
+        setTransferScoutPool(annualScoutCareers.scouts);
+      }
+    }
 
     // ── SKAUTING TRANSFEROWY: zakończenie zadań i raporty ────────────────────
     if (userTeamId && transferScoutingAssignments.length > 0) {

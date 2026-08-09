@@ -25,6 +25,7 @@ const europeanScoutRegions = new Set([
 assert(pool.filter(scout => europeanScoutRegions.has(scout.nationality)).length === 11, 'Około 23% rynku powinno pochodzić z pozostałej części Europy.');
 assert(pool.filter(scout => scout.nationality !== Region.POLAND && !europeanScoutRegions.has(scout.nationality)).length === 1, 'Około 2% rynku powinno pochodzić spoza Europy.');
 assert(pool.every(scout => scout.reputation >= 1 && scout.reputation <= 5), 'Każdy skaut powinien mieć reputację od 1 do 5 gwiazdek.');
+assert(pool.every(scout => scout.retirementEligibleAge >= 58 && scout.retirementEligibleAge <= 66), 'Każdy skaut powinien mieć indywidualnie losowany próg emerytalny.');
 assert(
   pool.every(scout => Math.max(scout.judgment, scout.reach, scout.speed, scout.experience) >= 15),
   'Każdy skaut powinien mieć wyraźną mocną stronę zamiast niskiej, ogólnej oceny gwiazdkowej.'
@@ -87,6 +88,17 @@ assert(
     === TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, new Date('2026-08-09T12:00:00Z')).status,
   'Decyzja skauta o podpisaniu tej samej oferty musi być stabilna.'
 );
+
+const retirementPool = pool.map((scout, index) => ({
+  ...scout,
+  age: 80,
+  retirementEligibleAge: 58,
+  isOnAssignment: index === 0,
+}));
+const annualCareerResult = TransferScoutingService.processAnnualScoutCareers(retirementPool, 2035);
+assert(annualCareerResult.retiredScouts.length > 0, 'Coroczne losowanie powinno pozwalać skautom kończyć karierę.');
+assert(annualCareerResult.scouts.length === 48, 'Każdy emerytowany skaut powinien zostać zastąpiony nowym kandydatem.');
+assert(!annualCareerResult.retiredScouts.some(scout => scout.id === retirementPool[0].id), 'Skaut będący na aktywnym zadaniu nie może przejść na emeryturę przed zakończeniem pracy.');
 
 const makePlayer = (index: number): Player => ({
   id: `HIDDEN_PLAYER_${index}`,

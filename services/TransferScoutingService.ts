@@ -47,6 +47,7 @@ const OTHER_SCOUT_REGIONS = [
   Region.KOREA,
   Region.OCEANIA,
 ];
+const EUROPEAN_SCOUT_REGION_SET = new Set<Region>(EUROPEAN_SCOUT_REGIONS);
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
@@ -126,6 +127,11 @@ const getRegionCategories = (seed: number): ('POLAND' | 'EUROPE' | 'OTHER')[] =>
     .map(entry => entry.category);
 };
 
+const getScoutNationalityCategory = (scout: TransferScout): 'POLAND' | 'EUROPE' | 'OTHER' => {
+  if (scout.nationality === Region.POLAND) return 'POLAND';
+  return EUROPEAN_SCOUT_REGION_SET.has(scout.nationality) ? 'EUROPE' : 'OTHER';
+};
+
 const matchesFilters = (player: Player, filters: TransferScoutingFilters, referenceDate: Date): boolean => {
   if (filters.position && player.position !== filters.position && player.secondaryPosition !== filters.position) return false;
   if (filters.region && player.nationality !== filters.region) return false;
@@ -177,6 +183,7 @@ export const TransferScoutingService = {
         firstName: name.firstName,
         lastName: name.lastName,
         age: 28 + Math.floor(stableUnit(`${seed}|${index}|age`) * 35),
+        retirementEligibleAge: 58 + Math.floor(stableUnit(`${seed}|${index}|retirement-age`) * 9),
         nationality: region,
         judgment,
         reach,
@@ -211,12 +218,64 @@ export const TransferScoutingService = {
             referenceDate,
           )
         : normalizedScout.contract;
-      return { ...normalizedScout, contract };
+      return {
+        ...normalizedScout,
+        retirementEligibleAge: normalizedScout.retirementEligibleAge
+          ?? 58 + Math.floor(stableUnit(`${seed}|legacy|${scout.id}|retirement-age`) * 9),
+        contract,
+      };
     });
     const retained = normalized.filter(scout => !!scout.employedByClubId || scout.isOnAssignment);
     const existingIds = new Set(retained.map(scout => scout.id));
     const additions = generated.filter(scout => !existingIds.has(scout.id));
     return [...retained, ...additions].slice(0, Math.max(SCOUT_POOL_SIZE, retained.length));
+  },
+
+  processAnnualScoutCareers(
+    scouts: TransferScout[],
+    year: number,
+  ): { scouts: TransferScout[]; retiredScouts: TransferScout[] } {
+    const agedScouts = scouts.map(scout => ({ ...scout, age: scout.age + 1 }));
+    const retiredScouts = agedScouts.filter(scout => {
+      if (scout.isOnAssignment || scout.age < scout.retirementEligibleAge) return false;
+      const annualCareerDraw = stableUnit(`${scout.id}|career-draw|${year}`) < 0.5 ? 0 : 1;
+      return annualCareerDraw === 0;
+    });
+    if (retiredScouts.length === 0) return { scouts: agedScouts, retiredScouts: [] };
+
+    const retiredIds = new Set(retiredScouts.map(scout => scout.id));
+    const survivors = agedScouts.filter(scout => !retiredIds.has(scout.id));
+    const targetCounts = { POLAND: 36, EUROPE: 11, OTHER: 1 };
+    const survivorCounts = survivors.reduce((counts, scout) => {
+      counts[getScoutNationalityCategory(scout)] += 1;
+      return counts;
+    }, { POLAND: 0, EUROPE: 0, OTHER: 0 });
+    const neededCategories = (Object.keys(targetCounts) as ('POLAND' | 'EUROPE' | 'OTHER')[]).flatMap(category =>
+      Array.from({ length: Math.max(0, targetCounts[category] - survivorCounts[category]) }, () => category)
+    );
+    while (neededCategories.length < retiredScouts.length) {
+      neededCategories.push(getScoutNationalityCategory(retiredScouts[neededCategories.length]));
+    }
+    const replacementPool = TransferScoutingService.generateScoutPool(hashString(`replacement|${year}|${scouts.map(scout => scout.id).join('|')}`));
+    const usedReplacementIds = new Set<string>();
+    const replacements = neededCategories.slice(0, retiredScouts.length).map((category, index) => {
+      const replacement = replacementPool.find(candidate =>
+        !usedReplacementIds.has(candidate.id) && getScoutNationalityCategory(candidate) === category
+      ) ?? replacementPool.find(candidate => !usedReplacementIds.has(candidate.id))!;
+      usedReplacementIds.add(replacement.id);
+      return {
+        ...replacement,
+        id: `${replacement.id}_R${year}_${index}`,
+        age: 28 + Math.floor(stableUnit(`${replacement.id}|replacement-age`) * 25),
+        unavailableUntil: undefined,
+        contractNegotiation: undefined,
+      };
+    });
+
+    return {
+      scouts: [...survivors, ...replacements],
+      retiredScouts,
+    };
   },
 
   getContractAcceptanceChance(

@@ -2150,6 +2150,7 @@ export interface TransferScout {
   firstName: string;
   lastName: string;
   age: number;
+  retirementEligibleAge: number;
   nationality: Region;
   judgment: number;
   reach: number;

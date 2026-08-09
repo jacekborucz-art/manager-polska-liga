@@ -15477,6 +15477,7 @@ var OTHER_SCOUT_REGIONS = [
   "KOREA" /* KOREA */,
   "OCEANIA" /* OCEANIA */
 ];
+var EUROPEAN_SCOUT_REGION_SET = new Set(EUROPEAN_SCOUT_REGIONS);
 var clamp4 = (value, min, max) => Math.max(min, Math.min(max, value));
 var hashString = (value) => {
   let hash = 2166136261;
@@ -15532,6 +15533,10 @@ var getRegionCategories = (seed) => {
   ];
   return categories.map((category, index) => ({ category, order: stableUnit2(`${seed}|nationality-order|${index}`) })).sort((left, right) => left.order - right.order).map((entry) => entry.category);
 };
+var getScoutNationalityCategory = (scout) => {
+  if (scout.nationality === "POLAND" /* POLAND */) return "POLAND";
+  return EUROPEAN_SCOUT_REGION_SET.has(scout.nationality) ? "EUROPE" : "OTHER";
+};
 var matchesFilters = (player, filters2, referenceDate) => {
   if (filters2.position && player.position !== filters2.position && player.secondaryPosition !== filters2.position) return false;
   if (filters2.region && player.nationality !== filters2.region) return false;
@@ -15570,6 +15575,7 @@ var TransferScoutingService = {
         firstName: name.firstName,
         lastName: name.lastName,
         age: 28 + Math.floor(stableUnit2(`${seed}|${index}|age`) * 35),
+        retirementEligibleAge: 58 + Math.floor(stableUnit2(`${seed}|${index}|retirement-age`) * 9),
         nationality: region,
         judgment,
         reach,
@@ -15597,12 +15603,57 @@ var TransferScoutingService = {
         { durationYears: 1, weeklySalary },
         referenceDate
       ) : normalizedScout.contract;
-      return { ...normalizedScout, contract };
+      return {
+        ...normalizedScout,
+        retirementEligibleAge: normalizedScout.retirementEligibleAge ?? 58 + Math.floor(stableUnit2(`${seed}|legacy|${scout.id}|retirement-age`) * 9),
+        contract
+      };
     });
     const retained = normalized.filter((scout) => !!scout.employedByClubId || scout.isOnAssignment);
     const existingIds = new Set(retained.map((scout) => scout.id));
     const additions = generated.filter((scout) => !existingIds.has(scout.id));
     return [...retained, ...additions].slice(0, Math.max(SCOUT_POOL_SIZE, retained.length));
+  },
+  processAnnualScoutCareers(scouts, year) {
+    const agedScouts = scouts.map((scout) => ({ ...scout, age: scout.age + 1 }));
+    const retiredScouts = agedScouts.filter((scout) => {
+      if (scout.isOnAssignment || scout.age < scout.retirementEligibleAge) return false;
+      const annualCareerDraw = stableUnit2(`${scout.id}|career-draw|${year}`) < 0.5 ? 0 : 1;
+      return annualCareerDraw === 0;
+    });
+    if (retiredScouts.length === 0) return { scouts: agedScouts, retiredScouts: [] };
+    const retiredIds = new Set(retiredScouts.map((scout) => scout.id));
+    const survivors = agedScouts.filter((scout) => !retiredIds.has(scout.id));
+    const targetCounts = { POLAND: 36, EUROPE: 11, OTHER: 1 };
+    const survivorCounts = survivors.reduce((counts, scout) => {
+      counts[getScoutNationalityCategory(scout)] += 1;
+      return counts;
+    }, { POLAND: 0, EUROPE: 0, OTHER: 0 });
+    const neededCategories = Object.keys(targetCounts).flatMap(
+      (category) => Array.from({ length: Math.max(0, targetCounts[category] - survivorCounts[category]) }, () => category)
+    );
+    while (neededCategories.length < retiredScouts.length) {
+      neededCategories.push(getScoutNationalityCategory(retiredScouts[neededCategories.length]));
+    }
+    const replacementPool = TransferScoutingService.generateScoutPool(hashString(`replacement|${year}|${scouts.map((scout) => scout.id).join("|")}`));
+    const usedReplacementIds = /* @__PURE__ */ new Set();
+    const replacements = neededCategories.slice(0, retiredScouts.length).map((category, index) => {
+      const replacement = replacementPool.find(
+        (candidate) => !usedReplacementIds.has(candidate.id) && getScoutNationalityCategory(candidate) === category
+      ) ?? replacementPool.find((candidate) => !usedReplacementIds.has(candidate.id));
+      usedReplacementIds.add(replacement.id);
+      return {
+        ...replacement,
+        id: `${replacement.id}_R${year}_${index}`,
+        age: 28 + Math.floor(stableUnit2(`${replacement.id}|replacement-age`) * 25),
+        unavailableUntil: void 0,
+        contractNegotiation: void 0
+      };
+    });
+    return {
+      scouts: [...survivors, ...replacements],
+      retiredScouts
+    };
   },
   getContractAcceptanceChance(scout, club, offer, demandedWeeklySalary = scout.weeklySalary) {
     const expectedSalary = Math.max(1, demandedWeeklySalary);
@@ -15859,6 +15910,7 @@ var europeanScoutRegions = /* @__PURE__ */ new Set([
 assert(pool.filter((scout) => europeanScoutRegions.has(scout.nationality)).length === 11, "Oko\u0142o 23% rynku powinno pochodzi\u0107 z pozosta\u0142ej cz\u0119\u015Bci Europy.");
 assert(pool.filter((scout) => scout.nationality !== "POLAND" /* POLAND */ && !europeanScoutRegions.has(scout.nationality)).length === 1, "Oko\u0142o 2% rynku powinno pochodzi\u0107 spoza Europy.");
 assert(pool.every((scout) => scout.reputation >= 1 && scout.reputation <= 5), "Ka\u017Cdy skaut powinien mie\u0107 reputacj\u0119 od 1 do 5 gwiazdek.");
+assert(pool.every((scout) => scout.retirementEligibleAge >= 58 && scout.retirementEligibleAge <= 66), "Ka\u017Cdy skaut powinien mie\u0107 indywidualnie losowany pr\xF3g emerytalny.");
 assert(
   pool.every((scout) => Math.max(scout.judgment, scout.reach, scout.speed, scout.experience) >= 15),
   "Ka\u017Cdy skaut powinien mie\u0107 wyra\u017An\u0105 mocn\u0105 stron\u0119 zamiast niskiej, og\xF3lnej oceny gwiazdkowej."
@@ -15915,6 +15967,16 @@ assert(
   TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, /* @__PURE__ */ new Date("2026-08-09T12:00:00Z")).status === TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, /* @__PURE__ */ new Date("2026-08-09T12:00:00Z")).status,
   "Decyzja skauta o podpisaniu tej samej oferty musi by\u0107 stabilna."
 );
+var retirementPool = pool.map((scout, index) => ({
+  ...scout,
+  age: 80,
+  retirementEligibleAge: 58,
+  isOnAssignment: index === 0
+}));
+var annualCareerResult = TransferScoutingService.processAnnualScoutCareers(retirementPool, 2035);
+assert(annualCareerResult.retiredScouts.length > 0, "Coroczne losowanie powinno pozwala\u0107 skautom ko\u0144czy\u0107 karier\u0119.");
+assert(annualCareerResult.scouts.length === 48, "Ka\u017Cdy emerytowany skaut powinien zosta\u0107 zast\u0105piony nowym kandydatem.");
+assert(!annualCareerResult.retiredScouts.some((scout) => scout.id === retirementPool[0].id), "Skaut b\u0119d\u0105cy na aktywnym zadaniu nie mo\u017Ce przej\u015B\u0107 na emerytur\u0119 przed zako\u0144czeniem pracy.");
 var makePlayer = (index) => ({
   id: `HIDDEN_PLAYER_${index}`,
   firstName: "Ukryty",
