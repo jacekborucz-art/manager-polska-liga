@@ -28,6 +28,8 @@ Region,
 YouthPlayer,
 Scout,
 TransferScout,
+TransferScoutContractOffer,
+TransferScoutHiringResult,
 TransferScoutingAssignment,
 TransferScoutingFilters,
 TransferScoutingReport,
@@ -1133,7 +1135,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   transferScoutingAssignments: TransferScoutingAssignment[];
   transferScoutingReports: TransferScoutingReport[];
   discoveredTransferPlayerIds: string[];
-  hireTransferScout: (scoutId: string) => { ok: boolean; message: string };
+  hireTransferScout: (scoutId: string, offer: TransferScoutContractOffer) => TransferScoutHiringResult;
   fireTransferScout: (scoutId: string) => { ok: boolean; message: string };
   startTransferScoutingAssignment: (scoutId: string, filters: TransferScoutingFilters) => { ok: boolean; message: string };
   cancelTransferScoutingAssignment: (scoutId: string) => { ok: boolean; message: string };
@@ -3912,7 +3914,7 @@ if (userTeamId) {
     setScoutMarketManualRefreshCount(data.scoutMarketManualRefreshCount ?? 0);
     setScoutMarketPeriodStart(data.scoutMarketPeriodStart ?? '');
     setTransferScoutPool(data.transferScoutPool?.length
-      ? data.transferScoutPool
+      ? TransferScoutingService.normalizeScoutPool(data.transferScoutPool, data.sessionSeed ?? Date.now(), data.currentDate)
       : TransferScoutingService.generateScoutPool(data.sessionSeed ?? Date.now()));
     setTransferScoutingAssignments(data.transferScoutingAssignments ?? []);
     setTransferScoutingReports(data.transferScoutingReports ?? []);
@@ -5944,27 +5946,68 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
   );
 
   const transferScoutMarket = useMemo(
-    () => transferScoutPool.filter(scout => !scout.employedByClubId).slice(0, 12),
-    [transferScoutPool]
+    () => {
+      const dateOnly = currentDate.toISOString().split('T')[0];
+      return transferScoutPool.filter(scout =>
+        !scout.employedByClubId && (!scout.unavailableUntil || scout.unavailableUntil <= dateOnly)
+      );
+    },
+    [transferScoutPool, currentDate]
   );
 
-  const hireTransferScout = useCallback((scoutId: string): { ok: boolean; message: string } => {
-    if (!userTeamId) return { ok: false, message: 'Brak klubu gracza.' };
+  const hireTransferScout = useCallback((scoutId: string, offer: TransferScoutContractOffer): TransferScoutHiringResult => {
+    if (!userTeamId) return { ok: false, status: 'VALIDATION_ERROR', message: 'Brak klubu gracza.' };
     if (employedTransferScouts.length >= TransferScoutingService.getMaxScouts()) {
-      return { ok: false, message: 'Możesz zatrudnić maksymalnie 3 skautów transferowych.' };
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Możesz zatrudnić maksymalnie 3 skautów transferowych.' };
     }
     const scout = transferScoutPool.find(entry => entry.id === scoutId);
     const club = clubs.find(entry => entry.id === userTeamId);
-    if (!scout || scout.employedByClubId) return { ok: false, message: 'Ten skaut nie jest już dostępny.' };
-    if (!club) return { ok: false, message: 'Nie znaleziono klubu gracza.' };
-    const hiringFee = scout.weeklySalary * 4;
-    if (club.budget < hiringFee) return { ok: false, message: 'Klub nie ma środków na zatrudnienie tego skauta.' };
-
-    setClubs(prev => prev.map(entry => entry.id === userTeamId ? { ...entry, budget: entry.budget - hiringFee } : entry));
-    addFinanceLog(userTeamId, `Zatrudnienie skauta transferowego: ${scout.firstName} ${scout.lastName}`, -hiringFee, currentDate);
-    setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId ? { ...entry, employedByClubId: userTeamId } : entry));
-    return { ok: true, message: `${scout.firstName} ${scout.lastName} dołączył do działu skautingu.` };
-  }, [userTeamId, employedTransferScouts.length, transferScoutPool, clubs, addFinanceLog, currentDate]);
+    if (!scout || scout.employedByClubId) return { ok: false, status: 'VALIDATION_ERROR', message: 'Ten skaut nie jest już dostępny.' };
+    if (scout.unavailableUntil && scout.unavailableUntil > currentDate.toISOString().split('T')[0]) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: `Skaut nie chce wracać do rozmów przed ${scout.unavailableUntil}.` };
+    }
+    if (!club) return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu gracza.' };
+    const normalizedOffer: TransferScoutContractOffer = {
+      ...offer,
+      weeklySalary: Math.max(500, Math.round(offer.weeklySalary / 500) * 500),
+    };
+    if (![1, 2, 3].includes(normalizedOffer.durationYears) || normalizedOffer.weeklySalary <= 0) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Nieprawidłowe warunki kontraktu.' };
+    }
+    if (club.budget < normalizedOffer.weeklySalary * 4) {
+      return { ok: false, status: 'VALIDATION_ERROR', message: 'Klub nie ma środków pozwalających zabezpieczyć pierwszy miesiąc kontraktu.' };
+    }
+    const decision = TransferScoutingService.evaluateContractOffer(scout, club, normalizedOffer, currentDate);
+    if (decision.status === 'COUNTER') {
+      setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId
+        ? {
+            ...entry,
+            contractNegotiation: {
+              clubId: userTeamId,
+              attempts: (entry.contractNegotiation?.clubId === userTeamId ? entry.contractNegotiation.attempts : 0) + 1,
+              demandedWeeklySalary: decision.counterWeeklySalary ?? entry.weeklySalary,
+              startedDate: entry.contractNegotiation?.startedDate ?? currentDate.toISOString().split('T')[0],
+            },
+          }
+        : entry
+      ));
+      return decision;
+    }
+    if (decision.status === 'WALKED_AWAY') {
+      setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId
+        ? { ...entry, contractNegotiation: undefined, unavailableUntil: decision.unavailableUntil }
+        : entry
+      ));
+      return decision;
+    }
+    if (!decision.ok) return decision;
+    const contract = TransferScoutingService.buildScoutContract(scout, normalizedOffer, currentDate);
+    setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId
+      ? { ...entry, weeklySalary: contract.weeklySalary, contract, contractNegotiation: undefined, unavailableUntil: undefined, employedByClubId: userTeamId }
+      : entry
+    ));
+    return { ...decision, message: `${decision.message} Umowa obowiązuje do ${contract.endDate}.` };
+  }, [userTeamId, employedTransferScouts.length, transferScoutPool, clubs, currentDate]);
 
   const fireTransferScout = useCallback((scoutId: string): { ok: boolean; message: string } => {
     if (!userTeamId) return { ok: false, message: 'Brak klubu gracza.' };
@@ -5973,12 +6016,37 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     if (transferScoutingAssignments.some(assignment => assignment.scoutId === scoutId)) {
       return { ok: false, message: 'Najpierw odwołaj aktywne zadanie tego skauta.' };
     }
+    const club = clubs.find(entry => entry.id === userTeamId);
+    if (!club) return { ok: false, message: 'Nie znaleziono klubu gracza.' };
+    const penalty = TransferScoutingService.getEarlyTerminationPenalty(scout, currentDate);
+    if (club.budget < penalty) return { ok: false, message: 'Klub nie ma środków na zapłatę kary za rozwiązanie kontraktu.' };
+    if (penalty > 0) {
+      const logDate = currentDate.toISOString().split('T')[0];
+      setClubs(prev => prev.map(entry => {
+        if (entry.id !== userTeamId) return entry;
+        const financeEntry = {
+          id: Math.random().toString(36).slice(2, 11),
+          date: logDate,
+          amount: -penalty,
+          type: 'EXPENSE' as const,
+          description: `Kara za rozwiązanie kontraktu skauta: ${scout.firstName} ${scout.lastName}`,
+          previousBalance: entry.budget,
+        };
+        return {
+          ...entry,
+          budget: entry.budget - penalty,
+          financeHistory: [financeEntry, ...(entry.financeHistory || [])].slice(0, 50),
+        };
+      }));
+    }
     setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId
-      ? { ...entry, employedByClubId: undefined, isOnAssignment: false }
+      ? { ...entry, employedByClubId: undefined, contract: undefined, isOnAssignment: false }
       : entry
     ));
-    return { ok: true, message: `${scout.firstName} ${scout.lastName} opuścił klub.` };
-  }, [userTeamId, transferScoutPool, transferScoutingAssignments]);
+    return { ok: true, message: penalty > 0
+      ? `${scout.firstName} ${scout.lastName} opuścił klub. Zapłacono ${penalty.toLocaleString('pl-PL')} PLN kary.`
+      : `${scout.firstName} ${scout.lastName} opuścił klub bez kary.` };
+  }, [userTeamId, transferScoutPool, transferScoutingAssignments, clubs, currentDate]);
 
   const startTransferScoutingAssignment = useCallback((
     scoutId: string,
@@ -5996,14 +6064,32 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       return { ok: false, message: 'Nieprawidłowy zakres wieku.' };
     }
     const assignment = TransferScoutingService.buildAssignment(scout, userTeamId, filters, currentDate);
+    if (scout.contract && assignment.completionDate > scout.contract.endDate) {
+      return { ok: false, message: `Kontrakt skauta wygasa ${scout.contract.endDate}, przed planowanym zakończeniem zadania.` };
+    }
     if (club.budget < assignment.cost) return { ok: false, message: 'Klub nie ma środków na tę misję.' };
 
-    setClubs(prev => prev.map(entry => entry.id === userTeamId ? { ...entry, budget: entry.budget - assignment.cost } : entry));
-    addFinanceLog(userTeamId, `Skauting transferowy: ${scout.firstName} ${scout.lastName}`, -assignment.cost, currentDate);
+    const logDate = currentDate.toISOString().split('T')[0];
+    setClubs(prev => prev.map(entry => {
+      if (entry.id !== userTeamId) return entry;
+      const financeEntry = {
+        id: Math.random().toString(36).slice(2, 11),
+        date: logDate,
+        amount: -assignment.cost,
+        type: 'EXPENSE' as const,
+        description: `Skauting transferowy: ${scout.firstName} ${scout.lastName}`,
+        previousBalance: entry.budget,
+      };
+      return {
+        ...entry,
+        budget: entry.budget - assignment.cost,
+        financeHistory: [financeEntry, ...(entry.financeHistory || [])].slice(0, 50),
+      };
+    }));
     setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId ? { ...entry, isOnAssignment: true } : entry));
     setTransferScoutingAssignments(prev => [...prev, assignment]);
     return { ok: true, message: `Zadanie rozpoczęte. Raport będzie gotowy ${assignment.completionDate}.` };
-  }, [userTeamId, transferScoutPool, clubs, transferScoutingAssignments, currentDate, addFinanceLog]);
+  }, [userTeamId, transferScoutPool, clubs, transferScoutingAssignments, currentDate]);
 
   const cancelTransferScoutingAssignment = useCallback((scoutId: string): { ok: boolean; message: string } => {
     const assignment = transferScoutingAssignments.find(entry => entry.scoutId === scoutId);
@@ -13142,9 +13228,43 @@ const finalResult: SimulationOutput = {
       }
     }
 
+    if (userTeamId) {
+      const nextDateOnly = nextDay.toISOString().split('T')[0];
+      const expiredTransferScouts = transferScoutPool.filter(scout =>
+        scout.employedByClubId === userTeamId &&
+        !!scout.contract &&
+        scout.contract.endDate < nextDateOnly &&
+        !transferScoutingAssignments.some(assignment => assignment.scoutId === scout.id && assignment.completionDate >= nextDateOnly)
+      );
+      if (expiredTransferScouts.length > 0) {
+        const expiredIds = new Set(expiredTransferScouts.map(scout => scout.id));
+        setTransferScoutPool(prev => prev.map(scout => expiredIds.has(scout.id)
+          ? { ...scout, employedByClubId: undefined, contract: undefined, isOnAssignment: false }
+          : scout
+        ));
+        setMessages(prev => [
+          ...expiredTransferScouts.map(scout => ({
+            id: `MAIL_TRANSFER_SCOUT_CONTRACT_END_${scout.id}_${nextDateOnly}`,
+            sender: 'Dział kadr',
+            role: 'Kontrakty pracowników',
+            subject: `Wygasł kontrakt skauta: ${scout.firstName} ${scout.lastName}`,
+            body: `Kontrakt skauta ${scout.firstName} ${scout.lastName} wygasł. Skaut opuścił klub i ponownie może pojawić się na rynku pracy.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 70,
+          })),
+          ...prev,
+        ]);
+      }
+    }
+
     if (userTeamId && nextDay.getDay() === 1) {
-      const employed = transferScoutPool.filter(scout => scout.employedByClubId === userTeamId);
-      const totalSalary = employed.reduce((sum, scout) => sum + scout.weeklySalary, 0);
+      const salaryDate = nextDay.toISOString().split('T')[0];
+      const employed = transferScoutPool.filter(scout =>
+        scout.employedByClubId === userTeamId && (!scout.contract || scout.contract.endDate >= salaryDate)
+      );
+      const totalSalary = employed.reduce((sum, scout) => sum + (scout.contract?.weeklySalary ?? scout.weeklySalary), 0);
       if (totalSalary > 0) {
         setClubs(prev => prev.map(club => club.id === userTeamId ? { ...club, budget: club.budget - totalSalary } : club));
         addFinanceLog(userTeamId, `Wynagrodzenia skautów transferowych (${employed.length})`, -totalSalary, nextDay);
@@ -17776,6 +17896,12 @@ const finalResult: SimulationOutput = {
       return { ok: false, status: 'VALIDATION_ERROR', message: `Łączny koszt transferu i kontraktu (${totalCommitment.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${buyerClub.transferBudget.toLocaleString('pl-PL')} PLN).` };
     }
 
+    const scoutingScoutReputation = transferScoutingReports.reduce((best, report) => {
+      if (!report.candidates.some(candidate => candidate.playerId === targetPlayer.id)) return best;
+      const reportScout = transferScoutPool.find(scout => scout.id === report.scoutId);
+      return Math.max(best, reportScout?.reputation ?? 0);
+    }, 0);
+
     const playerDecision = TransferPlayerDecisionService.evaluateMove(
       contractInput,
       targetPlayer,
@@ -17783,7 +17909,9 @@ const finalResult: SimulationOutput = {
       buyerClub,
       sellerSquad,
       buyerSquad,
-      currentDate
+      currentDate,
+      managerProfile,
+      scoutingScoutReputation || undefined
     );
 
     if (!playerDecision.accepted) {
@@ -18038,7 +18166,7 @@ const finalResult: SimulationOutput = {
       message: `${targetPlayer.firstName} ${targetPlayer.lastName} zaakceptowal transfer do ${buyerClub.name}.`,
       offer: completedOffer
     };
-  }, [userTeamId, transferOffers, clubs, players, currentDate, managerProfile]);
+  }, [userTeamId, transferOffers, clubs, players, currentDate, managerProfile, transferScoutingReports, transferScoutPool]);
 
 const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const mail = messages.find(m => m.id === mailId);

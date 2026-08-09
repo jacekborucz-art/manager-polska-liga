@@ -42,7 +42,7 @@ const _persisted = {
   scrollTopTransfer: 0 as number,
 };
 
-export const JobMarketView: React.FC = () => {
+const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScouting }) => {
   const {
     coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails,
     transferOffers, pendingNegotiations, userTeamId, isResigned, managerEmploymentStatus,
@@ -65,7 +65,6 @@ export const JobMarketView: React.FC = () => {
 
   const [filters, setFilters] = useState<typeof initialFilters>(_persisted.filters);
   const [showMyList, setShowMyList] = useState(false);
-  const [showScouting, setShowScouting] = useState(false);
   const [managerJobFeedback, setManagerJobFeedback] = useState<string | null>(null);
 
   const scrollRefPlayers = useRef<HTMLDivElement>(null);
@@ -378,7 +377,7 @@ export const JobMarketView: React.FC = () => {
           )}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowScouting(true)}
+              onClick={onOpenScouting}
               className="px-8 py-3 bg-amber-500/10 border border-amber-400/25 rounded-xl text-[9px] text-amber-300 hover:bg-amber-500/20 transition-all shadow-xl active:scale-95 group font-black italic uppercase tracking-tighter"
             >
               <span className="group-hover:text-amber-200 transition-colors font-black italic uppercase tracking-tighter">🔭 Scouting</span>
@@ -409,8 +408,6 @@ export const JobMarketView: React.FC = () => {
             </button>
           </div>
         </header>
-
-        {showScouting && <TransferScoutingModal onClose={() => setShowScouting(false)} />}
 
         {/* MOJA LISTA - OVERLAY */}
         {showMyList && (
@@ -1077,4 +1074,14 @@ export const JobMarketView: React.FC = () => {
       `}</style>
     </div>
   );
+};
+
+export const JobMarketView: React.FC = () => {
+  const [showScouting, setShowScouting] = useState(false);
+
+  if (showScouting) {
+    return <TransferScoutingModal onClose={() => setShowScouting(false)} />;
+  }
+
+  return <JobMarketContent onOpenScouting={() => setShowScouting(true)} />;
 };

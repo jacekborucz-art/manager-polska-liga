@@ -25,6 +25,18 @@ const roundMoney = (value: number) => Math.max(50_000, Math.round(value / 5_000)
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const stableUnit = (value: string): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0xffffffff;
+};
+
+const getScoutPersuasionChance = (reputation: number): number =>
+  ({ 1: 0.03, 2: 0.07, 3: 0.13, 4: 0.21, 5: 0.32 })[clamp(Math.round(reputation), 1, 5)] ?? 0;
+
 const PRE_CONTRACT_PRIORITY_DAYS = 330;
 const HIGH_OVERALL_EUROPEAN_TRANSFER_THRESHOLD = 76;
 
@@ -308,7 +320,8 @@ export const TransferPlayerDecisionService = {
     currentSquad: Player[],
     targetSquad: Player[],
     currentDate: Date,
-    managerProfile?: ManagerProfile | null
+    managerProfile?: ManagerProfile | null,
+    scoutReputation?: number
   ): PlayerDecisionResult => {
     const negotiationPlan = TransferPlayerDecisionService.buildNegotiationPlan(
       player,
@@ -320,7 +333,11 @@ export const TransferPlayerDecisionService = {
       managerProfile
     );
 
-    if (!negotiationPlan.willingToTalk) {
+    const scoutPersuasionChance = scoutReputation ? getScoutPersuasionChance(scoutReputation) : 0;
+    const scoutPersuasionRoll = stableUnit(`${player.id}|${targetClub.id}|${currentDate.getFullYear()}|scout-persuasion`);
+    const scoutOpenedTalks = !negotiationPlan.willingToTalk && scoutPersuasionRoll <= scoutPersuasionChance;
+
+    if (!negotiationPlan.willingToTalk && !scoutOpenedTalks) {
       return {
         accepted: false,
         reason: negotiationPlan.reason,
@@ -493,7 +510,8 @@ export const TransferPlayerDecisionService = {
         roleChanceAdjustment +
         financialChanceAdjustment +
         situationChanceAdjustment +
-        managerInfluence.chanceAdjustment,
+        managerInfluence.chanceAdjustment +
+        (scoutReputation ? Math.max(0, scoutReputation - 1) * 0.0125 : 0),
       0.01,
       0.999
     );
@@ -526,7 +544,9 @@ export const TransferPlayerDecisionService = {
 
     return {
       accepted: true,
-      reason: `Zawodnik zaakceptowal warunki. Oferta spelnia jego oczekiwania finansowe i daje realna perspektywe roli ${negotiationPlan.targetRole.toLowerCase()}.`,
+      reason: scoutOpenedTalks
+        ? `Skaut o reputacji ${scoutReputation}/5 przekonał zawodnika do podjęcia rozmów, a przedstawiona oferta spełniła jego oczekiwania.`
+        : `Zawodnik zaakceptowal warunki. Oferta spelnia jego oczekiwania finansowe i daje realna perspektywe roli ${negotiationPlan.targetRole.toLowerCase()}.`,
       stayScore,
       offerScore,
       targetRole: negotiationPlan.targetRole

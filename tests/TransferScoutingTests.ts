@@ -14,8 +14,21 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const pool = TransferScoutingService.generateScoutPool(20260809);
-assert(pool.length === 24, 'Rynek powinien zawierać pełną pulę skautów transferowych.');
+assert(pool.length === 48, 'Rynek powinien zawierać powiększoną pulę 48 skautów transferowych.');
 assert(TransferScoutingService.getMaxScouts() === 3, 'Klub może zatrudnić maksymalnie trzech skautów transferowych.');
+assert(pool.filter(scout => scout.nationality === Region.POLAND).length === 36, '75% rynku skautów powinno pochodzić z Polski.');
+const europeanScoutRegions = new Set([
+  Region.BALKANS, Region.CZ_SK, Region.IBERIA, Region.GERMANY, Region.FRANCE, Region.EX_USSR,
+  Region.ROMANIA, Region.SCANDINAVIA, Region.ENGLAND, Region.ITALY, Region.BENELUX,
+  Region.HUNGARIAN, Region.BALTIC,
+]);
+assert(pool.filter(scout => europeanScoutRegions.has(scout.nationality)).length === 11, 'Około 23% rynku powinno pochodzić z pozostałej części Europy.');
+assert(pool.filter(scout => scout.nationality !== Region.POLAND && !europeanScoutRegions.has(scout.nationality)).length === 1, 'Około 2% rynku powinno pochodzić spoza Europy.');
+assert(pool.every(scout => scout.reputation >= 1 && scout.reputation <= 5), 'Każdy skaut powinien mieć reputację od 1 do 5 gwiazdek.');
+assert(
+  pool.every(scout => Math.max(scout.judgment, scout.reach, scout.speed, scout.experience) >= 15),
+  'Każdy skaut powinien mieć wyraźną mocną stronę zamiast niskiej, ogólnej oceny gwiazdkowej.'
+);
 
 const weakScout: TransferScout = {
   ...pool[0],
@@ -62,6 +75,18 @@ const userClub = {
   leagueId: 'L_PL_1',
   reputation: 8,
 } as Club;
+
+const scoutContractOffer = { durationYears: 2 as const, weeklySalary: pool[0].weeklySalary };
+const scoutContract = TransferScoutingService.buildScoutContract(pool[0], scoutContractOffer, new Date('2026-08-09T12:00:00Z'));
+assert(scoutContract.endDate === '2028-08-09', 'Dwuletni kontrakt skauta powinien kończyć się po dwóch latach.');
+assert(scoutContract.earlyTerminationPenalty > 0, 'Kontrakt powinien zawierać karę za wcześniejsze rozwiązanie.');
+assert(scoutContract.earlyTerminationPenalty % 10_000 === 0, 'Kara kontraktowa powinna być zaokrąglona do 10 000 PLN.');
+assert(scoutContract.weeklySalary % 500 === 0, 'Pensja tygodniowa skauta powinna być zaokrąglona do 500 PLN.');
+assert(
+  TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, new Date('2026-08-09T12:00:00Z')).status
+    === TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, new Date('2026-08-09T12:00:00Z')).status,
+  'Decyzja skauta o podpisaniu tej samej oferty musi być stabilna.'
+);
 
 const makePlayer = (index: number): Player => ({
   id: `HIDDEN_PLAYER_${index}`,

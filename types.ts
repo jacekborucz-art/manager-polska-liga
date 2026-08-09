@@ -2112,6 +2112,38 @@ export interface Scout {
 export type TransferLikelihood = 'LOW' | 'MEDIUM' | 'LIKELY' | 'CERTAIN';
 export type TransferLikelihoodFilter = 'ANY' | TransferLikelihood;
 export type TransferScoutingContractStatus = 'FREE_AGENT' | 'EXPIRING' | 'VALID';
+export type TransferScoutReputation = 1 | 2 | 3 | 4 | 5;
+export type TransferScoutContractYears = 1 | 2 | 3;
+
+export interface TransferScoutContractOffer {
+  durationYears: TransferScoutContractYears;
+  weeklySalary: number;
+}
+
+export interface TransferScoutContract {
+  startDate: string;
+  endDate: string;
+  weeklySalary: number;
+  earlyTerminationPenalty: number;
+}
+
+export interface TransferScoutContractNegotiation {
+  clubId: string;
+  attempts: number;
+  demandedWeeklySalary: number;
+  startedDate: string;
+}
+
+export type TransferScoutHiringStatus = 'SIGNED' | 'COUNTER' | 'WALKED_AWAY' | 'VALIDATION_ERROR';
+
+export interface TransferScoutHiringResult {
+  ok: boolean;
+  status: TransferScoutHiringStatus;
+  message: string;
+  counterWeeklySalary?: number;
+  attemptsRemaining?: number;
+  unavailableUntil?: string;
+}
 
 export interface TransferScout {
   id: string;
@@ -2123,9 +2155,14 @@ export interface TransferScout {
   reach: number;
   speed: number;
   experience: number;
+  reputation: TransferScoutReputation;
   regionalSpecialty?: Region;
   positionSpecialty?: PlayerPosition;
+  /** Oczekiwana pensja tygodniowa przed podpisaniem umowy. */
   weeklySalary: number;
+  contract?: TransferScoutContract;
+  contractNegotiation?: TransferScoutContractNegotiation;
+  unavailableUntil?: string;
   employedByClubId?: string;
   isOnAssignment: boolean;
 }

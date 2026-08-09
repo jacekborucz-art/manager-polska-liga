@@ -15053,6 +15053,15 @@ var PrestigeTransferGuardService = {
 // services/TransferPlayerDecisionService.ts
 var roundMoney = (value) => Math.max(5e4, Math.round(value / 5e3) * 5e3);
 var clamp3 = (value, min, max) => Math.min(max, Math.max(min, value));
+var stableUnit = (value) => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+};
+var getScoutPersuasionChance = (reputation) => ({ 1: 0.03, 2: 0.07, 3: 0.13, 4: 0.21, 5: 0.32 })[clamp3(Math.round(reputation), 1, 5)] ?? 0;
 var PRE_CONTRACT_PRIORITY_DAYS = 330;
 var HIGH_OVERALL_EUROPEAN_TRANSFER_THRESHOLD = 76;
 var EUROPEAN_PLAYER_REGIONS = /* @__PURE__ */ new Set([
@@ -15277,7 +15286,7 @@ var TransferPlayerDecisionService = {
       desiredYears
     };
   },
-  evaluateMove: (offer, player, currentClub, targetClub, currentSquad, targetSquad, currentDate2, managerProfile) => {
+  evaluateMove: (offer, player, currentClub, targetClub, currentSquad, targetSquad, currentDate2, managerProfile, scoutReputation) => {
     const negotiationPlan = TransferPlayerDecisionService.buildNegotiationPlan(
       player,
       currentClub,
@@ -15287,7 +15296,10 @@ var TransferPlayerDecisionService = {
       currentDate2,
       managerProfile
     );
-    if (!negotiationPlan.willingToTalk) {
+    const scoutPersuasionChance = scoutReputation ? getScoutPersuasionChance(scoutReputation) : 0;
+    const scoutPersuasionRoll = stableUnit(`${player.id}|${targetClub.id}|${currentDate2.getFullYear()}|scout-persuasion`);
+    const scoutOpenedTalks = !negotiationPlan.willingToTalk && scoutPersuasionRoll <= scoutPersuasionChance;
+    if (!negotiationPlan.willingToTalk && !scoutOpenedTalks) {
       return {
         accepted: false,
         reason: negotiationPlan.reason,
@@ -15398,7 +15410,7 @@ var TransferPlayerDecisionService = {
     const financialChanceAdjustment = clamp3((financialFit - 1) * 0.25, -0.22, 0.16);
     const situationChanceAdjustment = (player.isOnTransferList ? 0.08 : 0) + (contractPressure > 0 ? 0.04 : 0) + (contractBreakdownPressure > 0 ? 0.12 : 0) - loyaltyResistance * 0.34;
     const rawAcceptanceChance = clamp3(
-      getBaseMoveAcceptanceChance(currentClub, targetClub) + roleChanceAdjustment + financialChanceAdjustment + situationChanceAdjustment + managerInfluence.chanceAdjustment,
+      getBaseMoveAcceptanceChance(currentClub, targetClub) + roleChanceAdjustment + financialChanceAdjustment + situationChanceAdjustment + managerInfluence.chanceAdjustment + (scoutReputation ? Math.max(0, scoutReputation - 1) * 0.0125 : 0),
       0.01,
       0.999
     );
@@ -15420,7 +15432,7 @@ var TransferPlayerDecisionService = {
     }
     return {
       accepted: true,
-      reason: `Zawodnik zaakceptowal warunki. Oferta spelnia jego oczekiwania finansowe i daje realna perspektywe roli ${negotiationPlan.targetRole.toLowerCase()}.`,
+      reason: scoutOpenedTalks ? `Skaut o reputacji ${scoutReputation}/5 przekona\u0142 zawodnika do podj\u0119cia rozm\xF3w, a przedstawiona oferta spe\u0142ni\u0142a jego oczekiwania.` : `Zawodnik zaakceptowal warunki. Oferta spelnia jego oczekiwania finansowe i daje realna perspektywe roli ${negotiationPlan.targetRole.toLowerCase()}.`,
       stayScore,
       offerScore,
       targetRole: negotiationPlan.targetRole
@@ -15438,21 +15450,32 @@ var TransferPlayerDecisionService = {
 
 // services/TransferScoutingService.ts
 var MAX_TRANSFER_SCOUTS = 3;
-var SCOUT_POOL_SIZE = 24;
+var SCOUT_POOL_SIZE = 48;
 var POSITIONS = ["GK" /* GK */, "DEF" /* DEF */, "MID" /* MID */, "FWD" /* FWD */];
-var REGIONS = [
-  "POLAND" /* POLAND */,
+var EUROPEAN_SCOUT_REGIONS = [
   "BALKANS" /* BALKANS */,
   "CZ_SK" /* CZ_SK */,
-  "SSA" /* SSA */,
   "IBERIA" /* IBERIA */,
   "GERMANY" /* GERMANY */,
-  "BRAZIL" /* BRAZIL */,
-  "ARGENTINA" /* ARGENTINA */,
   "FRANCE" /* FRANCE */,
   "EX_USSR" /* EX_USSR */,
   "ROMANIA" /* ROMANIA */,
-  "SCANDINAVIA" /* SCANDINAVIA */
+  "SCANDINAVIA" /* SCANDINAVIA */,
+  "ENGLAND" /* ENGLAND */,
+  "ITALY" /* ITALY */,
+  "BENELUX" /* BENELUX */,
+  "HUNGARIAN" /* HUNGARIAN */,
+  "BALTIC" /* BALTIC */
+];
+var OTHER_SCOUT_REGIONS = [
+  "SSA" /* SSA */,
+  "BRAZIL" /* BRAZIL */,
+  "ARGENTINA" /* ARGENTINA */,
+  "NORTH_AMERICA" /* NORTH_AMERICA */,
+  "ARABIA" /* ARABIA */,
+  "JAPAN" /* JAPAN */,
+  "KOREA" /* KOREA */,
+  "OCEANIA" /* OCEANIA */
 ];
 var clamp4 = (value, min, max) => Math.max(min, Math.min(max, value));
 var hashString = (value) => {
@@ -15463,7 +15486,7 @@ var hashString = (value) => {
   }
   return hash >>> 0;
 };
-var stableUnit = (key) => hashString(key) / 4294967295;
+var stableUnit2 = (key) => hashString(key) / 4294967295;
 var matchesContractStatus = (player, status, referenceDate) => {
   if (status === "FREE_AGENT") return player.clubId === "FREE_AGENTS";
   if (player.clubId === "FREE_AGENTS") return false;
@@ -15482,6 +15505,33 @@ var toLikelihood = (probability) => {
   return "LOW";
 };
 var getScoutQuality = (scout) => (scout.judgment + scout.reach + scout.speed + scout.experience) / 4;
+var getReputation = (seed, index) => {
+  const roll = stableUnit2(`${seed}|${index}|reputation`);
+  if (roll < 0.3) return 1;
+  if (roll < 0.58) return 2;
+  if (roll < 0.8) return 3;
+  if (roll < 0.94) return 4;
+  return 5;
+};
+var getExpectedWeeklySalary = (reputation, seedKey) => {
+  const ranges = {
+    1: [700, 1200],
+    2: [1200, 1900],
+    3: [1900, 3e3],
+    4: [3e3, 4500],
+    5: [4500, 6500]
+  };
+  const [min, max] = ranges[reputation];
+  return Math.max(500, Math.round((min + stableUnit2(seedKey) * (max - min)) / 500) * 500);
+};
+var getRegionCategories = (seed) => {
+  const categories = [
+    ...Array.from({ length: 36 }, () => "POLAND"),
+    ...Array.from({ length: 11 }, () => "EUROPE"),
+    "OTHER"
+  ];
+  return categories.map((category, index) => ({ category, order: stableUnit2(`${seed}|nationality-order|${index}`) })).sort((left, right) => left.order - right.order).map((entry) => entry.category);
+};
 var matchesFilters = (player, filters2, referenceDate) => {
   if (filters2.position && player.position !== filters2.position && player.secondaryPosition !== filters2.position) return false;
   if (filters2.region && player.nationality !== filters2.region) return false;
@@ -15504,41 +15554,159 @@ var TransferScoutingService = {
     return MAX_TRANSFER_SCOUTS;
   },
   generateScoutPool(seed) {
+    const nationalityCategories = getRegionCategories(seed);
     return Array.from({ length: SCOUT_POOL_SIZE }, (_, index) => {
-      const region = REGIONS[Math.floor(stableUnit(`${seed}|${index}|region`) * REGIONS.length)];
+      const category = nationalityCategories[index];
+      const availableRegions = category === "EUROPE" ? EUROPEAN_SCOUT_REGIONS : OTHER_SCOUT_REGIONS;
+      const region = category === "POLAND" ? "POLAND" /* POLAND */ : availableRegions[Math.floor(stableUnit2(`${seed}|${index}|region`) * availableRegions.length)];
       const name = NameGeneratorService.getRandomName(region);
-      const base = 4 + Math.floor(stableUnit(`${seed}|${index}|base`) * 13);
-      const stat = (key) => clamp4(base + Math.floor(stableUnit(`${seed}|${index}|${key}`) * 9) - 4, 1, 20);
-      const judgment = stat("judgment");
-      const reach = stat("reach");
-      const speed = stat("speed");
-      const experience = stat("experience");
+      const archetype = Math.floor(stableUnit2(`${seed}|${index}|archetype`) * 4);
+      const stat = (key, min, max) => min + Math.floor(stableUnit2(`${seed}|${index}|${key}`) * (max - min + 1));
+      const [judgment, reach, speed, experience] = archetype === 0 ? [stat("judgment", 15, 20), stat("reach", 8, 15), stat("speed", 7, 14), stat("experience", 10, 18)] : archetype === 1 ? [stat("judgment", 9, 16), stat("reach", 15, 20), stat("speed", 10, 18), stat("experience", 6, 14)] : archetype === 2 ? [stat("judgment", 8, 15), stat("reach", 9, 16), stat("speed", 16, 20), stat("experience", 6, 13)] : [stat("judgment", 12, 18), stat("reach", 7, 14), stat("speed", 6, 13), stat("experience", 16, 20)];
       const average = (judgment + reach + speed + experience) / 4;
+      const reputation = getReputation(seed, index);
       return {
         id: `TRANSFER_SCOUT_${seed}_${index}`,
         firstName: name.firstName,
         lastName: name.lastName,
-        age: 28 + Math.floor(stableUnit(`${seed}|${index}|age`) * 35),
+        age: 28 + Math.floor(stableUnit2(`${seed}|${index}|age`) * 35),
         nationality: region,
         judgment,
         reach,
         speed,
         experience,
-        regionalSpecialty: stableUnit(`${seed}|${index}|regional`) < 0.72 ? region : void 0,
-        positionSpecialty: stableUnit(`${seed}|${index}|position-specialty`) < 0.55 ? POSITIONS[Math.floor(stableUnit(`${seed}|${index}|position`) * POSITIONS.length)] : void 0,
-        weeklySalary: Math.round((9e3 + average * 2200) / 500) * 500,
+        reputation,
+        regionalSpecialty: stableUnit2(`${seed}|${index}|regional`) < 0.72 ? region : void 0,
+        positionSpecialty: stableUnit2(`${seed}|${index}|position-specialty`) < 0.55 ? POSITIONS[Math.floor(stableUnit2(`${seed}|${index}|position`) * POSITIONS.length)] : void 0,
+        weeklySalary: getExpectedWeeklySalary(reputation, `${seed}|${index}|salary|${average}`),
+        contract: void 0,
         employedByClubId: void 0,
         isOnAssignment: false
       };
     });
   },
-  getScoutStars(scout) {
-    const quality = getScoutQuality(scout);
-    if (quality >= 17) return 5;
-    if (quality >= 14) return 4;
-    if (quality >= 11) return 3;
-    if (quality >= 8) return 2;
-    return 1;
+  normalizeScoutPool(scouts, seed, referenceDate = /* @__PURE__ */ new Date()) {
+    const generated = TransferScoutingService.generateScoutPool(seed);
+    const normalized = scouts.map((scout, index) => {
+      const quality = getScoutQuality(scout);
+      const reputation = scout.reputation ?? clamp4(Math.round((quality - 6) / 3), 1, 5);
+      const weeklySalary = scout.weeklySalary > 1e4 ? getExpectedWeeklySalary(reputation, `${seed}|legacy|${scout.id}|salary`) : scout.weeklySalary;
+      const normalizedScout = { ...scout, reputation, weeklySalary };
+      const contract = normalizedScout.employedByClubId && !normalizedScout.contract ? TransferScoutingService.buildScoutContract(
+        normalizedScout,
+        { durationYears: 1, weeklySalary },
+        referenceDate
+      ) : normalizedScout.contract;
+      return { ...normalizedScout, contract };
+    });
+    const retained = normalized.filter((scout) => !!scout.employedByClubId || scout.isOnAssignment);
+    const existingIds = new Set(retained.map((scout) => scout.id));
+    const additions = generated.filter((scout) => !existingIds.has(scout.id));
+    return [...retained, ...additions].slice(0, Math.max(SCOUT_POOL_SIZE, retained.length));
+  },
+  getContractAcceptanceChance(scout, club, offer, demandedWeeklySalary = scout.weeklySalary) {
+    const expectedSalary = Math.max(1, demandedWeeklySalary);
+    const salaryRatio = offer.weeklySalary / expectedSalary;
+    const requiredClubReputation = clamp4(scout.reputation * 3 - 1, 1, 16);
+    const clubFit = (club.reputation - requiredClubReputation) * 5;
+    const salaryFit = (salaryRatio - 1) * 85;
+    const durationFit = offer.durationYears >= 2 ? 6 : scout.reputation >= 4 ? -12 : 0;
+    return clamp4(Math.round(58 - scout.reputation * 5 + clubFit + salaryFit + durationFit), 5, 96);
+  },
+  evaluateContractOffer(scout, club, offer, currentDate2) {
+    const previousNegotiation = scout.contractNegotiation?.clubId === club.id ? scout.contractNegotiation : void 0;
+    const attempt = (previousNegotiation?.attempts ?? 0) + 1;
+    const demand = previousNegotiation?.demandedWeeklySalary ?? scout.weeklySalary;
+    const normalizedOffer = Math.max(500, Math.round(offer.weeklySalary / 500) * 500);
+    const normalizedContractOffer = { ...offer, weeklySalary: normalizedOffer };
+    const salaryRatio = normalizedOffer / Math.max(500, demand);
+    const requiredClubReputation = clamp4(scout.reputation * 3 - 1, 1, 16);
+    const reputationGap = Math.max(0, requiredClubReputation - club.reputation);
+    const isMajorReputationMismatch = reputationGap >= 4;
+    const decisionRoll = stableUnit2(`${scout.id}|${club.id}|contract-decision|${attempt}`) * 100;
+    const breakRoll = stableUnit2(`${scout.id}|${club.id}|contract-break|${attempt}`);
+    const lowOffer = salaryRatio < 0.82;
+    const immediateBreakChance = clamp4(
+      0.18 + reputationGap * 0.035 + Math.max(0, 0.82 - salaryRatio) * 1.15,
+      0.18,
+      0.82
+    );
+    const walkAway = (message) => {
+      const unavailableUntil = new Date(currentDate2);
+      unavailableUntil.setMonth(unavailableUntil.getMonth() + 5 + Math.floor(stableUnit2(`${scout.id}|${club.id}|cooldown`) * 3));
+      return {
+        ok: false,
+        status: "WALKED_AWAY",
+        message,
+        attemptsRemaining: 0,
+        unavailableUntil: unavailableUntil.toISOString().split("T")[0]
+      };
+    };
+    if (lowOffer && breakRoll < immediateBreakChance) {
+      return walkAway(`${scout.firstName} ${scout.lastName} uzna\u0142 ofert\u0119 za niepowa\u017Cn\u0105 i zerwa\u0142 rozmowy.`);
+    }
+    let acceptanceChance = TransferScoutingService.getContractAcceptanceChance(
+      scout,
+      club,
+      normalizedContractOffer,
+      demand
+    );
+    if (isMajorReputationMismatch) {
+      const exceptionalPremium = Math.max(0, salaryRatio - 1) * 12;
+      const durationBonus = offer.durationYears >= 3 ? 3 : offer.durationYears === 2 ? 1 : 0;
+      acceptanceChance = clamp4(Math.round(2 + exceptionalPremium + durationBonus), 2, 12);
+    }
+    if (lowOffer) acceptanceChance = Math.min(acceptanceChance, 4);
+    if (decisionRoll <= acceptanceChance) {
+      return {
+        ok: true,
+        status: "SIGNED",
+        message: isMajorReputationMismatch ? `${scout.firstName} ${scout.lastName} zrobi\u0142 wyj\u0105tek i zaakceptowa\u0142 ofert\u0119 klubu o ni\u017Cszej reputacji.` : `${scout.firstName} ${scout.lastName} zaakceptowa\u0142 warunki kontraktu.`,
+        attemptsRemaining: Math.max(0, 3 - attempt)
+      };
+    }
+    if (attempt >= 3) {
+      return walkAway(`${scout.firstName} ${scout.lastName} odrzuci\u0142 trzeci\u0105 ofert\u0119 i zako\u0144czy\u0142 negocjacje.`);
+    }
+    const counterMultiplier = 1.08 + scout.reputation * 0.015 + stableUnit2(`${scout.id}|${club.id}|counter|${attempt}`) * 0.05;
+    const reputationPremium = reputationGap > 0 ? 1 + Math.min(0.2, reputationGap * 0.025) : 1;
+    const counterWeeklySalary = Math.max(
+      demand,
+      Math.round(demand * counterMultiplier * reputationPremium / 500) * 500
+    );
+    return {
+      ok: false,
+      status: "COUNTER",
+      message: `${scout.firstName} ${scout.lastName} nie przyj\u0105\u0142 oferty i podbi\u0142 oczekiwan\u0105 pensj\u0119 do ${counterWeeklySalary.toLocaleString("pl-PL")} PLN tygodniowo.`,
+      counterWeeklySalary,
+      attemptsRemaining: 3 - attempt
+    };
+  },
+  buildScoutContract(scout, offer, currentDate2) {
+    const endDate = new Date(currentDate2);
+    endDate.setFullYear(endDate.getFullYear() + offer.durationYears);
+    const basePenaltyWeeks = { 1: 5, 2: 9, 3: 14, 4: 22, 5: 32 };
+    const extraYears = Math.max(0, offer.durationYears - 1);
+    const penaltyWeeks = basePenaltyWeeks[scout.reputation] + extraYears * (2 + scout.reputation);
+    const weeklySalary = Math.max(500, Math.round(offer.weeklySalary / 500) * 500);
+    return {
+      startDate: currentDate2.toISOString().split("T")[0],
+      endDate: endDate.toISOString().split("T")[0],
+      weeklySalary,
+      earlyTerminationPenalty: Math.max(1e4, Math.round(weeklySalary * penaltyWeeks / 1e4) * 1e4)
+    };
+  },
+  getEarlyTerminationPenalty(scout, currentDate2) {
+    if (!scout.contract) return 0;
+    const start = new Date(scout.contract.startDate).getTime();
+    const end = new Date(scout.contract.endDate).getTime();
+    const now = currentDate2.getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || now >= end) return 0;
+    const remainingRatio = clamp4((end - now) / Math.max(1, end - start), 0, 1);
+    return Math.max(0, Math.round(scout.contract.earlyTerminationPenalty * remainingRatio / 1e4) * 1e4);
+  },
+  getScoutPersuasionChance(reputation) {
+    return { 1: 3, 2: 7, 3: 13, 4: 21, 5: 32 }[reputation];
   },
   getAssignmentDays(scout, filters2) {
     let days = 30 - scout.speed * 0.9;
@@ -15566,19 +15734,20 @@ var TransferScoutingService = {
       filters: filters2
     };
   },
-  getInterestProbability(player, userClub2, sourceClub, playersByClub2, currentDate2) {
+  getInterestProbability(player, userClub2, sourceClub, playersByClub2, currentDate2, scoutReputation) {
     const targetSquad = playersByClub2[userClub2.id] ?? [];
     const sourceSquad = sourceClub ? playersByClub2[sourceClub.id] ?? [] : [];
     const clubLevel = 34 + userClub2.reputation * 4.2;
     const levelGap = player.overallRating - clubLevel;
     const loyalty = clamp4(player.lojalnosc ?? 50, 1, 99);
-    const stableSurprise = (stableUnit(`${player.id}|${userClub2.id}|transfer-interest`) - 0.5) * 30;
+    const stableSurprise = (stableUnit2(`${player.id}|${userClub2.id}|transfer-interest`) - 0.5) * 30;
     let probability = 62 - Math.max(0, levelGap) * 3.2 + Math.max(0, -levelGap) * 0.6;
     probability += player.isOnTransferList ? 17 : 0;
     probability += player.clubId === "FREE_AGENTS" ? 12 : 0;
     probability += player.age >= 31 ? 7 : player.age <= 22 ? 3 : 0;
     probability -= Math.max(0, loyalty - 55) * 0.28;
     probability += stableSurprise;
+    probability += scoutReputation ? { 1: 1, 2: 3, 3: 6, 4: 10, 5: 15 }[scoutReputation] : 0;
     if (sourceClub) {
       probability += (userClub2.reputation - sourceClub.reputation) * 5;
       const plan = TransferPlayerDecisionService.buildNegotiationPlan(
@@ -15604,9 +15773,9 @@ var TransferScoutingService = {
     const selectedLikelihood2 = assignment2.filters.likelihood ?? assignment2.filters.minimumLikelihood ?? "ANY";
     const candidates2 = Array.from(uniquePlayers.values()).filter((player) => player.clubId !== userClub2.id).filter((player) => matchesFilters(player, assignment2.filters, completionDate)).map((player) => {
       const sourceClub = player.clubId === "FREE_AGENTS" ? null : clubById.get(player.clubId) ?? null;
-      const probability = TransferScoutingService.getInterestProbability(player, userClub2, sourceClub, playersByClub2, completionDate);
+      const probability = TransferScoutingService.getInterestProbability(player, userClub2, sourceClub, playersByClub2, completionDate, scout.reputation);
       const likelihood = toLikelihood(probability);
-      const discoveryRoll = stableUnit(`${assignment2.id}|${player.id}|discovery`);
+      const discoveryRoll = stableUnit2(`${assignment2.id}|${player.id}|discovery`);
       const specialtyBonus = scout.positionSpecialty === player.position ? 0.08 : 0;
       const regionBonus = scout.regionalSpecialty === player.nationality ? 0.1 : 0;
       const discovered = discoveryRoll <= clamp4(coverage + specialtyBonus + regionBonus, 0, 0.99);
@@ -15634,7 +15803,7 @@ var TransferScoutingService = {
       const salarySpread = clamp4((23 - scout.experience) / 100, 0.04, 0.22);
       return {
         playerId: player.id,
-        matchScore: clamp4(Math.round(98 - index * 5 - stableUnit(`${assignment2.id}|${player.id}|fit`) * 8), 50, 99),
+        matchScore: clamp4(Math.round(98 - index * 5 - stableUnit2(`${assignment2.id}|${player.id}|fit`) * 8), 50, 99),
         likelihood,
         probabilityMin: clamp4(probability - uncertainty, 1, 99),
         probabilityMax: clamp4(probability + uncertainty, 1, 99),
@@ -15669,8 +15838,31 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 var pool = TransferScoutingService.generateScoutPool(20260809);
-assert(pool.length === 24, "Rynek powinien zawiera\u0107 pe\u0142n\u0105 pul\u0119 skaut\xF3w transferowych.");
+assert(pool.length === 48, "Rynek powinien zawiera\u0107 powi\u0119kszon\u0105 pul\u0119 48 skaut\xF3w transferowych.");
 assert(TransferScoutingService.getMaxScouts() === 3, "Klub mo\u017Ce zatrudni\u0107 maksymalnie trzech skaut\xF3w transferowych.");
+assert(pool.filter((scout) => scout.nationality === "POLAND" /* POLAND */).length === 36, "75% rynku skaut\xF3w powinno pochodzi\u0107 z Polski.");
+var europeanScoutRegions = /* @__PURE__ */ new Set([
+  "BALKANS" /* BALKANS */,
+  "CZ_SK" /* CZ_SK */,
+  "IBERIA" /* IBERIA */,
+  "GERMANY" /* GERMANY */,
+  "FRANCE" /* FRANCE */,
+  "EX_USSR" /* EX_USSR */,
+  "ROMANIA" /* ROMANIA */,
+  "SCANDINAVIA" /* SCANDINAVIA */,
+  "ENGLAND" /* ENGLAND */,
+  "ITALY" /* ITALY */,
+  "BENELUX" /* BENELUX */,
+  "HUNGARIAN" /* HUNGARIAN */,
+  "BALTIC" /* BALTIC */
+]);
+assert(pool.filter((scout) => europeanScoutRegions.has(scout.nationality)).length === 11, "Oko\u0142o 23% rynku powinno pochodzi\u0107 z pozosta\u0142ej cz\u0119\u015Bci Europy.");
+assert(pool.filter((scout) => scout.nationality !== "POLAND" /* POLAND */ && !europeanScoutRegions.has(scout.nationality)).length === 1, "Oko\u0142o 2% rynku powinno pochodzi\u0107 spoza Europy.");
+assert(pool.every((scout) => scout.reputation >= 1 && scout.reputation <= 5), "Ka\u017Cdy skaut powinien mie\u0107 reputacj\u0119 od 1 do 5 gwiazdek.");
+assert(
+  pool.every((scout) => Math.max(scout.judgment, scout.reach, scout.speed, scout.experience) >= 15),
+  "Ka\u017Cdy skaut powinien mie\u0107 wyra\u017An\u0105 mocn\u0105 stron\u0119 zamiast niskiej, og\xF3lnej oceny gwiazdkowej."
+);
 var weakScout = {
   ...pool[0],
   id: "TRANSFER_SCOUT_WEAK",
@@ -15713,6 +15905,16 @@ var userClub = {
   leagueId: "L_PL_1",
   reputation: 8
 };
+var scoutContractOffer = { durationYears: 2, weeklySalary: pool[0].weeklySalary };
+var scoutContract = TransferScoutingService.buildScoutContract(pool[0], scoutContractOffer, /* @__PURE__ */ new Date("2026-08-09T12:00:00Z"));
+assert(scoutContract.endDate === "2028-08-09", "Dwuletni kontrakt skauta powinien ko\u0144czy\u0107 si\u0119 po dw\xF3ch latach.");
+assert(scoutContract.earlyTerminationPenalty > 0, "Kontrakt powinien zawiera\u0107 kar\u0119 za wcze\u015Bniejsze rozwi\u0105zanie.");
+assert(scoutContract.earlyTerminationPenalty % 1e4 === 0, "Kara kontraktowa powinna by\u0107 zaokr\u0105glona do 10 000 PLN.");
+assert(scoutContract.weeklySalary % 500 === 0, "Pensja tygodniowa skauta powinna by\u0107 zaokr\u0105glona do 500 PLN.");
+assert(
+  TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, /* @__PURE__ */ new Date("2026-08-09T12:00:00Z")).status === TransferScoutingService.evaluateContractOffer(pool[0], userClub, scoutContractOffer, /* @__PURE__ */ new Date("2026-08-09T12:00:00Z")).status,
+  "Decyzja skauta o podpisaniu tej samej oferty musi by\u0107 stabilna."
+);
 var makePlayer = (index) => ({
   id: `HIDDEN_PLAYER_${index}`,
   firstName: "Ukryty",
