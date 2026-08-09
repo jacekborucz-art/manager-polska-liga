@@ -14749,160 +14749,90 @@ var ManagerNegotiationInfluenceService = {
   }
 };
 
+// services/ClubStrengthService.ts
+var CLUB_REPUTATION_MIN = 1;
+var CLUB_REPUTATION_DOMESTIC_CEILING = 10;
+var CLUB_REPUTATION_MAX = 20;
+var clamp2 = (value, min, max) => Math.min(max, Math.max(min, value));
+var ClubStrengthService = {
+  getLevel(reputation) {
+    const normalizedReputation = clamp2(
+      Number.isFinite(reputation) ? reputation : CLUB_REPUTATION_MIN,
+      CLUB_REPUTATION_MIN,
+      CLUB_REPUTATION_MAX
+    );
+    if (normalizedReputation <= CLUB_REPUTATION_DOMESTIC_CEILING) {
+      return 34 + normalizedReputation * 4.2;
+    }
+    return 76 + (normalizedReputation - CLUB_REPUTATION_DOMESTIC_CEILING) * 2;
+  },
+  getExposure(reputation) {
+    const minimumLevel = 34 + CLUB_REPUTATION_MIN * 4.2;
+    const maximumLevel = 96;
+    return clamp2(
+      (ClubStrengthService.getLevel(reputation) - minimumLevel) / (maximumLevel - minimumLevel),
+      0,
+      1
+    );
+  }
+};
+
+// services/PlayerPrestigeService.ts
+var PLAYER_REPUTATION_MIN = 1;
+var PLAYER_REPUTATION_MAX = 99;
+var clamp3 = (value, min, max) => Math.min(max, Math.max(min, value));
+var normalizeOverall = (overall) => clamp3((clamp3(overall, 1, 99) - 35) / 64, 0, 1);
+var PlayerPrestigeService = {
+  /** Docelowa reputacja wynikająca z poziomu sportowego i ekspozycji klubu. */
+  getReputationTarget(overall, clubReputation) {
+    const sportingRecognition = 5 + Math.pow(normalizeOverall(overall), 1.15) * 76;
+    const clubExposure = ClubStrengthService.getExposure(clubReputation) * 18;
+    return clamp3(sportingRecognition + clubExposure, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+  },
+  /** Reputacja startowa bez progów i podłóg; mały rozrzut zachowuje różnorodność świata. */
+  calculateGeneratedReputation(overall, clubReputation, random = Math.random) {
+    const variation = (clamp3(random(), 0, 1) - 0.5) * 4;
+    return Math.round(clamp3(
+      PlayerPrestigeService.getReputationTarget(overall, clubReputation) + variation,
+      PLAYER_REPUTATION_MIN,
+      PLAYER_REPUTATION_MAX
+    ));
+  },
+  /** Jeden płynny prestiż używany przy ocenie realności transferu. */
+  getTransferPrestige(player) {
+    const overall = clamp3(player.overallRating, 1, 99);
+    const reputation = clamp3(player.reputacja ?? overall, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+    return clamp3(overall * 0.72 + reputation * 0.28, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+  },
+  isGlobalIcon(player) {
+    const overall = clamp3(player.overallRating, 1, 99);
+    const reputation = clamp3(player.reputacja ?? overall, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+    const prestige = PlayerPrestigeService.getTransferPrestige(player);
+    return prestige >= 94 || reputation >= 97 && overall >= 85 || overall >= 97 && reputation >= 85;
+  }
+};
+
 // services/PrestigeTransferGuardService.ts
-var HIGH_PRESTIGE_PLAYER_MIN_REPUTATION = 90;
+var HIGH_PLAYER_PRESTIGE_THRESHOLD = 90;
 var LOW_PRESTIGE_CLUB_REPUTATION_LIMIT = 17;
 var YOUTH_TALENT_EXCEPTION_MIN_AGE = 16;
 var YOUTH_TALENT_EXCEPTION_MAX_AGE = 18;
-var YOUTH_TALENT_EXCEPTION_MIN_OVERALL = 72;
+var YOUTH_TALENT_EXCEPTION_MIN_PRESTIGE = 72;
 var GULF_EXCEPTION_COUNTRIES = /* @__PURE__ */ new Set(["KSA", "UAE", "QAT"]);
 var getClubReputation = (club) => club.reputation ?? 0;
-var clamp2 = (value, min, max) => Math.min(max, Math.max(min, value));
-var getEffectivePrestigeOverall = (player) => {
-  const reputation = player.reputacja ?? 50;
-  if (reputation >= HIGH_PRESTIGE_PLAYER_MIN_REPUTATION) {
-    return Math.max(player.overallRating, 90);
-  }
-  return player.overallRating;
-};
-var getExpectationForOverall = (overall) => {
-  if (overall >= 90) {
-    return {
-      preferredMinReputation: 19,
-      acceptableMinReputation: 15,
-      longShotMinReputation: 10,
-      stretchChance: 0.16,
-      longShotChance: 1e-3,
-      extremeChance: 0
-    };
-  }
-  if (overall >= 85) {
-    return {
-      preferredMinReputation: 17,
-      acceptableMinReputation: 13,
-      longShotMinReputation: 10,
-      stretchChance: 0.24,
-      longShotChance: 0.015,
-      extremeChance: 1e-3
-    };
-  }
-  if (overall >= 80) {
-    return {
-      preferredMinReputation: 16,
-      acceptableMinReputation: 12,
-      longShotMinReputation: 9,
-      stretchChance: 0.32,
-      longShotChance: 0.04,
-      extremeChance: 3e-3
-    };
-  }
-  if (overall >= 78) {
-    return {
-      preferredMinReputation: 14,
-      acceptableMinReputation: 10,
-      longShotMinReputation: 8,
-      stretchChance: 0.42,
-      longShotChance: 0.06,
-      extremeChance: 6e-3
-    };
-  }
-  if (overall >= 76) {
-    return {
-      preferredMinReputation: 13,
-      acceptableMinReputation: 10,
-      longShotMinReputation: 7,
-      stretchChance: 0.44,
-      longShotChance: 0.05,
-      extremeChance: 5e-3
-    };
-  }
-  if (overall >= 74) {
-    return {
-      preferredMinReputation: 12,
-      acceptableMinReputation: 9,
-      longShotMinReputation: 6,
-      stretchChance: 0.47,
-      longShotChance: 0.06,
-      extremeChance: 6e-3
-    };
-  }
-  if (overall >= 72) {
-    return {
-      preferredMinReputation: 11,
-      acceptableMinReputation: 8,
-      longShotMinReputation: 5,
-      stretchChance: 0.5,
-      longShotChance: 0.07,
-      extremeChance: 8e-3
-    };
-  }
-  if (overall >= 70) {
-    return {
-      preferredMinReputation: 10,
-      acceptableMinReputation: 7,
-      longShotMinReputation: 4,
-      stretchChance: 0.54,
-      longShotChance: 0.09,
-      extremeChance: 0.012
-    };
-  }
-  if (overall >= 68) {
-    return {
-      preferredMinReputation: 9,
-      acceptableMinReputation: 6,
-      longShotMinReputation: 3,
-      stretchChance: 0.58,
-      longShotChance: 0.11,
-      extremeChance: 0.018
-    };
-  }
-  if (overall >= 66) {
-    return {
-      preferredMinReputation: 8,
-      acceptableMinReputation: 5,
-      longShotMinReputation: 2,
-      stretchChance: 0.62,
-      longShotChance: 0.14,
-      extremeChance: 0.024
-    };
-  }
-  if (overall >= 64) {
-    return {
-      preferredMinReputation: 7,
-      acceptableMinReputation: 4,
-      longShotMinReputation: 1,
-      stretchChance: 0.66,
-      longShotChance: 0.17,
-      extremeChance: 0.03
-    };
-  }
-  if (overall >= 62) {
-    return {
-      preferredMinReputation: 6,
-      acceptableMinReputation: 3,
-      longShotMinReputation: 0,
-      stretchChance: 0.7,
-      longShotChance: 0.22,
-      extremeChance: 0.05
-    };
-  }
-  if (overall >= 60) {
-    return {
-      preferredMinReputation: 5,
-      acceptableMinReputation: 2,
-      longShotMinReputation: 0,
-      stretchChance: 0.74,
-      longShotChance: 0.28,
-      extremeChance: 0.08
-    };
-  }
+var clamp4 = (value, min, max) => Math.min(max, Math.max(min, value));
+var getExpectationForPrestige = (prestige) => {
+  const normalized = clamp4((prestige - 58) / 32, 0, 1);
+  const preferredMinReputation = Math.round(4 + normalized * 15);
+  const expectationGap = Math.round(3 + normalized * 2);
+  const chanceBase = 1 - normalized;
   return {
-    preferredMinReputation: 4,
-    acceptableMinReputation: 1,
-    longShotMinReputation: 0,
-    stretchChance: 0.8,
-    longShotChance: 0.36,
-    extremeChance: 0.12
+    preferredMinReputation,
+    acceptableMinReputation: Math.max(1, preferredMinReputation - expectationGap),
+    longShotMinReputation: Math.max(0, preferredMinReputation - expectationGap * 2),
+    stretchChance: clamp4(0.8 - normalized * 0.64, 0.16, 0.8),
+    longShotChance: clamp4(0.36 * Math.pow(chanceBase, 2.2), 0, 0.36),
+    extremeChance: clamp4(0.12 * Math.pow(chanceBase, 3), 0, 0.12)
   };
 };
 var getBandForClub = (clubReputation, expectation) => {
@@ -14928,12 +14858,12 @@ var getReasonForBand = (band, player, targetClub, expectation) => {
   return "";
 };
 var getYouthTalentDiscoveryChance = (assessment) => {
-  const clubFactor = clamp2(0.45 + assessment.clubReputation / 20, 0.45, 1.15);
-  const baseChance = assessment.effectiveOverall >= 90 ? 4e-3 : assessment.effectiveOverall >= 85 ? 0.012 : assessment.effectiveOverall >= 80 ? 0.022 : assessment.effectiveOverall >= 76 ? 0.035 : 0.05;
-  return clamp2(baseChance * clubFactor, 15e-4, 0.055);
+  const clubFactor = clamp4(0.45 + assessment.clubReputation / 20, 0.45, 1.15);
+  const baseChance = assessment.effectivePrestige >= 90 ? 4e-3 : assessment.effectivePrestige >= 85 ? 0.012 : assessment.effectivePrestige >= 80 ? 0.022 : assessment.effectivePrestige >= 76 ? 0.035 : 0.05;
+  return clamp4(baseChance * clubFactor, 15e-4, 0.055);
 };
 var applyYouthTalentDiscoveryException = (assessment, player) => {
-  if (player.age < YOUTH_TALENT_EXCEPTION_MIN_AGE || player.age > YOUTH_TALENT_EXCEPTION_MAX_AGE || assessment.effectiveOverall < YOUTH_TALENT_EXCEPTION_MIN_OVERALL || assessment.band === "NATURAL") {
+  if (player.age < YOUTH_TALENT_EXCEPTION_MIN_AGE || player.age > YOUTH_TALENT_EXCEPTION_MAX_AGE || assessment.effectivePrestige < YOUTH_TALENT_EXCEPTION_MIN_PRESTIGE || assessment.band === "NATURAL") {
     return assessment;
   }
   const youthChance = getYouthTalentDiscoveryChance(assessment);
@@ -14943,7 +14873,7 @@ var applyYouthTalentDiscoveryException = (assessment, player) => {
     chanceCap: Math.max(assessment.chanceCap, youthChance),
     salaryPremium: Math.min(Math.max(assessment.salaryPremium, 0.08), 0.22),
     bonusPremium: Math.min(Math.max(assessment.bonusPremium, 0.16), 0.35),
-    scorePenalty: Math.min(assessment.scorePenalty, assessment.effectiveOverall >= 85 ? 26 : 18),
+    scorePenalty: Math.min(assessment.scorePenalty, assessment.effectivePrestige >= 85 ? 26 : 18),
     blocksNegotiation: false,
     reason: "M\xF3j klient jest bardzo m\u0142ody, wi\u0119c taki ruch m\xF3g\u0142by mie\u0107 sens jako wyj\u0105tkowy projekt rozwojowy po wcze\u015Bniejszym wy\u0142owieniu talentu. To nadal rzadki scenariusz i klub musi zagwarantowa\u0107 jasn\u0105 \u015Bcie\u017Ck\u0119 gry."
   };
@@ -14968,7 +14898,7 @@ var applyGulfException = (assessment, player, targetClub) => {
     return {
       ...assessment,
       band: assessment.band === "BLOCKED" ? "EXTREME" : assessment.band,
-      chanceCap: Math.max(assessment.chanceCap, assessment.effectiveOverall >= 90 ? 0.035 : 0.08),
+      chanceCap: Math.max(assessment.chanceCap, assessment.effectivePrestige >= 90 ? 0.035 : 0.08),
       salaryPremium: Math.max(assessment.salaryPremium, 0.38),
       bonusPremium: Math.max(assessment.bonusPremium, 0.75),
       scorePenalty: Math.max(assessment.scorePenalty, 24),
@@ -14979,7 +14909,7 @@ var applyGulfException = (assessment, player, targetClub) => {
   return {
     ...assessment,
     band: assessment.band === "BLOCKED" ? "EXTREME" : assessment.band,
-    chanceCap: Math.max(assessment.chanceCap, assessment.effectiveOverall >= 90 ? 6e-3 : 0.018),
+    chanceCap: Math.max(assessment.chanceCap, assessment.effectivePrestige >= 90 ? 6e-3 : 0.018),
     salaryPremium: Math.max(assessment.salaryPremium, 0.55),
     bonusPremium: Math.max(assessment.bonusPremium, 1),
     scorePenalty: Math.max(assessment.scorePenalty, 34),
@@ -14992,16 +14922,16 @@ var getChanceWithManagerInfluence = (assessment, managerChanceAdjustment = 0) =>
   if (assessment.band === "NATURAL") return 1;
   const positiveInfluence = Math.max(0, managerChanceAdjustment);
   const boost = assessment.band === "STRETCH" ? positiveInfluence * 0.45 : assessment.band === "LONG_SHOT" ? positiveInfluence * 0.12 : positiveInfluence * 0.03;
-  return clamp2(assessment.chanceCap + boost, 0, assessment.band === "STRETCH" ? 0.65 : assessment.chanceCap + 0.015);
+  return clamp4(assessment.chanceCap + boost, 0, assessment.band === "STRETCH" ? 0.65 : assessment.chanceCap + 0.015);
 };
 var PrestigeTransferGuardService = {
-  getPlayerPrestige: (player) => player.reputacja ?? 50,
-  isHighPrestigePlayer: (player) => PrestigeTransferGuardService.getPlayerPrestige(player) >= HIGH_PRESTIGE_PLAYER_MIN_REPUTATION,
+  getPlayerPrestige: (player) => PlayerPrestigeService.getTransferPrestige(player),
+  isHighPrestigePlayer: (player) => PrestigeTransferGuardService.getPlayerPrestige(player) >= HIGH_PLAYER_PRESTIGE_THRESHOLD,
   isLowPrestigeDestination: (club) => getClubReputation(club) <= LOW_PRESTIGE_CLUB_REPUTATION_LIMIT,
   isGulfExceptionClub: (club) => GULF_EXCEPTION_COUNTRIES.has(club.country || "") && getClubReputation(club) >= 8,
   evaluateDestination: (player, targetClub) => {
-    const effectiveOverall = getEffectivePrestigeOverall(player);
-    const expectation = getExpectationForOverall(effectiveOverall);
+    const effectivePrestige = PlayerPrestigeService.getTransferPrestige(player);
+    const expectation = getExpectationForPrestige(effectivePrestige);
     const clubReputation = getClubReputation(targetClub);
     const band = getBandForClub(clubReputation, expectation);
     const chanceCap = band === "NATURAL" ? 1 : band === "STRETCH" ? expectation.stretchChance : band === "LONG_SHOT" ? expectation.longShotChance : band === "EXTREME" ? expectation.extremeChance : 0;
@@ -15011,7 +14941,7 @@ var PrestigeTransferGuardService = {
     const assessment = {
       band,
       clubReputation,
-      effectiveOverall,
+      effectivePrestige,
       preferredMinReputation: expectation.preferredMinReputation,
       acceptableMinReputation: expectation.acceptableMinReputation,
       longShotMinReputation: expectation.longShotMinReputation,
@@ -15052,7 +14982,7 @@ var PrestigeTransferGuardService = {
 
 // services/TransferPlayerDecisionService.ts
 var roundMoney = (value) => Math.max(5e4, Math.round(value / 5e3) * 5e3);
-var clamp3 = (value, min, max) => Math.min(max, Math.max(min, value));
+var clamp5 = (value, min, max) => Math.min(max, Math.max(min, value));
 var stableUnit = (value) => {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index++) {
@@ -15061,7 +14991,84 @@ var stableUnit = (value) => {
   }
   return (hash >>> 0) / 4294967295;
 };
-var getScoutPersuasionChance = (reputation) => ({ 1: 0.03, 2: 0.07, 3: 0.13, 4: 0.21, 5: 0.32 })[clamp3(Math.round(reputation), 1, 5)] ?? 0;
+var TOP_MARKET_COUNTRIES = /* @__PURE__ */ new Set(["ENG", "FRA", "GER", "ESP", "POR"]);
+var GLOBAL_ICON_POLAND_CHANCE_CAP = 1e-6;
+var TOP_MARKET_REGIONS = /* @__PURE__ */ new Set([
+  "ENGLAND" /* ENGLAND */,
+  "FRANCE" /* FRANCE */,
+  "GERMANY" /* GERMANY */,
+  "SPAIN" /* SPAIN */,
+  "IBERIA" /* IBERIA */
+]);
+var getScoutNegotiationPower = (scout) => {
+  if (!scout) return 0;
+  const reputation = (clamp5(Math.round(scout.reputation), 1, 5) - 1) / 4;
+  const experience = (clamp5(scout.experience, 1, 20) - 1) / 19;
+  const judgment = (clamp5(scout.judgment, 1, 20) - 1) / 19;
+  return clamp5(reputation * 0.55 + experience * 0.3 + judgment * 0.15, 0, 1);
+};
+var getPolishLeagueTier = (club) => {
+  if (club.leagueId === "L_PL_1") return 1;
+  if (club.leagueId === "L_PL_2") return 2;
+  if (club.leagueId === "L_PL_3") return 3;
+  if (club.leagueId === "L_PL_4") return 4;
+  return null;
+};
+var getPolishClubPrestigeProgression = (club) => {
+  const reputation = clamp5(club.reputation ?? 0, 0, 20);
+  if (reputation >= 20) return { topPlayerMultiplier: 5, globalIconCap: 0.03 };
+  if (reputation >= 19) return { topPlayerMultiplier: 3.5, globalIconCap: 0.01 };
+  if (reputation >= 18) return { topPlayerMultiplier: 2.25, globalIconCap: 25e-4 };
+  if (reputation >= 17) return { topPlayerMultiplier: 1.5, globalIconCap: 5e-4 };
+  return { topPlayerMultiplier: 1, globalIconCap: GLOBAL_ICON_POLAND_CHANCE_CAP };
+};
+var isRenownedTopMarketMoveToPoland = (player, currentClub, targetClub) => {
+  const tier = getPolishLeagueTier(targetClub);
+  if (!tier) return false;
+  const prestige = PrestigeTransferGuardService.evaluateDestination(player, targetClub).effectivePrestige;
+  const comesFromTopMarket = currentClub ? TOP_MARKET_COUNTRIES.has(currentClub.country || "") : TOP_MARKET_REGIONS.has(player.nationality);
+  return prestige >= 78 && comesFromTopMarket;
+};
+var getTopMarketPolandChanceCap = (player, currentClub, targetClub, scoutPower) => {
+  const polishTier = getPolishLeagueTier(targetClub);
+  if (!polishTier) return null;
+  const prestigeProgression = getPolishClubPrestigeProgression(targetClub);
+  if (PlayerPrestigeService.isGlobalIcon(player)) {
+    return prestigeProgression.globalIconCap;
+  }
+  if (!isRenownedTopMarketMoveToPoland(player, currentClub, targetClub)) return null;
+  const prestige = PrestigeTransferGuardService.evaluateDestination(player, targetClub).effectivePrestige;
+  const prestigeBand = prestige >= 90 ? 3 : prestige >= 85 ? 2 : prestige >= 80 ? 1 : 0;
+  const maximumCaps = {
+    1: [0.12, 0.08, 0.045, 0.02],
+    2: [0.055, 0.035, 0.018, 7e-3],
+    3: [0.022, 0.014, 6e-3, 2e-3],
+    4: [8e-3, 4e-3, 15e-4, 5e-4]
+  };
+  const eliteScoutCap = maximumCaps[polishTier][prestigeBand] * prestigeProgression.topPlayerMultiplier;
+  const scoutFactor = 0.18 + Math.pow(scoutPower, 1.45) * 0.82;
+  const availabilitySoftener = player.isOnTransferList || player.clubId === "FREE_AGENTS" ? 1.25 : 1;
+  const veteranSoftener = player.age >= 33 ? 1.35 : player.age >= 30 ? 1.15 : 1;
+  return clamp5(eliteScoutCap * scoutFactor * availabilitySoftener * veteranSoftener, 1e-4, eliteScoutCap * 1.45);
+};
+var getScoutTalkOpeningChance = (player, currentClub, targetClub, scout) => {
+  const scoutPower = getScoutNegotiationPower(scout);
+  if (scoutPower <= 0) return 0;
+  const band = PrestigeTransferGuardService.evaluateDestination(player, targetClub).band;
+  const eliteChance = band === "NATURAL" ? 0.45 : band === "STRETCH" ? 0.64 : band === "LONG_SHOT" ? 0.56 : band === "EXTREME" ? 0.46 : 0.36;
+  const chance = 0.01 + (eliteChance - 0.01) * Math.pow(scoutPower, 1.65);
+  const topMarketCap = getTopMarketPolandChanceCap(player, currentClub, targetClub, scoutPower);
+  const talkCap = topMarketCap === GLOBAL_ICON_POLAND_CHANCE_CAP ? GLOBAL_ICON_POLAND_CHANCE_CAP : topMarketCap === null ? null : topMarketCap * 1.35;
+  return talkCap === null ? chance : Math.min(chance, talkCap);
+};
+var getScoutAdjustedAcceptanceChanceCap = (player, currentClub, targetClub, scout) => {
+  const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+  const scoutPower = getScoutNegotiationPower(scout);
+  const scoutLift = assessment.band === "NATURAL" ? 0 : assessment.band === "STRETCH" ? 0.36 * Math.pow(scoutPower, 1.45) : assessment.band === "LONG_SHOT" ? 0.42 * Math.pow(scoutPower, 1.45) : assessment.band === "EXTREME" ? 0.38 * Math.pow(scoutPower, 1.65) : 0.3 * Math.pow(scoutPower, 1.8);
+  const generalCap = assessment.band === "BLOCKED" ? scoutLift : clamp5(assessment.chanceCap + scoutLift, 0, assessment.band === "STRETCH" ? 0.72 : 1);
+  const topMarketCap = getTopMarketPolandChanceCap(player, currentClub, targetClub, scoutPower);
+  return topMarketCap === null ? generalCap : Math.min(generalCap, topMarketCap);
+};
 var PRE_CONTRACT_PRIORITY_DAYS = 330;
 var HIGH_OVERALL_EUROPEAN_TRANSFER_THRESHOLD = 76;
 var EUROPEAN_PLAYER_REGIONS = /* @__PURE__ */ new Set([
@@ -15108,9 +15115,9 @@ var getBaseMoveAcceptanceChance = (currentClub, targetClub) => {
   if (reputationDrop === 3) return 0.88;
   if (reputationDrop === 4) return 0.7;
   if (reputationDrop === 5) return 0.6;
-  return clamp3(0.6 * Math.pow(0.82, reputationDrop - 5), 0.02, 0.6);
+  return clamp5(0.6 * Math.pow(0.82, reputationDrop - 5), 0.02, 0.6);
 };
-var getPlayerLoyalty = (player) => clamp3(Math.round(player.lojalnosc ?? 50), 1, 99);
+var getPlayerLoyalty = (player) => clamp5(Math.round(player.lojalnosc ?? 50), 1, 99);
 var isLoyaltySoftenedForTransfer = (player) => !!player.isOnTransferList || !player.squadRole;
 var isMajorReputationStepUp = (currentClub, targetClub) => targetClub.reputation >= currentClub.reputation + 5;
 var isLowAppealDestinationForHighOverallEuropean = (player, targetClub) => player.overallRating >= HIGH_OVERALL_EUROPEAN_TRANSFER_THRESHOLD && EUROPEAN_PLAYER_REGIONS.has(player.nationality) && LOW_APPEAL_DESTINATION_COUNTRIES.has(targetClub.country || "");
@@ -15133,7 +15140,7 @@ var getLoyaltyResistance = (player, currentClub, targetClub) => {
   if (isLoyaltySoftenedForTransfer(player) || isMajorReputationStepUp(currentClub, targetClub)) {
     return 0;
   }
-  return clamp3((getPlayerLoyalty(player) - 50) / 49, 0, 1);
+  return clamp5((getPlayerLoyalty(player) - 50) / 49, 0, 1);
 };
 var roleScore = (role) => {
   switch (role) {
@@ -15286,7 +15293,7 @@ var TransferPlayerDecisionService = {
       desiredYears
     };
   },
-  evaluateMove: (offer, player, currentClub, targetClub, currentSquad, targetSquad, currentDate2, managerProfile, scoutReputation) => {
+  evaluateMove: (offer, player, currentClub, targetClub, currentSquad, targetSquad, currentDate2, managerProfile, scoutInfluence) => {
     const negotiationPlan = TransferPlayerDecisionService.buildNegotiationPlan(
       player,
       currentClub,
@@ -15296,7 +15303,8 @@ var TransferPlayerDecisionService = {
       currentDate2,
       managerProfile
     );
-    const scoutPersuasionChance = scoutReputation ? getScoutPersuasionChance(scoutReputation) : 0;
+    const scoutPower = getScoutNegotiationPower(scoutInfluence);
+    const scoutPersuasionChance = getScoutTalkOpeningChance(player, currentClub, targetClub, scoutInfluence);
     const scoutPersuasionRoll = stableUnit(`${player.id}|${targetClub.id}|${currentDate2.getFullYear()}|scout-persuasion`);
     const scoutOpenedTalks = !negotiationPlan.willingToTalk && scoutPersuasionRoll <= scoutPersuasionChance;
     if (!negotiationPlan.willingToTalk && !scoutOpenedTalks) {
@@ -15341,9 +15349,9 @@ var TransferPlayerDecisionService = {
         };
       }
     }
-    const salaryFit = clamp3(offer.salary / Math.max(effectiveDesiredSalary, 1), 0, 1.3);
-    const bonusFit = clamp3((offer.bonus ?? 0) / Math.max(negotiationPlan.desiredBonus, 1), 0, 1.35);
-    const yearsFit = clamp3(offer.years / Math.max(negotiationPlan.desiredYears, 1), 0.5, 1.2);
+    const salaryFit = clamp5(offer.salary / Math.max(effectiveDesiredSalary, 1), 0, 1.3);
+    const bonusFit = clamp5((offer.bonus ?? 0) / Math.max(negotiationPlan.desiredBonus, 1), 0, 1.35);
+    const yearsFit = clamp5(offer.years / Math.max(negotiationPlan.desiredYears, 1), 0.5, 1.2);
     const financialWeights = getAgeFinancialWeights(player.age);
     const financialFit = salaryFit * financialWeights.salary + bonusFit * financialWeights.bonus + yearsFit * (financialWeights.years + financialWeights.total);
     let salaryScore = 0;
@@ -15406,15 +15414,15 @@ var TransferPlayerDecisionService = {
         targetRole: negotiationPlan.targetRole
       };
     }
-    const roleChanceAdjustment = clamp3((roleLevel(negotiationPlan.targetRole) - roleLevel(currentRole)) * 0.05, -0.12, 0.12);
-    const financialChanceAdjustment = clamp3((financialFit - 1) * 0.25, -0.22, 0.16);
+    const roleChanceAdjustment = clamp5((roleLevel(negotiationPlan.targetRole) - roleLevel(currentRole)) * 0.05, -0.12, 0.12);
+    const financialChanceAdjustment = clamp5((financialFit - 1) * 0.25, -0.22, 0.16);
     const situationChanceAdjustment = (player.isOnTransferList ? 0.08 : 0) + (contractPressure > 0 ? 0.04 : 0) + (contractBreakdownPressure > 0 ? 0.12 : 0) - loyaltyResistance * 0.34;
-    const rawAcceptanceChance = clamp3(
-      getBaseMoveAcceptanceChance(currentClub, targetClub) + roleChanceAdjustment + financialChanceAdjustment + situationChanceAdjustment + managerInfluence.chanceAdjustment + (scoutReputation ? Math.max(0, scoutReputation - 1) * 0.0125 : 0),
+    const rawAcceptanceChance = clamp5(
+      getBaseMoveAcceptanceChance(currentClub, targetClub) + roleChanceAdjustment + financialChanceAdjustment + situationChanceAdjustment + managerInfluence.chanceAdjustment + scoutPower * 0.18,
       0.01,
       0.999
     );
-    const prestigeAcceptanceCap = PrestigeTransferGuardService.getAcceptanceChanceCap(player, targetClub);
+    const prestigeAcceptanceCap = getScoutAdjustedAcceptanceChanceCap(player, currentClub, targetClub, scoutInfluence);
     const finalAcceptanceChance = Math.min(
       rawAcceptanceChance,
       lowAppealAcceptanceCap ?? rawAcceptanceChance,
@@ -15432,7 +15440,7 @@ var TransferPlayerDecisionService = {
     }
     return {
       accepted: true,
-      reason: scoutOpenedTalks ? `Skaut o reputacji ${scoutReputation}/5 przekona\u0142 zawodnika do podj\u0119cia rozm\xF3w, a przedstawiona oferta spe\u0142ni\u0142a jego oczekiwania.` : `Zawodnik zaakceptowal warunki. Oferta spelnia jego oczekiwania finansowe i daje realna perspektywe roli ${negotiationPlan.targetRole.toLowerCase()}.`,
+      reason: scoutOpenedTalks ? `Skaut o reputacji ${scoutInfluence?.reputation ?? 1}/5 i do\u015Bwiadczeniu ${Math.round(scoutInfluence?.experience ?? 1)}/20 przekona\u0142 zawodnika do podj\u0119cia rozm\xF3w, a przedstawiona oferta spe\u0142ni\u0142a jego oczekiwania.` : `Zawodnik zaakceptowal warunki. Oferta spelnia jego oczekiwania finansowe i daje realna perspektywe roli ${negotiationPlan.targetRole.toLowerCase()}.`,
       stayScore,
       offerScore,
       targetRole: negotiationPlan.targetRole
@@ -15478,7 +15486,7 @@ var OTHER_SCOUT_REGIONS = [
   "OCEANIA" /* OCEANIA */
 ];
 var EUROPEAN_SCOUT_REGION_SET = new Set(EUROPEAN_SCOUT_REGIONS);
-var clamp4 = (value, min, max) => Math.max(min, Math.min(max, value));
+var clamp6 = (value, min, max) => Math.max(min, Math.min(max, value));
 var hashString = (value) => {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index++) {
@@ -15506,6 +15514,13 @@ var toLikelihood = (probability) => {
   return "LOW";
 };
 var getScoutQuality = (scout) => (scout.judgment + scout.reach + scout.speed + scout.experience) / 4;
+var getNegotiationInfluence = (scout) => ({
+  reputation: scout.reputation,
+  judgment: scout.judgment,
+  reach: scout.reach,
+  speed: scout.speed,
+  experience: scout.experience
+});
 var getReputation = (seed, index) => {
   const roll = stableUnit2(`${seed}|${index}|reputation`);
   if (roll < 0.3) return 1;
@@ -15595,7 +15610,7 @@ var TransferScoutingService = {
     const generated = TransferScoutingService.generateScoutPool(seed);
     const normalized = scouts.map((scout, index) => {
       const quality = getScoutQuality(scout);
-      const reputation = scout.reputation ?? clamp4(Math.round((quality - 6) / 3), 1, 5);
+      const reputation = scout.reputation ?? clamp6(Math.round((quality - 6) / 3), 1, 5);
       const weeklySalary = scout.weeklySalary > 1e4 ? getExpectedWeeklySalary(reputation, `${seed}|legacy|${scout.id}|salary`) : scout.weeklySalary;
       const normalizedScout = { ...scout, reputation, weeklySalary };
       const contract = normalizedScout.employedByClubId && !normalizedScout.contract ? TransferScoutingService.buildScoutContract(
@@ -15658,11 +15673,11 @@ var TransferScoutingService = {
   getContractAcceptanceChance(scout, club, offer, demandedWeeklySalary = scout.weeklySalary) {
     const expectedSalary = Math.max(1, demandedWeeklySalary);
     const salaryRatio = offer.weeklySalary / expectedSalary;
-    const requiredClubReputation = clamp4(scout.reputation * 3 - 1, 1, 16);
+    const requiredClubReputation = clamp6(scout.reputation * 3 - 1, 1, 16);
     const clubFit = (club.reputation - requiredClubReputation) * 5;
     const salaryFit = (salaryRatio - 1) * 85;
     const durationFit = offer.durationYears >= 2 ? 6 : scout.reputation >= 4 ? -12 : 0;
-    return clamp4(Math.round(58 - scout.reputation * 5 + clubFit + salaryFit + durationFit), 5, 96);
+    return clamp6(Math.round(58 - scout.reputation * 5 + clubFit + salaryFit + durationFit), 5, 96);
   },
   evaluateContractOffer(scout, club, offer, currentDate2) {
     const previousNegotiation = scout.contractNegotiation?.clubId === club.id ? scout.contractNegotiation : void 0;
@@ -15671,13 +15686,13 @@ var TransferScoutingService = {
     const normalizedOffer = Math.max(500, Math.round(offer.weeklySalary / 500) * 500);
     const normalizedContractOffer = { ...offer, weeklySalary: normalizedOffer };
     const salaryRatio = normalizedOffer / Math.max(500, demand);
-    const requiredClubReputation = clamp4(scout.reputation * 3 - 1, 1, 16);
+    const requiredClubReputation = clamp6(scout.reputation * 3 - 1, 1, 16);
     const reputationGap = Math.max(0, requiredClubReputation - club.reputation);
     const isMajorReputationMismatch = reputationGap >= 4;
     const decisionRoll = stableUnit2(`${scout.id}|${club.id}|contract-decision|${attempt}`) * 100;
     const breakRoll = stableUnit2(`${scout.id}|${club.id}|contract-break|${attempt}`);
     const lowOffer = salaryRatio < 0.82;
-    const immediateBreakChance = clamp4(
+    const immediateBreakChance = clamp6(
       0.18 + reputationGap * 0.035 + Math.max(0, 0.82 - salaryRatio) * 1.15,
       0.18,
       0.82
@@ -15705,7 +15720,7 @@ var TransferScoutingService = {
     if (isMajorReputationMismatch) {
       const exceptionalPremium = Math.max(0, salaryRatio - 1) * 12;
       const durationBonus = offer.durationYears >= 3 ? 3 : offer.durationYears === 2 ? 1 : 0;
-      acceptanceChance = clamp4(Math.round(2 + exceptionalPremium + durationBonus), 2, 12);
+      acceptanceChance = clamp6(Math.round(2 + exceptionalPremium + durationBonus), 2, 12);
     }
     if (lowOffer) acceptanceChance = Math.min(acceptanceChance, 4);
     if (decisionRoll <= acceptanceChance) {
@@ -15753,7 +15768,7 @@ var TransferScoutingService = {
     const end = new Date(scout.contract.endDate).getTime();
     const now = currentDate2.getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || now >= end) return 0;
-    const remainingRatio = clamp4((end - now) / Math.max(1, end - start), 0, 1);
+    const remainingRatio = clamp6((end - now) / Math.max(1, end - start), 0, 1);
     return Math.max(0, Math.round(scout.contract.earlyTerminationPenalty * remainingRatio / 1e4) * 1e4);
   },
   getScoutPersuasionChance(reputation) {
@@ -15765,7 +15780,7 @@ var TransferScoutingService = {
     if (filters2.position && scout.positionSpecialty === filters2.position) days -= 2;
     const activeAttributeCount = Object.keys(filters2.attributes).length;
     days += Math.max(0, activeAttributeCount - 2);
-    return clamp4(Math.round(days), 7, 28);
+    return clamp6(Math.round(days), 7, 28);
   },
   getAssignmentCost(scout, filters2) {
     const regionCost = filters2.region && filters2.region !== "POLAND" /* POLAND */ ? 1e4 : 0;
@@ -15785,12 +15800,12 @@ var TransferScoutingService = {
       filters: filters2
     };
   },
-  getInterestProbability(player, userClub2, sourceClub, playersByClub2, currentDate2, scoutReputation) {
+  getInterestProbability(player, userClub2, sourceClub, playersByClub2, currentDate2, scoutInfluence) {
     const targetSquad = playersByClub2[userClub2.id] ?? [];
     const sourceSquad = sourceClub ? playersByClub2[sourceClub.id] ?? [] : [];
-    const clubLevel = 34 + userClub2.reputation * 4.2;
+    const clubLevel = ClubStrengthService.getLevel(userClub2.reputation);
     const levelGap = player.overallRating - clubLevel;
-    const loyalty = clamp4(player.lojalnosc ?? 50, 1, 99);
+    const loyalty = clamp6(player.lojalnosc ?? 50, 1, 99);
     const stableSurprise = (stableUnit2(`${player.id}|${userClub2.id}|transfer-interest`) - 0.5) * 30;
     let probability = 62 - Math.max(0, levelGap) * 3.2 + Math.max(0, -levelGap) * 0.6;
     probability += player.isOnTransferList ? 17 : 0;
@@ -15798,7 +15813,7 @@ var TransferScoutingService = {
     probability += player.age >= 31 ? 7 : player.age <= 22 ? 3 : 0;
     probability -= Math.max(0, loyalty - 55) * 0.28;
     probability += stableSurprise;
-    probability += scoutReputation ? { 1: 1, 2: 3, 3: 6, 4: 10, 5: 15 }[scoutReputation] : 0;
+    probability += getScoutNegotiationPower(scoutInfluence) * 22;
     if (sourceClub) {
       probability += (userClub2.reputation - sourceClub.reputation) * 5;
       const plan = TransferPlayerDecisionService.buildNegotiationPlan(
@@ -15809,9 +15824,18 @@ var TransferScoutingService = {
         targetSquad,
         currentDate2
       );
-      if (!plan.willingToTalk) probability = Math.min(probability, 18);
+      if (!plan.willingToTalk) {
+        probability = Math.min(
+          probability,
+          getScoutTalkOpeningChance(player, sourceClub, userClub2, scoutInfluence) * 100
+        );
+      }
     }
-    return clamp4(Math.round(probability), 1, 96);
+    probability = Math.min(
+      probability,
+      getScoutAdjustedAcceptanceChanceCap(player, sourceClub, userClub2, scoutInfluence) * 100
+    );
+    return clamp6(Math.round(probability), 1, 96);
   },
   resolveAssignment(assignment2, scout, userClub2, clubs, playersByClub2, completionDate) {
     const clubById = new Map(clubs.map((club) => [club.id, club]));
@@ -15820,16 +15844,17 @@ var TransferScoutingService = {
       if (!uniquePlayers.has(player.id)) uniquePlayers.set(player.id, player);
     });
     const quality = getScoutQuality(scout);
-    const coverage = clamp4(0.3 + scout.reach * 0.033, 0.35, 0.96);
+    const scoutInfluence = getNegotiationInfluence(scout);
+    const coverage = clamp6(0.3 + scout.reach * 0.033, 0.35, 0.96);
     const selectedLikelihood2 = assignment2.filters.likelihood ?? assignment2.filters.minimumLikelihood ?? "ANY";
     const candidates2 = Array.from(uniquePlayers.values()).filter((player) => player.clubId !== userClub2.id).filter((player) => matchesFilters(player, assignment2.filters, completionDate)).map((player) => {
       const sourceClub = player.clubId === "FREE_AGENTS" ? null : clubById.get(player.clubId) ?? null;
-      const probability = TransferScoutingService.getInterestProbability(player, userClub2, sourceClub, playersByClub2, completionDate, scout.reputation);
+      const probability = TransferScoutingService.getInterestProbability(player, userClub2, sourceClub, playersByClub2, completionDate, scoutInfluence);
       const likelihood = toLikelihood(probability);
       const discoveryRoll = stableUnit2(`${assignment2.id}|${player.id}|discovery`);
       const specialtyBonus = scout.positionSpecialty === player.position ? 0.08 : 0;
       const regionBonus = scout.regionalSpecialty === player.nationality ? 0.1 : 0;
-      const discovered = discoveryRoll <= clamp4(coverage + specialtyBonus + regionBonus, 0, 0.99);
+      const discovered = discoveryRoll <= clamp6(coverage + specialtyBonus + regionBonus, 0, 0.99);
       const attributeFit = Object.entries(assignment2.filters.attributes).reduce(
         (score, [attribute, range]) => {
           const midpoint = (range.min + range.max) / 2;
@@ -15845,19 +15870,19 @@ var TransferScoutingService = {
         score: probability * 0.6 + player.overallRating * 0.35 + attributeFit
       };
     }).filter((entry) => entry.discovered && (selectedLikelihood2 === "ANY" || entry.likelihood === selectedLikelihood2)).sort((left, right) => right.score - left.score);
-    const resultCount = clamp4(2 + Math.floor((scout.judgment + scout.reach) / 6), 3, 9);
-    const uncertainty = clamp4(Math.round(16 - quality * 0.65), 3, 14);
+    const resultCount = clamp6(2 + Math.floor((scout.judgment + scout.reach) / 6), 3, 9);
+    const uncertainty = clamp6(Math.round(16 - quality * 0.65), 3, 14);
     const reports = candidates2.slice(0, resultCount).map(({ player, probability, likelihood }, index) => {
       const value = Math.max(0, player.marketValue ?? 0);
       const salary = Math.max(0, player.annualSalary ?? 0);
-      const valueSpread = clamp4((22 - scout.judgment) / 100, 0.03, 0.2);
-      const salarySpread = clamp4((23 - scout.experience) / 100, 0.04, 0.22);
+      const valueSpread = clamp6((22 - scout.judgment) / 100, 0.03, 0.2);
+      const salarySpread = clamp6((23 - scout.experience) / 100, 0.04, 0.22);
       return {
         playerId: player.id,
-        matchScore: clamp4(Math.round(98 - index * 5 - stableUnit2(`${assignment2.id}|${player.id}|fit`) * 8), 50, 99),
+        matchScore: clamp6(Math.round(98 - index * 5 - stableUnit2(`${assignment2.id}|${player.id}|fit`) * 8), 50, 99),
         likelihood,
-        probabilityMin: clamp4(probability - uncertainty, 1, 99),
-        probabilityMax: clamp4(probability + uncertainty, 1, 99),
+        probabilityMin: clamp6(probability - uncertainty, 1, 99),
+        probabilityMax: clamp6(probability + uncertainty, 1, 99),
         estimatedMarketValue: {
           min: Math.round(value * (1 - valueSpread)),
           max: Math.round(value * (1 + valueSpread))
@@ -15866,7 +15891,7 @@ var TransferScoutingService = {
           min: Math.round(salary * (1 - salarySpread)),
           max: Math.round(salary * (1 + salarySpread))
         },
-        recommendation: likelihood === "CERTAIN" || likelihood === "LIKELY" && player.overallRating >= clubLevelForRecommendation(userClub2) ? "PRIORITY" : likelihood === "LIKELY" || likelihood === "MEDIUM" ? "APPROACH" : "WATCH"
+        recommendation: likelihood === "CERTAIN" || likelihood === "LIKELY" && player.overallRating >= ClubStrengthService.getLevel(userClub2.reputation) ? "PRIORITY" : likelihood === "LIKELY" || likelihood === "MEDIUM" ? "APPROACH" : "WATCH"
       };
     });
     return {
@@ -15874,15 +15899,13 @@ var TransferScoutingService = {
       assignmentId: assignment2.id,
       scoutId: scout.id,
       scoutName: `${scout.firstName} ${scout.lastName}`,
+      scoutInfluence,
       completedDate: completionDate.toISOString().split("T")[0],
       filters: assignment2.filters,
       candidates: reports
     };
   }
 };
-function clubLevelForRecommendation(club) {
-  return 34 + club.reputation * 4.2;
-}
 
 // tests/TransferScoutingTests.ts
 function assert(condition, message) {
@@ -15922,6 +15945,7 @@ var weakScout = {
   reach: 4,
   speed: 4,
   experience: 4,
+  reputation: 1,
   regionalSpecialty: void 0
 };
 var strongScout = {
@@ -15931,6 +15955,7 @@ var strongScout = {
   reach: 19,
   speed: 19,
   experience: 19,
+  reputation: 5,
   regionalSpecialty: "BRAZIL" /* BRAZIL */,
   positionSpecialty: "MID" /* MID */
 };
@@ -16047,6 +16072,8 @@ var report = TransferScoutingService.resolveAssignment(
   new Date(assignment.completionDate)
 );
 assert(report.candidates.length > 0, "Dobry skaut powinien znale\u017A\u0107 kandydat\xF3w spe\u0142niaj\u0105cych szerokie kryteria.");
+assert(report.scoutInfluence?.reputation === 5, "Raport powinien zachowa\u0107 reputacj\u0119 skauta potrzebn\u0105 do p\xF3\u017Aniejszych negocjacji.");
+assert(report.scoutInfluence?.experience === 19, "Raport powinien zachowa\u0107 do\u015Bwiadczenie skauta r\xF3wnie\u017C po jego odej\u015Bciu z klubu.");
 assert(report.candidates.length <= 9, "Pojedynczy raport nie powinien zawiera\u0107 wi\u0119cej ni\u017C dziewi\u0119ciu kandydat\xF3w.");
 assert(
   report.candidates.every((candidate) => candidates.some((player) => player.id === candidate.playerId)),
@@ -16108,4 +16135,122 @@ assert(
   validContractReport.candidates.every((candidate) => candidate.playerId.startsWith("VALID_CONTRACT_PLAYER_")),
   "Filtr wa\u017Cnego kontraktu nie mo\u017Ce zwraca\u0107 um\xF3w wygasaj\u0105cych w ci\u0105gu roku."
 );
+var weakInfluence = {
+  reputation: weakScout.reputation,
+  judgment: weakScout.judgment,
+  reach: weakScout.reach,
+  speed: weakScout.speed,
+  experience: weakScout.experience
+};
+var eliteInfluence = {
+  reputation: strongScout.reputation,
+  judgment: 20,
+  reach: 20,
+  speed: 20,
+  experience: 20
+};
+assert(
+  getScoutNegotiationPower(eliteInfluence) > getScoutNegotiationPower(weakInfluence),
+  "Reputacja i do\u015Bwiadczenie elitarnego skauta powinny dawa\u0107 wyra\u017Anie wi\u0119ksz\u0105 si\u0142\u0119 negocjacyjn\u0105."
+);
+var renownedPlayer = {
+  ...candidates[0],
+  id: "RENOWNED_PLAYER",
+  clubId: "TOP_MARKET_CLUB",
+  nationality: "ENGLAND" /* ENGLAND */,
+  overallRating: 84,
+  reputacja: 86
+};
+var elitePlayerOutsideTopMarkets = {
+  ...renownedPlayer,
+  id: "ELITE_OUTSIDE_TOP_MARKETS",
+  nationality: "BRAZIL" /* BRAZIL */,
+  overallRating: 90,
+  reputacja: 92
+};
+var topMarketClub = {
+  id: "TOP_MARKET_CLUB",
+  name: "Klub angielski",
+  country: "ENG",
+  reputation: 18
+};
+var nonTopMarketClub = {
+  ...topMarketClub,
+  id: "NON_TOP_MARKET_CLUB",
+  country: "BRA"
+};
+var polishFirstLeagueClub = { ...userClub, leagueId: "L_PL_2", reputation: 7 };
+var polishSecondLeagueClub = { ...userClub, leagueId: "L_PL_3", reputation: 5 };
+var eliteGeneralTalkChance = getScoutTalkOpeningChance(
+  elitePlayerOutsideTopMarkets,
+  nonTopMarketClub,
+  polishFirstLeagueClub,
+  eliteInfluence
+);
+assert(eliteGeneralTalkChance >= 0.1, "Elitarny skaut powinien mie\u0107 odczuwaln\u0105 szans\u0119 prze\u0142amania odmowy klasowego zawodnika poza topowymi rynkami.");
+assert(
+  eliteGeneralTalkChance > getScoutTalkOpeningChance(elitePlayerOutsideTopMarkets, nonTopMarketClub, polishFirstLeagueClub, weakInfluence),
+  "S\u0142aby skaut nie mo\u017Ce przekonywa\u0107 klasowych zawodnik\xF3w r\xF3wnie skutecznie jak elitarny."
+);
+var firstLeagueTopMarketCap = getScoutAdjustedAcceptanceChanceCap(
+  renownedPlayer,
+  topMarketClub,
+  polishFirstLeagueClub,
+  eliteInfluence
+);
+var secondLeagueTopMarketCap = getScoutAdjustedAcceptanceChanceCap(
+  renownedPlayer,
+  topMarketClub,
+  polishSecondLeagueClub,
+  eliteInfluence
+);
+assert(firstLeagueTopMarketCap <= 0.035, "Renomowany zawodnik z topowego rynku powinien bardzo rzadko trafia\u0107 do polskiej 1. Ligi.");
+assert(secondLeagueTopMarketCap < firstLeagueTopMarketCap, "Im ni\u017Csza polska liga, tym ni\u017Cszy musi by\u0107 limit szansy na presti\u017Cowy transfer.");
+assert(secondLeagueTopMarketCap > 0, "Nawet w ni\u017Cszej polskiej lidze musi pozosta\u0107 minimalne RNG na wyj\u0105tkowy transfer.");
+var globalIcon = {
+  ...renownedPlayer,
+  id: "GLOBAL_FOOTBALL_ICON",
+  age: 36,
+  overallRating: 88,
+  reputacja: 99,
+  isOnTransferList: true
+};
+["L_PL_1", "L_PL_2", "L_PL_3", "L_PL_4"].forEach((leagueId) => {
+  const polishClub = { ...userClub, leagueId };
+  const iconTransferCap = getScoutAdjustedAcceptanceChanceCap(
+    globalIcon,
+    nonTopMarketClub,
+    polishClub,
+    eliteInfluence
+  );
+  const iconTalkChance = getScoutTalkOpeningChance(
+    globalIcon,
+    nonTopMarketClub,
+    polishClub,
+    eliteInfluence
+  );
+  assert(iconTransferCap === 1e-6, "Globalna ikona futbolu mo\u017Ce trafi\u0107 do polskiej ligi najwy\u017Cej raz na milion pr\xF3b.");
+  assert(iconTalkChance <= 1e-6, "Skaut nie mo\u017Ce obej\u015B\u0107 limitu raz na milion przy rozmowach z globaln\u0105 ikon\u0105.");
+});
+var elitePolishClubReputations = [17, 18, 19, 20];
+var expectedGlobalIconCaps = [5e-4, 25e-4, 0.01, 0.03];
+var progressiveIconCaps = elitePolishClubReputations.map((reputation) => getScoutAdjustedAcceptanceChanceCap(
+  globalIcon,
+  nonTopMarketClub,
+  { ...userClub, leagueId: "L_PL_1", reputation },
+  eliteInfluence
+));
+progressiveIconCaps.forEach((chance, index) => {
+  assert(chance === expectedGlobalIconCaps[index], "Szansa na globaln\u0105 ikon\u0119 musi rosn\u0105\u0107 progresywnie wraz z reputacj\u0105 polskiego klubu 17\u201320.");
+  if (index > 0) {
+    assert(chance > progressiveIconCaps[index - 1], "Ka\u017Cdy kolejny punkt elitarnej reputacji klubu musi zwi\u0119ksza\u0107 ma\u0142e RNG transferowe.");
+  }
+});
+var regularStarCaps = elitePolishClubReputations.map((reputation) => getScoutAdjustedAcceptanceChanceCap(
+  renownedPlayer,
+  topMarketClub,
+  { ...userClub, leagueId: "L_PL_1", reputation },
+  eliteInfluence
+));
+assert(regularStarCaps[3] > regularStarCaps[0], "Polski klub o reputacji 20 powinien mie\u0107 wyra\u017Anie wi\u0119ksz\u0105 szans\u0119 na zwyk\u0142\u0105 gwiazd\u0119 ni\u017C klub o reputacji 17.");
 console.log("TransferScoutingTests: OK");

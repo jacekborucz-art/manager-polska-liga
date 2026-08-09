@@ -6,7 +6,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { FinanceService } from './FinanceService';
 import { pickNationalityForRegion } from './NationalityService';
 import { PlayerMoraleService } from './PlayerMoraleService';
-import { calcReputacja } from './SquadGeneratorService';
+import { PlayerPrestigeService } from './PlayerPrestigeService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { TrainingFacilityService } from './TrainingFacilityService';
 
@@ -573,7 +573,7 @@ export const AcademyService = {
       contractLockoutUntil: null,
       moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
       fatigueDebt: 0,
-      reputacja: calcReputacja(overallRating, clubReputation),
+      reputacja: PlayerPrestigeService.calculateGeneratedReputation(overallRating, clubReputation),
       lojalnosc: Math.floor(Math.random() * 99) + 1,
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,

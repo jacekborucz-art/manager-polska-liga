@@ -1,4 +1,5 @@
 import { Club, MatchHistoryEntry, Player, PlayerStats } from '../types';
+import { PlayerPrestigeService } from './PlayerPrestigeService';
 
 type StatKind = 'goals' | 'assists';
 type EuropeanCompetitionGroup = 'CL' | 'EL' | 'CONF';
@@ -20,7 +21,7 @@ const clampReputation = (value: number): number => Math.max(1, Math.min(99, Math
 const getPlayerReputation = (player: Player): number => clampReputation(player.reputacja ?? 50);
 
 const addDelta = (deltas: Map<string, number>, playerId: string | undefined, delta: number): void => {
-  if (!playerId || delta <= 0) return;
+  if (!playerId || delta === 0) return;
   deltas.set(playerId, (deltas.get(playerId) ?? 0) + delta);
 };
 
@@ -36,6 +37,55 @@ const getAverageRating = (player: Player): number | null => {
 
   if (ratings.length === 0) return null;
   return ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+};
+
+const getSeasonUsage = (player: Player): { matches: number; effectiveMinutes: number } => {
+  const stats = [player.stats, player.cupStats, player.euroStats, player.nationalStats]
+    .filter((entry): entry is PlayerStats => !!entry);
+  const matches = stats.reduce((sum, entry) => sum + (entry.matchesPlayed ?? 0), 0);
+  const recordedMinutes = stats.reduce((sum, entry) => sum + (entry.minutesPlayed ?? 0), 0);
+  return {
+    matches,
+    // Część starszych silników zapisuje występ bez minut. Szacunek chroni
+    // regularnie grających zawodników przed fałszywą karą za brak gry.
+    effectiveMinutes: Math.max(recordedMinutes, matches * 60),
+  };
+};
+
+const getInactivityDecay = (effectiveMinutes: number): number => {
+  if (effectiveMinutes === 0) return 4;
+  if (effectiveMinutes < 450) return 3;
+  if (effectiveMinutes < 900) return 2;
+  if (effectiveMinutes < 1_350) return 1;
+  return 0;
+};
+
+const getWeakSeasonDecay = (averageRating: number | null, matches: number): number => {
+  if (averageRating === null || matches < 6) return 0;
+  if (averageRating < 6.2) return 2;
+  if (averageRating < 6.5) return 1;
+  return 0;
+};
+
+const getAgeDecay = (
+  player: Player,
+  averageRating: number | null,
+  effectiveMinutes: number,
+): number => {
+  const strongSeason = effectiveMinutes >= 1_350 && averageRating !== null && averageRating >= 7.0;
+  if (strongSeason) return 0;
+  if (player.age >= 38) return 2;
+  if (player.age >= 34) return 1;
+  return 0;
+};
+
+const getExposureGrowth = (player: Player, clubReputation: number): number => {
+  const currentReputation = getPlayerReputation(player);
+  const target = PlayerPrestigeService.getReputationTarget(player.overallRating, clubReputation);
+  const gap = target - currentReputation;
+  if (gap >= 15) return 2;
+  if (gap >= 6) return 1;
+  return 0;
 };
 
 const getLeagueTopDelta = (leagueId: string): number => {
@@ -116,13 +166,19 @@ export const PlayerReputationGrowthService = {
     };
   },
 
-  applySeasonEndGrowth: (
+  applySeasonEndUpdate: (
     playersMap: Record<string, Player[]>,
     clubs: Club[],
     matchHistory: MatchHistoryEntry[],
     seasonNumber: number
   ): Record<string, Player[]> => {
     const deltas = new Map<string, number>();
+    const clubReputationById = new Map(clubs.map(club => [club.id, club.reputation]));
+    const fullyTrackedClubIds = new Set(
+      clubs
+        .filter(club => ['L_PL_1', 'L_PL_2', 'L_PL_3'].includes(club.leagueId))
+        .map(club => club.id),
+    );
 
     (['L_PL_1', 'L_PL_2', 'L_PL_3'] as const).forEach(leagueId => {
       const delta = getLeagueTopDelta(leagueId);
@@ -152,14 +208,24 @@ export const PlayerReputationGrowthService = {
     getEuropeanTopPlayers(matchHistory, seasonNumber, 'CONF', 'assists')
       .forEach(playerId => addDelta(deltas, playerId, 1));
 
-    if (deltas.size === 0) return playersMap;
-
     return Object.fromEntries(
       Object.entries(playersMap).map(([clubId, squad]) => [
         clubId,
         squad.map(player => {
-          const delta = deltas.get(player.id) ?? 0;
-          if (delta <= 0) return player;
+          const averageRating = getAverageRating(player);
+          const usage = getSeasonUsage(player);
+          const achievementGrowth = deltas.get(player.id) ?? 0;
+          const exposureGrowth = getExposureGrowth(
+            player,
+            clubReputationById.get(clubId) ?? 1,
+          );
+          const hasFullSeasonUsage = clubId === 'FREE_AGENTS' || fullyTrackedClubIds.has(clubId);
+          const decay =
+            (hasFullSeasonUsage ? getInactivityDecay(usage.effectiveMinutes) : 0) +
+            getWeakSeasonDecay(averageRating, usage.matches) +
+            getAgeDecay(player, averageRating, usage.effectiveMinutes);
+          const delta = Math.max(-6, Math.min(6, achievementGrowth + exposureGrowth - decay));
+          if (delta === 0) return player;
           return {
             ...player,
             reputacja: clampReputation(getPlayerReputation(player) + delta),

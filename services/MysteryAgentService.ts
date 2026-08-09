@@ -13,7 +13,7 @@ import { NameGeneratorService } from './NameGeneratorService';
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { FinanceService } from './FinanceService';
 import { pickNationalityForRegion } from './NationalityService';
-import { calcReputacja } from './SquadGeneratorService';
+import { PlayerPrestigeService } from './PlayerPrestigeService';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
@@ -180,7 +180,7 @@ export const MysteryAgentService = {
       negotiationLockoutUntil: null,
       contractLockoutUntil: null,
       fatigueDebt: 0,
-      reputacja: calcReputacja(hiddenOverallRating, params.club.reputation),
+      reputacja: PlayerPrestigeService.calculateGeneratedReputation(hiddenOverallRating, params.club.reputation),
       lojalnosc: 20 + (hashString(`${seed}|loyalty`) % 80),
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,

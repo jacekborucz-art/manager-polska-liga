@@ -4,6 +4,7 @@ import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { STATIC_CLUBS, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_CONF_CLUBS } from '../constants';
 import { FinanceService } from './FinanceService';
 import { pickNationalityForRegion } from './NationalityService';
+import { PlayerPrestigeService } from './PlayerPrestigeService';
 
 // STAGE 2 CONSTANTS
 export const MIN_SQUAD_SIZE = 29;
@@ -307,36 +308,6 @@ export const SquadValidator = {
   }
 };
 
-export function calcReputacja(overall: number, clubRep: number): number {
-  let min: number, max: number;
-  if (overall >= 87 && clubRep >= 18) {
-    [min, max] = [87, 99];
-  } else if (overall >= 80 && clubRep >= 15) {
-    [min, max] = [75, 91];
-  } else if (overall >= 80 && clubRep >= 10) {
-    [min, max] = [70, 85];
-  } else if (overall >= 80 && clubRep >= 6) {
-    [min, max] = [55, 75];
-  } else if (overall >= 80) {
-    [min, max] = [45, 65];
-  } else {
-    const t = Math.max(0, overall - 40) / 39;
-    const c = Math.min(clubRep, 20) / 20;
-    const base = Math.round(5 + t * 50 * (0.65 + 0.35 * c));
-    const spread = Math.round(3 + t * 7);
-    min = Math.max(1, base - Math.floor(spread / 2));
-    max = Math.min(74, base + Math.ceil(spread / 2));
-    if (min > max) max = min;
-  }
-  const floor = clubRep >= 18 ? 75
-              : clubRep >= 15 ? 65
-              : clubRep >= 12 ? 60
-              : clubRep >= 10 ? 50
-              : clubRep >= 6  ? 40
-              : 8;
-  return Math.max(floor, Math.max(1, Math.min(99, Math.round(min + Math.random() * (max - min)))));
-}
-
 export const SquadGeneratorService = {
   generateSquadForClub: (clubId: string, clubOverride?: Club): Player[] => {
     const usedNames = new Set<string>();
@@ -416,7 +387,7 @@ export const SquadGeneratorService = {
             nationalityCountry: pickNationalityForRegion(region),
             age: age,
             fatigueDebt: 0,
-            reputacja: calcReputacja(genData.overall, clubRep),
+            reputacja: PlayerPrestigeService.calculateGeneratedReputation(genData.overall, clubRep),
             lojalnosc: Math.floor(Math.random() * 99) + 1,
             overallRating: genData.overall,
             attributes: genData.attributes,
@@ -610,7 +581,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
-        reputacja: calcReputacja(region === Region.SWEDEN ? Math.min(genData.overall, 93) : genData.overall, reputation),
+        reputacja: PlayerPrestigeService.calculateGeneratedReputation(region === Region.SWEDEN ? Math.min(genData.overall, 93) : genData.overall, reputation),
         lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: region === Region.SWEDEN ? Math.min(genData.overall, 93) : genData.overall,
         attributes: genData.attributes,
@@ -729,7 +700,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
-        reputacja: calcReputacja(genData.overall, reputation),
+        reputacja: PlayerPrestigeService.calculateGeneratedReputation(genData.overall, reputation),
         lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
@@ -822,7 +793,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
-        reputacja: calcReputacja(genData.overall, reputation),
+        reputacja: PlayerPrestigeService.calculateGeneratedReputation(genData.overall, reputation),
         lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
@@ -926,7 +897,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         nationalityCountry: 'Polska',
         age,
         fatigueDebt: 0,
-        reputacja: calcReputacja(genData.overall, Math.max(1, clubRep - 1)),
+        reputacja: PlayerPrestigeService.calculateGeneratedReputation(genData.overall, Math.max(1, clubRep - 1)),
         lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,
@@ -1093,7 +1064,7 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
         nationalityCountry: pickNationalityForRegion(region),
         age,
         fatigueDebt: 0,
-        reputacja: calcReputacja(genData.overall, reputation),
+        reputacja: PlayerPrestigeService.calculateGeneratedReputation(genData.overall, reputation),
         lojalnosc: Math.floor(Math.random() * 99) + 1,
         overallRating: genData.overall,
         attributes: genData.attributes,

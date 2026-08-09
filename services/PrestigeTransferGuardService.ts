@@ -1,11 +1,12 @@
 import { Club, Player } from '../types';
+import { PlayerPrestigeService } from './PlayerPrestigeService';
 
-export const HIGH_PRESTIGE_PLAYER_MIN_REPUTATION = 90;
+export const HIGH_PLAYER_PRESTIGE_THRESHOLD = 90;
 export const LOW_PRESTIGE_CLUB_REPUTATION_LIMIT = 17;
 export const GULF_EXCEPTION_MIN_AGE = 35;
 export const YOUTH_TALENT_EXCEPTION_MIN_AGE = 16;
 export const YOUTH_TALENT_EXCEPTION_MAX_AGE = 18;
-export const YOUTH_TALENT_EXCEPTION_MIN_OVERALL = 72;
+export const YOUTH_TALENT_EXCEPTION_MIN_PRESTIGE = 72;
 
 const GULF_EXCEPTION_COUNTRIES = new Set(['KSA', 'UAE', 'QAT']);
 
@@ -23,7 +24,7 @@ interface PrestigeExpectation {
 export interface PrestigeDestinationAssessment {
   band: PrestigeDestinationBand;
   clubReputation: number;
-  effectiveOverall: number;
+  effectivePrestige: number;
   preferredMinReputation: number;
   acceptableMinReputation: number;
   longShotMinReputation: number;
@@ -40,166 +41,19 @@ const getClubReputation = (club: Club): number => club.reputation ?? 0;
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
-const getEffectivePrestigeOverall = (player: Player): number => {
-  const reputation = player.reputacja ?? 50;
-  if (reputation >= HIGH_PRESTIGE_PLAYER_MIN_REPUTATION) {
-    return Math.max(player.overallRating, 90);
-  }
-
-  return player.overallRating;
-};
-
-const getExpectationForOverall = (overall: number): PrestigeExpectation => {
-  if (overall >= 90) {
-    return {
-      preferredMinReputation: 19,
-      acceptableMinReputation: 15,
-      longShotMinReputation: 10,
-      stretchChance: 0.16,
-      longShotChance: 0.001,
-      extremeChance: 0
-    };
-  }
-
-  if (overall >= 85) {
-    return {
-      preferredMinReputation: 17,
-      acceptableMinReputation: 13,
-      longShotMinReputation: 10,
-      stretchChance: 0.24,
-      longShotChance: 0.015,
-      extremeChance: 0.001
-    };
-  }
-
-  if (overall >= 80) {
-    return {
-      preferredMinReputation: 16,
-      acceptableMinReputation: 12,
-      longShotMinReputation: 9,
-      stretchChance: 0.32,
-      longShotChance: 0.04,
-      extremeChance: 0.003
-    };
-  }
-
-  if (overall >= 78) {
-    return {
-      preferredMinReputation: 14,
-      acceptableMinReputation: 10,
-      longShotMinReputation: 8,
-      stretchChance: 0.42,
-      longShotChance: 0.06,
-      extremeChance: 0.006
-    };
-  }
-
-  if (overall >= 76) {
-    return {
-      preferredMinReputation: 13,
-      acceptableMinReputation: 10,
-      longShotMinReputation: 7,
-      stretchChance: 0.44,
-      longShotChance: 0.05,
-      extremeChance: 0.005
-    };
-  }
-
-  if (overall >= 74) {
-    return {
-      preferredMinReputation: 12,
-      acceptableMinReputation: 9,
-      longShotMinReputation: 6,
-      stretchChance: 0.47,
-      longShotChance: 0.06,
-      extremeChance: 0.006
-    };
-  }
-
-  if (overall >= 72) {
-    return {
-      preferredMinReputation: 11,
-      acceptableMinReputation: 8,
-      longShotMinReputation: 5,
-      stretchChance: 0.50,
-      longShotChance: 0.07,
-      extremeChance: 0.008
-    };
-  }
-
-  if (overall >= 70) {
-    return {
-      preferredMinReputation: 10,
-      acceptableMinReputation: 7,
-      longShotMinReputation: 4,
-      stretchChance: 0.54,
-      longShotChance: 0.09,
-      extremeChance: 0.012
-    };
-  }
-
-  if (overall >= 68) {
-    return {
-      preferredMinReputation: 9,
-      acceptableMinReputation: 6,
-      longShotMinReputation: 3,
-      stretchChance: 0.58,
-      longShotChance: 0.11,
-      extremeChance: 0.018
-    };
-  }
-
-  if (overall >= 66) {
-    return {
-      preferredMinReputation: 8,
-      acceptableMinReputation: 5,
-      longShotMinReputation: 2,
-      stretchChance: 0.62,
-      longShotChance: 0.14,
-      extremeChance: 0.024
-    };
-  }
-
-  if (overall >= 64) {
-    return {
-      preferredMinReputation: 7,
-      acceptableMinReputation: 4,
-      longShotMinReputation: 1,
-      stretchChance: 0.66,
-      longShotChance: 0.17,
-      extremeChance: 0.03
-    };
-  }
-
-  if (overall >= 62) {
-    return {
-      preferredMinReputation: 6,
-      acceptableMinReputation: 3,
-      longShotMinReputation: 0,
-      stretchChance: 0.70,
-      longShotChance: 0.22,
-      extremeChance: 0.05
-    };
-  }
-
-  if (overall >= 60) {
-    return {
-      preferredMinReputation: 5,
-      acceptableMinReputation: 2,
-      longShotMinReputation: 0,
-      stretchChance: 0.74,
-      longShotChance: 0.28,
-      extremeChance: 0.08
-    };
-  }
+const getExpectationForPrestige = (prestige: number): PrestigeExpectation => {
+  const normalized = clamp((prestige - 58) / 32, 0, 1);
+  const preferredMinReputation = Math.round(4 + normalized * 15);
+  const expectationGap = Math.round(3 + normalized * 2);
+  const chanceBase = 1 - normalized;
 
   return {
-    preferredMinReputation: 4,
-    acceptableMinReputation: 1,
-    longShotMinReputation: 0,
-    stretchChance: 0.80,
-    longShotChance: 0.36,
-    extremeChance: 0.12
+    preferredMinReputation,
+    acceptableMinReputation: Math.max(1, preferredMinReputation - expectationGap),
+    longShotMinReputation: Math.max(0, preferredMinReputation - expectationGap * 2),
+    stretchChance: clamp(0.80 - normalized * 0.64, 0.16, 0.80),
+    longShotChance: clamp(0.36 * Math.pow(chanceBase, 2.2), 0, 0.36),
+    extremeChance: clamp(0.12 * Math.pow(chanceBase, 3), 0, 0.12),
   };
 };
 
@@ -240,10 +94,10 @@ const getReasonForBand = (
 const getYouthTalentDiscoveryChance = (assessment: PrestigeDestinationAssessment): number => {
   const clubFactor = clamp(0.45 + assessment.clubReputation / 20, 0.45, 1.15);
   const baseChance =
-    assessment.effectiveOverall >= 90 ? 0.004 :
-    assessment.effectiveOverall >= 85 ? 0.012 :
-    assessment.effectiveOverall >= 80 ? 0.022 :
-    assessment.effectiveOverall >= 76 ? 0.035 :
+    assessment.effectivePrestige >= 90 ? 0.004 :
+    assessment.effectivePrestige >= 85 ? 0.012 :
+    assessment.effectivePrestige >= 80 ? 0.022 :
+    assessment.effectivePrestige >= 76 ? 0.035 :
     0.05;
 
   return clamp(baseChance * clubFactor, 0.0015, 0.055);
@@ -256,7 +110,7 @@ const applyYouthTalentDiscoveryException = (
   if (
     player.age < YOUTH_TALENT_EXCEPTION_MIN_AGE ||
     player.age > YOUTH_TALENT_EXCEPTION_MAX_AGE ||
-    assessment.effectiveOverall < YOUTH_TALENT_EXCEPTION_MIN_OVERALL ||
+    assessment.effectivePrestige < YOUTH_TALENT_EXCEPTION_MIN_PRESTIGE ||
     assessment.band === 'NATURAL'
   ) {
     return assessment;
@@ -270,7 +124,7 @@ const applyYouthTalentDiscoveryException = (
     chanceCap: Math.max(assessment.chanceCap, youthChance),
     salaryPremium: Math.min(Math.max(assessment.salaryPremium, 0.08), 0.22),
     bonusPremium: Math.min(Math.max(assessment.bonusPremium, 0.16), 0.35),
-    scorePenalty: Math.min(assessment.scorePenalty, assessment.effectiveOverall >= 85 ? 26 : 18),
+    scorePenalty: Math.min(assessment.scorePenalty, assessment.effectivePrestige >= 85 ? 26 : 18),
     blocksNegotiation: false,
     reason: 'Mój klient jest bardzo młody, więc taki ruch mógłby mieć sens jako wyjątkowy projekt rozwojowy po wcześniejszym wyłowieniu talentu. To nadal rzadki scenariusz i klub musi zagwarantować jasną ścieżkę gry.'
   };
@@ -302,7 +156,7 @@ const applyGulfException = (
     return {
       ...assessment,
       band: assessment.band === 'BLOCKED' ? 'EXTREME' : assessment.band,
-      chanceCap: Math.max(assessment.chanceCap, assessment.effectiveOverall >= 90 ? 0.035 : 0.08),
+      chanceCap: Math.max(assessment.chanceCap, assessment.effectivePrestige >= 90 ? 0.035 : 0.08),
       salaryPremium: Math.max(assessment.salaryPremium, 0.38),
       bonusPremium: Math.max(assessment.bonusPremium, 0.75),
       scorePenalty: Math.max(assessment.scorePenalty, 24),
@@ -314,7 +168,7 @@ const applyGulfException = (
   return {
     ...assessment,
     band: assessment.band === 'BLOCKED' ? 'EXTREME' : assessment.band,
-    chanceCap: Math.max(assessment.chanceCap, assessment.effectiveOverall >= 90 ? 0.006 : 0.018),
+    chanceCap: Math.max(assessment.chanceCap, assessment.effectivePrestige >= 90 ? 0.006 : 0.018),
     salaryPremium: Math.max(assessment.salaryPremium, 0.55),
     bonusPremium: Math.max(assessment.bonusPremium, 1.0),
     scorePenalty: Math.max(assessment.scorePenalty, 34),
@@ -340,10 +194,10 @@ const getChanceWithManagerInfluence = (
 };
 
 export const PrestigeTransferGuardService = {
-  getPlayerPrestige: (player: Player): number => player.reputacja ?? 50,
+  getPlayerPrestige: (player: Player): number => PlayerPrestigeService.getTransferPrestige(player),
 
   isHighPrestigePlayer: (player: Player): boolean =>
-    PrestigeTransferGuardService.getPlayerPrestige(player) >= HIGH_PRESTIGE_PLAYER_MIN_REPUTATION,
+    PrestigeTransferGuardService.getPlayerPrestige(player) >= HIGH_PLAYER_PRESTIGE_THRESHOLD,
 
   isLowPrestigeDestination: (club: Club): boolean =>
     getClubReputation(club) <= LOW_PRESTIGE_CLUB_REPUTATION_LIMIT,
@@ -352,8 +206,8 @@ export const PrestigeTransferGuardService = {
     GULF_EXCEPTION_COUNTRIES.has(club.country || '') && getClubReputation(club) >= 8,
 
   evaluateDestination: (player: Player, targetClub: Club): PrestigeDestinationAssessment => {
-    const effectiveOverall = getEffectivePrestigeOverall(player);
-    const expectation = getExpectationForOverall(effectiveOverall);
+    const effectivePrestige = PlayerPrestigeService.getTransferPrestige(player);
+    const expectation = getExpectationForPrestige(effectivePrestige);
     const clubReputation = getClubReputation(targetClub);
     const band = getBandForClub(clubReputation, expectation);
     const chanceCap =
@@ -384,7 +238,7 @@ export const PrestigeTransferGuardService = {
     const assessment: PrestigeDestinationAssessment = {
       band,
       clubReputation,
-      effectiveOverall,
+      effectivePrestige,
       preferredMinReputation: expectation.preferredMinReputation,
       acceptableMinReputation: expectation.acceptableMinReputation,
       longShotMinReputation: expectation.longShotMinReputation,

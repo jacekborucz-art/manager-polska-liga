@@ -1,5 +1,10 @@
 import { TransferScoutingService } from '../services/TransferScoutingService';
 import {
+  getScoutAdjustedAcceptanceChanceCap,
+  getScoutNegotiationPower,
+  getScoutTalkOpeningChance,
+} from '../services/TransferPlayerDecisionService';
+import {
   Club,
   HealthStatus,
   Player,
@@ -38,6 +43,7 @@ const weakScout: TransferScout = {
   reach: 4,
   speed: 4,
   experience: 4,
+  reputation: 1,
   regionalSpecialty: undefined,
 };
 const strongScout: TransferScout = {
@@ -47,6 +53,7 @@ const strongScout: TransferScout = {
   reach: 19,
   speed: 19,
   experience: 19,
+  reputation: 5,
   regionalSpecialty: Region.BRAZIL,
   positionSpecialty: PlayerPosition.MID,
 };
@@ -155,6 +162,8 @@ const report = TransferScoutingService.resolveAssignment(
   new Date(assignment.completionDate),
 );
 assert(report.candidates.length > 0, 'Dobry skaut powinien znaleźć kandydatów spełniających szerokie kryteria.');
+assert(report.scoutInfluence?.reputation === 5, 'Raport powinien zachować reputację skauta potrzebną do późniejszych negocjacji.');
+assert(report.scoutInfluence?.experience === 19, 'Raport powinien zachować doświadczenie skauta również po jego odejściu z klubu.');
 assert(report.candidates.length <= 9, 'Pojedynczy raport nie powinien zawierać więcej niż dziewięciu kandydatów.');
 assert(
   report.candidates.every(candidate => candidates.some(player => player.id === candidate.playerId)),
@@ -219,5 +228,130 @@ assert(
   validContractReport.candidates.every(candidate => candidate.playerId.startsWith('VALID_CONTRACT_PLAYER_')),
   'Filtr ważnego kontraktu nie może zwracać umów wygasających w ciągu roku.'
 );
+
+const weakInfluence = {
+  reputation: weakScout.reputation,
+  judgment: weakScout.judgment,
+  reach: weakScout.reach,
+  speed: weakScout.speed,
+  experience: weakScout.experience,
+};
+const eliteInfluence = {
+  reputation: strongScout.reputation,
+  judgment: 20,
+  reach: 20,
+  speed: 20,
+  experience: 20,
+};
+assert(
+  getScoutNegotiationPower(eliteInfluence) > getScoutNegotiationPower(weakInfluence),
+  'Reputacja i doświadczenie elitarnego skauta powinny dawać wyraźnie większą siłę negocjacyjną.'
+);
+
+const renownedPlayer = {
+  ...candidates[0],
+  id: 'RENOWNED_PLAYER',
+  clubId: 'TOP_MARKET_CLUB',
+  nationality: Region.ENGLAND,
+  overallRating: 84,
+  reputacja: 86,
+} as Player;
+const elitePlayerOutsideTopMarkets = {
+  ...renownedPlayer,
+  id: 'ELITE_OUTSIDE_TOP_MARKETS',
+  nationality: Region.BRAZIL,
+  overallRating: 90,
+  reputacja: 92,
+} as Player;
+const topMarketClub = {
+  id: 'TOP_MARKET_CLUB',
+  name: 'Klub angielski',
+  country: 'ENG',
+  reputation: 18,
+} as Club;
+const nonTopMarketClub = {
+  ...topMarketClub,
+  id: 'NON_TOP_MARKET_CLUB',
+  country: 'BRA',
+} as Club;
+const polishFirstLeagueClub = { ...userClub, leagueId: 'L_PL_2', reputation: 7 } as Club;
+const polishSecondLeagueClub = { ...userClub, leagueId: 'L_PL_3', reputation: 5 } as Club;
+
+const eliteGeneralTalkChance = getScoutTalkOpeningChance(
+  elitePlayerOutsideTopMarkets,
+  nonTopMarketClub,
+  polishFirstLeagueClub,
+  eliteInfluence,
+);
+assert(eliteGeneralTalkChance >= 0.10, 'Elitarny skaut powinien mieć odczuwalną szansę przełamania odmowy klasowego zawodnika poza topowymi rynkami.');
+assert(
+  eliteGeneralTalkChance > getScoutTalkOpeningChance(elitePlayerOutsideTopMarkets, nonTopMarketClub, polishFirstLeagueClub, weakInfluence),
+  'Słaby skaut nie może przekonywać klasowych zawodników równie skutecznie jak elitarny.'
+);
+
+const firstLeagueTopMarketCap = getScoutAdjustedAcceptanceChanceCap(
+  renownedPlayer,
+  topMarketClub,
+  polishFirstLeagueClub,
+  eliteInfluence,
+);
+const secondLeagueTopMarketCap = getScoutAdjustedAcceptanceChanceCap(
+  renownedPlayer,
+  topMarketClub,
+  polishSecondLeagueClub,
+  eliteInfluence,
+);
+assert(firstLeagueTopMarketCap <= 0.035, 'Renomowany zawodnik z topowego rynku powinien bardzo rzadko trafiać do polskiej 1. Ligi.');
+assert(secondLeagueTopMarketCap < firstLeagueTopMarketCap, 'Im niższa polska liga, tym niższy musi być limit szansy na prestiżowy transfer.');
+assert(secondLeagueTopMarketCap > 0, 'Nawet w niższej polskiej lidze musi pozostać minimalne RNG na wyjątkowy transfer.');
+
+const globalIcon = {
+  ...renownedPlayer,
+  id: 'GLOBAL_FOOTBALL_ICON',
+  age: 36,
+  overallRating: 88,
+  reputacja: 99,
+  isOnTransferList: true,
+} as Player;
+(['L_PL_1', 'L_PL_2', 'L_PL_3', 'L_PL_4'] as const).forEach(leagueId => {
+  const polishClub = { ...userClub, leagueId } as Club;
+  const iconTransferCap = getScoutAdjustedAcceptanceChanceCap(
+    globalIcon,
+    nonTopMarketClub,
+    polishClub,
+    eliteInfluence,
+  );
+  const iconTalkChance = getScoutTalkOpeningChance(
+    globalIcon,
+    nonTopMarketClub,
+    polishClub,
+    eliteInfluence,
+  );
+  assert(iconTransferCap === 0.000001, 'Globalna ikona futbolu może trafić do polskiej ligi najwyżej raz na milion prób.');
+  assert(iconTalkChance <= 0.000001, 'Skaut nie może obejść limitu raz na milion przy rozmowach z globalną ikoną.');
+});
+
+const elitePolishClubReputations = [17, 18, 19, 20] as const;
+const expectedGlobalIconCaps = [0.0005, 0.0025, 0.01, 0.03] as const;
+const progressiveIconCaps = elitePolishClubReputations.map(reputation => getScoutAdjustedAcceptanceChanceCap(
+  globalIcon,
+  nonTopMarketClub,
+  { ...userClub, leagueId: 'L_PL_1', reputation } as Club,
+  eliteInfluence,
+));
+progressiveIconCaps.forEach((chance, index) => {
+  assert(chance === expectedGlobalIconCaps[index], 'Szansa na globalną ikonę musi rosnąć progresywnie wraz z reputacją polskiego klubu 17–20.');
+  if (index > 0) {
+    assert(chance > progressiveIconCaps[index - 1], 'Każdy kolejny punkt elitarnej reputacji klubu musi zwiększać małe RNG transferowe.');
+  }
+});
+
+const regularStarCaps = elitePolishClubReputations.map(reputation => getScoutAdjustedAcceptanceChanceCap(
+  renownedPlayer,
+  topMarketClub,
+  { ...userClub, leagueId: 'L_PL_1', reputation } as Club,
+  eliteInfluence,
+));
+assert(regularStarCaps[3] > regularStarCaps[0], 'Polski klub o reputacji 20 powinien mieć wyraźnie większą szansę na zwykłą gwiazdę niż klub o reputacji 17.');
 
 console.log('TransferScoutingTests: OK');

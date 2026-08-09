@@ -12,7 +12,7 @@ import { AiClubTransferStrategy, AiClubTransferStrategyService } from './AiClubT
 import { PlayerAttributesGenerator } from './PlayerAttributesGenerator';
 import { NameGeneratorService } from './NameGeneratorService';
 import { pickNationalityForRegion } from './NationalityService';
-import { calcReputacja } from './SquadGeneratorService';
+import { PlayerPrestigeService } from './PlayerPrestigeService';
 import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
 import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
@@ -861,7 +861,7 @@ const _buildAiSeasonYouthPlayer = (
     contractLockoutUntil: null,
     moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
     fatigueDebt: 0,
-    reputacja: calcReputacja(overallRating, club.reputation),
+    reputacja: PlayerPrestigeService.calculateGeneratedReputation(overallRating, club.reputation),
     lojalnosc: 45 + Math.floor(_seededRandom(`${seed}_LOYALTY`) * 55),
     isNegotiationPermanentBlocked: false,
     transferLockoutUntil: null,

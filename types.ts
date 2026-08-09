@@ -2168,6 +2168,14 @@ export interface TransferScout {
   isOnAssignment: boolean;
 }
 
+export interface TransferScoutNegotiationInfluence {
+  reputation: TransferScoutReputation;
+  judgment: number;
+  reach: number;
+  speed: number;
+  experience: number;
+}
+
 export interface TransferScoutingRange {
   min: number;
   max: number;
@@ -2214,6 +2222,8 @@ export interface TransferScoutingReport {
   assignmentId: string;
   scoutId: string;
   scoutName: string;
+  /** Migawka jakości skauta zachowana razem z raportem, również po jego odejściu lub emeryturze. */
+  scoutInfluence?: TransferScoutNegotiationInfluence;
   completedDate: string;
   filters: TransferScoutingFilters;
   candidates: TransferScoutingCandidateReport[];

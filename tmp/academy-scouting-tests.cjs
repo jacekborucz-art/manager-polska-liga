@@ -19037,6 +19037,69 @@ ${withMorale.firstName} ${withMorale.lastName}`,
   }
 };
 
+// services/ClubStrengthService.ts
+var CLUB_REPUTATION_MIN = 1;
+var CLUB_REPUTATION_DOMESTIC_CEILING = 10;
+var CLUB_REPUTATION_MAX = 20;
+var clamp4 = (value, min, max) => Math.min(max, Math.max(min, value));
+var ClubStrengthService = {
+  getLevel(reputation) {
+    const normalizedReputation = clamp4(
+      Number.isFinite(reputation) ? reputation : CLUB_REPUTATION_MIN,
+      CLUB_REPUTATION_MIN,
+      CLUB_REPUTATION_MAX
+    );
+    if (normalizedReputation <= CLUB_REPUTATION_DOMESTIC_CEILING) {
+      return 34 + normalizedReputation * 4.2;
+    }
+    return 76 + (normalizedReputation - CLUB_REPUTATION_DOMESTIC_CEILING) * 2;
+  },
+  getExposure(reputation) {
+    const minimumLevel = 34 + CLUB_REPUTATION_MIN * 4.2;
+    const maximumLevel = 96;
+    return clamp4(
+      (ClubStrengthService.getLevel(reputation) - minimumLevel) / (maximumLevel - minimumLevel),
+      0,
+      1
+    );
+  }
+};
+
+// services/PlayerPrestigeService.ts
+var PLAYER_REPUTATION_MIN = 1;
+var PLAYER_REPUTATION_MAX = 99;
+var clamp5 = (value, min, max) => Math.min(max, Math.max(min, value));
+var normalizeOverall = (overall) => clamp5((clamp5(overall, 1, 99) - 35) / 64, 0, 1);
+var PlayerPrestigeService = {
+  /** Docelowa reputacja wynikająca z poziomu sportowego i ekspozycji klubu. */
+  getReputationTarget(overall, clubReputation) {
+    const sportingRecognition = 5 + Math.pow(normalizeOverall(overall), 1.15) * 76;
+    const clubExposure = ClubStrengthService.getExposure(clubReputation) * 18;
+    return clamp5(sportingRecognition + clubExposure, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+  },
+  /** Reputacja startowa bez progów i podłóg; mały rozrzut zachowuje różnorodność świata. */
+  calculateGeneratedReputation(overall, clubReputation, random = Math.random) {
+    const variation = (clamp5(random(), 0, 1) - 0.5) * 4;
+    return Math.round(clamp5(
+      PlayerPrestigeService.getReputationTarget(overall, clubReputation) + variation,
+      PLAYER_REPUTATION_MIN,
+      PLAYER_REPUTATION_MAX
+    ));
+  },
+  /** Jeden płynny prestiż używany przy ocenie realności transferu. */
+  getTransferPrestige(player) {
+    const overall = clamp5(player.overallRating, 1, 99);
+    const reputation = clamp5(player.reputacja ?? overall, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+    return clamp5(overall * 0.72 + reputation * 0.28, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+  },
+  isGlobalIcon(player) {
+    const overall = clamp5(player.overallRating, 1, 99);
+    const reputation = clamp5(player.reputacja ?? overall, PLAYER_REPUTATION_MIN, PLAYER_REPUTATION_MAX);
+    const prestige = PlayerPrestigeService.getTransferPrestige(player);
+    return prestige >= 94 || reputation >= 97 && overall >= 85 || overall >= 97 && reputation >= 85;
+  }
+};
+
 // services/PlayerAttributesGenerator.ts
 var TIER_CONFIG = {
   1: { minBase: 58, maxBase: 71, hardCap: 77 },
@@ -19395,1936 +19458,6 @@ var PlayerAttributesGenerator = {
   }
 };
 
-// resources/static_db/clubs/pl_clubs.ts
-var generateClubId = (name) => {
-  const slug = name.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-  return `PL_${slug}`;
-};
-var RAW_PL_CLUBS = [
-  // --- TIER 1 (Ekstraklasa) - 18 Teams ---004d00
-  { name: "Legia Warszawa", tier: 1, colors: ["#007a25", "#ffffff", "#a80e0e"], stadium: "Stadion Wojska Polskiego", capacity: 31103, reputation: 10, logoFile: "legia-warsaw-2019-logo.png" },
-  { name: "Lech Pozna\u0144", tier: 1, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Enea Stadion", capacity: 41609, reputation: 10, logoFile: "lech-poznan-2022-logo.png" },
-  { name: "Jagiellonia Bia\u0142ystok", tier: 1, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Bia\u0142ymstoku", capacity: 22372, reputation: 8, logoFile: "jagiellonia-bialystok-2024-logo.png" },
-  { name: "Rak\xF3w Cz\u0119stochowa", tier: 1, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Cz\u0119stochowie", capacity: 5500, reputation: 8, logoFile: "rakow-czestochowa-2014-logo.png" },
-  { name: "Pogo\u0144 Szczecin", tier: 1, colors: ["#000080", "#800000", "#FFFFFF"], stadium: "Stadion Miejski im. Floriana Krygiera", capacity: 21163, reputation: 7, logoFile: "pogon_szczecin.png" },
-  { name: "G\xF3rnik Zabrze", tier: 1, colors: ["#0519ca", "#ffffff", "#FF0000"], stadium: "Stadion im. Ernesta Pohla", capacity: 24563, reputation: 8, logoFile: "Gornik_zabrze.png" },
-  { name: "Cracovia", tier: 1, colors: ["#ff0000", "#ffffff", "#000000"], stadium: "Stadion im. J\xF3zefa Pi\u0142sudskiego", capacity: 15016, reputation: 8, logoFile: "cracovia-2024-logo.png" },
-  { name: "Zag\u0142\u0119bie Lubin", tier: 1, colors: ["#FF5F1F", "#FFFFFF", "#008000"], stadium: "Dialog Arena", capacity: 16068, reputation: 7, logoFile: "zaglebie-lubin-2022-logo.png" },
-  { name: "Widzew \u0141\xF3d\u017A", tier: 1, colors: ["#FF0000", "#FFFFFF", "#FF0000"], stadium: "Stadion Widzewa", capacity: 18018, reputation: 10, logoFile: "widzew-lodz.png" },
-  { name: "Lechia Gda\u0144sk", tier: 1, colors: ["#008000", "#FFFFFF", "#008000"], stadium: "Polsat Plus Arena Gda\u0144sk", capacity: 41620, reputation: 7, logoFile: "lechia_gdansk.png" },
-  { name: "Piast Gliwice", tier: 1, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Gliwicach", capacity: 9913, reputation: 6, logoFile: "piast-gliwice-1997-logo.png" },
-  { name: "Arka Gdynia", tier: 1, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski w Gdyni", capacity: 15139, reputation: 6, logoFile: "arka-gdynia-2009-logo.png" },
-  { name: "Korona Kielce", tier: 1, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Suzuki Arena", capacity: 15500, reputation: 7, logoFile: "korona-kielce-2024-logo.png" },
-  { name: "Radomiak Radom", tier: 1, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Radomiu", capacity: 15e3, reputation: 6, logoFile: "RKS_Radomiak_Radom.png" },
-  { name: "Motor Lublin", tier: 1, colors: ["#FFFF00", "#FFFFFF", "#0000FF"], stadium: "Arena Lublin", capacity: 15500, reputation: 6, logoFile: "motor-lublin-2023-logo.png" },
-  { name: "GKS Katowice", tier: 1, colors: ["#FFFF00", "#0a6102", "#000000"], stadium: "Stadion GKS Katowice", capacity: 6710, reputation: 6, logoFile: "gks-katowice-logo.png" },
-  { name: "Termalica Nieciecza", tier: 1, colors: ["#FF5F1F", "#FFFF00", "#0000FF"], stadium: "Stadion Bruk-Bet", capacity: 4595, reputation: 5, logoFile: "bruk-bet-termalica-nieciecza-2021-logo.png" },
-  { name: "Wis\u0142a P\u0142ock", tier: 1, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion im. Kazimierza G\xF3rskiego", capacity: 12800, reputation: 6, logoFile: "wisla-plock-2006-logo.png" },
-  // --- TIER 2 (1. Liga) - 18 Teams ---
-  { name: "Wis\u0142a Krak\xF3w", tier: 2, colors: ["#fa0101", "#0026ff", "#ffffff"], stadium: "Stadion im. Henryka Reymana", capacity: 33326, reputation: 10, logoFile: "wisla-krakow-logo.png" },
-  { name: "Pogo\u0144 Grodzisk Mazowiecki", tier: 2, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Grodzisku Mazowieckim", capacity: 1500, reputation: 4, logoFile: "pogon-grodzisk-mazowiecki.png" },
-  { name: "Polonia Bytom", tier: 2, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion im. Edwardw Szymkowiaka", capacity: 5500, reputation: 7, logoFile: "Polonia_Bytom.png" },
-  { name: "Chrobry G\u0142og\xF3w", tier: 2, colors: ["#FF5F1F", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w G\u0142ogowie", capacity: 3e3, reputation: 5, logoFile: "chrobry_glogow.png" },
-  { name: "Stal Rzesz\xF3w", tier: 2, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Rzeszowie", capacity: 11500, reputation: 6, logoFile: "stal-rzeszow-2025-logo.png" },
-  { name: "\u015Al\u0105sk Wroc\u0142aw", tier: 2, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Tarczy\u0144ski Arena", capacity: 42771, reputation: 10, logoFile: "Slask_Wroclaw.png" },
-  { name: "Polonia Warszawa", tier: 2, colors: ["#000000", "#FFFFFF", "#ff0000e9"], stadium: "Stadion Im. Gen. Kazimierza Sosnowskiego", capacity: 7150, reputation: 8, logoFile: "Polonia_warszawa.png", stadiumSeatColors: ["#111111", "#cc0000", "#ffffff"] },
-  { name: "Wieczysta Krak\xF3w", tier: 2, colors: ["#FFFF00", "#FF0000", "#000000"], stadium: "Stadion Pr\u0105dniczanki", capacity: 2e3, reputation: 5, logoFile: "wieczysta-krakow-logo.png" },
-  { name: "Ruch Chorz\xF3w", tier: 2, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Chorzowie", capacity: 9300, reputation: 9, logoFile: "ruch-chorzow-2021-logo.png" },
-  { name: "Mied\u017A Legnica", tier: 2, colors: ["#008000", "#FF0000", "#0000FF"], stadium: "Stadion Or\u0142a Bia\u0142ego", capacity: 6194, reputation: 8, logoFile: "miedz-legnica-2022-logo.png" },
-  { name: "\u0141KS \u0141\xF3d\u017A", tier: 2, colors: ["#FFFFFF", "#FF0000", "#FFFFFF"], stadium: "Stadion Kr\xF3la", capacity: 18029, reputation: 9, logoFile: "lks_lodz.png" },
-  { name: "Pogo\u0144 Siedlce", tier: 2, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion ROSRRiT", capacity: 2900, reputation: 4, logoFile: "pogon_siedlce.png" },
-  { name: "Odra Opole", tier: 2, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Odry", capacity: 4800, reputation: 6, logoFile: "odra-opole.png" },
-  { name: "Puszcza Niepo\u0142omice", tier: 2, colors: ["#FFFFFF", "#0000FF", "#008000"], stadium: "Stadion w Niepo\u0142omicach", capacity: 2118, reputation: 6, logoFile: "puszcza-niepolomice-2013-logo.png" },
-  { name: "Znicz Pruszk\xF3w", tier: 2, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Stadion MZOS", capacity: 2100, reputation: 4, logoFile: "znicz-pruszkow.png" },
-  { name: "Stal Mielec", tier: 2, colors: ["#0817ee", "#e2e611", "#ffffff"], stadium: "Stadion MOSiR w Mielcu", capacity: 6864, reputation: 7, logoFile: "stal-mielec.png" },
-  { name: "GKS Tychy", tier: 2, colors: ["#008000", "#000000", "#FF0000"], stadium: "Stadion Miejski w Tychach", capacity: 15300, reputation: 6, logoFile: "gks_tychy.png" },
-  { name: "G\xF3rnik \u0141\u0119czna", tier: 2, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion G\xF3rnika", capacity: 7200, reputation: 6, logoFile: "gornik_leczna.png" },
-  // --- TIER 3 (2. Liga) - 18 Teams ---
-  { name: "Zag\u0142\u0119bie Sosnowiec", tier: 3, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "ArcelorMittal Park", capacity: 11600, reputation: 6, logoFile: "Zaglebie_Sosnowiec.png" },
-  { name: "Podbeskidzie Bielsko-Bia\u0142a", tier: 3, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Bielsku-Bia\u0142ej", capacity: 15100, reputation: 4, logoFile: "Podbeskidzie_bielsko_biala.png" },
-  { name: "Warta Pozna\u0144", tier: 3, colors: ["#008000", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Pozaniu", capacity: 4600, reputation: 4, logoFile: "warta-poznan.png" },
-  { name: "Zawisza Bydgoszcz", tier: 3, colors: ["#0000FF", "#000000", "#FFFFFF"], stadium: "Stadion im. Zdzis\u0142awa Krzyszkowiaka", capacity: 20247, reputation: 7, logoFile: "zawisza-bydgoszcz.png" },
-  { name: "Stal Stalowa Wola", tier: 3, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Podkarpackie Centrum Pi\u0142ki No\u017Cnej", capacity: 3800, reputation: 3, logoFile: "stal-stalowa-wola-2024-logo.png" },
-  { name: "Resovia", tier: 3, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski w Rzeszowie", capacity: 3500, reputation: 3, logoFile: "Resovia.png" },
-  { name: "Hutnik Krak\xF3w", tier: 3, colors: ["#5EB6E4", "#FFFFFF", "#FF0000"], stadium: "Stadion Suche Stawy", capacity: 6500, reputation: 3, logoFile: "Hutnik_krakow.png" },
-  { name: "Olimpia Grudzi\u0105dz", tier: 3, colors: ["#FFFFFF", "#FF0000", "#008000"], stadium: "Stadion Miejski w Grudzi\u0105dzu", capacity: 5e3, reputation: 3, logoFile: "olimpia_grudziadz.png" },
-  { name: "Sandecja Nowy S\u0105cz", tier: 3, colors: ["#FFFFFF", "#000000", "#0000FF"], stadium: "Stadion Miejski w Nowym S\u0105czu", capacity: 4500, reputation: 3, logoFile: "Sandecja_Nowy_sacz.png" },
-  { name: "Chojniczanka Chojnice", tier: 3, colors: ["#FFFF00", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Chojnicach", capacity: 3500, reputation: 3, logoFile: "Chojniczanka_chojnice.png" },
-  { name: "Elana Toru\u0144", tier: 3, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski w Toruniu", capacity: 4200, reputation: 3, logoFile: "Elana_Torun.png" },
-  { name: "KKS 1925 Kalisz", tier: 3, colors: ["#FFFFFF", "#008000", "#0000FF"], stadium: "Stadion Miejski w Kaliszu", capacity: 8e3, reputation: 3, logoFile: "kks-1925-kalisz.png" },
-  { name: "GKS Jastrz\u0119bie", tier: 3, colors: ["#008000", "#000000", "#FFFF00"], stadium: "Stadion Miejski w Jastrz\u0119biu-Zdroju", capacity: 5600, reputation: 3, logoFile: "GKS_Jastrz\u0119bie.png" },
-  { name: "Unia Skierniewice", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FFFF00"], stadium: "Stadion Miejski w Skierniewicach", capacity: 2500, reputation: 2, logoFile: "Unia_Skierniewice.png" },
-  { name: "Podhale Nowy Targ", tier: 3, colors: ["#FF0000", "#0000FF", "#FFFF00"], stadium: "Stadion Miejski w Nowym Targu", capacity: 3e3, reputation: 2, logoFile: "Podhale_Nowy_Targ.png" },
-  { name: "\u015Awit Szczecin", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Szczecinie", capacity: 2e3, reputation: 2, logoFile: "swit_szczecin.png" },
-  { name: "Sok\xF3\u0142 Kleczew", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Kleczewie", capacity: 1e3, reputation: 2, logoFile: "sokol-kleczew-logo.png" },
-  { name: "Rekord Bielsko-Bia\u0142a", tier: 3, colors: ["#FFFFFF", "#008000", "#FFFF00"], stadium: "Stadion Miejski", capacity: 800, reputation: 2, logoFile: "Rekord_Bielsko-Bia\u0142a.png" },
-  // --- TIER 4 (3. Liga i niższe) ---
-  // Drużyny rezerw są osobnymi klubami AI. Integracja sportowa i kadrowa z
-  // pierwszym zespołem zostanie dodana w osobnym etapie.
-  { name: "Legia Warszawa II", tier: 4, colors: ["#007a25", "#ffffff", "#a80e0e"], stadium: "Legia Training Center", capacity: 1e3, reputation: 3, logoFile: "legia-warsaw-2019-logo.png" },
-  { name: "\u015Al\u0105sk Wroc\u0142aw II", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Oporowska", capacity: 8346, reputation: 3, logoFile: "Slask_Wroclaw.png" },
-  { name: "\u0141KS II \u0141\xF3d\u017A", tier: 4, colors: ["#FFFFFF", "#FF0000", "#FFFFFF"], stadium: "Akademia \u0141KS", capacity: 3e3, reputation: 3, logoFile: "lks_lodz.png" },
-  { name: "GKS Be\u0142chat\xF3w", tier: 4, colors: ["#06830c", "#ffffff", "#000000"], stadium: "GIEKSA Arena", capacity: 5264, reputation: 5, logoFile: "gksbelchatow.png" },
-  { name: "Wigry Suwa\u0142ki", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Suwa\u0142kach", capacity: 3060, reputation: 3 },
-  { name: "Olimpia Elbl\u0105g", tier: 4, colors: ["#FFFF00", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Elbl\u0105gu", capacity: 3e3, reputation: 3 },
-  { name: "Avia \u015Awidnik", tier: 4, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski w \u015Awidniku", capacity: 2800, reputation: 2 },
-  { name: "KSZO Ostrowiec", tier: 4, colors: ["#FF5F1F", "#000000", "#FFFFFF"], stadium: "Stadion KSZO", capacity: 7430, reputation: 5, logoFile: "kszo-ostrowiec-swietokrzyski.png" },
-  { name: "Siarka Tarnobrzeg", tier: 4, colors: ["#008000", "#000000", "#FFFF00"], stadium: "Stadion Miejski w Tarnobrzegu", capacity: 3770, reputation: 2, logoFile: "siarka-tarnobrzeg-logo.png" },
-  { name: "Wis\u0142oka D\u0119bica", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Wis\u0142oki w D\u0119bicy", capacity: 2840, reputation: 2 },
-  { name: "Lechia Zielona G\xF3ra", tier: 4, colors: ["#FFFFFF", "#008000", "#FFFF00"], stadium: "Stadion MOSiR w Zielonej G\xF3rze", capacity: 5e3, reputation: 2 },
-  { name: "MKS Flota \u015Awinouj\u015Bcie", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w \u015Awinouj\u015Bciu", capacity: 3070, reputation: 2 },
-  { name: "\u015Awit Nowy Dw\xF3r Mazowiecki", tier: 4, colors: ["#FFFFFF", "#008000", "#000000"], stadium: "Stadion Miejski w Nowym Dworze Mazowieckim", capacity: 3e3, reputation: 2 },
-  { name: "Lechia Tomasz\xF3w Mazowiecki", tier: 4, colors: ["#008000", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Tomaszowie Mazowieckim", capacity: 2500, reputation: 2 },
-  { name: "G\xF3rnik Polkowice", tier: 4, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Polkowicach", capacity: 2500, reputation: 2 },
-  { name: "MKS Kluczbork", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Kluczborku", capacity: 2500, reputation: 2 },
-  { name: "Che\u0142mianka Che\u0142m", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Miejski w Che\u0142mie", capacity: 3e3, reputation: 2 },
-  { name: "Star Starachowice", tier: 4, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Starachowicach", capacity: 5e3, reputation: 2 },
-  { name: "B\u0142\u0119kitni Stargard", tier: 4, colors: ["#87CEEB", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Stargardzie", capacity: 2850, reputation: 2 },
-  { name: "Warta Gorz\xF3w Wielkopolski", tier: 4, colors: ["#000080", "#800000", "#FFFFFF"], stadium: "Stadion OSiR w Gorzowie Wielkopolskim", capacity: 4e3, reputation: 2 },
-  { name: "Bro\u0144 Radom", tier: 4, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski w Radomiu", capacity: 4e3, reputation: 2, logoFile: "bron-radom-2020-logo.png" },
-  { name: "M\u0142awianka M\u0142awa", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w M\u0142awie", capacity: 4e3, reputation: 2 },
-  { name: "Warta Sieradz", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Miejski w Sieradzu", capacity: 2e3, reputation: 2 },
-  { name: "Polonia Nysa", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Nysie", capacity: 2e3, reputation: 2 },
-  { name: "FKS Stal Kra\u015Bnik", tier: 4, colors: ["#0000FF", "#FFFF00", "#FFFFFF"], stadium: "Stadion Miejski w Kra\u015Bniku", capacity: 2e3, reputation: 2 },
-  { name: "\u015Al\u0119za Wroc\u0142aw", tier: 4, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski", capacity: 2e3, reputation: 2 },
-  { name: "Z\u0105bkovia Z\u0105bki", tier: 4, colors: ["#FFFFFF", "#FF0000", "#000080"], stadium: "Stadion Miejski w Z\u0105bkach", capacity: 2e3, reputation: 2, logoFile: "zabkovia-zabki-2018-logo.png" },
-  { name: "Pogo\u0144-Sok\xF3\u0142 Lubacz\xF3w", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Lubaczowie", capacity: 2500, reputation: 1 },
-  { name: "LKS Gocza\u0142kowice-Zdr\xF3j", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1, logoFile: "lks-goczalkowice-zdroj-2025-logo.png" },
-  { name: "MKP Carina Gubin", tier: 4, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Gubinie", capacity: 1500, reputation: 1 },
-  { name: "SKRA Cz\u0119stochowa", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1, logoFile: "skra-czestochowa-2023-logo.png" },
-  { name: "Karkonosze Jelenia G\xF3ra", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Jeleniej G\xF3rze", capacity: 3e3, reputation: 1 },
-  { name: "S\u0142owianin Wolib\xF3rz", tier: 4, colors: ["#008000", "#FF0000", "#000000"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
-  { name: "Pni\xF3wek Paw\u0142owice \u015Al\u0105skie", tier: 4, colors: ["#008000", "#000000", "#FFFF00"], stadium: "Stadion Miejski", capacity: 1200, reputation: 1 },
-  { name: "LZS Starowice", tier: 4, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
-  { name: "MKS Stal Jasie\u0144", tier: 4, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
-  { name: "\u0141KS \u0141om\u017Ca", tier: 4, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski w \u0141om\u017Cy", capacity: 3e3, reputation: 1 },
-  { name: "KS CK Troszyn", tier: 4, colors: ["#008000", "#FFFFFF", "#000000"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
-  { name: "KS Wasilk\xF3w", tier: 4, colors: ["#0000FF", "#FF0000", "#008000"], stadium: "Stadion Miejski w Wasilkowie", capacity: 1e3, reputation: 1 },
-  { name: "MLKS Znicz Bia\u0142a Piska", tier: 4, colors: ["#FF0000", "#008000", "#FFFFFF"], stadium: "Stadion Miejski w Bia\u0142ej Piskiej", capacity: 800, reputation: 1 },
-  { name: "Polonia \u015Aroda Wielkopolska", tier: 4, colors: ["#800000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w \u015Arodzie Wielkopolskiej", capacity: 1500, reputation: 1 },
-  { name: "KTS-K Luzino", tier: 4, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
-  { name: "Cartusia Kartuzy", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Kartuzach", capacity: 1200, reputation: 1 },
-  { name: "KS Lipno St\u0119szew", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
-  { name: "WDA \u015Awiecie", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w \u015Awieciu", capacity: 3e3, reputation: 1 },
-  { name: "Note\u0107 Czarnk\xF3w", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Czarnkowie", capacity: 1500, reputation: 2 },
-  { name: "ZKS Kluczevia Stargard", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
-  { name: "Pogo\u0144 Nowe Skalmierzyce", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1500, reputation: 1 },
-  { name: "SKS Unia Swarz\u0119dz", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Swarz\u0119dzu", capacity: 1500, reputation: 1 },
-  { name: "MKS Viktoria Wrze\u015Bnia", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Miejski we Wrze\u015Bni", capacity: 1e3, reputation: 1 },
-  { name: "GZS Tluchovia T\u0142uchowo", tier: 4, colors: ["#0000FF", "#FFFF00", "#FF0000"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
-  { name: "LKS Wybrze\u017Ce Rewalskie Rewal", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
-  { name: "Wi\u015Blanie Ja\u015Bkowice", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000080"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
-  { name: "MKS Podlasie Bia\u0142a Podlaska", tier: 4, colors: ["#FFFFFF", "#008000", "#FFFF00"], stadium: "Stadion Miejski w Bia\u0142ej Piskiej", capacity: 1500, reputation: 1 },
-  { name: "MKS Czarni Po\u0142aniec", tier: 4, colors: ["#FFFF00", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Po\u0142a\u0144cu", capacity: 900, reputation: 1 },
-  { name: "KS Naprz\xF3d J\u0119drzej\xF3w", tier: 4, colors: ["#FFFF00", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w J\u0119drzejowie", capacity: 1200, reputation: 1 },
-  { name: "\u015Awidniczanka \u015Awidnik", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
-  { name: "Sok\xF3\u0142 Kolbuszowa Dolna", tier: 4, colors: ["#FF0000", "#FFFF00", "#008000"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
-  { name: "Sparta Kazimierza Wielka", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
-  { name: "BKS Sparta Katowice", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
-  { name: "Wikielec", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 600, reputation: 1 },
-  { name: "Kotwica Ko\u0142obrzeg", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Ko\u0142obrzegu", capacity: 3e3, reputation: 3 },
-  { name: "Olimpia Zambr\xF3w", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Zambrowie", capacity: 2e3, reputation: 2 },
-  { name: "Stomil Olsztyn", tier: 4, colors: ["#1f68d6", "#FFFFFF", "#0c53bd"], stadium: "Stadion Miejski w Olsztynie", capacity: 4500, reputation: 5 },
-  { name: "Gwardia Koszalin", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Koszalinie", capacity: 2500, reputation: 2 },
-  { name: "Ba\u0142tyk Gdynia", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Gdyni (Ba\u0142tyk)", capacity: 2e3, reputation: 3, logoFile: "baltyk_gdynia.png" },
-  { name: "Vineta Wolin", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Stadion Miejski w Wolinie", capacity: 1500, reputation: 2 },
-  { name: "Chemik Police", tier: 4, colors: ["#008000", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Policach", capacity: 2e3, reputation: 2 },
-  { name: "Lechia Dzier\u017Coni\xF3w", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Dzier\u017Coniowie", capacity: 2500, reputation: 2 },
-  { name: "Foto-Higiena Ga\u0107", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Gaci", capacity: 800, reputation: 1 },
-  { name: "Unia Janikowo", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Janikowie", capacity: 2e3, reputation: 2 },
-  { name: "W\u0142\xF3kniarz Cz\u0119stochowa", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Cz\u0119stochowie", capacity: 1500, reputation: 2 },
-  { name: "Victoria Cz\u0119stochowa", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
-  { name: "KTS Wesz\u0142o Warszawa", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski", capacity: 1200, reputation: 1 },
-  { name: "Sok\xF3\u0142 Ostr\xF3da", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Ostr\xF3dzie", capacity: 3e3, reputation: 2 },
-  { name: "Mazovia Mi\u0144sk Mazowiecki", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Mi\u0144sku Mazowieckim", capacity: 1500, reputation: 1 },
-  { name: "Polonia Bydgoszcz", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion im. Bronis\u0142awa Malinowskiego", capacity: 2500, reputation: 2 }
-];
-
-// resources/static_db/clubs/ChampionsLeagueTeams.tsx
-var RAW_CHAMPIONS_LEAGUE_CLUBS = [
-  { name: "Ajax Amsterdam", country: "NED", tier: 2, colors: ["#FFFFFF", "#ED0000", "#000000"], stadium: "Johan Cruijff Arena", capacity: 54744, reputation: 16 },
-  { name: "Arsenal Londyn", country: "ENG", tier: 1, colors: ["#EF0107", "#FFFFFF", "#023474"], stadium: "Emirates Stadium", capacity: 60260, reputation: 18 },
-  { name: "Atalanta Bergamo", country: "ITA", tier: 2, colors: ["#000000", "#1E90FF", "#000000"], stadium: "Gewiss Stadium", capacity: 24500, reputation: 15 },
-  { name: "Athletic Bilbao", country: "ESP", tier: 2, colors: ["#D50032", "#FFFFFF", "#000000"], stadium: "San Mam\xE9s", capacity: 53e3, reputation: 15 },
-  { name: "Atl\xE9tico Madryt", country: "ESP", tier: 1, colors: ["#C8102E", "#FFFFFF", "#1F3C88"], stadium: "C\xEDvitas Metropolitano", capacity: 68456, reputation: 17 },
-  { name: "Bayer Leverkusen", country: "GER", tier: 1, colors: ["#E32219", "#000000", "#FFFFFF"], stadium: "BayArena", capacity: 30750, reputation: 17 },
-  { name: "Bayern Monachium", country: "GER", tier: 1, colors: ["#DC052D", "#FFFFFF", "#0066B2"], stadium: "Allianz Arena", capacity: 75e3, reputation: 20 },
-  { name: "Benfica Lizbona", country: "POR", tier: 1, colors: ["#E10600", "#FFFFFF", "#E10600"], stadium: "Est\xE1dio da Luz", capacity: 65e3, reputation: 17 },
-  { name: "Bod\xF8/Glimt", country: "NOR", tier: 3, colors: ["#FFD200", "#000000", "#FFD200"], stadium: "Aspmyra Stadion", capacity: 8270, reputation: 12 },
-  { name: "Borussia Dortmund", country: "GER", tier: 1, colors: ["#FDE100", "#000000", "#FDE100"], stadium: "Signal Iduna Park", capacity: 81365, reputation: 18 },
-  { name: "Celtic Glasgow", country: "SCO", tier: 2, colors: ["#009A44", "#FFFFFF", "#009A44"], stadium: "Celtic Park", capacity: 60832, reputation: 15 },
-  { name: "Chelsea Londyn", country: "ENG", tier: 1, colors: ["#034694", "#FFFFFF", "#034694"], stadium: "Stamford Bridge", capacity: 41798, reputation: 18 },
-  { name: "Club Brugge", country: "BEL", tier: 2, colors: ["#003DA5", "#000000", "#003DA5"], stadium: "Jan Breydel Stadium", capacity: 29500, reputation: 14 },
-  { name: "Crvena Zvezda Belgrad", country: "SRB", tier: 3, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Rajko Miti\u0107 Stadium", capacity: 53200, reputation: 14 },
-  { name: "Dinamo Kij\xF3w", country: "UKR", tier: 2, colors: ["#0057B8", "#FFFFFF", "#0057B8"], stadium: "Olimpijski", capacity: 70050, reputation: 14 },
-  { name: "Dinamo Zagrzeb", country: "CRO", tier: 2, colors: ["#0046AD", "#FFFFFF", "#0046AD"], stadium: "Maksimir", capacity: 35e3, reputation: 13 },
-  { name: "FC Barcelona", country: "ESP", tier: 1, colors: ["#A50044", "#004D98", "#FDB913"], stadium: "Camp Nou", capacity: 99354, reputation: 20 },
-  { name: "FC Kopenhaga", country: "DEN", tier: 3, colors: ["#9D2235", "#FFFFFF", "#9D2235"], stadium: "Parken", capacity: 38065, reputation: 14 },
-  { name: "Fenerbah\xE7e Stambu\u0142", country: "TUR", tier: 2, colors: ["#0A1E3F", "#FCD116", "#D21034"], stadium: "\u015E\xFCkr\xFC Saraco\u011Flu", capacity: 50509, reputation: 15 },
-  { name: "Galatasaray Stambu\u0142", country: "TUR", tier: 1, colors: ["#A50034", "#FDCB0A", "#A50034"], stadium: "RAMS Park", capacity: 52652, reputation: 16 },
-  { name: "Inter Mediolan", country: "ITA", tier: 1, colors: ["#00529B", "#000000", "#00529B"], stadium: "San Siro", capacity: 80018, reputation: 18 },
-  { name: "Juventus Turyn", country: "ITA", tier: 1, colors: ["#FFFFFF", "#000000", "#FFFFFF"], stadium: "Allianz Stadium", capacity: 41507, reputation: 18 },
-  { name: "Lazio Rzym", country: "ITA", tier: 2, colors: ["#A7C7E7", "#FFFFFF", "#A7C7E7"], stadium: "Stadio Olimpico", capacity: 70634, reputation: 15 },
-  { name: "Liverpool FC", country: "ENG", tier: 1, colors: ["#C8102E", "#FFFFFF", "#C8102E"], stadium: "Anfield", capacity: 54074, reputation: 18 },
-  { name: "Manchester City", country: "ENG", tier: 1, colors: ["#6CABDD", "#FFFFFF", "#6CABDD"], stadium: "Etihad Stadium", capacity: 55017, reputation: 20 },
-  { name: "Manchester United", country: "ENG", tier: 1, colors: ["#DA291C", "#FFFFFF", "#DA291C"], stadium: "Old Trafford", capacity: 74879, reputation: 18 },
-  { name: "Milan AC", country: "ITA", tier: 1, colors: ["#A50034", "#000000", "#A50034"], stadium: "San Siro", capacity: 80018, reputation: 18 },
-  { name: "Napoli", country: "ITA", tier: 1, colors: ["#1C6ED5", "#FFFFFF", "#1C6ED5"], stadium: "Stadio Diego Armando Maradona", capacity: 54726, reputation: 16 },
-  { name: "Olympiakos Pireus", country: "GRE", tier: 2, colors: ["#E41F26", "#FFFFFF", "#E41F26"], stadium: "Karaiskakis Stadium", capacity: 32115, reputation: 14 },
-  { name: "Paris Saint-Germain", country: "FRA", tier: 1, colors: ["#004170", "#FFFFFF", "#E30613"], stadium: "Parc des Princes", capacity: 47929, reputation: 19 },
-  { name: "FC Porto", country: "POR", tier: 1, colors: ["#0033A0", "#FFFFFF", "#0033A0"], stadium: "Est\xE1dio do Drag\xE3o", capacity: 50033, reputation: 17 },
-  { name: "PSV Eindhoven", country: "NED", tier: 2, colors: ["#FF0000", "#FFFFFF", "#FF0000"], stadium: "Philips Stadion", capacity: 35600, reputation: 16 },
-  { name: "Real Madryt", country: "ESP", tier: 1, colors: ["#FFFFFF", "rgba(5, 40, 179, 0.96)", "#767b80"], stadium: "Santiago Bernab\xE9u", capacity: 81044, reputation: 20 },
-  { name: "AS Roma", country: "ITA", tier: 2, colors: ["#8E1B3D", "#F7B500", "#8E1B3D"], stadium: "Stadio Olimpico", capacity: 70634, reputation: 15 },
-  { name: "Red Bull Salzburg", country: "AUT", tier: 3, colors: ["#FFFFFF", "#E20613", "#FFD200"], stadium: "Red Bull Arena", capacity: 31895, reputation: 13 },
-  { name: "Sevilla FC", country: "ESP", tier: 2, colors: ["#D00027", "#FFFFFF", "#D00027"], stadium: "Ram\xF3n S\xE1nchez-Pizju\xE1n", capacity: 43883, reputation: 16 },
-  { name: "Szachtar Donieck", country: "UKR", tier: 2, colors: ["#FF7A00", "#000000", "#FF7A00"], stadium: "Donbas Arena", capacity: 52400, reputation: 14 },
-  { name: "Sporting Lizbona", country: "POR", tier: 2, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "Est\xE1dio Jos\xE9 Alvalade", capacity: 50095, reputation: 15 },
-  { name: "Tottenham Hotspur", country: "ENG", tier: 1, colors: ["#132257", "#FFFFFF", "#132257"], stadium: "Tottenham Hotspur Stadium", capacity: 62850, reputation: 17 },
-  { name: "Union Berlin", country: "GER", tier: 2, colors: ["#E30613", "#FFFFFF", "#E30613"], stadium: "Stadion An der Alten F\xF6rsterei", capacity: 22012, reputation: 14 },
-  { name: "Villarreal CF", country: "ESP", tier: 2, colors: ["#FFE000", "#00529F", "#FFE000"], stadium: "Estadio de la Cer\xE1mica", capacity: 23500, reputation: 15 },
-  { name: "Young Boys Berno", country: "SUI", tier: 3, colors: ["#FFD100", "#000000", "#FFD100"], stadium: "Stadion Wankdorf", capacity: 31783, reputation: 13 },
-  { name: "Zenit Petersburg", country: "RUS", tier: 1, colors: ["#009EE0", "#FFFFFF", "#009EE0"], stadium: "Gazprom Arena", capacity: 68134, reputation: 13 },
-  { name: "RB Lipsk", country: "GER", tier: 1, colors: ["#FFFFFF", "#DD0741", "#002D62"], stadium: "Red Bull Arena Leipzig", capacity: 47069, reputation: 14 },
-  { name: "Slavia Praga", country: "CZE", tier: 3, colors: ["#D7141A", "#FFFFFF", "#D7141A"], stadium: "Eden Arena", capacity: 19370, reputation: 14 },
-  { name: "AS Monaco", country: "FRA", tier: 2, colors: ["#FFFFFF", "#E30613", "#FFFFFF"], stadium: "Stade Louis II", capacity: 18523, reputation: 15 },
-  { name: "Borussia M\xF6nchengladbach", country: "GER", tier: 2, colors: ["#FFFFFF", "#000000", "#FFFFFF"], stadium: "Borussia-Park", capacity: 54057, reputation: 13 },
-  { name: "FC Basel", country: "SUI", tier: 3, colors: ["#D00027", "#FFFFFF", "#002F6C"], stadium: "St. Jakob-Park", capacity: 38512, reputation: 11 },
-  { name: "Ludogorec Razgrad", country: "BUL", tier: 3, colors: ["#2E8B57", "#FFFFFF", "#2E8B57"], stadium: "Huvepharma Arena", capacity: 10422, reputation: 11 },
-  { name: "Qaraba\u011F A\u011Fdam", country: "AZE", tier: 3, colors: ["#000000", "#FFFFFF", "#000000"], stadium: "Azersun Arena", capacity: 5800, reputation: 11 },
-  { name: "Sheriff Tiraspol", country: "MDA", tier: 3, colors: ["#FFD700", "#000000", "#FFD700"], stadium: "Sheriff Stadium", capacity: 12900, reputation: 9 },
-  { name: "Slovan Bratys\u0142awa", country: "SVK", tier: 3, colors: ["#5B2D8B", "#FFFFFF", "#5B2D8B"], stadium: "Teheln\xE9 pole", capacity: 22500, reputation: 10 },
-  { name: "Ferencv\xE1ros Budapeszt", country: "HUN", tier: 3, colors: ["#008000", "#FFFFFF", "#008000"], stadium: "Groupama Arena", capacity: 23700, reputation: 9 },
-  { name: "Malm\xF6 FF", country: "SWE", tier: 3, colors: ["#5BA4E5", "#FFFFFF", "#5BA4E5"], stadium: "Eleda Stadion", capacity: 22500, reputation: 11 },
-  { name: "APOEL Nikozja", country: "CYP", tier: 3, colors: ["#003A8F", "#FFD200", "#003A8F"], stadium: "GSP Stadium", capacity: 22859, reputation: 11 },
-  { name: "HJK Helsinki", country: "FIN", tier: 3, colors: ["#0057B8", "#FFFFFF", "#0057B8"], stadium: "Bolt Arena", capacity: 10770, reputation: 11 },
-  { name: "\u017Dalgiris Wilno", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "LFF Stadium", capacity: 5400, reputation: 5 },
-  { name: "Flora Tallinn", country: "EST", tier: 4, colors: ["#2E8B57", "#FFFFFF", "#2E8B57"], stadium: "A. Le Coq Arena", capacity: 14500, reputation: 6 },
-  { name: "K\xCD Klaksv\xEDk", country: "FRO", tier: 4, colors: ["#003A8F", "#FFFFFF", "#003A8F"], stadium: "Vi\xF0 Dj\xFApum\xFDrar", capacity: 3e3, reputation: 8 },
-  { name: "Lincoln Red Imps", country: "GIB", tier: 4, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Victoria Stadium", capacity: 5028, reputation: 4 },
-  { name: "Swift Hesperange", country: "LUX", tier: 4, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Stade Alphonse Theis", capacity: 7800, reputation: 4 },
-  { name: "V\xEDkingur Reykjav\xEDk", country: "ISL", tier: 3, colors: ["#D50032", "#000000", "#D50032"], stadium: "V\xEDkingsv\xF6llur", capacity: 1200, reputation: 8 },
-  { name: "Struga Trim-Lum", country: "MKD", tier: 4, colors: ["#1E90FF", "#FFFFFF", "#1E90FF"], stadium: "Gradska Pla\u017Ea", capacity: 8e3, reputation: 7 },
-  { name: "Celje", country: "SVN", tier: 3, colors: ["#0057B8", "#FFD200", "#0057B8"], stadium: "Stadion Z'de\u017Eele", capacity: 13059, reputation: 9 },
-  { name: "RFS Ryga", country: "LAT", tier: 4, colors: ["#003A8F", "#FFFFFF", "#003A8F"], stadium: "LNK Sporta Parks", capacity: 2500, reputation: 6 },
-  { name: "H\xE4cken", country: "SWE", tier: 3, colors: ["#FFD200", "#000000", "#FFD200"], stadium: "Bravida Arena", capacity: 6500, reputation: 9 },
-  { name: "Zrinjski Mostar", country: "BIH", tier: 3, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Stadion Pod Bijelim Brijegom", capacity: 9e3, reputation: 9 },
-  { name: "Partizani Tirana", country: "ALB", tier: 4, colors: ["#D50032", "#FFFFFF", "#000000"], stadium: "Air Albania Stadium", capacity: 22500, reputation: 9 },
-  { name: "Astana", country: "KAZ", tier: 3, colors: ["#00AEEF", "#FFD200", "#00AEEF"], stadium: "Astana Arena", capacity: 3e4, reputation: 11 },
-  { name: "Dinamo Tbilisi", country: "GEO", tier: 4, colors: ["#0057B8", "#FFFFFF", "#0057B8"], stadium: "Boris Paichadze Dinamo Arena", capacity: 54900, reputation: 10 },
-  { name: "Shamrock Rovers", country: "IRL", tier: 4, colors: ["#007A33", "#FFFFFF", "#007A33"], stadium: "Tallaght Stadium", capacity: 1e4, reputation: 7 },
-  { name: "Hapoel Be'er Sheva", country: "ISR", tier: 3, colors: ["#E30613", "#FFFFFF", "#E30613"], stadium: "Turner Stadium", capacity: 16126, reputation: 10 },
-  { name: "Linfield Belfast", country: "NIR", tier: 4, colors: ["#003A8F", "#FFFFFF", "#003A8F"], stadium: "Windsor Park", capacity: 18234, reputation: 6 },
-  { name: "The New Saints", country: "WAL", tier: 4, colors: ["#00A650", "#FFFFFF", "#00A650"], stadium: "Park Hall", capacity: 2034, reputation: 7 },
-  { name: "Brei\xF0ablik", country: "ISL", tier: 4, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "K\xF3pavogsv\xF6llur", capacity: 5501, reputation: 8 },
-  { name: "CSKA Moskwa", country: "RUS", tier: 3, colors: ["#fc0101", "#001aff", "#ff0000"], stadium: "VEB Arena", capacity: 3e4, reputation: 12 },
-  { name: "BATE Borisov", country: "BLR", tier: 3, colors: ["#f2ff00", "#1e00ff", "#ffffff"], stadium: "BATE Area", capacity: 13126, reputation: 12 },
-  { name: "Spartak Moskwa", country: "RUS", tier: 2, colors: ["#ff0000", "#ffffff", "#ff0000"], stadium: "Otkritie Arena", capacity: 45e3, reputation: 12 }
-];
-var generateEuropeanClubId = (name) => {
-  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-  return `EU_CL_${slug}`;
-};
-
-// resources/static_db/clubs/EuropeLeagueTeams.tsx
-var RAW_EUROPA_LEAGUE_CLUBS = [
-  // Albania (ALB)
-  { name: "Tirana", country: "ALB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Air Albania Stadium", capacity: 22500, reputation: 6 },
-  { name: "Egnatia", country: "ALB", tier: 4, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Arena Egnatia", capacity: 4e3, reputation: 7 },
-  { name: "Vllaznia Szkodra", country: "ALB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Loro Bori\xE7i Stadium", capacity: 16e3, reputation: 7 },
-  // Anglia (ENG) 
-  { name: "Crystal Palace", country: "ENG", tier: 2, colors: ["#1E22AA", "#C41230", "#FFFFFF"], stadium: "Selhurst Park", capacity: 25486, reputation: 14 },
-  { name: "Brighton & Hove Albion", country: "ENG", tier: 2, colors: ["#0057B8", "#FFFFFF", "#FFCD00"], stadium: "Falmer Stadium", capacity: 31876, reputation: 14 },
-  { name: "Wolverhampton Wanderers", country: "ENG", tier: 2, colors: ["#FDB913", "#000000", "#FFFFFF"], stadium: "Molineux Stadium", capacity: 32050, reputation: 14 },
-  { name: "Newcastle United", country: "ENG", tier: 2, colors: ["#000000", "#FFFFFF", "#41B6E6"], stadium: "St James' Park", capacity: 52305, reputation: 12 },
-  { name: "Everton FC", country: "ENG", tier: 2, colors: ["#003399", "#FFFFFF", "#FF0000"], stadium: "Goodison Park", capacity: 39214, reputation: 12 },
-  { name: "Aston Villa", country: "ENG", tier: 3, colors: ["#882525", "#134ac0", "#ffffff"], stadium: "Villa Park", capacity: 42682, reputation: 10 },
-  { name: "Nottingham Forest", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "City Ground", capacity: 3e4, reputation: 9 },
-  // Armenia (ARM)
-  { name: "Ararat-Armenia", country: "ARM", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "FFA Academy Stadium", capacity: 1400, reputation: 6 },
-  { name: "Noah Erywa\u0144", country: "ARM", tier: 4, colors: ["#000000", "#FFD700", "#FFFFFF"], stadium: "Abovyan City Stadium", capacity: 5320, reputation: 6 },
-  { name: "Pyunik Erywa\u0144", country: "ARM", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Republican Stadium after Vazgen Sargsyan", capacity: 14403, reputation: 6 },
-  // Azerbejdżan (AZE)
-  { name: "Neft\xE7i Baku", country: "AZE", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Bak\u0131 Olimpiya Stadionu", capacity: 68700, reputation: 7 },
-  { name: "Sabah FK", country: "AZE", tier: 4, colors: ["#0033A0", "#FFFFFF", "#FFD700"], stadium: "Bank Respublika Arena", capacity: 13e3, reputation: 7 },
-  { name: "Zira FK", country: "AZE", tier: 4, colors: ["#000000", "#FFFFFF", "#FF6600"], stadium: "Zir\u0259 Sport Kompleksi", capacity: 1500, reputation: 7 },
-  // Austria (AUT)
-  { name: "Rapid Wiede\u0144", country: "AUT", tier: 2, colors: ["#006600", "#FFFFFF", "#000000"], stadium: "Allianz Stadion", capacity: 28345, reputation: 13 },
-  { name: "Austria Wiede\u0144", country: "AUT", tier: 2, colors: ["#FFFFFF", "#000000", "#990000"], stadium: "Generali Arena", capacity: 17800, reputation: 13 },
-  { name: "LASK Linz", country: "AUT", tier: 2, colors: ["#000000", "#FFFFFF", "#FFCC00"], stadium: "Raiffeisen Arena", capacity: 19009, reputation: 13 },
-  { name: "Sturm Graz", country: "AUT", tier: 2, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Merkur Arena", capacity: 16e3, reputation: 12 },
-  // Belgia (BEL) – 
-  { name: "Royal Antwerp", country: "BEL", tier: 2, colors: ["#FFFFFF", "#C8102E", "#000000"], stadium: "Bosuilstadion", capacity: 23057, reputation: 12 },
-  { name: "Gent", country: "BEL", tier: 2, colors: ["#006633", "#FFFFFF", "#FFCC00"], stadium: "Ghelamco Arena", capacity: 2e4, reputation: 13 },
-  { name: "Standard Li\xE8ge", country: "BEL", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stade Maurice Dufrasne", capacity: 30023, reputation: 13 },
-  { name: "Anderlecht Bruksela", country: "BEL", tier: 2, colors: ["#FFFFFF", "#0033A0", "#FF0000"], stadium: "Lotto Park", capacity: 21e3, reputation: 15 },
-  { name: "KRC Genk", country: "BEL", tier: 2, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "Luminus Arena", capacity: 24956, reputation: 12 },
-  // Białoruś (BLR)
-  { name: "Dinamo Mi\u0144sk", country: "BLR", tier: 3, colors: ["#FFFFFF", "#0033A0", "#FF0000"], stadium: "Dinamo Stadium", capacity: 22346, reputation: 7 },
-  { name: "Torpedo-BelAZ \u017Bodzino", country: "BLR", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Torpedo Stadium", capacity: 6524, reputation: 7 },
-  { name: "Neman Grodno", country: "BLR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Neman Stadium", capacity: 8500, reputation: 7 },
-  // Bośnia i Hercegowina (BIH) – 
-  { name: "Borac Banja Luka", country: "BIH", tier: 3, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "Gradski Stadion Banja Luka", capacity: 9730, reputation: 8 },
-  { name: "FK Sarajevo", country: "BIH", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "Asim Ferhatovi\u0107 Hase", capacity: 34500, reputation: 7 },
-  { name: "\u017Deljezni\u010Dar Sarajewo", country: "BIH", tier: 3, colors: ["#0033A0", "#FFFFFF", "#000000"], stadium: "Grbavica", capacity: 13349, reputation: 7 },
-  // Bułgaria (BUL) – 
-  { name: "Levski Sofia", country: "BUL", tier: 3, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Georgi Asparuhov Stadium", capacity: 18341, reputation: 9 },
-  { name: "CSKA Sofia", country: "BUL", tier: 3, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "Balgarska Armiya Stadium", capacity: 18191, reputation: 8 },
-  { name: "Lokomotiv P\u0142owdiw", country: "BUL", tier: 3, colors: ["#000000", "#FFFFFF", "#C8102E"], stadium: "Lokomotiv Stadium", capacity: 13e3, reputation: 7 },
-  // Chorwacja (CRO) – 
-  { name: "Hajduk Split", country: "CRO", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Poljud", capacity: 34198, reputation: 10 },
-  { name: "HNK Rijeka", country: "CRO", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Rujevica", capacity: 8279, reputation: 9 },
-  { name: "NK Osijek", country: "CRO", tier: 3, colors: ["#FFFFFF", "#0033A0", "#FFCC00"], stadium: "Opus Arena", capacity: 13005, reputation: 9 },
-  // Cypr (CYP) – 
-  { name: "Omonia Nikozja", country: "CYP", tier: 3, colors: ["#00A651", "#FFFFFF", "#000000"], stadium: "GSP Stadium", capacity: 22859, reputation: 8 },
-  { name: "AEK Larnaka", country: "CYP", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "AEK Arena", capacity: 7380, reputation: 9 },
-  { name: "Aris Limassol", country: "CYP", tier: 3, colors: ["#00AEEF", "#FFFFFF", "#000000"], stadium: "Alphamega Stadium", capacity: 11e3, reputation: 9 },
-  // Czechy (CZE) – 
-  { name: "Sparta Praga", country: "CZE", tier: 2, colors: ["#000000", "#FF0000", "#FFFFFF"], stadium: "Generali \u010Cesk\xE1 poji\u0161\u0165ovna Arena", capacity: 19316, reputation: 14 },
-  { name: "Viktoria Pilzno", country: "CZE", tier: 2, colors: ["#FF6600", "#000000", "#FFFFFF"], stadium: "Doosan Arena", capacity: 11700, reputation: 10 },
-  { name: "Ban\xEDk Ostrawa", country: "CZE", tier: 2, colors: ["#000000", "#FFA500", "#FFFFFF"], stadium: "M\u011Bstsk\xFD stadion v Ostrav\u011B-V\xEDtkovic\xEDch", capacity: 15275, reputation: 9 },
-  // Czarnogóra (MNE) – typowe pucharowicze z 1. CFL (poziom EL/ECL qualifiers)
-  { name: "Budu\u0107nost Podgorica", country: "MNE", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "Gradski stadion Podgorica", capacity: 15230, reputation: 7 },
-  { name: "Sutjeska Nik\u0161i\u0107", country: "MNE", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Gradski stadion Nik\u0161i\u0107", capacity: 5184, reputation: 6 },
-  { name: "De\u010Di\u0107 Tuzi", country: "MNE", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Tu\u0161ko Polje", capacity: 3e3, reputation: 7 },
-  // Dania (DEN) – po FC Kopenhaga
-  { name: "FC Midtjylland", country: "DEN", tier: 3, colors: ["#000000", "#FF0000", "#FFFFFF"], stadium: "MCH Arena", capacity: 11432, reputation: 9 },
-  { name: "Br\xF8ndby IF", country: "DEN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Br\xF8ndby Stadium", capacity: 28e3, reputation: 12 },
-  { name: "FC Nordsj\xE6lland", country: "DEN", tier: 3, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Right to Dream Park", capacity: 10300, reputation: 11 },
-  //ESTONIA (EST) – więc solidni pucharowicze z Meistriliiga
-  { name: "Levadia Tallinn", country: "EST", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kadriorg Stadium", capacity: 5e3, reputation: 5 },
-  { name: "N\xF5mme Kalju", country: "EST", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Hiiu Stadium", capacity: 800, reputation: 5 },
-  { name: "Paide Linnameeskond", country: "EST", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FFD700"], stadium: "Paide linnastaadion", capacity: 268, reputation: 5 },
-  // Finlandia (FIN) 
-  { name: "KuPS Kuopio", country: "FIN", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Savon Sanomat Areena", capacity: 4700, reputation: 7 },
-  { name: "SJK Sein\xE4joki", country: "FIN", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FFCC00"], stadium: "OmaSP Stadion", capacity: 4300, reputation: 6 },
-  { name: "Ilves Tampere", country: "FIN", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Tammela Stadion", capacity: 8012, reputation: 7 },
-  // Francja (FRA) – 
-  { name: "Lille OSC", country: "FRA", tier: 2, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "Decathlon Arena - Stade Pierre-Mauroy", capacity: 5e4, reputation: 13 },
-  { name: "OGC Nice", country: "FRA", tier: 2, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Allianz Riviera", capacity: 35624, reputation: 13 },
-  { name: "RC Lens", country: "FRA", tier: 2, colors: ["#FFD700", "#000000", "#FF0000"], stadium: "Stade Bollaert-Delelis", capacity: 38223, reputation: 13 },
-  { name: "Olympique Lyon", country: "FRA", tier: 2, colors: ["#FFFFFF", "#C8102E", "#000000"], stadium: "Groupama Stadium", capacity: 59186, reputation: 14 },
-  { name: "Olympique Marsylia", country: "FRA", tier: 2, colors: ["#00AEEF", "#FFFFFF", "#000000"], stadium: "Stade V\xE9lodrome", capacity: 67394, reputation: 14 },
-  // Gruzja (GEO) – 
-  { name: "Dinamo Batumi", country: "GEO", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Batumi Stadium", capacity: 2e4, reputation: 6 },
-  { name: "Dila Gori", country: "GEO", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Tengiz Burjanadze Stadium", capacity: 5e3, reputation: 6 },
-  { name: "Torpedo Kutaisi", country: "GEO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Ramaz Shengelia Stadium", capacity: 11978, reputation: 6 },
-  // Grecja (GRE) – po Olympiakos (z CL)
-  { name: "PAOK Saloniki", country: "GRE", tier: 2, colors: ["#000000", "#FFFFFF", "#000000"], stadium: "Toumba Stadium", capacity: 28803, reputation: 12 },
-  { name: "AEK Ateny", country: "GRE", tier: 2, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "OPAP Arena", capacity: 32500, reputation: 14 },
-  { name: "Panathinaikos Ateny", country: "GRE", tier: 2, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Apostolos Nikolaidis Stadium", capacity: 68703, reputation: 14 },
-  // Holandia (NED)  
-  { name: "Feyenoord Rotterdam", country: "NED", tier: 2, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "De Kuip", capacity: 51177, reputation: 14 },
-  { name: "AZ Alkmaar", country: "NED", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "AFAS Stadion", capacity: 19e3, reputation: 11 },
-  { name: "Twente Enschede", country: "NED", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "De Grolsch Veste", capacity: 3e4, reputation: 11 },
-  // Węgry (HUN) – po Ferencváros (z CL)
-  { name: "Mol Feh\xE9rv\xE1r FC", country: "HUN", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "MOL Ar\xE9na S\xF3st\xF3", capacity: 14300, reputation: 7 },
-  { name: "Pusk\xE1s Akad\xE9mia", country: "HUN", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Pusk\xE1s Ar\xE9na", capacity: 67215, reputation: 8 },
-  // grają tam mecze, ale stadion akademii mniejszy
-  { name: "\xDAjpest FC", country: "HUN", tier: 3, colors: ["#9932CC", "#FFFFFF", "#000000"], stadium: "Szusza Ferenc Stadion", capacity: 13500, reputation: 9 },
-  // Islandia (ISL)
-  { name: "V\xEDkingur Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#D50032", "#000000", "#D50032"], stadium: "V\xEDkingsv\xF6llur", capacity: 1200, reputation: 7 },
-  { name: "Brei\xF0ablik K\xF3pavogur", country: "ISL", tier: 4, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "K\xF3pavogsv\xF6llur", capacity: 5501, reputation: 6 },
-  { name: "FH Hafnarfj\xF6r\xF0ur", country: "ISL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Kaplakrikav\xF6llur", capacity: 6450, reputation: 5 },
-  // Irlandia (IRL)
-  { name: "Shamrock Rovers", country: "IRL", tier: 4, colors: ["#007A33", "#FFFFFF", "#007A33"], stadium: "Tallaght Stadium", capacity: 8e3, reputation: 4 },
-  { name: "St Patrick's Athletic", country: "IRL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Richmond Park", capacity: 5347, reputation: 5 },
-  { name: "Derry City", country: "IRL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Brandywell Stadium", capacity: 7700, reputation: 5 },
-  // Izrael (ISR)  top Ligat ha'Al
-  { name: "Maccabi Tel Awiw", country: "ISR", tier: 3, colors: ["#FFD700", "#0000FF", "#FFFFFF"], stadium: "Bloomfield Stadium", capacity: 29300, reputation: 7 },
-  { name: "Hapoel Beer Szewa", country: "ISR", tier: 3, colors: ["#E30613", "#FFFFFF", "#E30613"], stadium: "Turner Stadium", capacity: 16126, reputation: 8 },
-  // jeśli nie w CL w Twojej liście – solidny
-  { name: "Maccabi Hajfa", country: "ISR", tier: 3, colors: ["#FFFFFF", "#006633", "#000000"], stadium: "Sammy Ofer Stadium", capacity: 30800, reputation: 10 },
-  // Włochy (ITA) –  Serie A
-  { name: "Bologna FC", country: "ITA", tier: 2, colors: ["#00529B", "#FFFFFF", "#FF0000"], stadium: "Stadio Renato Dall'Ara", capacity: 36462, reputation: 13 },
-  { name: "Udinese Calcio", country: "ITA", tier: 2, colors: ["#000000", "#FFFFFF", "#FFCC00"], stadium: "Bluenergy Stadium", capacity: 25132, reputation: 12 },
-  // Kazachstan (KAZ)  top Premier Liga
-  { name: "Kairat A\u0142maty", country: "KAZ", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Central Stadium Almaty", capacity: 23804, reputation: 4 },
-  { name: "Ordabasy Szymkent", country: "KAZ", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kazybek-Bi Stadium", capacity: 16400, reputation: 5 },
-  { name: "Tobo\u0142 Kostanaj", country: "KAZ", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Central Stadium Kostanay", capacity: 8320, reputation: 6 },
-  // Kosowo (KOS) – top Superliga e Kosovës (najmocniejsze kluby w pucharach)
-  { name: "FC Ballkani", country: "KOS", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadiumi Fadil Vokrri", capacity: 13500, reputation: 4 },
-  { name: "FC Drita", country: "KOS", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gjilan City Stadium", capacity: 1e4, reputation: 4 },
-  { name: "FC Prishtina", country: "KOS", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadiumi Fadil Vokrri", capacity: 13500, reputation: 4 },
-  // Łotwa (LAT) – top Virslīga (po RFS Ryga z CL? – unikamy dubli, więc reszta top)
-  { name: "FK Riga", country: "LAT", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Skonto Stadium", capacity: 8083, reputation: 5 },
-  { name: "FK Auda", country: "LAT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Skonto Stadium", capacity: 8083, reputation: 6 },
-  { name: "FK Liep\u0101ja", country: "LAT", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Daugava Stadium Liep\u0101ja", capacity: 8e3, reputation: 5 },
-  // Litwa (LTU) – top A Lyga (po Žalgiris Wilno z CL – unikamy, reszta top)
-  { name: "FK Kauno \u017Dalgiris", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Darius and Gir\u0117nas Stadium", capacity: 15315, reputation: 6 },
-  { name: "FK \u017Dalgiris Vilnius", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "LFF Stadium", capacity: 5400, reputation: 6 },
-  { name: "FK Banga Garg\u017Edai", country: "LTU", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Garg\u017Edai Stadium", capacity: 2300, reputation: 6 },
-  // Luksemburg (LUX) – top BGL Ligue (Differdange, Dudelange, UNA Strassen itp.)
-  { name: "F91 Dudelange", country: "LUX", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Jos Nosbaum", capacity: 2550, reputation: 5 },
-  { name: "FC Differdange 03", country: "LUX", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stade Parc des Sports", capacity: 2400, reputation: 3 },
-  { name: "UNA Strassen", country: "LUX", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Complexe Sportif Jean Wirtz", capacity: 2e3, reputation: 4 },
-  // Macedonia Północna (MKD) – top 1. MFL (Vardar, Shkendija, Struga dominują w 2025/26)
-  { name: "FK Vardar Skopje", country: "MKD", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "To\u0161e Proeski Arena", capacity: 33e3, reputation: 5 },
-  { name: "KF Shk\xEBndija Tetovo", country: "MKD", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Ecolog Arena", capacity: 15e3, reputation: 5 },
-  { name: "FC Struga Trim-Lum", country: "MKD", tier: 4, colors: ["#1E90FF", "#FFFFFF", "#1E90FF"], stadium: "Gradska Pla\u017Ea", capacity: 8e3, reputation: 5 },
-  // Malta (MLT) – top Premier League (Hamrun, Floriana, Valletta, Marsaxlokk itp.)
-  { name: "Hamrun Spartans", country: "MLT", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Victor Tedesco Stadium", capacity: 6e3, reputation: 5 },
-  { name: "Floriana FC", country: "MLT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Independence Ground", capacity: 3e3, reputation: 5 },
-  { name: "Valletta FC", country: "MLT", tier: 4, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "Centenary Stadium", capacity: 2e3, reputation: 6 },
-  // Mołdawia (MDA) – top Super Liga (Petrocub, Zimbru, Sheriff, Milsami w 2025/26)
-  { name: "FC Petrocub H\xEEnce\u0219ti", country: "MDA", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadionul Municipal H\xEEnce\u0219ti", capacity: 1500, reputation: 5 },
-  { name: "FC Zimbru Chi\u0219in\u0103u", country: "MDA", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadionul Zimbru", capacity: 10500, reputation: 5 },
-  { name: "FC Milsami Orhei", country: "MDA", tier: 4, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "Complexul Sportiv Raional Orhei", capacity: 2500, reputation: 4 },
-  // Norwegia (NOR) – top Eliteserien (Bodø/Glimt już w CL, więc reszta mocnych: Molde, Viking, Brann, Rosenborg, Lillestrøm itp.)
-  { name: "Molde FK", country: "NOR", tier: 4, colors: ["#FFFFFF", "#0000FF", "#000000"], stadium: "Aker Stadion", capacity: 11249, reputation: 10 },
-  { name: "SK Brann Bergen", country: "NOR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Brann Stadion", capacity: 17767, reputation: 9 },
-  { name: "Rosenborg BK", country: "NOR", tier: 4, colors: ["#000000", "#FFFFFF", "#000000"], stadium: "Lerkendal Stadion", capacity: 21421, reputation: 9 },
-  // Rumunia (ROU) – top Liga I / SuperLiga (aktualnie liderzy: U Craiova, Rapid, U Cluj, Dinamo, CFR itd.)
-  { name: "Universitatea Craiova", country: "ROU", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Ion Oblemenco Stadium", capacity: 3e4, reputation: 9 },
-  { name: "FC Rapid Bucure\u0219ti", country: "ROU", tier: 3, colors: ["#000000", "#FFFFFF", "#C8102E"], stadium: "Rapid-Giule\u0219ti Stadium", capacity: 14047, reputation: 9 },
-  { name: "Universitatea Cluj", country: "ROU", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Cluj Arena", capacity: 30201, reputation: 8 },
-  // Szkocja (SCO) – top Premiership (aktualnie Hearts lider, Celtic/Rangers blisko, Motherwell, Hibs itd.; Celtic w CL?)
-  { name: "Heart of Midlothian", country: "SCO", tier: 3, colors: ["#8B0000", "#FFFFFF", "#FFD700"], stadium: "Tynecastle Park", capacity: 20099, reputation: 9 },
-  { name: "Motherwell FC", country: "SCO", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Fir Park", capacity: 13677, reputation: 8 },
-  { name: "Hibernian FC", country: "SCO", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Easter Road", capacity: 20421, reputation: 8 },
-  { name: "Glasgow Rangers", country: "SCO", tier: 2, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Ibrox Stadium", capacity: 5e4, reputation: 13 },
-  // Słowacja (SVK) – top Super Liga (Slovan w CL? – unikamy, reszta: DAC, Žilina, Spartak Trnava, Podbrezová)
-  { name: "FC DAC 1904 Dunajsk\xE1 Streda", country: "SVK", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "MOL Ar\xE9na", capacity: 12500, reputation: 8 },
-  { name: "M\u0160K \u017Dilina", country: "SVK", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "\u0160tadi\xF3n pod Dub\u0148om", capacity: 11258, reputation: 8 },
-  { name: "Spartak Trnava", country: "SVK", tier: 3, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "City Arena \u2013 \u0160tadi\xF3n Antona Malatinsk\xE9ho", capacity: 19200, reputation: 8 },
-  // Portugalia (POR) – top Primeira Liga (Porto/Benfica/Sporting w CL, więc mid-top: Braga, Gil Vicente, Famalicão, Moreirense, Estoril)
-  { name: "SC Braga", country: "POR", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Est\xE1dio Municipal de Braga", capacity: 30186, reputation: 12 },
-  { name: "FC Famalic\xE3o", country: "POR", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Est\xE1dio Municipal 22 de Junho", capacity: 5307, reputation: 13 },
-  { name: "Moreirense FC", country: "POR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Est\xE1dio Comendador Joaquim de Almeida Freitas", capacity: 6153, reputation: 12 },
-  // Rosja (RUS) – mocne kluby z RPL poza Zenit/CSKA/Spartak
-  { name: "FK Krasnodar", country: "RUS", tier: 2, colors: ["#000000", "#FFFFFF", "#006633"], stadium: "Krasnodar Stadium", capacity: 35574, reputation: 13 },
-  { name: "Lokomotiw Moskwa", country: "RUS", tier: 2, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "RZD Arena", capacity: 28800, reputation: 12 },
-  { name: "Dynamo Moskwa", country: "RUS", tier: 2, colors: ["#0033A0", "#FFFFFF", "#000000"], stadium: "VTB Arena", capacity: 26047, reputation: 12 },
-  // Szwecja (SWE) – po Malmö FF i Häcken (z CL), aktualnie mocne: Mjällby, Hammarby, GAIS, Elfsborg, Djurgården itd.
-  { name: "Mj\xE4llby AIF", country: "SWE", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Strandvallen", capacity: 7500, reputation: 10 },
-  { name: "Hammarby IF", country: "SWE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "3Arena", capacity: 33e3, reputation: 10 },
-  { name: "GAIS G\xF6teborg", country: "SWE", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Gamla Ullevi", capacity: 18454, reputation: 9 },
-  // Szwajcaria (SUI) – po Young Boys i Basel (z CL), aktualnie liderzy: Thun, St. Gallen, Lugano, Sion
-  { name: "FC Thun", country: "SUI", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Arena Thun", capacity: 10300, reputation: 10 },
-  { name: "FC St. Gallen", country: "SUI", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kybunpark", capacity: 19456, reputation: 10 },
-  { name: "FC Lugano", country: "SUI", tier: 4, colors: ["#000000", "#FFFFFF", "#0000FF"], stadium: "Cornaredo Stadium", capacity: 6310, reputation: 9 },
-  // Turcja (TUR) – po Galatasaray, Fenerbahçe (z CL), aktualnie top: Trabzonspor, Beşiktaş, Başakşehir, Göztepe
-  { name: "Trabzonspor", country: "TUR", tier: 4, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "\u015Eenol G\xFCne\u015F Spor Kompleksi", capacity: 40882, reputation: 11 },
-  { name: "Be\u015Fikta\u015F JK", country: "TUR", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Vodafone Park", capacity: 41588, reputation: 11 },
-  { name: "\u0130stanbul Ba\u015Fak\u015Fehir", country: "TUR", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Ba\u015Fak\u015Fehir Fatih Terim Stadium", capacity: 17319, reputation: 10 },
-  // Ukraina (UKR) – po Szachtar i Dynamo (z CL), aktualnie mocne: LNZ Cherkasy, Polissya Zhytomyr, Kryvbas, Metalist 1925
-  { name: "LNZ Cherkasy", country: "UKR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Cherkasy Arena", capacity: 10321, reputation: 8 },
-  { name: "Polissya Zhytomyr", country: "UKR", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Stadion im. O. Oleksandriya", capacity: 5926, reputation: 8 },
-  { name: "Kryvbas Kryvyj Rih", country: "UKR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Hirnyk Stadium", capacity: 2500, reputation: 8 },
-  // Walia (WAL) – top Cymru Premier (liderzy: The New Saints, Connah's Quay, Penybont, Colwyn Bay, Caernarfon)
-  { name: "The New Saints", country: "WAL", tier: 4, colors: ["#00A650", "#FFFFFF", "#00A650"], stadium: "Park Hall", capacity: 2034, reputation: 5 },
-  { name: "Connah's Quay Nomads", country: "WAL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Deeside Stadium", capacity: 1500, reputation: 5 },
-  { name: "Penybont FC", country: "WAL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "SDA Wales Stadium", capacity: 1e3, reputation: 4 },
-  // Andora (AND) – najsłabsza federacja, reputacja max 4–5
-  { name: "FC Santa Coloma", country: "AND", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Camp Nou Municipal d'Andorra", capacity: 500, reputation: 2 },
-  { name: "Inter Club d'Escaldes", country: "AND", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 2 },
-  { name: "Atl\xE8tic Club d'Escaldes", country: "AND", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 2 },
-  // Gibraltar (GIB) – po Lincoln Red Imps (z CL)
-  { name: "Europa FC", country: "GIB", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 1 },
-  { name: "Bruno's Magpies", country: "GIB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 1 },
-  { name: "Manchester 62", country: "GIB", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 1 },
-  // Liechtenstein (LIE) – tylko jedna liga (w Szwajcarii), ale pucharowicze
-  { name: "FC Vaduz", country: "LIE", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Rheinpark Stadion", capacity: 7838, reputation: 2 },
-  { name: "USV Eschen/Mauren", country: "LIE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Sportpark Eschen-Mauren", capacity: 2e3, reputation: 2 },
-  { name: "FC Balzers", country: "LIE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sportanlage Rheinau", capacity: 2e3, reputation: 2 },
-  // San Marino (SMR) – najsłabsza federacja w Europie
-  { name: "La Fiorita", country: "SMR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
-  { name: "Tre Penne", country: "SMR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
-  { name: "Virtus Acquaviva", country: "SMR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
-  // Wyspy Owcze (FRO) – po KÍ Klaksvík (z CL)
-  { name: "HB T\xF3rshavn", country: "FRO", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "T\xF3rsv\xF8llur", capacity: 6e3, reputation: 1 },
-  { name: "V\xEDkingur G\xF8ta", country: "FRO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sarpuger\xF0i", capacity: 3e3, reputation: 1 },
-  { name: "B36 T\xF3rshavn", country: "FRO", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Gundadalur", capacity: 5e3, reputation: 1 },
-  // Niemcy (GER) – mid-table Bundesliga (po Bayern, Dortmund, Leverkusen, RB Lipsk, Union Berlin, Gladbach z CL)
-  { name: "VfB Stuttgart", country: "GER", tier: 2, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "MHPArena", capacity: 60449, reputation: 13 },
-  { name: "Eintracht Frankfurt", country: "GER", tier: 2, colors: ["#000000", "#FFFFFF", "#E1001A"], stadium: "Deutsche Bank Park", capacity: 51500, reputation: 13 },
-  // już był w CL, ale jeśli chcesz mid
-  { name: "SC Freiburg", country: "GER", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Europa-Park Stadion", capacity: 34700, reputation: 12 },
-  { name: "1. FC K\xF6ln", country: "GER", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "RheinEnergieStadion", capacity: 5e4, reputation: 12 },
-  { name: "VfL Wolfsburg", country: "GER", tier: 2, colors: ["#00A650", "#FFFFFF", "#000000"], stadium: "Volkswagen Arena", capacity: 3e4, reputation: 12 },
-  // Hiszpania (ESP) – mid-table La Liga (po Real, Barca, Atletico, Athletic, Sevilla, Villarreal z CL)
-  { name: "Real Sociedad", country: "ESP", tier: 2, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "Reale Arena", capacity: 4e4, reputation: 14 },
-  { name: "Valencia CF", country: "ESP", tier: 2, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "Mestalla", capacity: 49e3, reputation: 13 },
-  { name: "Real Betis", country: "ESP", tier: 2, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Benito Villamar\xEDn", capacity: 60720, reputation: 13 },
-  { name: "Osasuna", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "El Sadar", capacity: 23189, reputation: 12 },
-  // Słowenia (SVN) – mocne z PrvaLiga Telemach
-  { name: "NK Koper", country: "SVN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "\u0160tadion Bonifika", capacity: 4010, reputation: 8 },
-  { name: "NK Aluminij", country: "SVN", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Aluminij Sports Park", capacity: 1200, reputation: 8 },
-  { name: "NS Mura", country: "SVN", tier: 3, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Fazanerija City Stadium", capacity: 4120, reputation: 8 },
-  // Serbia (SRB) – mocne z SuperLiga Srbije (po Crvena Zvezda, Partizan)
-  { name: "FK Vojvodina Novi Sad", country: "SRB", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Kara\u0111or\u0111e Stadium", capacity: 14458, reputation: 8 },
-  { name: "FK Novi Pazar", country: "SRB", tier: 3, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Stadion Novi Pazar", capacity: 12e3, reputation: 8 },
-  { name: "Partizan Belgrad", country: "SRB", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion Partizana", capacity: 32e3, reputation: 10 }
-];
-var generateELClubId = (name) => {
-  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-  return `EU_EL_${slug}`;
-};
-
-// resources/static_db/clubs/ConferenceLeagueTeams.tsx
-var RAW_CONFERENCE_LEAGUE_CLUBS = [
-  // Andora (AND) – najsłabsza federacja
-  { name: "FC Santa Coloma", country: "AND", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Camp Nou Municipal d'Andorra", capacity: 500, reputation: 1 },
-  { name: "Inter Club d'Escaldes", country: "AND", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 1 },
-  { name: "Atl\xE8tic Club d'Escaldes", country: "AND", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 1 },
-  // Gibraltar (GIB)
-  { name: "Europa FC", country: "GIB", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 2 },
-  { name: "Bruno's Magpies", country: "GIB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 2 },
-  // Liechtenstein (LIE) – tylko puchar Liechtensteinu, kluby grają w szwajcarskiej lidze
-  { name: "USV Eschen/Mauren", country: "LIE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Sportpark Eschen-Mauren", capacity: 2e3, reputation: 3 },
-  { name: "FC Balzers", country: "LIE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sportanlage Rheinau", capacity: 2e3, reputation: 2 },
-  { name: "FC Ruggell", country: "LIE", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Rheinpark Stadion", capacity: 7838, reputation: 2 },
-  // San Marino (SMR)
-  { name: "Tre Penne", country: "SMR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
-  { name: "Virtus Acquaviva", country: "SMR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
-  { name: "Folgore/Falciano", country: "SMR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
-  // Wyspy Owcze (FRO) – bardzo nisko, nawet HB i Víkingur rzadko przechodzą rundy
-  { name: "HB T\xF3rshavn", country: "FRO", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "T\xF3rsv\xF8llur", capacity: 6e3, reputation: 1 },
-  { name: "V\xEDkingur G\xF8ta", country: "FRO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sarpuger\xF0i", capacity: 3e3, reputation: 1 },
-  { name: "B36 T\xF3rshavn", country: "FRO", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Gundadalur", capacity: 5e3, reputation: 1 },
-  // Malta (MLT)
-  { name: "Floriana FC", country: "MLT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Independence Ground", capacity: 3e3, reputation: 3 },
-  { name: "Valletta FC", country: "MLT", tier: 4, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "Centenary Stadium", capacity: 2e3, reputation: 2 },
-  { name: "G\u017Cira United", country: "MLT", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Centenary Stadium", capacity: 2e3, reputation: 2 },
-  // Luksemburg (LUX)
-  { name: "UNA Strassen", country: "LUX", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Complexe Sportif Jean Wirtz", capacity: 2e3, reputation: 3 },
-  { name: "FC Progr\xE8s Niederkorn", country: "LUX", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stade Jos Haupert", capacity: 1800, reputation: 2 },
-  { name: "Fola Esch", country: "LUX", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Stade \xC9mile Mayrisch", capacity: 3826, reputation: 2 },
-  // Kosowo (KOS)
-  { name: "KF Llapi", country: "KOS", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Fadil Vokrri Stadium", capacity: 13500, reputation: 5 },
-  { name: "KF Malisheva", country: "KOS", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Malisheva Stadium", capacity: 2e3, reputation: 5 },
-  { name: "KF Dukagjini", country: "KOS", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "P\xEBrparim Tha\xE7i Stadium", capacity: 2e3, reputation: 5 },
-  // Łotwa (LAT)
-  { name: "FK Auda", country: "LAT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Skonto Stadium", capacity: 8083, reputation: 5 },
-  { name: "FK Liep\u0101ja", country: "LAT", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Daugava Stadium Liep\u0101ja", capacity: 8e3, reputation: 5 },
-  { name: "FK Metta", country: "LAT", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Daugava Stadium", capacity: 10800, reputation: 5 },
-  // Litwa (LTU)
-  { name: "FK Hegelmann", country: "LTU", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Hegelmann Arena", capacity: 3500, reputation: 5 },
-  { name: "FK D\u017Eiugas Tel\u0161iai", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Tel\u0161iai Central Stadium", capacity: 2400, reputation: 6 },
-  // Albania (ALB) – po Tirana, Egnatia, Vllaznia (już w EL)
-  { name: "KF Teuta Durr\xEBs", country: "ALB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadiumi Niko Dovana", capacity: 12e3, reputation: 4 },
-  { name: "KF Bylis Ballsh", country: "ALB", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Adush Mu\xE7a Stadium", capacity: 5e3, reputation: 4 },
-  { name: "KF La\xE7i", country: "ALB", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadiumi La\xE7i", capacity: 5e3, reputation: 4 },
-  // Armenia (ARM) – po Ararat-Armenia, Noah, Pyunik (już w EL)
-  { name: "FC Urartu", country: "ARM", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Urartu Stadium", capacity: 7e3, reputation: 4 },
-  { name: "FC Alashkert", country: "ARM", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Alashkert Stadium", capacity: 6850, reputation: 4 },
-  { name: "FC Van", country: "ARM", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Charentsavan City Stadium", capacity: 5e3, reputation: 4 },
-  // Austria (AUT) – po Rapid, Austria Wiedeń, LASK (już w EL)
-  { name: "SCR Altach", country: "AUT", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Cashpoint Arena", capacity: 8500, reputation: 8 },
-  { name: "TSV Hartberg", country: "AUT", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Profertil Arena Hartberg", capacity: 4635, reputation: 8 },
-  { name: "Wolfsberger AC", country: "AUT", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Lavanttal-Arena", capacity: 8100, reputation: 8 },
-  // Azerbejdżan (AZE) – po Neftçi, Sabah, Zira (już w EL)
-  { name: "Sumgayit FK", country: "AZE", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Kapital Bank Arena", capacity: 1600, reputation: 4 },
-  { name: "Kapaz PFK", country: "AZE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Ganja City Stadium", capacity: 15e3, reputation: 4 },
-  { name: "Sabail FK", country: "AZE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Bayil Arena", capacity: 3e3, reputation: 4 },
-  // Białoruś (BLR)
-  { name: "FK Isloch Mi\u0144sk", country: "BLR", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion FC Minsk", capacity: 3100, reputation: 6 },
-  { name: "FK Slutsk", country: "BLR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion Haradski", capacity: 2150, reputation: 5 },
-  { name: "FK Smolevichi", country: "BLR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Ozyorny Stadium", capacity: 1500, reputation: 5 },
-  // Bośnia i Hercegowina (BIH)
-  { name: "FK Igman Konjic", country: "BIH", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Gradski stadion Igman", capacity: 5e3, reputation: 6 },
-  { name: "FK Posu\u0161je", country: "BIH", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadion Mokri Dolac", capacity: 8e3, reputation: 5 },
-  { name: "FK Sloga Meridian", country: "BIH", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion Tu\u0161anj", capacity: 7e3, reputation: 5 },
-  // Bułgaria (BUL)
-  { name: "FK Arda Kardzhali", country: "BUL", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Arena Arda", capacity: 12500, reputation: 6 },
-  { name: "FK Beroe Stara Zagora", country: "BUL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Beroe Stadium", capacity: 12128, reputation: 6 },
-  { name: "FK Hebar Pazardzhik", country: "BUL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadion Georgi Benkovski", capacity: 13128, reputation: 5 },
-  { name: "PFC Slavia Sofia", country: "BUL", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Ovcha Kupel Stadium", capacity: 25e3, reputation: 6 },
-  { name: "PFC Lokomotiv Sofia 1929", country: "BUL", tier: 3, colors: ["#ca0707", "#000000", "#FF0000"], stadium: "Lokomotiv Stadium Sofia", capacity: 22e3, reputation: 6 },
-  { name: "PFC Septemvri Sofia", country: "BUL", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Stadion Dragalevtsi", capacity: 1e3, reputation: 5 },
-  // Chorwacja (CRO)
-  { name: "NK Istra 1961", country: "CRO", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadion Aldo Drosina", capacity: 9921, reputation: 6 },
-  { name: "NK \u0160ibenik", country: "CRO", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion \u0160ubi\u0107evac", capacity: 3928, reputation: 5 },
-  { name: "HNK Gorica", country: "CRO", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion HNK Gorica", capacity: 4826, reputation: 5 },
-  // Cypr (CYP) – 
-  { name: "Anorthosis Famagusta", country: "CYP", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Antonis Papadopoulos Stadium", capacity: 10800, reputation: 6 },
-  { name: "Apollon Limassol", country: "CYP", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Tsirio Stadium", capacity: 13261, reputation: 6 },
-  { name: "Pafos FC", country: "CYP", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadio Stelios Kyriakides", capacity: 9394, reputation: 5 },
-  // Czechy (CZE) 
-  { name: "FK Jablonec", country: "CZE", tier: 3, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Stadion St\u0159elnice", capacity: 6108, reputation: 6 },
-  { name: "FK Teplice", country: "CZE", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Na St\xEDnadlech", capacity: 18221, reputation: 5 },
-  { name: "FK Mlad\xE1 Boleslav", country: "CZE", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Lokotrans Ar\xE9na", capacity: 5e3, reputation: 5 },
-  // Dania (DEN) 
-  { name: "Aarhus GF", country: "DEN", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Ceres Park & Arena", capacity: 19433, reputation: 6 },
-  { name: "Randers FC", country: "DEN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Cepheus Park Randers", capacity: 10300, reputation: 5 },
-  { name: "Viborg FF", country: "DEN", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Viborg Stadion", capacity: 9600, reputation: 5 },
-  // Estonia (EST) 
-  { name: "JK Tammeka Tartu", country: "EST", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Tamme staadion", capacity: 1600, reputation: 5 },
-  { name: "JK Narva Trans", country: "EST", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Kreenholmi staadion", capacity: 1800, reputation: 5 },
-  { name: "FC Kuressaare", country: "EST", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kuressaare linnastaadion", capacity: 2e3, reputation: 4 },
-  // Finlandia (FIN) 
-  { name: "FC Honka Espoo", country: "FIN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Tapiolan Urheilupuisto", capacity: 6e3, reputation: 6 },
-  { name: "FC Inter Turku", country: "FIN", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Veritas Stadion", capacity: 9300, reputation: 6 },
-  { name: "AC Oulu", country: "FIN", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Raatin stadion", capacity: 4900, reputation: 5 },
-  // Gruzja (GEO) 
-  { name: "FC Telavi", country: "GEO", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Municipal Stadium Telavi", capacity: 12e3, reputation: 6 },
-  { name: "FC Samtredia", country: "GEO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Erosi Manjgaladze Stadium", capacity: 15e3, reputation: 5 },
-  { name: "FC Gagra", country: "GEO", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gagra Stadium", capacity: 2e3, reputation: 5 },
-  // Irlandia (IRL) 
-  { name: "Dundalk FC", country: "IRL", tier: 4, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Oriel Park", capacity: 4500, reputation: 6 },
-  { name: "Sligo Rovers", country: "IRL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "The Showgrounds", capacity: 5500, reputation: 5 },
-  { name: "Waterford FC", country: "IRL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "RSC", capacity: 5500, reputation: 5 },
-  // Irlandia Północna (NIR)
-  { name: "Cliftonville FC", country: "NIR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Solitude", capacity: 2462, reputation: 6 },
-  { name: "Crusaders FC", country: "NIR", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Seaview", capacity: 3383, reputation: 5 },
-  { name: "Glentoran FC", country: "NIR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "The Oval", capacity: 26556, reputation: 5 },
-  // Islandia (ISL) – po Víkingur, Breiðablik, FH, Stjarnan (już w CL/EL)
-  { name: "KR Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "KR-v\xF6llur", capacity: 6450, reputation: 6 },
-  { name: "Valur Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Hl\xED\xF0arendi", capacity: 3e3, reputation: 6 },
-  { name: "Fram Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Framv\xF6llur \xDAlfars\xE1rdal", capacity: 1500, reputation: 5 },
-  // Izrael (ISR) – kluby z Ligat ha'Al (najwyższa liga)
-  { name: "Hapoel Tel Aviv", country: "ISR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Bloomfield Stadium", capacity: 29300, reputation: 6 },
-  { name: "Ironi Tiberias", country: "ISR", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Tiberias Municipal Stadium", capacity: 8e3, reputation: 5 },
-  { name: "Maccabi Bnei Raina", country: "ISR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Green Stadium", capacity: 3800, reputation: 5 },
-  // Kazachstan (KAZ) – kluby z Premier League (najwyższa liga)
-  { name: "FC Aktobe", country: "KAZ", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Central Stadium Aktobe", capacity: 13500, reputation: 7 },
-  { name: "FC Kairat Almaty", country: "KAZ", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Central Stadium Almaty", capacity: 23804, reputation: 6 },
-  { name: "FC Ordabasy Shymkent", country: "KAZ", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kazybek-Bi Stadium", capacity: 16400, reputation: 6 },
-  // Macedonia Północna (MKD)
-  { name: "FK Tikvesh Kavadarci", country: "MKD", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Gradski Stadion Kavadarci", capacity: 7500, reputation: 6 },
-  { name: "FK Shkupi", country: "MKD", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "\u010Cair Stadium", capacity: 6e3, reputation: 6 },
-  { name: "KF Gostivar", country: "MKD", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gostivar Stadium", capacity: 1e3, reputation: 5 },
-  // Mołdawia (MDA) – po Sheriff, Petrocub, Zimbru (już w CL/EL)
-  { name: "FC Milsami Orhei", country: "MDA", tier: 4, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "Complexul Sportiv Raional Orhei", capacity: 2500, reputation: 6 },
-  { name: "FC Spartanii Selemet", country: "MDA", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadionul Orhei", capacity: 2500, reputation: 5 },
-  { name: "FC Flore\u0219ti", country: "MDA", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Stadionul Flore\u0219ti", capacity: 1e3, reputation: 5 },
-  // Niemcy 
-  { name: "1. FC Kaiserslautern", country: "GER", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Fritz-Walter-Stadion", capacity: 49780, reputation: 10 },
-  { name: "Hannover 96", country: "GER", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "HDI-Arena", capacity: 49200, reputation: 10 },
-  { name: "Karlsruher SC", country: "GER", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "BBBank Wildpark", capacity: 28762, reputation: 9 },
-  { name: "St. Pauli", country: "GER", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Millerntor-Stadion", capacity: 29e3, reputation: 9 },
-  { name: "1. FC N\xFCrnberg", country: "GER", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Max-Morlock-Stadion", capacity: 5e4, reputation: 9 },
-  { name: "Eintracht Braunschweig", country: "GER", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Eintracht-Stadion", capacity: 25e3, reputation: 8 },
-  { name: "Mainz 05", country: "GER", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Mewa Arena", capacity: 34e3, reputation: 8 },
-  // Norwegia (NOR) – tier 4
-  { name: "Viking FK", country: "NOR", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "SR-Bank Arena", capacity: 15600, reputation: 6 },
-  { name: "Sarpsborg 08 FF", country: "NOR", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Sarpsborg Stadion", capacity: 8e3, reputation: 5 },
-  { name: "HamKam", country: "NOR", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Briskeby Arena", capacity: 7800, reputation: 5 },
-  // Portugalia (POR) – tier 3, mid-table / niższe Primeira Liga
-  { name: "Gil Vicente FC", country: "POR", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Est\xE1dio Cidade de Barcelos", capacity: 12046, reputation: 8 },
-  { name: "Estoril Praia", country: "POR", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Est\xE1dio Ant\xF3nio Coimbra da Mota", capacity: 8e3, reputation: 9 },
-  { name: "Rio Ave FC", country: "POR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Est\xE1dio dos Arcos", capacity: 9065, reputation: 9 },
-  // Rumunia (ROU) – tier 4
-  { name: "FC Hermannstadt", country: "ROU", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Municipal Stadium Sibiu", capacity: 14400, reputation: 6 },
-  { name: "FC UTA Arad", country: "ROU", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadionul Francisc Neuman", capacity: 12800, reputation: 5 },
-  { name: "FC Politehnica Ia\u0219i", country: "ROU", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadionul Emil Alexandrescu", capacity: 12800, reputation: 5 },
-  // Szkocja (SCO)
-  { name: "Livingston FC", country: "SCO", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Tony Macaroni Arena", capacity: 9528, reputation: 6 },
-  { name: "Raith Rovers", country: "SCO", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Stark's Park", capacity: 8798, reputation: 5 },
-  { name: "Partick Thistle", country: "SCO", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Firhill Stadium", capacity: 10102, reputation: 5 },
-  // Słowacja (SVK)
-  { name: "FK Ko\u0161ice", country: "SVK", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Futbal Tatran Ar\xE9na", capacity: 12458, reputation: 6 },
-  { name: "MFK Zempl\xEDn Michalovce", country: "SVK", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "\u0160tadi\xF3n pod Zoborom", capacity: 7200, reputation: 5 },
-  { name: "MFK Skalica", country: "SVK", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Futbalov\xFD \u0161tadi\xF3n Skalica", capacity: 4e3, reputation: 5 },
-  // Szwecja (SWE)
-  { name: "IK Sirius", country: "SWE", tier: 3, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Studenternas IP", capacity: 10522, reputation: 6 },
-  { name: "IF Brommapojkarna", country: "SWE", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Grimsta IP", capacity: 5e3, reputation: 5 },
-  { name: "Degerfors IF", country: "SWE", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stora Valla", capacity: 12500, reputation: 5 },
-  // Szwajcaria (SUI)
-  { name: "FC Winterthur", country: "SUI", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Sch\xFCtzenwiese", capacity: 8500, reputation: 6 },
-  { name: "FC Sion", country: "SUI", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Stade de Tourbillon", capacity: 14283, reputation: 6 },
-  { name: "FC Schaffhausen", country: "SUI", tier: 3, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Wefox Arena Schaffhausen", capacity: 8200, reputation: 5 },
-  // Turcja (TUR)
-  { name: "Konyaspor", country: "TUR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Konya B\xFCy\xFCk\u015Fehir Stadium", capacity: 42076, reputation: 6 },
-  { name: "Adana Demirspor", country: "TUR", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Yeni Adana Stadium", capacity: 33500, reputation: 6 },
-  { name: "Alanyaspor", country: "TUR", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Bah\xE7e\u015Fehir Okullar\u0131 Stadium", capacity: 10842, reputation: 5 },
-  { name: "Gaziantep FK", country: "TUR", tier: 3, colors: ["#e41919", "#FFFFFF", "#000000"], stadium: "Gaziantep Atat\xFCrk Stadium", capacity: 42222, reputation: 6 },
-  { name: "Kocaelispor", country: "TUR", tier: 3, colors: ["#00590c", "#000000", "#ffffff"], stadium: "\u0130zmit Stadium", capacity: 34400, reputation: 5 },
-  // Ukraina (UKR)
-  { name: "FC Oleksandriya", country: "UKR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "CSC Nika Stadium", capacity: 5682, reputation: 6 },
-  { name: "FC Veres Rivne", country: "UKR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Avanhard Stadium", capacity: 7200, reputation: 5 },
-  { name: "FC Inhulets Petrove", country: "UKR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Inhulets Stadium", capacity: 1720, reputation: 5 },
-  // Walia (WAL)
-  { name: "Connah's Quay Nomads", country: "WAL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Deeside Stadium", capacity: 1500, reputation: 5 },
-  { name: "Bala Town FC", country: "WAL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Maes Tegid", capacity: 3e3, reputation: 4 },
-  { name: "Caernarfon Town", country: "WAL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "The Oval", capacity: 3e3, reputation: 4 },
-  // Rosja (RUS)
-  { name: "FK Ural Jekaterynburg", country: "RUS", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Central Stadium", capacity: 35061, reputation: 6 },
-  { name: "FK Orenburg", country: "RUS", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gazovik Stadium", capacity: 7500, reputation: 5 },
-  { name: "FK Akhmat Grozny", country: "RUS", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Akhmat-Arena", capacity: 30597, reputation: 6 },
-  // Włochy (ITA) – tier 3, reputacja 8–11 (mid/niższe Serie A lub spadkowicze / solidni z Serie B)
-  { name: "Torino FC", country: "ITA", tier: 3, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Stadio Olimpico Grande Torino", capacity: 27994, reputation: 10 },
-  { name: "Genoa CFC", country: "ITA", tier: 3, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Stadio Luigi Ferraris", capacity: 36585, reputation: 9 },
-  { name: "Palermo", country: "ITA", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadio Renzo Barbera", capacity: 36e3, reputation: 8 },
-  // Węgry (HUN) – tier 4
-  { name: "MTK Budapest", country: "HUN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Hidegkuti N\xE1ndor Stadion", capacity: 5322, reputation: 6 },
-  { name: "Di\xF3sgy\u0151ri VTK", country: "HUN", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Di\xF3sgy\u0151ri Stadion", capacity: 9680, reputation: 5 },
-  { name: "Kecskem\xE9ti TE", country: "HUN", tier: 3, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Sz\xE9kt\xF3i Stadion", capacity: 6300, reputation: 5 },
-  // Anglia (ENG) – najniżej sklasyfikowane w Premier League w danym sezonie
-  { name: "Ipswich Town", country: "ENG", tier: 3, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Portman Road", capacity: 30311, reputation: 10 },
-  { name: "Southampton FC", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "St Mary's Stadium", capacity: 32384, reputation: 10 },
-  { name: "Leicester City", country: "ENG", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "King Power Stadium", capacity: 32312, reputation: 11 },
-  { name: "Leeds United", country: "ENG", tier: 3, colors: ["#FFFFFF", "#1E90FF", "#FFD700"], stadium: "Elland Road", capacity: 53e3, reputation: 10 },
-  { name: "West Ham United", country: "ENG", tier: 3, colors: ["#7A263A", "#FFFFFF", "#000000"], stadium: "London Stadium", capacity: 6e4, reputation: 10 },
-  { name: "Fulham", country: "ENG", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Craven Cottage", capacity: 25700, reputation: 9 },
-  { name: "Sunderland AFC", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadium of Light", capacity: 49e3, reputation: 9 },
-  { name: "Bournemouth AFC", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Vitality Stadium", capacity: 11e3, reputation: 8 },
-  { name: "QPR", country: "ENG", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Loftus Road", capacity: 18800, reputation: 8 },
-  { name: "Hull City", country: "ENG", tier: 3, colors: ["#ff8800", "#FFFFFF", "#000000"], stadium: "KCOM Stadium", capacity: 25e3, reputation: 8 },
-  // Belgia (BEL) – niższe miejsce w Jupiler Pro League
-  { name: "KVC Westerlo", country: "BEL", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Het Kuipje", capacity: 8035, reputation: 6 },
-  { name: "KV Mechelen", country: "BEL", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "AFAS Stadion", capacity: 16700, reputation: 7 },
-  { name: "Sint-Truidense VV", country: "BEL", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stayen", capacity: 14500, reputation: 7 },
-  // Czarnogóra (MNE) – najwyższa liga (1. CFL)
-  { name: "FK Jezero Plav", country: "MNE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion pod Golubinjem", capacity: 5e3, reputation: 5 },
-  { name: "FK Arsenal Tivat", country: "MNE", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadion u Parku", capacity: 2e3, reputation: 5 },
-  { name: "OFK Petrovac", country: "MNE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion pod Malim brdom", capacity: 1630, reputation: 4 },
-  // Francja (FRA) – niższe miejsce w Ligue 1 / Ligue 2 spadkowicze
-  { name: "Le Havre AC", country: "FRA", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stade Oceane", capacity: 25178, reputation: 7 },
-  { name: "Stade de Reims", country: "FRA", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stade Auguste-Delaune", capacity: 21684, reputation: 7 },
-  { name: "FC Lorient", country: "FRA", tier: 3, colors: ["#FF6600", "#000000", "#FFFFFF"], stadium: "Stade du Moustoir", capacity: 18970, reputation: 7 },
-  { name: "Strasbourg", country: "FRA", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stade de la Meinau", capacity: 29e3, reputation: 8 },
-  { name: "Stade Rennais", country: "FRA", tier: 3, colors: ["#FF0000", "#000000", "#ffffff"], stadium: "Stade de la Mosqu\xE9e", capacity: 38512, reputation: 8 },
-  // Grecja (GRE) – niższe miejsce w Super League
-  { name: "Panetolikos GFS", country: "GRE", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Panetolikos Stadium", capacity: 7321, reputation: 6 },
-  { name: "Panserraikos FC", country: "GRE", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Serres Municipal Stadium", capacity: 9500, reputation: 7 },
-  { name: "Kallithea FC", country: "GRE", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Grigorios Lambrakis Stadium", capacity: 4e3, reputation: 7 },
-  // Hiszpania (ESP) – niższe miejsce w La Liga
-  { name: "CD Legan\xE9s", country: "ESP", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Estadio Municipal de Butarque", capacity: 12450, reputation: 7 },
-  { name: "Real Valladolid", country: "ESP", tier: 3, colors: ["#FFFFFF", "#000000", "#FF6600"], stadium: "Estadio Jos\xE9 Zorrilla", capacity: 26512, reputation: 8 },
-  { name: "UD Las Palmas", country: "ESP", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Estadio Gran Canaria", capacity: 32200, reputation: 8 },
-  { name: "Espanyol FC", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Estadio de Cornell\xE0-El Prat", capacity: 4e4, reputation: 9 },
-  { name: "Rayo Vallecano", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Campo de F\xFAtbol de Vallecas", capacity: 14950, reputation: 8 },
-  { name: "Mallorca FC", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Visit Mallorca Stadium", capacity: 23e3, reputation: 8 },
-  // Holandia (NED) – niższe miejsce w Eredivisie
-  { name: "FC Volendam", country: "NED", tier: 3, colors: ["#FF6600", "#FFFFFF", "#000000"], stadium: "Kras Stadion", capacity: 7384, reputation: 6 },
-  { name: "Almere City FC", country: "NED", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Yanmar Stadion", capacity: 4501, reputation: 5 },
-  { name: "RKC Waalwijk", country: "NED", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Mandemakers Stadion", capacity: 7500, reputation: 5 },
-  // Słowenia (SVN)
-  { name: "NK Bravo", country: "SVN", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "\u0160tadion Sto\u017Eice", capacity: 16152, reputation: 6 },
-  { name: "NK Celje", country: "SVN", tier: 3, colors: ["#0057B8", "#FFD200", "#0057B8"], stadium: "Stadion Z'de\u017Eele", capacity: 13059, reputation: 6 },
-  { name: "NK Dom\u017Eale", country: "SVN", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "\u0160portni park Dom\u017Eale", capacity: 2341, reputation: 5 },
-  // Serbia (SRB)
-  { name: "FK \u010Cukari\u010Dki", country: "SRB", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Stadion na Banovom brdu", capacity: 4070, reputation: 6 },
-  { name: "FK Radni\u010Dki 1923", country: "SRB", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "\u010Cika Da\u010Da Stadium", capacity: 15100, reputation: 6 },
-  { name: "FK TSC Ba\u010Dka Topola", country: "SRB", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "TSC Arena", capacity: 4500, reputation: 6 }
-];
-var generateCONFClubId = (name) => {
-  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-  return `EU_CONF_${slug}`;
-};
-
-// resources/static_db/clubs/SouthamericanTeams.tsx
-var CLUBS_SOUTH_AMERICA = [
-  // Argentyna
-  {
-    name: "River Plate",
-    country: "ARG",
-    tier: 1,
-    colors: ["#FFFFFF", "#E30613", "#000000"],
-    stadium: "Estadio M\xE1s Monumental",
-    capacity: 85018,
-    reputation: 16
-  },
-  {
-    name: "Boca Juniors",
-    country: "ARG",
-    tier: 1,
-    colors: ["#003087", "#F5C518", "#FFFFFF"],
-    stadium: "La Bombonera",
-    capacity: 57200,
-    reputation: 15
-  },
-  {
-    name: "Racing Club",
-    country: "ARG",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF", "#E30613"],
-    stadium: "Estadio Presidente Per\xF3n",
-    capacity: 55e3,
-    reputation: 13
-  },
-  {
-    name: "Independiente",
-    country: "ARG",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Estadio Libertadores de Am\xE9rica",
-    capacity: 42e3,
-    reputation: 15
-  },
-  {
-    name: "San Lorenzo",
-    country: "ARG",
-    tier: 2,
-    colors: ["#E30613", "#000000", "#FFFFFF"],
-    stadium: "Estadio Pedro Bidegain",
-    capacity: 47e3,
-    reputation: 14
-  },
-  // Brazylia
-  {
-    name: "Flamengo",
-    country: "BRA",
-    tier: 1,
-    colors: ["#E30613", "#000000", "#F5C518"],
-    stadium: "Maracan\xE3",
-    capacity: 78838,
-    reputation: 16
-  },
-  {
-    name: "Palmeiras",
-    country: "BRA",
-    tier: 1,
-    colors: ["#006633", "#FFFFFF"],
-    stadium: "Allianz Parque",
-    capacity: 43713,
-    reputation: 15
-  },
-  {
-    name: "S\xE3o Paulo",
-    country: "BRA",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF", "#000000"],
-    stadium: "Morumbi",
-    capacity: 66795,
-    reputation: 15
-  },
-  {
-    name: "Fluminense",
-    country: "BRA",
-    tier: 2,
-    colors: ["#E30613", "#008000", "#FFFFFF"],
-    stadium: "Maracan\xE3",
-    capacity: 78838,
-    reputation: 16
-  },
-  {
-    name: "Botafogo",
-    country: "BRA",
-    tier: 2,
-    colors: ["#000000", "#FFFFFF"],
-    stadium: "Nilton Santos",
-    capacity: 46e3,
-    reputation: 15
-  },
-  {
-    name: "Atl\xE9tico Mineiro",
-    country: "BRA",
-    tier: 2,
-    colors: ["#000000", "#FFFFFF", "#E30613"],
-    stadium: "Arena MRV",
-    capacity: 47e3,
-    reputation: 15
-  },
-  // Urugwaj
-  {
-    name: "Pe\xF1arol",
-    country: "URU",
-    tier: 2,
-    colors: ["#000000", "#F5C518"],
-    stadium: "Estadio Campe\xF3n del Siglo",
-    capacity: 42e3,
-    reputation: 15
-  },
-  {
-    name: "Nacional",
-    country: "URU",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Estadio Gran Parque Central",
-    capacity: 34e3,
-    reputation: 14
-  },
-  // Kolumbia
-  {
-    name: "Atl\xE9tico Nacional",
-    country: "COL",
-    tier: 2,
-    colors: ["#008000", "#FFFFFF"],
-    stadium: "Atanasio Girardot",
-    capacity: 40500,
-    reputation: 13
-  },
-  {
-    name: "Millonarios",
-    country: "COL",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "El Camp\xEDn",
-    capacity: 36e3,
-    reputation: 13
-  },
-  // Ekwador
-  {
-    name: "LDU Quito",
-    country: "ECU",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF", "#E30613"],
-    stadium: "Rodrigo Paz Delgado",
-    capacity: 41083,
-    reputation: 13
-  },
-  {
-    name: "Barcelona SC",
-    country: "ECU",
-    tier: 2,
-    colors: ["#F5C518", "#003087"],
-    stadium: "Monumental Banco Pichincha",
-    capacity: 57e3,
-    reputation: 12
-  },
-  {
-    name: "Independiente del Valle",
-    country: "ECU",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Banco Guayaquil",
-    capacity: 12e3,
-    reputation: 13
-  },
-  // Pozostałe kraje
-  {
-    name: "Olimpia",
-    country: "PAR",
-    tier: 2,
-    colors: ["#000000", "#FFFFFF"],
-    stadium: "Defensores del Chaco",
-    capacity: 42e3,
-    reputation: 11
-  },
-  {
-    name: "Colo-Colo",
-    country: "CHI",
-    tier: 2,
-    colors: ["#000000", "#FFFFFF"],
-    stadium: "Monumental David Arellano",
-    capacity: 47347,
-    reputation: 12
-  },
-  {
-    name: "Universitario",
-    country: "PER",
-    tier: 4,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Estadio Monumental",
-    capacity: 80093,
-    reputation: 10
-  },
-  {
-    name: "Bol\xEDvar",
-    country: "BOL",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "Hernando Siles",
-    capacity: 41e3,
-    reputation: 8
-  }
-];
-var generateSAClubId = (name) => "SA_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-
-// resources/static_db/clubs/asian_teams.tsx
-var CLUBS_ASIAN = [
-  // === Arabia Saudyjska – absolutna czołówka (reputacja do 10) ===
-  { name: "Neom SC", country: "KSA", tier: 2, colors: ["#0022ff", "#FFFFFF", "#0022ff"], stadium: "Neom Stadium", capacity: 22e3, reputation: 10 },
-  {
-    name: "Al-Hilal",
-    country: "KSA",
-    tier: 2,
-    colors: ["#0033A0", "#FFFFFF"],
-    stadium: "Kingdom Arena",
-    capacity: 26e3,
-    reputation: 10
-  },
-  {
-    name: "Al-Nassr",
-    country: "KSA",
-    tier: 2,
-    colors: ["#1E3A8A", "#FACC15"],
-    stadium: "Al-Awwal Park",
-    capacity: 25e3,
-    reputation: 10
-  },
-  {
-    name: "Al-Ahli",
-    country: "KSA",
-    tier: 2,
-    colors: ["#1E3A8A", "#FFFFFF"],
-    stadium: "King Abdullah Sports City",
-    capacity: 62345,
-    reputation: 9
-  },
-  {
-    name: "Al-Ittihad",
-    country: "KSA",
-    tier: 2,
-    colors: ["#FFD700", "#000000"],
-    stadium: "King Abdullah Sports City",
-    capacity: 62345,
-    reputation: 9
-  },
-  // === ZEA ===
-  {
-    name: "Al Ain",
-    country: "UAE",
-    tier: 2,
-    colors: ["#003087", "#F4C300"],
-    stadium: "Hazza bin Zayed Stadium",
-    capacity: 25100,
-    reputation: 9
-  },
-  {
-    name: "Shabab Al Ahli",
-    country: "UAE",
-    tier: 2,
-    colors: ["#C8102E", "#FFFFFF"],
-    stadium: "Rashid Stadium",
-    capacity: 12e3,
-    reputation: 8
-  },
-  {
-    name: "Al-Wahda",
-    country: "UAE",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Al Nahyan Stadium",
-    capacity: 12e3,
-    reputation: 8
-  },
-  // === Katar ===
-  {
-    name: "Al Sadd",
-    country: "QAT",
-    tier: 2,
-    colors: ["#FFFFFF", "#000000"],
-    stadium: "Jassim Bin Hamad Stadium",
-    capacity: 15e3,
-    reputation: 9
-  },
-  {
-    name: "Al-Duhail",
-    country: "QAT",
-    tier: 2,
-    colors: ["#C8102E", "#FFFFFF"],
-    stadium: "Abdullah bin Khalifa Stadium",
-    capacity: 10221,
-    reputation: 8
-  },
-  // === Japonia ===
-  {
-    name: "Urawa Red Diamonds",
-    country: "JPN",
-    tier: 2,
-    colors: ["#E30613", "#000000"],
-    stadium: "Saitama Stadium 2002",
-    capacity: 63700,
-    reputation: 9
-  },
-  {
-    name: "Vissel Kobe",
-    country: "JPN",
-    tier: 2,
-    colors: ["#E30613", "#000000"],
-    stadium: "Noevir Stadium Kobe",
-    capacity: 30132,
-    reputation: 9
-  },
-  {
-    name: "Kashima Antlers",
-    country: "JPN",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Kashima Soccer Stadium",
-    capacity: 40728,
-    reputation: 9
-  },
-  {
-    name: "Yokohama F. Marinos",
-    country: "JPN",
-    tier: 2,
-    colors: ["#00AEEF", "#FFFFFF"],
-    stadium: "Nissan Stadium",
-    capacity: 72327,
-    reputation: 8
-  },
-  {
-    name: "Sanfrecce Hiroshima",
-    country: "JPN",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Edion Stadium Hiroshima",
-    capacity: 36e3,
-    reputation: 8
-  },
-  // === Korea Południowa ===
-  {
-    name: "Jeonbuk Hyundai Motors",
-    country: "KOR",
-    tier: 2,
-    colors: ["#00AEEF", "#FFFFFF"],
-    stadium: "Jeonju World Cup Stadium",
-    capacity: 42477,
-    reputation: 9
-  },
-  {
-    name: "Ulsan HD",
-    country: "KOR",
-    tier: 2,
-    colors: ["#E30613", "#000000"],
-    stadium: "Ulsan Munsu Football Stadium",
-    capacity: 44102,
-    reputation: 9
-  },
-  // === Iran ===
-  {
-    name: "Persepolis",
-    country: "IRN",
-    tier: 2,
-    colors: ["#C8102E", "#FFFFFF"],
-    stadium: "Azadi Stadium",
-    capacity: 78450,
-    reputation: 9
-  },
-  {
-    name: "Esteghlal",
-    country: "IRN",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "Azadi Stadium",
-    capacity: 78450,
-    reputation: 8
-  },
-  {
-    name: "Tractor",
-    country: "IRN",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Yadegar-e Emam Stadium",
-    capacity: 66e3,
-    reputation: 8
-  },
-  // === Chiny ===
-  {
-    name: "Shanghai Port",
-    country: "CHN",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Shanghai Stadium",
-    capacity: 72e3,
-    reputation: 8
-  },
-  {
-    name: "Shanghai Shenhua",
-    country: "CHN",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "Shanghai Stadium",
-    capacity: 72e3,
-    reputation: 8
-  },
-  // === Tajlandia ===
-  {
-    name: "Buriram United",
-    country: "THA",
-    tier: 3,
-    colors: ["#E30613", "#000000"],
-    stadium: "Chang Arena",
-    capacity: 32600,
-    reputation: 8
-  },
-  {
-    name: "Bangkok United",
-    country: "THA",
-    tier: 3,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Thammasat Stadium",
-    capacity: 25e3,
-    reputation: 7
-  },
-  // === Malezja ===
-  {
-    name: "Johor Darul Ta'zim",
-    country: "MAS",
-    tier: 3,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Sultan Ibrahim Stadium",
-    capacity: 4e4,
-    reputation: 8
-  },
-  // === Australia ===
-  {
-    name: "Melbourne City",
-    country: "AUS",
-    tier: 3,
-    colors: ["#00AEEF", "#FFFFFF"],
-    stadium: "AAMI Park",
-    capacity: 30050,
-    reputation: 7
-  }
-];
-var generateAsianClubId = (name) => "ASIA_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-
-// resources/static_db/clubs/african_teams.tsx
-var CLUBS_AFRICAN = [
-  // === Egipt – najsilniejsza reprezentacja ===
-  {
-    name: "Al Ahly",
-    country: "EGY",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Cairo International Stadium",
-    capacity: 75e3,
-    reputation: 10
-  },
-  {
-    name: "Pyramids FC",
-    country: "EGY",
-    tier: 2,
-    colors: ["#E30613", "#000000"],
-    stadium: "30 June Stadium",
-    capacity: 75e3,
-    reputation: 10
-  },
-  {
-    name: "Zamalek",
-    country: "EGY",
-    tier: 1,
-    colors: ["#FFFFFF", "#E30613"],
-    stadium: "Cairo International Stadium",
-    capacity: 75e3,
-    reputation: 9
-  },
-  // === Południowa Afryka ===
-  {
-    name: "Mamelodi Sundowns",
-    country: "RSA",
-    tier: 2,
-    colors: ["#003087", "#FFD700"],
-    stadium: "Loftus Versfeld Stadium",
-    capacity: 51900,
-    reputation: 10
-  },
-  {
-    name: "Orlando Pirates",
-    country: "RSA",
-    tier: 2,
-    colors: ["#000000", "#E30613"],
-    stadium: "Orlando Stadium",
-    capacity: 4e4,
-    reputation: 9
-  },
-  {
-    name: "Kaizer Chiefs",
-    country: "RSA",
-    tier: 2,
-    colors: ["#000000", "#FFD700"],
-    stadium: "FNB Stadium (Soccer City)",
-    capacity: 94736,
-    reputation: 9
-  },
-  // === Maroko ===
-  {
-    name: "Wydad AC",
-    country: "MAR",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Stade Mohammed V",
-    capacity: 68e3,
-    reputation: 9
-  },
-  {
-    name: "Raja Club Athletic",
-    country: "MAR",
-    tier: 2,
-    colors: ["#009900", "#FFFFFF"],
-    stadium: "Stade Mohammed V",
-    capacity: 68e3,
-    reputation: 9
-  },
-  {
-    name: "RS Berkane",
-    country: "MAR",
-    tier: 2,
-    colors: ["#E30613", "#FFD700"],
-    stadium: "Stade Municipal de Berkane",
-    capacity: 15e3,
-    reputation: 8
-  },
-  {
-    name: "AS FAR Rabat",
-    country: "MAR",
-    tier: 2,
-    colors: ["#003087", "#E30613"],
-    stadium: "Prince Moulay Abdellah Stadium",
-    capacity: 52e3,
-    reputation: 8
-  },
-  // === Tunezja ===
-  {
-    name: "Esp\xE9rance de Tunis",
-    country: "TUN",
-    tier: 2,
-    colors: ["#E30613", "#FFD700"],
-    stadium: "Stade Olympique de Rad\xE8s",
-    capacity: 65e3,
-    reputation: 9
-  },
-  {
-    name: "Club Africain",
-    country: "TUN",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Stade Olympique de Rad\xE8s",
-    capacity: 65e3,
-    reputation: 8
-  },
-  // === Algieria ===
-  {
-    name: "USM Alger",
-    country: "ALG",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Stade du 5 Juillet 1962",
-    capacity: 64e3,
-    reputation: 8
-  },
-  {
-    name: "CR Belouizdad",
-    country: "ALG",
-    tier: 2,
-    colors: ["#E30613", "#000000"],
-    stadium: "Stade du 20 Ao\xFBt 1955",
-    capacity: 2e4,
-    reputation: 8
-  },
-  {
-    name: "MC Alger",
-    country: "ALG",
-    tier: 2,
-    colors: ["#008000", "#FFFFFF"],
-    stadium: "Stade du 5 Juillet 1962",
-    capacity: 64e3,
-    reputation: 8
-  },
-  // === Inne mocne kluby z Afryki (regularnie w CAF) ===
-  {
-    name: "Simba SC",
-    country: "TZA",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Benjamin Mkapa Stadium",
-    capacity: 6e4,
-    reputation: 8
-  },
-  {
-    name: "Young Africans (Yanga)",
-    country: "TZA",
-    tier: 2,
-    colors: ["#00AEEF", "#FFD700"],
-    stadium: "Benjamin Mkapa Stadium",
-    capacity: 6e4,
-    reputation: 8
-  },
-  {
-    name: "TP Mazembe",
-    country: "COD",
-    tier: 2,
-    colors: ["#000000", "#FFFFFF"],
-    stadium: "Stade TP Mazembe",
-    capacity: 18e3,
-    reputation: 8
-  }
-];
-var generateAfricanClubId = (name) => "AFR_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-
-// resources/static_db/clubs/northAME_teams.tsx
-var CLUBS_NORTH_AMERICA = [
-  // === Meksyk - Liga MX (najsilniejsza liga w CONCACAF) ===
-  {
-    name: "Club Am\xE9rica",
-    country: "MEX",
-    tier: 2,
-    colors: ["#FFCC00", "#000000"],
-    stadium: "Estadio Azteca",
-    capacity: 87428,
-    reputation: 10
-  },
-  {
-    name: "Cruz Azul",
-    country: "MEX",
-    tier: 2,
-    colors: ["#004B9F", "#FFFFFF"],
-    stadium: "Estadio Azteca",
-    capacity: 87428,
-    reputation: 10
-  },
-  {
-    name: "Tigres UANL",
-    country: "MEX",
-    tier: 2,
-    colors: ["#E30613", "#FFD700"],
-    stadium: "Estadio Universitario",
-    capacity: 41890,
-    reputation: 10
-  },
-  {
-    name: "CF Monterrey",
-    country: "MEX",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "Estadio BBVA",
-    capacity: 53500,
-    reputation: 9
-  },
-  {
-    name: "Deportivo Toluca",
-    country: "MEX",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Estadio Nemesio D\xEDez",
-    capacity: 3e4,
-    reputation: 9
-  },
-  {
-    name: "Chivas Guadalajara",
-    country: "MEX",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "Estadio Akron",
-    capacity: 49850,
-    reputation: 9
-  },
-  {
-    name: "Pumas UNAM",
-    country: "MEX",
-    tier: 2,
-    colors: ["#003087", "#FFD700"],
-    stadium: "Estadio Ol\xEDmpico Universitario",
-    capacity: 72e3,
-    reputation: 9
-  },
-  {
-    name: "Pachuca",
-    country: "MEX",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "Estadio Hidalgo",
-    capacity: 3e4,
-    reputation: 8
-  },
-  // === USA - MLS (główna siła) ===
-  {
-    name: "Inter Miami CF",
-    country: "USA",
-    tier: 2,
-    colors: ["#FF6F00", "#000000"],
-    stadium: "Chase Stadium",
-    capacity: 21550,
-    reputation: 11
-  },
-  {
-    name: "LAFC",
-    country: "USA",
-    tier: 2,
-    colors: ["#000000", "#E30613"],
-    stadium: "BMO Stadium",
-    capacity: 22e3,
-    reputation: 9
-  },
-  {
-    name: "LA Galaxy",
-    country: "USA",
-    tier: 2,
-    colors: ["#003087", "#FFD700"],
-    stadium: "Dignity Health Sports Park",
-    capacity: 27e3,
-    reputation: 11
-  },
-  {
-    name: "Seattle Sounders FC",
-    country: "USA",
-    tier: 2,
-    colors: ["#00AEEF", "#003087"],
-    stadium: "Lumen Field",
-    capacity: 68740,
-    reputation: 8
-  },
-  {
-    name: "FC Cincinnati",
-    country: "USA",
-    tier: 2,
-    colors: ["#E30613", "#003087"],
-    stadium: "TQL Stadium",
-    capacity: 26e3,
-    reputation: 8
-  },
-  {
-    name: "Columbus Crew",
-    country: "USA",
-    tier: 2,
-    colors: ["#FFD700", "#000000"],
-    stadium: "Lower.com Field",
-    capacity: 20500,
-    reputation: 8
-  },
-  {
-    name: "Nashville SC",
-    country: "USA",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "GEODIS Park",
-    capacity: 3e4,
-    reputation: 8
-  },
-  {
-    name: "New York City FC",
-    country: "USA",
-    tier: 2,
-    colors: ["#00AEEF", "#FFFFFF"],
-    stadium: "Yankee Stadium",
-    capacity: 47300,
-    reputation: 7
-  },
-  {
-    name: "Philadelphia Union",
-    country: "USA",
-    tier: 3,
-    colors: ["#003087", "#E30613"],
-    stadium: "Subaru Park",
-    capacity: 18500,
-    reputation: 7
-  },
-  {
-    name: "Orlando City SC",
-    country: "USA",
-    tier: 3,
-    colors: ["#003087", "#E30613"],
-    stadium: "Inter&Co Stadium",
-    capacity: 25500,
-    reputation: 7
-  },
-  // === Kanada - MLS + CPL (tak, Kanada ma dobre drużyny!) ===
-  {
-    name: "Vancouver Whitecaps FC",
-    country: "CAN",
-    tier: 2,
-    colors: ["#003087", "#FFFFFF"],
-    stadium: "BC Place",
-    capacity: 22120,
-    reputation: 8
-  },
-  {
-    name: "Toronto FC",
-    country: "CAN",
-    tier: 2,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "BMO Field",
-    capacity: 28500,
-    reputation: 8
-  },
-  {
-    name: "CF Montr\xE9al",
-    country: "CAN",
-    tier: 3,
-    colors: ["#003087", "#E30613"],
-    stadium: "Stade Saputo",
-    capacity: 19619,
-    reputation: 7
-  },
-  // Canadian Premier League (CPL) - popularne i utytułowane drużyny
-  {
-    name: "Forge FC",
-    country: "CAN",
-    tier: 3,
-    colors: ["#E30613", "#000000"],
-    stadium: "Tim Hortons Field",
-    capacity: 23e3,
-    reputation: 7
-  },
-  {
-    name: "Cavalry FC",
-    country: "CAN",
-    tier: 3,
-    colors: ["#003087", "#FFD700"],
-    stadium: "ATCO Field",
-    capacity: 6e3,
-    reputation: 7
-  },
-  {
-    name: "Chicago Fire FC",
-    country: "USA",
-    tier: 3,
-    colors: ["#E30613", "#003087"],
-    stadium: "Soldier Field",
-    capacity: 61500,
-    reputation: 7
-  },
-  {
-    name: "Atl\xE9tico Ottawa",
-    country: "CAN",
-    tier: 3,
-    colors: ["#E30613", "#FFFFFF"],
-    stadium: "TD Place Stadium",
-    capacity: 24e3,
-    reputation: 6
-  }
-];
-var generateNorthAmericaClubId = (name) => "NA_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-
-// constants.ts
-var BOARD_LEVELS = ["bardzo_niska", "niska", "przecietna", "wysoka", "bardzo_wysoka"];
-var generateRandomBoard = () => ({
-  hojnosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
-  ambicja: BOARD_LEVELS[Math.floor(Math.random() * 5)],
-  cierpliwosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
-  chciwosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
-  oczekiwania: BOARD_LEVELS[Math.floor(Math.random() * 5)],
-  kompetencja: BOARD_LEVELS[Math.floor(Math.random() * 5)]
-});
-var REGION_NATIONALITY_LABEL = {
-  ["POLAND" /* POLAND */]: "Polska",
-  ["GERMANY" /* GERMANY */]: "Niemcy",
-  ["SPAIN" /* SPAIN */]: "Hiszpania",
-  ["ENGLAND" /* ENGLAND */]: "Anglia",
-  ["ITALY" /* ITALY */]: "W\u0142ochy",
-  ["FRANCE" /* FRANCE */]: "Francja",
-  ["BALKANS" /* BALKANS */]: "Ba\u0142kany",
-  ["CZ_SK" /* CZ_SK */]: "Czechy/S\u0142owacja",
-  ["SSA" /* SSA */]: "Afryka Subsaharyjska",
-  ["IBERIA" /* IBERIA */]: "P\xF3\u0142wysep Iberyjski",
-  ["NORTH_AMERICA" /* NORTH_AMERICA */]: "Ameryka P\xF3\u0142nocna",
-  ["MEXICO" /* MEXICO */]: "Meksyk",
-  ["OCEANIA" /* OCEANIA */]: "Oceania",
-  ["SWEDEN" /* SWEDEN */]: "Szwecja",
-  ["SCANDINAVIA" /* SCANDINAVIA */]: "Skandynawia",
-  ["EX_USSR" /* EX_USSR */]: "Europa Wschodnia",
-  ["JAPAN" /* JAPAN */]: "Japonia",
-  ["KOREA" /* KOREA */]: "Korea",
-  ["ARGENTINA" /* ARGENTINA */]: "Argentyna",
-  ["BRAZIL" /* BRAZIL */]: "Brazylia",
-  ["TURKEY" /* TURKEY */]: "Turcja",
-  ["ARABIA" /* ARABIA */]: "Arabia",
-  ["FINLAND" /* FINLAND */]: "Finlandia",
-  ["GEORGIA" /* GEORGIA */]: "Gruzja",
-  ["ARMENIA" /* ARMENIA */]: "Armenia",
-  ["ALBANIA" /* ALBANIA */]: "Albania",
-  ["ROMANIA" /* ROMANIA */]: "Rumunia",
-  ["BALTIC" /* BALTIC */]: "Kraje Ba\u0142tyckie",
-  ["BENELUX" /* BENELUX */]: "Benelux",
-  ["HUNGARIAN" /* HUNGARIAN */]: "W\u0119gry",
-  ["MALTESE" /* MALTESE */]: "Malta",
-  ["ISRAELI" /* ISRAELI */]: "Izrael",
-  ["GREEK" /* GREEK */]: "Grecja",
-  ["AZERBAIJANI" /* AZERBAIJANI */]: "Azerbejd\u017Can",
-  ["KAZAKH" /* KAZAKH */]: "Kazachstan",
-  ["SOUTH_AMERICAN" /* SOUTH_AMERICAN */]: "Ameryka Po\u0142udniowa"
-};
-var generateNTId = (name) => `NT_${name.toUpperCase().replace(/\s+/g, "_")}`;
-var processNT = (data) => data.map((t) => ({
-  ...t,
-  id: generateNTId(t.name),
-  colorsHex: t.colors,
-  stadiumName: t.stadium,
-  stadiumCapacity: t.capacity
-}));
-var STATIC_NATIONAL_TEAMS = [
-  ...processNT(NATIONAL_TEAMS_EUROPE),
-  ...processNT(NATIONAL_TEAMS_AFRICA),
-  ...processNT(NATIONAL_TEAMS_CONCACAF),
-  ...processNT(NATIONAL_TEAMS_CONMEBOL),
-  ...processNT(NATIONAL_TEAMS_OFC),
-  ...processNT(NATIONAL_TEAMS_AFC)
-];
-var STATIC_LEAGUES = [
-  { id: "L_PL_1", name: "Ekstraklasa", level: "TIER_1" /* TIER_1 */, teamIds: [] },
-  { id: "L_PL_2", name: "1. Liga", level: "TIER_2" /* TIER_2 */, teamIds: [] },
-  { id: "L_PL_3", name: "2. Liga", level: "TIER_3" /* TIER_3 */, teamIds: [] },
-  { id: "L_PL_4", name: "Liga Regionalna", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
-  { id: "L_CL", name: "UEFA Champions League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] },
-  { id: "L_EL", name: "UEFA Europa League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] },
-  { id: "L_CONF", name: "UEFA Conference League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] }
-];
-var generatePlaceholderClub = (leagueId, index, tier) => {
-  const id = `PL_TIER${tier}_PLACEHOLDER_${String(index).padStart(3, "0")}`;
-  const budget = FinanceService.calculateInitialBudget(tier, 1);
-  return {
-    id,
-    name: `Klub Placeholder ${index}`,
-    shortName: `P${index}`,
-    leagueId,
-    tier,
-    colorsHex: ["#808080", "#FFFFFF", "#000000"],
-    budget,
-    stadiumName: "Stadion Miejski TBD",
-    stadiumCapacity: 1e3,
-    reputation: 1,
-    isDefaultActive: true,
-    colorPrimary: "#808080",
-    colorSecondary: "#FFFFFF",
-    rosterIds: [],
-    stats: {
-      points: 0,
-      wins: 0,
-      draws: 0,
-      losses: 0,
-      goalsFor: 0,
-      goalsAgainst: 0,
-      goalDifference: 0,
-      played: 0,
-      form: []
-    },
-    boardStrictness: Math.floor(Math.random() * 10) + 1,
-    transferBudget: FinanceService.calculateInitialTransferBudget(budget, 1),
-    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, 1),
-    boardBudgetRequestsThisSeason: 0,
-    signingBonusPool: 0,
-    board: generateRandomBoard(),
-    boardConfidence: 75
-  };
-};
-var loadClubsForTier = (tier, leagueId, limit) => {
-  const rawClubs = RAW_PL_CLUBS.filter((c) => c.tier === tier);
-  const clubs = [];
-  rawClubs.forEach((raw, index) => {
-    const isActive = index < limit;
-    const assignedLeagueId = isActive ? leagueId : "NONE";
-    const budget = FinanceService.calculateInitialBudget(tier, raw.reputation);
-    const club = {
-      id: generateClubId(raw.name),
-      name: raw.name,
-      shortName: raw.name.substring(0, 3).toUpperCase(),
-      leagueId: assignedLeagueId,
-      tier: raw.tier,
-      colorsHex: raw.colors,
-      stadiumName: raw.stadium,
-      stadiumCapacity: raw.capacity,
-      reputation: raw.reputation,
-      isDefaultActive: isActive,
-      budget,
-      transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
-      reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
-      boardBudgetRequestsThisSeason: 0,
-      boardStrictness: Math.floor(Math.random() * 10) + 1,
-      signingBonusPool: FinanceService.calculateInitialSigningPool(
-        budget,
-        raw.reputation
-      ),
-      logoFile: raw.logoFile,
-      stadiumSeatColors: raw.stadiumSeatColors,
-      board: generateRandomBoard(),
-      boardConfidence: 75,
-      colorPrimary: raw.colors[0],
-      colorSecondary: raw.colors[1] || "#FFFFFF",
-      rosterIds: [],
-      stats: {
-        points: 0,
-        wins: 0,
-        draws: 0,
-        losses: 0,
-        goalsFor: 0,
-        goalsAgainst: 0,
-        goalDifference: 0,
-        played: 0,
-        form: []
-      }
-    };
-    clubs.push(club);
-  });
-  if (tier < 4) {
-    const activeCount = clubs.filter((c) => c.isDefaultActive).length;
-    if (activeCount < limit) {
-      const missing = limit - activeCount;
-      for (let i = 0; i < missing; i++) {
-        clubs.push(generatePlaceholderClub(leagueId, i + 1, tier));
-      }
-    }
-  }
-  return clubs;
-};
-var clubsTier1 = loadClubsForTier(1, "L_PL_1", 18);
-var clubsTier2 = loadClubsForTier(2, "L_PL_2", 18);
-var clubsTier3 = loadClubsForTier(3, "L_PL_3", 18);
-var clubsTier4 = loadClubsForTier(4, "L_PL_4", 100);
-var STATIC_CLUBS = [
-  ...clubsTier1,
-  ...clubsTier2,
-  ...clubsTier3,
-  ...clubsTier4
-];
-var STATIC_CL_CLUBS = RAW_CHAMPIONS_LEAGUE_CLUBS.map((raw) => {
-  const budget = FinanceService.calculateEuropeanInitialBudget(raw.tier, raw.reputation, raw.country, raw.name, raw.capacity);
-  return {
-    id: generateEuropeanClubId(raw.name),
-    name: raw.name,
-    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
-    leagueId: "L_CL",
-    tier: raw.tier,
-    colorsHex: raw.colors,
-    stadiumName: raw.stadium,
-    stadiumCapacity: raw.capacity,
-    reputation: raw.reputation,
-    country: raw.country,
-    isDefaultActive: true,
-    colorPrimary: raw.colors[0],
-    colorSecondary: raw.colors[1] || "#FFFFFF",
-    rosterIds: [],
-    budget,
-    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
-    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
-    boardBudgetRequestsThisSeason: 0,
-    boardStrictness: 5,
-    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
-    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-    isInPolishCup: false,
-    board: generateRandomBoard(),
-    boardConfidence: 75
-  };
-});
-var STATIC_EL_CLUBS = RAW_EUROPA_LEAGUE_CLUBS.map((raw) => {
-  const budget = FinanceService.calculateEuropeanInitialBudget(raw.tier, raw.reputation, raw.country, raw.name, raw.capacity);
-  return {
-    id: generateELClubId(raw.name),
-    name: raw.name,
-    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
-    leagueId: "L_EL",
-    tier: raw.tier,
-    colorsHex: raw.colors,
-    stadiumName: raw.stadium,
-    stadiumCapacity: raw.capacity,
-    reputation: raw.reputation,
-    country: raw.country,
-    isDefaultActive: true,
-    colorPrimary: raw.colors[0],
-    colorSecondary: raw.colors[1] || "#FFFFFF",
-    rosterIds: [],
-    budget,
-    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
-    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
-    boardBudgetRequestsThisSeason: 0,
-    boardStrictness: 5,
-    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
-    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-    isInPolishCup: false,
-    board: generateRandomBoard(),
-    boardConfidence: 75
-  };
-});
-var STATIC_CONF_CLUBS = RAW_CONFERENCE_LEAGUE_CLUBS.map((raw) => {
-  const budget = FinanceService.calculateEuropeanInitialBudget(raw.tier, raw.reputation, raw.country, raw.name, raw.capacity);
-  return {
-    id: generateCONFClubId(raw.name),
-    name: raw.name,
-    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
-    leagueId: "L_CONF",
-    tier: raw.tier,
-    colorsHex: raw.colors,
-    stadiumName: raw.stadium,
-    stadiumCapacity: raw.capacity,
-    reputation: raw.reputation,
-    country: raw.country,
-    isDefaultActive: true,
-    colorPrimary: raw.colors[0],
-    colorSecondary: raw.colors[1] || "#FFFFFF",
-    rosterIds: [],
-    budget,
-    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
-    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
-    boardBudgetRequestsThisSeason: 0,
-    boardStrictness: 5,
-    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
-    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-    isInPolishCup: false
-  };
-});
-var buildInternationalClub = (raw, id, leagueId) => {
-  const budget = FinanceService.calculateInitialBudget(raw.tier, raw.reputation);
-  return {
-    id,
-    name: raw.name,
-    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
-    leagueId,
-    tier: raw.tier,
-    colorsHex: raw.colors,
-    stadiumName: raw.stadium,
-    stadiumCapacity: raw.capacity,
-    reputation: raw.reputation,
-    country: raw.country,
-    isDefaultActive: true,
-    colorPrimary: raw.colors[0],
-    colorSecondary: raw.colors[1] || "#FFFFFF",
-    rosterIds: [],
-    budget,
-    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
-    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
-    boardBudgetRequestsThisSeason: 0,
-    boardStrictness: 5,
-    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
-    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-    isInPolishCup: false,
-    board: generateRandomBoard(),
-    boardConfidence: 75
-  };
-};
-var STATIC_SA_CLUBS = CLUBS_SOUTH_AMERICA.map(
-  (raw) => buildInternationalClub(raw, generateSAClubId(raw.name), "L_SA")
-);
-var STATIC_ASIAN_CLUBS = CLUBS_ASIAN.map(
-  (raw) => buildInternationalClub(raw, generateAsianClubId(raw.name), "L_ASIA")
-);
-var STATIC_AFRICAN_CLUBS = CLUBS_AFRICAN.map(
-  (raw) => buildInternationalClub(raw, generateAfricanClubId(raw.name), "L_AFRICA")
-);
-var STATIC_NA_CLUBS = CLUBS_NORTH_AMERICA.map(
-  (raw) => buildInternationalClub(raw, generateNorthAmericaClubId(raw.name), "L_NA")
-);
-STATIC_LEAGUES.forEach((l) => {
-  l.teamIds = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS].filter((c) => c.leagueId === l.id && c.isDefaultActive).map((c) => c.id);
-});
-
-// services/SquadGeneratorService.ts
-var POLISH_CLUB_FOREIGN_REGIONS = [
-  "BALKANS" /* BALKANS */,
-  "CZ_SK" /* CZ_SK */,
-  "SSA" /* SSA */,
-  "IBERIA" /* IBERIA */,
-  "SCANDINAVIA" /* SCANDINAVIA */,
-  "EX_USSR" /* EX_USSR */,
-  "SPAIN" /* SPAIN */,
-  "JAPAN" /* JAPAN */,
-  "KOREA" /* KOREA */,
-  "ARGENTINA" /* ARGENTINA */,
-  "BRAZIL" /* BRAZIL */,
-  "TURKEY" /* TURKEY */,
-  "ARABIA" /* ARABIA */,
-  "FINLAND" /* FINLAND */,
-  "GEORGIA" /* GEORGIA */,
-  "ARMENIA" /* ARMENIA */,
-  "ALBANIA" /* ALBANIA */,
-  "ROMANIA" /* ROMANIA */,
-  "BALTIC" /* BALTIC */,
-  "BENELUX" /* BENELUX */,
-  "HUNGARIAN" /* HUNGARIAN */,
-  "MALTESE" /* MALTESE */,
-  "ISRAELI" /* ISRAELI */,
-  "GREEK" /* GREEK */,
-  "AZERBAIJANI" /* AZERBAIJANI */,
-  "KAZAKH" /* KAZAKH */
-];
-function calcReputacja(overall, clubRep) {
-  let min, max;
-  if (overall >= 87 && clubRep >= 18) {
-    [min, max] = [87, 99];
-  } else if (overall >= 80 && clubRep >= 15) {
-    [min, max] = [75, 91];
-  } else if (overall >= 80 && clubRep >= 10) {
-    [min, max] = [70, 85];
-  } else if (overall >= 80 && clubRep >= 6) {
-    [min, max] = [55, 75];
-  } else if (overall >= 80) {
-    [min, max] = [45, 65];
-  } else {
-    const t = Math.max(0, overall - 40) / 39;
-    const c = Math.min(clubRep, 20) / 20;
-    const base = Math.round(5 + t * 50 * (0.65 + 0.35 * c));
-    const spread = Math.round(3 + t * 7);
-    min = Math.max(1, base - Math.floor(spread / 2));
-    max = Math.min(74, base + Math.ceil(spread / 2));
-    if (min > max) max = min;
-  }
-  const floor = clubRep >= 18 ? 75 : clubRep >= 15 ? 65 : clubRep >= 12 ? 60 : clubRep >= 10 ? 50 : clubRep >= 6 ? 40 : 8;
-  return Math.max(floor, Math.max(1, Math.min(99, Math.round(min + Math.random() * (max - min)))));
-}
-
 // services/TrainingFacilityService.ts
 var TRAINING_FACILITY_UPGRADE_COSTS = {
   1: 15e5,
@@ -21371,8 +19504,8 @@ var hashSeed = (str) => {
   }
   return Math.abs(Math.sin(h) * 1e4) % 1;
 };
-var clamp4 = (value, min, max) => Math.max(min, Math.min(max, value));
-var clampLevel = (level) => clamp4(Math.round(level ?? 1), 1, 10);
+var clamp6 = (value, min, max) => Math.max(min, Math.min(max, value));
+var clampLevel = (level) => clamp6(Math.round(level ?? 1), 1, 10);
 var levelToScore = (level) => {
   const scores = {
     bardzo_niska: 1,
@@ -21385,15 +19518,15 @@ var levelToScore = (level) => {
 };
 var normalizeStaffQuality = (quality) => {
   if (quality === void 0 || Number.isNaN(quality)) return 10;
-  return quality > 20 ? clamp4(quality / 5, 1, 20) : clamp4(quality, 1, 20);
+  return quality > 20 ? clamp6(quality / 5, 1, 20) : clamp6(quality, 1, 20);
 };
 var getClubCostScale = (club) => {
-  const reputationPressure = 0.9 + clamp4(club.reputation, 1, 20) / 20 * 0.24;
-  const tierPressure = club.tier ? clamp4(1.08 - club.tier * 0.035, 0.88, 1.05) : 1;
+  const reputationPressure = 0.9 + clamp6(club.reputation, 1, 20) / 20 * 0.24;
+  const tierPressure = club.tier ? clamp6(1.08 - club.tier * 0.035, 0.88, 1.05) : 1;
   const boardCompetenceDiscount = 1 - (levelToScore(club.board?.kompetencja) - 3) * 0.025;
   const ambitionPremium = 1 + Math.max(0, levelToScore(club.board?.ambicja) - 3) * 0.025;
-  const strictnessDiscount = 1 - clamp4(club.boardStrictness ?? 50, 0, 100) / 100 * 0.04;
-  return clamp4(reputationPressure * tierPressure * boardCompetenceDiscount * ambitionPremium * strictnessDiscount, 0.82, 1.24);
+  const strictnessDiscount = 1 - clamp6(club.boardStrictness ?? 50, 0, 100) / 100 * 0.04;
+  return clamp6(reputationPressure * tierPressure * boardCompetenceDiscount * ambitionPremium * strictnessDiscount, 0.82, 1.24);
 };
 var getClubUpgradeCostRange = (club, fromLevel) => {
   const [baseMin, baseMax] = TRAINING_FACILITY_UPGRADE_COST_RANGES[fromLevel] ?? [0, 0];
@@ -21410,7 +19543,7 @@ var getBoardValuationCost = (club, fromLevel, projectId) => {
   const boardQuality = levelToScore(club.board?.kompetencja);
   const negotiationDiscount = (boardQuality - 3) * 0.025;
   const quotedCost = Math.round((range.min + quoteSeed * (range.max - range.min)) * (1 - negotiationDiscount));
-  const cost = Math.round(clamp4(quotedCost, range.min * 0.92, range.max * 1.04));
+  const cost = Math.round(clamp6(quotedCost, range.min * 0.92, range.max * 1.04));
   const minimumCashRequired = Math.round(cost * (0.14 + Math.max(0, 4 - levelToScore(club.board?.hojnosc)) * 0.025));
   return { cost, range, minimumCashRequired };
 };
@@ -21454,7 +19587,7 @@ var advancePhase = (club, project, currentDate) => {
       const boardScore = levelToScore(club.board?.ambicja) + levelToScore(club.board?.kompetencja) + levelToScore(club.board?.hojnosc);
       const budgetPressure = valuation.cost / Math.max(1, club.budget);
       const canFundPreparation = club.budget >= valuation.minimumCashRequired;
-      const approvalChance = clamp4(0.44 + boardScore * 0.042 + club.reputation * 0.016 - Math.max(0, budgetPressure - 2.5) * 0.08, 0.16, 0.86);
+      const approvalChance = clamp6(0.44 + boardScore * 0.042 + club.reputation * 0.016 - Math.max(0, budgetPressure - 2.5) * 0.08, 0.16, 0.86);
       if (!canFundPreparation || s1 > approvalChance) {
         const updatedProject2 = {
           ...projectWithValuation,
@@ -21537,7 +19670,7 @@ Zarz\u0105d Klubu`,
     }
     case "TECHNICAL_AUDIT": {
       const costBasis = getProjectCostBasis(club, project);
-      const auditCost = Math.round(clamp4(costBasis * (0.012 + s1 * 0.014), 8e4, 18e5));
+      const auditCost = Math.round(clamp6(costBasis * (0.012 + s1 * 0.014), 8e4, 18e5));
       if (club.budget < auditCost) {
         const updatedProject2 = {
           ...project,
@@ -21852,23 +19985,23 @@ var TrainingFacilityService = class _TrainingFacilityService {
     const normalizedStaffQuality = normalizeStaffQuality(staffQuality);
     const staffIndex = (normalizedStaffQuality - 1) / 19;
     const staffRequirement = 0.42 + facilityIndex * 0.58;
-    const facilityUtilization = clamp4((staffIndex + 0.1) / staffRequirement, 0.18, 1);
+    const facilityUtilization = clamp6((staffIndex + 0.1) / staffRequirement, 0.18, 1);
     const mismanagedComplexity = facilityIndex * (1 - facilityUtilization);
-    const synergy = clamp4(facilityIndex * facilityUtilization, 0, 1);
-    const growthChanceMultiplier = clamp4(
+    const synergy = clamp6(facilityIndex * facilityUtilization, 0, 1);
+    const growthChanceMultiplier = clamp6(
       0.84 + staffIndex * 0.18 + Math.pow(facilityIndex, 0.86) * 0.58 * facilityUtilization - mismanagedComplexity * 0.55,
       0.55,
       1.62
     );
-    const regressionChanceMultiplier = clamp4(
+    const regressionChanceMultiplier = clamp6(
       1.1 - staffIndex * 0.1 - Math.pow(facilityIndex, 0.9) * 0.24 * facilityUtilization - synergy * 0.1 + mismanagedComplexity * 0.58,
       0.68,
       1.65
     );
     const rawCap = 1 + Math.pow(facilityIndex, 1.08) * 14;
-    const extraSeasonalGrowthCap = Math.round(clamp4(rawCap * (0.35 + facilityUtilization * 0.65), 1, 18));
-    const peakSeasonOverallGain = Math.round(clamp4(1 + Math.pow(synergy, 0.9) * 6 - mismanagedComplexity * 2.2, 0, 7));
-    const typicalSeasonOverallGain = Math.round(clamp4(Math.pow(synergy, 1.05) * 4 - mismanagedComplexity * 1.1 + 1, 0, 4));
+    const extraSeasonalGrowthCap = Math.round(clamp6(rawCap * (0.35 + facilityUtilization * 0.65), 1, 18));
+    const peakSeasonOverallGain = Math.round(clamp6(1 + Math.pow(synergy, 0.9) * 6 - mismanagedComplexity * 2.2, 0, 7));
+    const typicalSeasonOverallGain = Math.round(clamp6(Math.pow(synergy, 1.05) * 4 - mismanagedComplexity * 1.1 + 1, 0, 4));
     return {
       level: normalizedLevel,
       growthChanceMultiplier,
@@ -22053,36 +20186,36 @@ function seededRng2(seed) {
 function pick(arr, rng) {
   return arr[Math.floor(rng() * arr.length)];
 }
-function clamp5(v, lo, hi) {
+function clamp7(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 function getAcademyOverallFloor(level, clubReputation) {
-  const rep = clamp5(clubReputation, 1, 10);
-  return Math.round(clamp5(48 + level * 2 + (rep - 4) * 1.1, 50, 64));
+  const rep = clamp7(clubReputation, 1, 10);
+  return Math.round(clamp7(48 + level * 2 + (rep - 4) * 1.1, 50, 64));
 }
 function rollHiddenTalent(level, clubReputation, rng) {
   const cap = INTAKE_TALENT_CAP[level];
-  const rep = clamp5(clubReputation, 1, 10);
-  const floor = Math.round(clamp5(44 + level * 2 + (rep - 4) * 0.8, 45, 62));
+  const rep = clamp7(clubReputation, 1, 10);
+  const floor = Math.round(clamp7(44 + level * 2 + (rep - 4) * 0.8, 45, 62));
   const base = floor + Math.pow(rng(), 1.12) * (cap - floor);
-  const lateBloomBonus = rng() < clamp5(0.04 + level * 0.012 + (rep - 5) * 6e-3, 0.03, 0.11) ? 4 + rng() * 7 : 0;
-  return Math.round(clamp5(base + lateBloomBonus, floor, cap));
+  const lateBloomBonus = rng() < clamp7(0.04 + level * 0.012 + (rep - 5) * 6e-3, 0.03, 0.11) ? 4 + rng() * 7 : 0;
+  return Math.round(clamp7(base + lateBloomBonus, floor, cap));
 }
 function rollTargetYouthOverall(level, clubReputation, hiddenTalent, rng) {
-  const rep = clamp5(clubReputation, 1, 10);
+  const rep = clamp7(clubReputation, 1, 10);
   const floor = getAcademyOverallFloor(level, rep);
-  const commonCeiling = Math.round(clamp5(floor + 8 + Math.floor(level / 2), 58, 70));
+  const commonCeiling = Math.round(clamp7(floor + 8 + Math.floor(level / 2), 58, 70));
   let target = floor + Math.floor(rng() * (commonCeiling - floor + 1));
-  const solidChance = clamp5(0.1 + level * 0.035 + (rep - 5) * 0.012, 0.08, 0.34);
+  const solidChance = clamp7(0.1 + level * 0.035 + (rep - 5) * 0.012, 0.08, 0.34);
   if (hiddenTalent >= 62 && rng() < solidChance) {
     target = Math.max(target, 60 + Math.floor(rng() * 10));
   }
-  const greatTalentChance = clamp5(0.012 + level * 8e-3 + (rep >= 8 ? 0.015 : 0) + (hiddenTalent >= 88 ? 0.015 : 0), 0.01, 0.08);
+  const greatTalentChance = clamp7(0.012 + level * 8e-3 + (rep >= 8 ? 0.015 : 0) + (hiddenTalent >= 88 ? 0.015 : 0), 0.01, 0.08);
   if (hiddenTalent >= 78 && rng() < greatTalentChance) {
     target = Math.max(target, 70 + Math.floor(rng() * (level >= 4 ? 11 : 9)));
   }
   const hardCap = level <= 1 ? 72 : level === 2 ? 75 : level === 3 ? 78 : 80;
-  return Math.round(clamp5(target, floor, Math.min(hardCap, Math.max(floor, hiddenTalent + 6))));
+  return Math.round(clamp7(target, floor, Math.min(hardCap, Math.max(floor, hiddenTalent + 6))));
 }
 function tuneAttributesTowardOverall(attrs, position, targetOverall, cap) {
   let tuned = { ...attrs };
@@ -22093,7 +20226,7 @@ function tuneAttributesTowardOverall(attrs, position, targetOverall, cap) {
     if (Math.abs(diff) === 0) break;
     coreKeys.forEach((key) => {
       const step = diff > 0 ? Math.ceil(diff * 0.85) : Math.floor(diff * 0.65);
-      tuned[key] = Math.round(clamp5(tuned[key] + step, 1, cap));
+      tuned[key] = Math.round(clamp7(tuned[key] + step, 1, cap));
     });
   }
   return tuned;
@@ -22105,20 +20238,20 @@ function getPromotionOverallTarget(currentOverall, hiddenTalent, level, clubRepu
   else if (hiddenTalent >= 72) target = Math.max(target, 62);
   else if (hiddenTalent >= 64) target = Math.max(target, 58);
   const cap = level <= 1 ? 72 : level === 2 ? 75 : level === 3 ? 78 : 80;
-  return Math.round(clamp5(target, 50, cap));
+  return Math.round(clamp7(target, 50, cap));
 }
 function calculateYouthRegressionRisk(trainingFacilityLevel, budgetMultiplier, academyStaffQuality, hiddenTalent, trainingFacilityYouthMultiplier) {
-  const staffQuality = clamp5(academyStaffQuality, 1, 20);
-  const facilityLevel = clamp5(trainingFacilityLevel, 1, 10);
-  const trainingFacilityWeakness = clamp5((4 - facilityLevel) / 3, 0, 1);
-  const staffWeakness = clamp5((10 - staffQuality) / 9, 0, 1);
-  const budgetWeakness = clamp5((1 - budgetMultiplier) / 0.5, 0, 1);
-  const facilityMultiplierWeakness = clamp5((1.03 - trainingFacilityYouthMultiplier) / 0.03, 0, 1);
+  const staffQuality = clamp7(academyStaffQuality, 1, 20);
+  const facilityLevel = clamp7(trainingFacilityLevel, 1, 10);
+  const trainingFacilityWeakness = clamp7((4 - facilityLevel) / 3, 0, 1);
+  const staffWeakness = clamp7((10 - staffQuality) / 9, 0, 1);
+  const budgetWeakness = clamp7((1 - budgetMultiplier) / 0.5, 0, 1);
+  const facilityMultiplierWeakness = clamp7((1.03 - trainingFacilityYouthMultiplier) / 0.03, 0, 1);
   if (trainingFacilityWeakness + staffWeakness + budgetWeakness < 0.2) return 0;
   const environmentPressure = trainingFacilityWeakness * 0.45 + staffWeakness * 0.35 + budgetWeakness * 0.15 + facilityMultiplierWeakness * 0.05;
-  const talentResistance = clamp5((hiddenTalent - 50) / 49, 0, 1);
+  const talentResistance = clamp7((hiddenTalent - 50) / 49, 0, 1);
   const resistanceFactor = 1 - talentResistance * 0.86;
-  return clamp5((6e-3 + environmentPressure * 0.036) * resistanceFactor, 1e-3, 0.045);
+  return clamp7((6e-3 + environmentPressure * 0.036) * resistanceFactor, 1e-3, 0.045);
 }
 function applyYouthRegressionPressure(youth2, attributes, risk) {
   if (risk <= 0 || Math.random() >= risk) {
@@ -22249,7 +20382,7 @@ function generateYouthAttributes(position, hiddenTalent, rng, targetOverall) {
     if (position === "GK" /* GK */ && ["dribbling", "heading", "attacking", "finishing", "crossing"].includes(key)) {
       value = Math.min(value, 32 + rng() * 8);
     }
-    attrs[key] = Math.round(clamp5(value, 1, Math.min(82, hiddenTalent + 8)));
+    attrs[key] = Math.round(clamp7(value, 1, Math.min(82, hiddenTalent + 8)));
   });
   return tuneAttributesTowardOverall(attrs, position, targetOverall, Math.min(84, hiddenTalent + 10));
 }
@@ -22386,7 +20519,7 @@ var AcademyService = {
       const updatedAttrs = { ...youth2.attributes };
       ACADEMY_DEVELOPMENT_ATTR_KEYS.forEach((key) => {
         if (Math.random() < (0.04 + (youth2.developmentFocus === key ? 0.05 : 0)) * trainingFacilityYouthMult) {
-          const growthCap = Math.round(clamp5(Math.max(62, youth2.hiddenTalent + 4 + facilityCapBonus, 58 + level * 4 + facilityCapBonus), 62, 90));
+          const growthCap = Math.round(clamp7(Math.max(62, youth2.hiddenTalent + 4 + facilityCapBonus, 58 + level * 4 + facilityCapBonus), 62, 90));
           updatedAttrs[key] = Math.min(growthCap, updatedAttrs[key] + 1);
         }
       });
@@ -22461,7 +20594,7 @@ var AcademyService = {
       contractLockoutUntil: null,
       moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
       fatigueDebt: 0,
-      reputacja: calcReputacja(overallRating, clubReputation),
+      reputacja: PlayerPrestigeService.calculateGeneratedReputation(overallRating, clubReputation),
       lojalnosc: Math.floor(Math.random() * 99) + 1,
       isNegotiationPermanentBlocked: false,
       transferLockoutUntil: null,
@@ -22475,7 +20608,7 @@ var AcademyService = {
   // Tworzy raport skautingowy (ujawnia talent)
   revealTalentRating(hiddenTalent, level) {
     const noise = level === 1 ? 20 : level === 2 ? 12 : level === 3 ? 6 : 3;
-    const perceived = clamp5(hiddenTalent + (Math.random() - 0.5) * noise, 0, 100);
+    const perceived = clamp7(hiddenTalent + (Math.random() - 0.5) * noise, 0, 100);
     if (perceived >= 78) return "EXCEPTIONAL";
     if (perceived >= 62) return "HIGH";
     if (perceived >= 44) return "AVERAGE";
@@ -22636,7 +20769,7 @@ var AcademyService = {
     if (!mission2.isRegionScouting || slotsAvailable <= 0) return [];
     const baseChance = { 1: 0.45, 2: 0.52, 3: 0.6, 4: 0.68, 5: 0.75 };
     const networkBonus = (networkDepth - 10) * 0.01;
-    const successChance = discoveryChance ?? clamp5((baseChance[academyLevel] ?? 0.5) + networkBonus, 0.2, 0.9);
+    const successChance = discoveryChance ?? clamp7((baseChance[academyLevel] ?? 0.5) + networkBonus, 0.2, 0.9);
     if (Math.random() > successChance) return [];
     const maxFind = academyLevel <= 2 ? 2 : 3;
     const baseCount = 1 + Math.floor(Math.random() * maxFind);
@@ -22665,7 +20798,7 @@ var AcademyService = {
       const ageMax = mission2.ageMax ?? 21;
       const age = ageMin + Math.floor(rng() * (ageMax - ageMin + 1));
       let hiddenTalent = rollHiddenTalent(academyLevel, clubReputation, rng);
-      const eliteNetworkRerollChance = clamp5((networkDepth - 10) * 0.025, 0, 0.25);
+      const eliteNetworkRerollChance = clamp7((networkDepth - 10) * 0.025, 0, 0.25);
       if (rng() < eliteNetworkRerollChance) {
         hiddenTalent = Math.max(hiddenTalent, rollHiddenTalent(academyLevel, clubReputation, rng));
       }

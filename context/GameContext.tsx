@@ -33,6 +33,7 @@ TransferScoutHiringResult,
 TransferScoutingAssignment,
 TransferScoutingFilters,
 TransferScoutingReport,
+TransferScoutNegotiationInfluence,
 MatchHistoryEntry,
 WCQPlayoffState,
 WCState,
@@ -86,7 +87,8 @@ import { STATIC_CLUBS, STATIC_LEAGUES, STATIC_CL_CLUBS, STATIC_EL_CLUBS, STATIC_
 import { SeasonTemplateGenerator } from '../services/SeasonTemplateGenerator';
 import { LeagueScheduleGenerator } from '../services/LeagueScheduleGenerator';
 import { CalendarEngine } from '../services/CalendarEngine';
-import { SquadGeneratorService, calcReputacja } from '../services/SquadGeneratorService';
+import { SquadGeneratorService } from '../services/SquadGeneratorService';
+import { PlayerPrestigeService } from '../services/PlayerPrestigeService';
 import { LineupService } from '../services/LineupService';
 import { BackgroundMatchProcessor } from '../services/BackgroundMatchProcessor';
 import { RelegationPlayoffSimulator } from '../services/RelegationPlayoffSimulator';
@@ -103,6 +105,8 @@ import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
+import { ClubReputationService } from '../services/ClubReputationService';
+import type { EuropeanClubTrophy } from '../services/ClubReputationService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
 import { ManagedReserveTeamService } from '../services/ManagedReserveTeamService';
 import { ReserveTeamFinanceService } from '../services/ReserveTeamFinanceService';
@@ -131,7 +135,12 @@ import { ScoutAssistantService } from '../services/ScoutAssistantService';
 import { ChampionshipHistoryService } from '../data/championship_history';
 import { TransferBuyerLogicService } from '../services/TransferBuyerLogicService';
 import { TransferSellerLogicService } from '../services/TransferSellerLogicService';
-import { TransferPlayerDecisionService } from '../services/TransferPlayerDecisionService';
+import {
+  getScoutAdjustedAcceptanceChanceCap,
+  getScoutNegotiationPower,
+  getScoutTalkOpeningChance,
+  TransferPlayerDecisionService,
+} from '../services/TransferPlayerDecisionService';
 import { TransferExecutionService } from '../services/TransferExecutionService';
 import { IncomingTransferService } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
@@ -179,6 +188,23 @@ import { ManagerJobService } from '../services/ManagerJobService';
 import { LeagueTeamOfWeekService } from '../services/LeagueTeamOfWeekService';
 import { PressConferenceAnswer, PressConferenceMatchEffect, PreMatchPressConferenceService } from '../services/PreMatchPressConferenceService';
 import { MediaInterviewService, SeasonInterviewSituation } from '../services/MediaInterviewService';
+
+const getBestScoutingInfluenceForPlayer = (
+  playerId: string,
+  reports: TransferScoutingReport[],
+  scoutPool: TransferScout[],
+): TransferScoutNegotiationInfluence | undefined => reports.reduce<TransferScoutNegotiationInfluence | undefined>((best, report) => {
+  if (!report.candidates.some(candidate => candidate.playerId === playerId)) return best;
+  const reportScout = scoutPool.find(scout => scout.id === report.scoutId);
+  const influence = report.scoutInfluence ?? (reportScout ? {
+    reputation: reportScout.reputation,
+    judgment: reportScout.judgment,
+    reach: reportScout.reach,
+    speed: reportScout.speed,
+    experience: reportScout.experience,
+  } : undefined);
+  return getScoutNegotiationPower(influence) > getScoutNegotiationPower(best) ? influence : best;
+}, undefined);
 
 export interface ImportedSquadPlayer {
   firstName: string;
@@ -2564,6 +2590,35 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       cupLoserId = homeWin ? cupFinal.awayTeamId : cupFinal.homeTeamId;
     }
 
+    const getLatestEuropeanFinalWinnerId = (leagueId: CompetitionType): string | null => {
+      const finalFixture = allFixtures
+        .filter(fixture => fixture.leagueId === leagueId && fixture.status === MatchStatus.FINISHED)
+        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())[0];
+      return ClubReputationService.resolveFinalWinnerId(finalFixture);
+    };
+
+    const europeanTrophiesByClubId = new Map<string, EuropeanClubTrophy[]>();
+    const registerEuropeanTrophy = (winnerId: string | null, trophy: EuropeanClubTrophy) => {
+      if (!winnerId) return;
+      europeanTrophiesByClubId.set(winnerId, [
+        ...(europeanTrophiesByClubId.get(winnerId) ?? []),
+        trophy,
+      ]);
+    };
+
+    registerEuropeanTrophy(
+      getLatestEuropeanFinalWinnerId(CompetitionType.CONF_FINAL),
+      'CONFERENCE_LEAGUE',
+    );
+    registerEuropeanTrophy(
+      getLatestEuropeanFinalWinnerId(CompetitionType.EL_FINAL),
+      'EUROPA_LEAGUE',
+    );
+    registerEuropeanTrophy(
+      getLatestEuropeanFinalWinnerId(CompetitionType.CL_FINAL),
+      'CHAMPIONS_LEAGUE',
+    );
+
     const polishEuropeanQualification = PolishEuropeanQualificationService.resolve({
       leagueTableIds: standingsL1.map(club => club.id),
       cupWinnerId,
@@ -3005,6 +3060,12 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
       }
 
+      newReputation = ClubReputationService.calculateSeasonEndReputation(newReputation, {
+        wonPolishChampionship: club.id === champion?.id,
+        wonPolishCup: club.id === cupWinnerId,
+        europeanTrophies: europeanTrophiesByClubId.get(club.id),
+      });
+
       // Nagroda za Mistrzostwo i Puchar
       if (!isUser) {
         if (club.id === champion?.id) adjustCoachIndividual(club.coachId, 3, 2, 3, 1);
@@ -3289,13 +3350,13 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
 
         const seasonEndDate = new Date(newYear - 1, 5, 30); // 30 czerwca kończącego się sezonu
-    const playersAfterReputationGrowth = PlayerReputationGrowthService.applySeasonEndGrowth(
+    const playersAfterReputationUpdate = PlayerReputationGrowthService.applySeasonEndUpdate(
       players,
       clubs,
       MatchHistoryService.getAll(),
       seasonNumber
     );
-    const transitionResult = SeasonTransitionService.processSquadTransition(playersAfterReputationGrowth, updatedClubs, seasonEndDate, userTeamId);
+    const transitionResult = SeasonTransitionService.processSquadTransition(playersAfterReputationUpdate, updatedClubs, seasonEndDate, userTeamId);
     if (transitionResult.expiredFreeAgentCount > 0) {
       DebugLoggerService.log('SQUAD_REVIEW', `Koniec kariery wolnych agentów bez klubu przez 2 sezony: ${transitionResult.expiredFreeAgentCount} zawodników opuściło świat gry.`, true);
     }
@@ -4142,7 +4203,7 @@ if (userTeamId) {
                 overallRating: overall,
                 history: p.history ?? [],
                 boardLockoutUntil: p.boardLockoutUntil ?? null,
-                reputacja: p.reputacja ?? calcReputacja(overall, clubRepMap.get(clubId) ?? 5),
+                reputacja: p.reputacja ?? PlayerPrestigeService.calculateGeneratedReputation(overall, clubRepMap.get(clubId) ?? 5),
                 lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
               } as Player);
             })
@@ -5174,14 +5235,41 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         return;
       }
 
+      const scoutingInfluence = getBestScoutingInfluenceForPlayer(
+        player.id,
+        transferScoutingReports,
+        transferScoutPool,
+      );
       const prestigeBlockReason = PrestigeTransferGuardService.getBlockedReason(player, userClub);
-      const decision = prestigeBlockReason
+      const scoutOpenedTalks = !!prestigeBlockReason && Math.random() <= getScoutTalkOpeningChance(
+        player,
+        null,
+        userClub,
+        scoutingInfluence,
+      );
+      let decision = prestigeBlockReason && !scoutOpenedTalks
         ? { accepted: false, reason: prestigeBlockReason, demands: null }
         : FinanceService.evaluateContractLogic(
             player, neg.salary, neg.bonus,
             new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(),
             simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
           );
+
+      if (decision.accepted && scoutingInfluence) {
+        const destinationChanceCap = getScoutAdjustedAcceptanceChanceCap(
+          player,
+          null,
+          userClub,
+          scoutingInfluence,
+        );
+        if (Math.random() > destinationChanceCap) {
+          decision = {
+            accepted: false,
+            reason: PrestigeTransferGuardService.getRejectionReason(player, userClub),
+            demands: null,
+          };
+        }
+      }
 
       const mail: MailMessage = {
         id: `MAIL_NEG_${neg.id}`,
@@ -15647,7 +15735,7 @@ const finalResult: SimulationOutput = {
           squadRole: p.squadRole ?? null,
           negotiationStep: 0, negotiationLockoutUntil: null, contractLockoutUntil: null,
           fatigueDebt: 0, isNegotiationPermanentBlocked: false,
-          reputacja: p.reputacja ?? calcReputacja(overall, importClubRep),
+          reputacja: p.reputacja ?? PlayerPrestigeService.calculateGeneratedReputation(overall, importClubRep),
           lojalnosc: (typeof p.lojalnosc === 'number' && p.lojalnosc >= 1) ? p.lojalnosc : Math.floor(Math.random() * 99) + 1,
           transferLockoutUntil: null, freeAgentLockoutUntil: null,
         } as Player);
@@ -17927,11 +18015,11 @@ const finalResult: SimulationOutput = {
       return { ok: false, status: 'VALIDATION_ERROR', message: `Łączny koszt transferu i kontraktu (${totalCommitment.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${buyerClub.transferBudget.toLocaleString('pl-PL')} PLN).` };
     }
 
-    const scoutingScoutReputation = transferScoutingReports.reduce((best, report) => {
-      if (!report.candidates.some(candidate => candidate.playerId === targetPlayer.id)) return best;
-      const reportScout = transferScoutPool.find(scout => scout.id === report.scoutId);
-      return Math.max(best, reportScout?.reputation ?? 0);
-    }, 0);
+    const scoutingScoutInfluence = getBestScoutingInfluenceForPlayer(
+      targetPlayer.id,
+      transferScoutingReports,
+      transferScoutPool,
+    );
 
     const playerDecision = TransferPlayerDecisionService.evaluateMove(
       contractInput,
@@ -17942,7 +18030,7 @@ const finalResult: SimulationOutput = {
       buyerSquad,
       currentDate,
       managerProfile,
-      scoutingScoutReputation || undefined
+      scoutingScoutInfluence
     );
 
     if (!playerDecision.accepted) {

@@ -10,6 +10,7 @@ import {
   TransferScoutContract,
   TransferScoutContractOffer,
   TransferScoutHiringResult,
+  TransferScoutNegotiationInfluence,
   TransferScoutReputation,
   TransferScoutingAssignment,
   TransferScoutingCandidateReport,
@@ -17,7 +18,13 @@ import {
   TransferScoutingReport,
 } from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
-import { TransferPlayerDecisionService } from './TransferPlayerDecisionService';
+import {
+  getScoutAdjustedAcceptanceChanceCap,
+  getScoutNegotiationPower,
+  getScoutTalkOpeningChance,
+  TransferPlayerDecisionService,
+} from './TransferPlayerDecisionService';
+import { ClubStrengthService } from './ClubStrengthService';
 
 const MAX_TRANSFER_SCOUTS = 3;
 const SCOUT_POOL_SIZE = 48;
@@ -93,6 +100,14 @@ const toLikelihood = (probability: number): TransferLikelihood => {
 
 const getScoutQuality = (scout: TransferScout): number =>
   (scout.judgment + scout.reach + scout.speed + scout.experience) / 4;
+
+const getNegotiationInfluence = (scout: TransferScout): TransferScoutNegotiationInfluence => ({
+  reputation: scout.reputation,
+  judgment: scout.judgment,
+  reach: scout.reach,
+  speed: scout.speed,
+  experience: scout.experience,
+});
 
 const getReputation = (seed: number, index: number): TransferScoutReputation => {
   const roll = stableUnit(`${seed}|${index}|reputation`);
@@ -451,11 +466,11 @@ export const TransferScoutingService = {
     sourceClub: Club | null,
     playersByClub: Record<string, Player[]>,
     currentDate: Date,
-    scoutReputation?: TransferScoutReputation,
+    scoutInfluence?: TransferScoutNegotiationInfluence,
   ): number {
     const targetSquad = playersByClub[userClub.id] ?? [];
     const sourceSquad = sourceClub ? (playersByClub[sourceClub.id] ?? []) : [];
-    const clubLevel = 34 + userClub.reputation * 4.2;
+    const clubLevel = ClubStrengthService.getLevel(userClub.reputation);
     const levelGap = player.overallRating - clubLevel;
     const loyalty = clamp(player.lojalnosc ?? 50, 1, 99);
     const stableSurprise = (stableUnit(`${player.id}|${userClub.id}|transfer-interest`) - 0.5) * 30;
@@ -466,7 +481,7 @@ export const TransferScoutingService = {
     probability += player.age >= 31 ? 7 : player.age <= 22 ? 3 : 0;
     probability -= Math.max(0, loyalty - 55) * 0.28;
     probability += stableSurprise;
-    probability += scoutReputation ? ({ 1: 1, 2: 3, 3: 6, 4: 10, 5: 15 })[scoutReputation] : 0;
+    probability += getScoutNegotiationPower(scoutInfluence) * 22;
 
     if (sourceClub) {
       probability += (userClub.reputation - sourceClub.reputation) * 5;
@@ -478,8 +493,18 @@ export const TransferScoutingService = {
         targetSquad,
         currentDate,
       );
-      if (!plan.willingToTalk) probability = Math.min(probability, 18);
+      if (!plan.willingToTalk) {
+        probability = Math.min(
+          probability,
+          getScoutTalkOpeningChance(player, sourceClub, userClub, scoutInfluence) * 100,
+        );
+      }
     }
+
+    probability = Math.min(
+      probability,
+      getScoutAdjustedAcceptanceChanceCap(player, sourceClub, userClub, scoutInfluence) * 100,
+    );
 
     return clamp(Math.round(probability), 1, 96);
   },
@@ -499,6 +524,7 @@ export const TransferScoutingService = {
     });
 
     const quality = getScoutQuality(scout);
+    const scoutInfluence = getNegotiationInfluence(scout);
     const coverage = clamp(0.30 + scout.reach * 0.033, 0.35, 0.96);
     const selectedLikelihood: TransferLikelihoodFilter = assignment.filters.likelihood
       ?? assignment.filters.minimumLikelihood
@@ -508,7 +534,7 @@ export const TransferScoutingService = {
       .filter(player => matchesFilters(player, assignment.filters, completionDate))
       .map(player => {
         const sourceClub = player.clubId === 'FREE_AGENTS' ? null : clubById.get(player.clubId) ?? null;
-        const probability = TransferScoutingService.getInterestProbability(player, userClub, sourceClub, playersByClub, completionDate, scout.reputation);
+        const probability = TransferScoutingService.getInterestProbability(player, userClub, sourceClub, playersByClub, completionDate, scoutInfluence);
         const likelihood = toLikelihood(probability);
         const discoveryRoll = stableUnit(`${assignment.id}|${player.id}|discovery`);
         const specialtyBonus = scout.positionSpecialty === player.position ? 0.08 : 0;
@@ -553,7 +579,7 @@ export const TransferScoutingService = {
           min: Math.round(salary * (1 - salarySpread)),
           max: Math.round(salary * (1 + salarySpread)),
         },
-        recommendation: likelihood === 'CERTAIN' || (likelihood === 'LIKELY' && player.overallRating >= clubLevelForRecommendation(userClub))
+        recommendation: likelihood === 'CERTAIN' || (likelihood === 'LIKELY' && player.overallRating >= ClubStrengthService.getLevel(userClub.reputation))
           ? 'PRIORITY'
           : likelihood === 'LIKELY' || likelihood === 'MEDIUM'
             ? 'APPROACH'
@@ -566,13 +592,10 @@ export const TransferScoutingService = {
       assignmentId: assignment.id,
       scoutId: scout.id,
       scoutName: `${scout.firstName} ${scout.lastName}`,
+      scoutInfluence,
       completedDate: completionDate.toISOString().split('T')[0],
       filters: assignment.filters,
       candidates: reports,
     };
   },
 };
-
-function clubLevelForRecommendation(club: Club): number {
-  return 34 + club.reputation * 4.2;
-}
