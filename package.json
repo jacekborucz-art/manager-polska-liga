@@ -29,6 +29,8 @@
     "test:cup-v2-player-ratings": "esbuild tests/CupPlayerRatingServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-player-ratings-tests.cjs && node tmp/cup-v2-player-ratings-tests.cjs",
     "test:cup-v2-final-report": "esbuild tests/CupV2FinalReportSelectionTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-final-report-tests.cjs && node tmp/cup-v2-final-report-tests.cjs",
     "test:save-archive": "esbuild tests/SaveArchiveTests.ts --bundle --platform=node --format=cjs --outfile=tmp/save-archive-tests.cjs && node tmp/save-archive-tests.cjs",
+    "test:academy-scouting": "esbuild tests/AcademyScoutingTests.ts --bundle --platform=node --format=cjs --outfile=tmp/academy-scouting-tests.cjs && node tmp/academy-scouting-tests.cjs",
+    "test:transfer-scouting": "esbuild tests/TransferScoutingTests.ts --bundle --platform=node --format=cjs --outfile=tmp/transfer-scouting-tests.cjs && node tmp/transfer-scouting-tests.cjs",
     "test:user-coach-instructions": "esbuild tests/UserCoachInstructionServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-coach-instruction-tests.cjs && node tmp/user-coach-instruction-tests.cjs",
     "test:user-coach-shouts": "esbuild tests/UserCoachShoutServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-coach-shout-tests.cjs && node tmp/user-coach-shout-tests.cjs",
     "test:ai-coach-commands": "esbuild tests/AiCoachCommandServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/ai-coach-command-tests.cjs && node tmp/ai-coach-command-tests.cjs",

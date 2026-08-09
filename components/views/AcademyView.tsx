@@ -96,11 +96,18 @@ const SELECTABLE_REGIONS: Region[] = [
 
 type Tab = 'players' | 'infra' | 'scout' | 'scouts' | 'history';
 
+interface ScoutMissionDraft {
+  region: Region | '';
+  position: PlayerPosition | '';
+  ageMin: number;
+  ageMax: number;
+}
+
 export const AcademyView: React.FC = () => {
   const {
     academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer,
-    dismissYouthPlayer, setYouthFocus, startScoutMission,
-    setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
+    dismissYouthPlayer, setYouthFocus, startScoutMission, startAnnualYouthIntake, cancelAcademyScoutMission,
+    setAcademyOperationalBudget, signYouthPlayerContract, rejectScoutCandidate, startScoutCandidateFollowUp,
     navigateTo, userTeamId, clubs, currentDate,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
     showGameNotification,
@@ -113,12 +120,10 @@ export const AcademyView: React.FC = () => {
   const [budgetInputValue, setBudgetInputValue] = useState<string>('');
 
   // Formularz misji skautingowej
-  const [scoutPosition, setScoutPosition] = useState<PlayerPosition | ''>('');
-  const [scoutAgeMin, setScoutAgeMin] = useState<number>(15);
-  const [scoutAgeMax, setScoutAgeMax] = useState<number>(21);
-  const [selectedMissionScoutId, setSelectedMissionScoutId] = useState<string>('');
+  const [scoutMissionDrafts, setScoutMissionDrafts] = useState<Record<string, ScoutMissionDraft>>({});
   const [fireScoutConfirm, setFireScoutConfirm] = useState<{ id: string; name: string; isOnMission: boolean } | null>(null);
-  const [youthConfirm, setYouthConfirm] = useState<{ id: string; name: string; action: 'reject' | 'dismiss' } | null>(null);
+  const [cancelMissionConfirm, setCancelMissionConfirm] = useState<{ scoutId: string; scoutName: string; cost: number } | null>(null);
+  const [youthConfirm, setYouthConfirm] = useState<{ id: string; name: string; action: 'reject' | 'dismiss' | 'candidate' } | null>(null);
 
   const myClub = clubs.find(c => c.id === userTeamId);
 
@@ -734,155 +739,304 @@ export const AcademyView: React.FC = () => {
                   ))}
                 </div>
               </div>
+
             </div>
+          )}
+
+          {tab === 'scout' && (
+              <div className="mb-5 rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-xs text-slate-300 font-black italic uppercase tracking-tighter">Shortlista kandydatów</h3>
+                    <p className="text-[10px] text-slate-500 font-black italic uppercase tracking-tighter">Kandydaci nie zajmują miejsca w akademii, dopóki nie podpiszesz z nimi umowy.</p>
+                  </div>
+                  <span className="text-xs text-amber-300 font-black italic uppercase tracking-tighter">{academy.scoutingCandidates.length} oczekuje</span>
+                </div>
+                {academy.scoutingCandidates.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-slate-600 font-black italic uppercase tracking-tighter">Brak kandydatów oczekujących na decyzję.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {academy.scoutingCandidates.map(candidate => {
+                      const talent = candidate.scoutReport.talentRating ? TALENT_LABEL[candidate.scoutReport.talentRating] : null;
+                      const activeFollowUp = academy.activeMissions.find(mission => mission.targetScoutCandidateId === candidate.id);
+                      const sourceMission = academy.scoutingHistory.find(entry => entry.id === `HISTORY_${candidate.sourceMissionId}`);
+                      const followUpCost = ScoutService.getFollowUpCost(sourceMission?.cost ?? 12_000);
+                      const confidenceLabel = candidate.scoutReport.confidence === 'VERY_HIGH'
+                        ? 'Bardzo wysoka'
+                        : candidate.scoutReport.confidence === 'HIGH'
+                          ? 'Wysoka'
+                          : candidate.scoutReport.confidence === 'MEDIUM'
+                            ? 'Średnia'
+                            : 'Niska';
+                      const recommendationLabel = candidate.scoutReport.recommendation === 'SIGN'
+                        ? 'Podpisz'
+                        : candidate.scoutReport.recommendation === 'OBSERVE'
+                          ? 'Obserwuj'
+                          : 'Odrzuć';
+                      return (
+                        <div key={candidate.id} className="rounded-xl border border-white/5 bg-slate-800/40 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-base text-white font-black italic uppercase tracking-tighter">{candidate.firstName} {candidate.lastName}</p>
+                              <p className="text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">
+                                {POSITION_LABEL[candidate.position]} · {candidate.age} lat · {candidate.nationalityCountry || REGION_LABELS[candidate.nationality] || candidate.nationality}
+                              </p>
+                              <p className="mt-1 text-[9px] text-blue-300 font-black italic uppercase tracking-tighter">Raport: {candidate.scoutReport.scoutName} · pewność {confidenceLabel}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {talent && <span className={`rounded border px-2 py-1 text-[9px] font-black italic uppercase tracking-tighter ${talent.color}`}>{talent.label}</span>}
+                              <span className="rounded border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[9px] text-violet-300 font-black italic uppercase tracking-tighter">Rekomendacja: {recommendationLabel}</span>
+                              <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] text-amber-300 font-black italic uppercase tracking-tighter">Decyzja do {candidate.decisionDeadline}</span>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-4 gap-1 sm:grid-cols-6 lg:grid-cols-12">
+                            {ATTR_DISPLAY.map(attribute => {
+                              const estimate = candidate.scoutReport.attributeEstimates[attribute.key];
+                              return (
+                                <div key={attribute.key} className="rounded-lg bg-slate-900/60 p-1.5 text-center">
+                                  <p className="text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">{attribute.label}</p>
+                                  <p className="text-[11px] text-slate-200 font-black italic uppercase tracking-tighter">{estimate ? `${estimate.min}–${estimate.max}` : '?'}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-3 flex justify-end gap-2">
+                            <button
+                              onClick={() => setYouthConfirm({ id: candidate.id, name: `${candidate.firstName} ${candidate.lastName}`, action: 'candidate' })}
+                              className="rounded-lg border border-rose-500/30 bg-rose-600/15 px-3 py-2 text-[10px] text-rose-300 transition-all hover:bg-rose-600/25 font-black italic uppercase tracking-tighter"
+                            >
+                              Odrzuć
+                            </button>
+                            <button
+                              disabled={!!activeFollowUp}
+                              onClick={() => {
+                                const ok = startScoutCandidateFollowUp(candidate.id);
+                                showGameNotification(ok ? {
+                                  title: 'Dodatkowa obserwacja',
+                                  message: `Skaut przygotuje dokładniejszy raport w ciągu 7 dni. Koszt: ${followUpCost.toLocaleString('pl-PL')} PLN.`,
+                                  tone: 'info'
+                                } : {
+                                  title: 'Nie można rozpocząć obserwacji',
+                                  message: 'Oryginalny skaut musi być nadal zatrudniony i dostępny, a klub musi mieć wystarczający budżet.',
+                                  tone: 'warning'
+                                });
+                              }}
+                              className="rounded-lg border border-blue-500/30 bg-blue-600/15 px-3 py-2 text-[10px] text-blue-300 transition-all hover:bg-blue-600/25 disabled:cursor-not-allowed disabled:opacity-50 font-black italic uppercase tracking-tighter"
+                            >
+                              {activeFollowUp ? `Obserwacja do ${activeFollowUp.completionDate}` : `Obserwuj dalej · ${followUpCost.toLocaleString('pl-PL')} PLN`}
+                            </button>
+                            <button
+                              onClick={() => {
+                                const ok = signYouthPlayerContract(candidate.id);
+                                showGameNotification(ok ? {
+                                  title: 'Kandydat przyjęty',
+                                  message: `${candidate.firstName} ${candidate.lastName} dołączył do akademii.`,
+                                  tone: 'success'
+                                } : {
+                                  title: 'Brak miejsca',
+                                  message: 'Zwolnij miejsce albo rozbuduj akademię przed podpisaniem umowy.',
+                                  tone: 'warning'
+                                });
+                              }}
+                              className="rounded-lg border border-emerald-500/30 bg-emerald-600/20 px-3 py-2 text-[10px] text-emerald-300 transition-all hover:bg-emerald-600/30 font-black italic uppercase tracking-tighter"
+                            >
+                              Podpisz umowę
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
           )}
 
           {/* ── TAB: Skautowanie ── */}
           {tab === 'scout' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Aktywne misje */}
-              <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
-                <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Aktywne Misje Skautingowe</h3>
-                <p className="text-[10px] text-slate-500 mb-4">Skaut jedzie do wybranego regionu i szuka nowych talentów do rekrutacji do akademii.</p>
-
-                {/* Formularz nowej misji */}
-                {employedScouts.length === 0 ? (
-                  <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4 mb-4 text-center">
-                    <p className="text-2xl mb-2">🕵️</p>
-                    <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Brak zatrudnionych skautów</p>
-                    <p className="text-slate-600 text-[10px]">Przejdź do zakładki <span className="text-slate-400 font-black">Skauci</span>, aby zatrudnić skauta przed wysłaniem misji.</p>
-                  </div>
-                ) : (
-                <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3 mb-4 space-y-3">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Parametry misji</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[9px] text-slate-500 uppercase tracking-wider block mb-1">Skaut (opcjonalnie)</label>
-                      <select
-                        value={selectedMissionScoutId}
-                        onChange={e => setSelectedMissionScoutId(e.target.value)}
-                        className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-2 py-1.5 outline-none"
-                      >
-                        <option value="">Bez skauta</option>
-                        {employedScouts.filter(s => !s.isOnMission).map(s => {
-                          const tier = ScoutService.getScoutTier(s);
-                          return (
-                            <option key={s.id} value={s.id}>
-                              {s.firstName} {s.lastName} [{tier.label}]
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] text-slate-500 uppercase tracking-wider block mb-1">Pozycja (opcjonalnie)</label>
-                      <select
-                        value={scoutPosition}
-                        onChange={e => setScoutPosition(e.target.value as PlayerPosition | '')}
-                        className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-2 py-1.5 outline-none"
-                      >
-                        <option value="">Dowolna pozycja</option>
-                        <option value={PlayerPosition.GK}>Bramkarz (BR)</option>
-                        <option value={PlayerPosition.DEF}>Obrońca (OBR)</option>
-                        <option value={PlayerPosition.MID}>Pomocnik (POM)</option>
-                        <option value={PlayerPosition.FWD}>Napastnik (NAP)</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[9px] text-slate-500 uppercase tracking-wider block mb-1">Wiek</label>
-                    <div className="flex items-center gap-1 w-full max-w-[180px]">
-                      <select
-                        value={scoutAgeMin}
-                        onChange={e => { const v = +e.target.value; setScoutAgeMin(v); if (v > scoutAgeMax) setScoutAgeMax(v); }}
-                        className="flex-1 bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-1.5 py-1.5 outline-none"
-                      >
-                        {[15,16,17,18,19,20,21].map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                      <span className="text-slate-600 text-[10px]">-</span>
-                      <select
-                        value={scoutAgeMax}
-                        onChange={e => { const v = +e.target.value; setScoutAgeMax(v); if (v < scoutAgeMin) setScoutAgeMin(v); }}
-                        className="flex-1 bg-slate-900 border border-white/10 rounded-lg text-[10px] font-black text-slate-200 px-1.5 py-1.5 outline-none"
-                      >
-                        {[15,16,17,18,19,20,21].filter(a => a >= scoutAgeMin).map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const ok = startScoutMission(undefined, academy.regionFocus, scoutPosition || undefined, scoutAgeMin, scoutAgeMax, selectedMissionScoutId || undefined);
-                      if (!ok) {
-                        showGameNotification({
-                          title: 'Za mało budżetu',
-                          message: 'Nie masz wystarczających środków na rozpoczęcie misji skautingowej.',
-                          tone: 'warning'
-                        });
-                      }
-                    }}
-                    className="w-full py-2.5 rounded-xl text-xs font-black bg-blue-600/20 border border-blue-500/30 text-blue-300 hover:bg-blue-600/30 transition-all"
-                  >
-                    <div className="font-black uppercase tracking-wider">🔍 Wyślij skauta {academy.regionFocus ? `→ ${REGION_LABELS[academy.regionFocus] ?? academy.regionFocus}` : '→ Globalny'}</div>
-                    <div className="text-[9px] font-medium normal-case mt-0.5 text-blue-400/70">
-                      Koszt: {AcademyService.getScoutMissionCost(academy.regionFocus, academy.level).toLocaleString('pl-PL')} PLN · ~{AcademyService.getScoutMissionDays(academy.regionFocus, academy.level)} dni
-                    </div>
-                  </button>
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-xl backdrop-blur-md">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-xs text-slate-400 font-black italic uppercase tracking-tighter">Zlecenia skautingowe</h3>
+                  <p className="mt-1 text-[10px] text-slate-500 font-black italic uppercase tracking-tighter">Ustaw parametry osobno dla każdego zatrudnionego skauta.</p>
                 </div>
+                {academy.annualIntakeAvailableYear && (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                    <p className="text-[10px] text-emerald-300 font-black italic uppercase tracking-tighter">Coroczny nabór {academy.annualIntakeAvailableYear} dostępny</p>
+                    <p className="text-[8px] text-emerald-300/60 font-black italic uppercase tracking-tighter">Wybierz „Nabór roczny” przy wolnym skaucie</p>
+                  </div>
                 )}
+              </div>
 
-                {/* Lista aktywnych misji */}
-                {academy.activeMissions.filter(m => m.isRegionScouting).length === 0 ? (
-                  <p className="text-slate-600 text-xs">Brak aktywnych misji.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {academy.activeMissions.filter(m => m.isRegionScouting).map(m => (
-                      <div key={m.id} className="p-3 rounded-xl bg-slate-800/40 border border-white/5 flex justify-between items-start">
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-black text-white">Misja: {m.regionFocus ? (REGION_LABELS[m.regionFocus] ?? m.regionFocus) : 'Globalny'}</p>
-                          <p className="text-[9px] text-slate-400">
-                            {m.positionFilter ? POSITION_LABEL[m.positionFilter] : 'Dowolna poz.'} · wiek {m.ageMin ?? 15}–{m.ageMax ?? 21}
-                          </p>
-                          <p className="text-[9px] text-blue-400">Zakończenie: {m.completionDate}</p>
+              {employedScouts.length === 0 ? (
+                <div className="rounded-xl border border-white/5 bg-slate-800/30 p-8 text-center">
+                  <p className="text-2xl">🕵️</p>
+                  <p className="mt-2 text-xs text-slate-400 font-black italic uppercase tracking-tighter">Brak zatrudnionych skautów</p>
+                  <p className="mt-1 text-[10px] text-slate-600 font-black italic uppercase tracking-tighter">Zatrudnij skauta w zakładce Skauci.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="hidden grid-cols-[minmax(220px,1.25fr)_minmax(145px,0.9fr)_minmax(135px,0.8fr)_150px_150px] gap-3 px-4 text-[9px] text-slate-600 lg:grid font-black italic uppercase tracking-tighter">
+                    <span>Skaut</span>
+                    <span>Region</span>
+                    <span>Pozycja</span>
+                    <span>Zakres wieku</span>
+                    <span className="text-center">Akcja</span>
+                  </div>
+                  {employedScouts.map((scout, index) => {
+                    const activeMission = academy.activeMissions.find(mission => mission.scoutId === scout.id);
+                    const defaultDraft: ScoutMissionDraft = { region: '', position: '', ageMin: 15, ageMax: 21 };
+                    const draft = scoutMissionDrafts[scout.id] ?? defaultDraft;
+                    const displayedRegion = activeMission ? (activeMission.regionFocus ?? '') : draft.region;
+                    const displayedPosition = activeMission ? (activeMission.positionFilter ?? '') : draft.position;
+                    const displayedAgeMin = activeMission?.ageMin ?? draft.ageMin;
+                    const displayedAgeMax = activeMission?.ageMax ?? draft.ageMax;
+                    const tier = ScoutService.getScoutTier(scout);
+                    const missionCost = ScoutService.getMissionCost(scout, draft.region || undefined, academy.level);
+                    const missionDays = ScoutService.getMissionDays(scout, draft.region || undefined, academy.level);
+                    const rowColors = [
+                      'bg-slate-800/60',
+                      'bg-blue-950/45',
+                      'bg-emerald-950/35',
+                      'bg-violet-950/35',
+                      'bg-amber-950/30',
+                    ];
+                    const updateDraft = (changes: Partial<ScoutMissionDraft>) => {
+                      setScoutMissionDrafts(previous => ({
+                        ...previous,
+                        [scout.id]: { ...(previous[scout.id] ?? defaultDraft), ...changes },
+                      }));
+                    };
+
+                    return (
+                      <div
+                        key={scout.id}
+                        className={`grid grid-cols-1 gap-3 rounded-xl border border-white/5 p-4 lg:grid-cols-[minmax(220px,1.25fr)_minmax(145px,0.9fr)_minmax(135px,0.8fr)_150px_150px] lg:items-center ${rowColors[index % rowColors.length]}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-[15px] text-white font-black italic uppercase tracking-tighter">{scout.firstName} {scout.lastName}</p>
+                            {activeMission && (
+                              <span className="rounded-md border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 text-[9px] text-amber-300 font-black italic uppercase tracking-tighter">Wysłany</span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">{scout.age} lat · {scout.nationality}</span>
+                            <span aria-label={`${tier.stars} z 4 gwiazdek`} className="text-[11px] text-amber-300 font-black italic uppercase tracking-tighter">{'★'.repeat(tier.stars)}<span className="text-slate-700">{'★'.repeat(4 - tier.stars)}</span></span>
+                          </div>
+                          {activeMission && (
+                            <p className="mt-1 text-[9px] text-amber-300/70 font-black italic uppercase tracking-tighter">Do {activeMission.completionDate}{activeMission.isAnnualIntake ? ' · Nabór roczny' : ''}</p>
+                          )}
                         </div>
-                        <span className="text-lg">🔍</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Region fokus skautingu */}
-              <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
-                <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Region Fokus Naboru</h3>
-                <p className="text-[10px] text-slate-500 mb-4">Podczas naboru (1 Sierpnia) ~40% wychowanków będzie z tego regionu.</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setAcademyRegionFocus(undefined)}
-                    className={`py-2 rounded-xl text-[10px] font-black border transition-all ${
-                      !academy.regionFocus
-                        ? 'bg-blue-600/30 border-blue-500/50 text-blue-300'
-                        : 'bg-slate-800/40 border-white/5 text-slate-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="uppercase tracking-wider">Globalny</div>
-                    <div className="text-[8px] font-medium normal-case opacity-60">{AcademyService.getScoutMissionCost(undefined, academy.level).toLocaleString('pl-PL')} PLN</div>
-                  </button>
-                  {SELECTABLE_REGIONS.map(region => (
-                    <button
-                      key={region}
-                      onClick={() => setAcademyRegionFocus(region)}
-                      className={`py-2 rounded-xl text-[10px] font-black border transition-all ${
-                        academy.regionFocus === region
-                          ? 'bg-blue-600/30 border-blue-500/50 text-blue-300'
-                          : 'bg-slate-800/40 border-white/5 text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="uppercase tracking-wider">{REGION_LABELS[region] ?? region}</div>
-                      <div className="text-[8px] font-medium normal-case opacity-60">{AcademyService.getScoutMissionCost(region, academy.level).toLocaleString('pl-PL')} PLN</div>
-                    </button>
-                  ))}
+                        <div>
+                          <label className="mb-1 block text-[9px] text-slate-500 lg:hidden font-black italic uppercase tracking-tighter">Region</label>
+                          <select
+                            value={displayedRegion}
+                            disabled={!!activeMission}
+                            onChange={event => updateDraft({ region: event.target.value as Region | '' })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-950/70 px-2 py-2 text-[10px] text-slate-200 outline-none disabled:cursor-not-allowed disabled:opacity-60 font-black italic uppercase tracking-tighter"
+                          >
+                            <option value="">Globalny</option>
+                            {SELECTABLE_REGIONS.map(region => <option key={region} value={region}>{REGION_LABELS[region] ?? region}</option>)}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-[9px] text-slate-500 lg:hidden font-black italic uppercase tracking-tighter">Pozycja</label>
+                          <select
+                            value={displayedPosition}
+                            disabled={!!activeMission}
+                            onChange={event => updateDraft({ position: event.target.value as PlayerPosition | '' })}
+                            className="w-full rounded-lg border border-white/10 bg-slate-950/70 px-2 py-2 text-[10px] text-slate-200 outline-none disabled:cursor-not-allowed disabled:opacity-60 font-black italic uppercase tracking-tighter"
+                          >
+                            <option value="">Dowolna</option>
+                            <option value={PlayerPosition.GK}>Bramkarz</option>
+                            <option value={PlayerPosition.DEF}>Obrońca</option>
+                            <option value={PlayerPosition.MID}>Pomocnik</option>
+                            <option value={PlayerPosition.FWD}>Napastnik</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-[9px] text-slate-500 lg:hidden font-black italic uppercase tracking-tighter">Zakres wieku</label>
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={displayedAgeMin}
+                              disabled={!!activeMission}
+                              onChange={event => {
+                                const ageMin = Number(event.target.value);
+                                updateDraft({ ageMin, ageMax: Math.max(ageMin, draft.ageMax) });
+                              }}
+                              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-950/70 px-2 py-2 text-[10px] text-slate-200 outline-none disabled:cursor-not-allowed disabled:opacity-60 font-black italic uppercase tracking-tighter"
+                            >
+                              {[15, 16, 17, 18, 19, 20, 21].map(age => <option key={age} value={age}>{age}</option>)}
+                            </select>
+                            <span className="text-slate-600">–</span>
+                            <select
+                              value={displayedAgeMax}
+                              disabled={!!activeMission}
+                              onChange={event => updateDraft({ ageMax: Number(event.target.value) })}
+                              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-950/70 px-2 py-2 text-[10px] text-slate-200 outline-none disabled:cursor-not-allowed disabled:opacity-60 font-black italic uppercase tracking-tighter"
+                            >
+                              {[15, 16, 17, 18, 19, 20, 21].filter(age => age >= displayedAgeMin).map(age => <option key={age} value={age}>{age}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <button
+                            onClick={() => {
+                              if (activeMission) {
+                                setCancelMissionConfirm({
+                                  scoutId: scout.id,
+                                  scoutName: `${scout.firstName} ${scout.lastName}`,
+                                  cost: activeMission.cost,
+                                });
+                                return;
+                              }
+                              const ok = startScoutMission(undefined, draft.region || undefined, draft.position || undefined, draft.ageMin, draft.ageMax, scout.id);
+                              showGameNotification(ok ? {
+                                title: 'Skaut wysłany',
+                                message: `${scout.firstName} ${scout.lastName} rozpoczął poszukiwania.`,
+                                tone: 'success'
+                              } : {
+                                title: 'Nie można wysłać skauta',
+                                message: 'Sprawdź budżet oraz dostępność skauta.',
+                                tone: 'warning'
+                              });
+                            }}
+                            className={`w-full rounded-lg border px-3 py-2 text-[10px] transition-all font-black italic uppercase tracking-tighter ${activeMission ? 'border-rose-500/40 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25' : 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'}`}
+                          >
+                            {activeMission ? 'Odwołaj' : 'Wyślij'}
+                          </button>
+                          {!activeMission && (
+                            <p className="text-center text-[8px] text-slate-500 font-black italic uppercase tracking-tighter">{missionCost.toLocaleString('pl-PL')} PLN · {missionDays} dni</p>
+                          )}
+                          {!activeMission && academy.annualIntakeAvailableYear && (
+                            <button
+                              onClick={() => {
+                                const ok = startAnnualYouthIntake(scout.id, draft.region || undefined);
+                                showGameNotification(ok ? {
+                                  title: 'Nabór rozpoczęty',
+                                  message: `${scout.firstName} ${scout.lastName} rozpoczął bezpłatny coroczny nabór.`,
+                                  tone: 'success'
+                                } : {
+                                  title: 'Nie można rozpocząć naboru',
+                                  message: 'Skaut nie jest dostępny albo nabór został już wykorzystany.',
+                                  tone: 'warning'
+                                });
+                              }}
+                              className="w-full rounded-lg border border-emerald-500/35 bg-emerald-500/15 px-2 py-1.5 text-[9px] text-emerald-300 hover:bg-emerald-500/25 font-black italic uppercase tracking-tighter"
+                            >
+                              Nabór roczny
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -891,7 +1045,7 @@ export const AcademyView: React.FC = () => {
             const maxScouts = ScoutService.getMaxScouts(academy.level);
             const userClub = clubs.find(c => c.id === userTeamId);
             return (
-              <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)] gap-5">
 
                 {/* Zatrudnieni skauci */}
                 <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
@@ -906,60 +1060,69 @@ export const AcademyView: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[13px] text-gold-500 font-black italic uppercase tracking-tighter mb-4">
-                    Maks. skautów na tym poziomie:<span className="text-white font-black">{maxScouts}</span>
+                    Maks. skautów na tym poziomie: <span className="text-white font-black italic uppercase tracking-tighter">{maxScouts}</span>
                     {academy.level < 5 && <span className="text-slate-600"> </span>}
                   </p>
 
                   {employedScouts.length === 0 ? (
                     <p className="text-slate-400 text-[15px] font-black italic uppercase tracking-tighter text-center py-6">Brak zatrudnionych skautów.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {employedScouts.map(scout => {
                         const tier = ScoutService.getScoutTier(scout);
                         const personality = ScoutService.getPersonalityLabel(scout.personality);
                         return (
-                          <div key={scout.id} className="p-3 rounded-xl bg-slate-800/40 border border-white/5">
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div>
-                                <p className="text-white font-black italic uppercase tracking-tighter text-[17px]">{scout.firstName} {scout.lastName}</p>
+                          <div key={scout.id} className="rounded-xl border border-white/5 bg-slate-800/40 p-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="break-words text-[17px] text-white font-black italic uppercase tracking-tighter">{scout.firstName} {scout.lastName}</p>
                                 <p className="text-slate-400 text-[12px] font-black italic uppercase tracking-tighter">{scout.age} lat · {scout.nationality}</p>
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={`text-[12px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
+                              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                                <span
+                                  title={tier.label}
+                                  aria-label={`${tier.label}: ${tier.stars} z 4 gwiazdek`}
+                                  className="flex items-center gap-0.5 px-1"
+                                >
+                                  {[1, 2, 3, 4].map(star => (
+                                    <span key={star} className={`text-[14px] font-black italic uppercase tracking-tighter ${star <= tier.stars ? 'text-amber-300' : 'text-slate-700'}`}>★</span>
+                                  ))}
+                                </span>
                                 {scout.isOnMission && (
-                                  <span className="text-[12px] font-black px-1.5 py-0.5 rounded border text-blue-300 border-blue-500/40 bg-blue-500/10 animate-pulse">W misji</span>
+                                  <span className="rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[11px] text-blue-300 animate-pulse font-black italic uppercase tracking-tighter">W misji</span>
                                 )}
                               </div>
                             </div>
-                            <div className="grid grid-cols-4 gap-1 mb-2">
+                            <div className="mb-3 grid grid-cols-2 gap-2">
                               {[
                                 { label: 'Ocena', value: scout.judgmentAccuracy },
                                 { label: 'Kontakty', value: scout.networkDepth },
                                 { label: 'Mobilność', value: scout.reportSpeed },
-                                { label: 'Doświad.', value: scout.experience },
+                                { label: 'Doświadczenie', value: scout.experience },
                               ].map(stat => (
-                                <div key={stat.label} className="text-center p-1 bg-slate-700/30 rounded-lg">
-                                  <p className={`text-[15px] font-black italic uppercase tracking-tighter ${stat.value >= 15 ? 'text-emerald-400' : stat.value >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{stat.value}</p>
-                                  <p className="text-[11px] text-slate-400 font-black italic uppercase tracking-tighter">{stat.label}</p>
+                                <div key={stat.label} className="flex min-w-0 items-center justify-between gap-2 rounded-lg bg-slate-700/30 px-3 py-2">
+                                  <p className="truncate text-[10px] text-slate-400 font-black italic uppercase tracking-tighter">{stat.label}</p>
+                                  <p className={`shrink-0 text-[16px] font-black italic uppercase tracking-tighter ${stat.value >= 15 ? 'text-emerald-400' : stat.value >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{stat.value}</p>
                                 </div>
                               ))}
                             </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[11px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
+                            <div className="mb-3 flex min-h-6 flex-wrap items-center gap-2">
+                                <span className={`text-[11px] font-black italic uppercase tracking-tighter ${personality.color}`}>{personality.label}</span>
                                 {scout.regionalSpecialty && (
                                   <span className="text-[11px] text-slate-400 font-black italic uppercase tracking-tighter">★ {scout.regionalSpecialty}</span>
                                 )}
+                            </div>
+                            <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                              <div className="min-w-0">
+                                <p className="text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Wynagrodzenie tygodniowe</p>
+                                <p className="whitespace-nowrap text-[13px] text-amber-400 font-black italic uppercase tracking-tighter">{scout.weeklySalary.toLocaleString('pl-PL')} PLN</p>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[12px] text-amber-400 font-black italic uppercase tracking-tighter">{scout.weeklySalary.toLocaleString('pl-PL')} PLN/tydz</span>
                                 <button
                                   onClick={() => setFireScoutConfirm({ id: scout.id, name: `${scout.firstName} ${scout.lastName}`, isOnMission: !!scout.isOnMission })}
-                                  className="px-2 py-1 text-[12px] font-black rounded bg-rose-600/20 text-rose-400 border border-rose-500/30 hover:bg-rose-600/30 transition-all"
+                                  className="shrink-0 rounded-lg border border-rose-500/30 bg-rose-600/20 px-3 py-1.5 text-[11px] text-rose-400 transition-all hover:bg-rose-600/30 font-black italic uppercase tracking-tighter"
                                 >
                                   Zwolnij
                                 </button>
-                              </div>
                             </div>
                           </div>
                         );
@@ -998,7 +1161,7 @@ export const AcademyView: React.FC = () => {
                         <thead>
                           <tr className="bg-slate-800/80 text-slate-300 font-black italic uppercase tracking-tighter text-[9px]">
                             <th className="px-2 py-2 text-left">Imię i Nazwisko</th>
-                            <th className="px-2 py-2 text-center border-l border-slate-700/50">Status</th>
+                            <th className="px-2 py-2 text-center border-l border-slate-700/50">Ocena</th>
                             <th className="px-2 py-2 text-center border-l border-slate-700/50" title="Dokładność oceny talentu">
                               <span className="block">Ocena</span>
                               <span className="block text-[7px] opacity-60">Zawodnika</span>
@@ -1027,14 +1190,22 @@ export const AcademyView: React.FC = () => {
                                   <p className="text-slate-400 text-[11px] font-black italic uppercase tracking-tighter">{scout.age} l. · {scout.nationality}{scout.regionalSpecialty && scout.regionalSpecialty !== scout.nationality ? ` · ★ ${scout.regionalSpecialty}` : ''}</p>
                                 </td>
                                 <td className="px-2 py-2 text-center border-l border-slate-700/30">
-                                  <span className={`text-[11px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${tier.color}`}>{tier.label}</span>
+                                  <span
+                                    title={tier.label}
+                                    aria-label={`${tier.label}: ${tier.stars} z 4 gwiazdek`}
+                                    className="inline-flex items-center gap-0.5 px-1"
+                                  >
+                                    {[1, 2, 3, 4].map(star => (
+                                      <span key={star} className={`text-[12px] font-black italic uppercase tracking-tighter ${star <= tier.stars ? 'text-amber-300' : 'text-slate-700'}`}>★</span>
+                                    ))}
+                                  </span>
                                 </td>
                                 <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.judgmentAccuracy >= 15 ? 'text-emerald-400' : scout.judgmentAccuracy >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.judgmentAccuracy}</td>
                                 <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.networkDepth >= 15 ? 'text-emerald-400' : scout.networkDepth >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.networkDepth}</td>
                                 <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.reportSpeed >= 15 ? 'text-emerald-400' : scout.reportSpeed >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.reportSpeed}</td>
                                 <td className={`px-2 py-2 text-center font-black italic uppercase tracking-tighter text-[15px] border-l border-slate-700/30 ${scout.experience >= 15 ? 'text-emerald-400' : scout.experience >= 10 ? 'text-slate-300' : 'text-slate-500'}`}>{scout.experience}</td>
                                 <td className="px-2 py-2 text-center border-l border-slate-700/30">
-                                  <span className={`text-[11px] font-black italic uppercase tracking-tighter px-1.5 py-0.5 rounded border ${personality.color}`}>{personality.label}</span>
+                                  <span className={`text-[11px] font-black italic uppercase tracking-tighter ${personality.color}`}>{personality.label}</span>
                                 </td>
                                 <td className="px-2 py-2 text-right text-amber-400 font-black italic uppercase tracking-tighter text-[13px] whitespace-nowrap border-l border-slate-700/30">{scout.weeklySalary.toLocaleString('pl-PL')}</td>
                                 <td className="px-2 py-2 text-center border-l border-slate-700/30">
@@ -1044,6 +1215,15 @@ export const AcademyView: React.FC = () => {
                                         showGameNotification({
                                           title: 'Reputacja za niska',
                                           message: 'Twój klub ma za niską reputację dla tego skauta.',
+                                          tone: 'warning'
+                                        });
+                                        return;
+                                      }
+                                      const hiringFee = scout.weeklySalary * 4;
+                                      if ((userClub?.budget ?? 0) < hiringFee) {
+                                        showGameNotification({
+                                          title: 'Za mało środków',
+                                          message: `Zatrudnienie wymaga opłaty początkowej ${hiringFee.toLocaleString('pl-PL')} PLN.`,
                                           tone: 'warning'
                                         });
                                         return;
@@ -1080,6 +1260,33 @@ export const AcademyView: React.FC = () => {
           {/* ── TAB: Historia ── */}
           {tab === 'history' && (
             <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md shadow-xl">
+              <h3 className="mb-4 text-xs text-slate-500 font-black italic uppercase tracking-tighter">Historia misji skautingowych</h3>
+              {academy.scoutingHistory.length === 0 ? (
+                <p className="mb-8 py-5 text-center text-xs text-slate-600 font-black italic uppercase tracking-tighter">Brak zakończonych misji.</p>
+              ) : (
+                <div className="mb-8 space-y-2">
+                  {academy.scoutingHistory.map(entry => (
+                    <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-slate-800/40 p-3">
+                      <div>
+                        <p className="text-xs text-white font-black italic uppercase tracking-tighter">
+                          {entry.isAnnualIntake ? 'Coroczny nabór · ' : ''}{entry.scoutName} · {entry.regionFocus ? (REGION_LABELS[entry.regionFocus] ?? entry.regionFocus) : 'Globalny'}
+                        </p>
+                        <p className="text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">{entry.startedDate} → {entry.completionDate} · {entry.cost.toLocaleString('pl-PL')} PLN</p>
+                      </div>
+                      <span className={`rounded border px-2 py-1 text-[9px] font-black italic uppercase tracking-tighter ${
+                        entry.status === 'SUCCESS'
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                          : entry.status === 'CANCELLED'
+                            ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                            : 'border-slate-500/30 bg-slate-500/10 text-slate-400'
+                      }`}>
+                        {entry.status === 'SUCCESS' ? `Znaleziono: ${entry.foundCount}` : entry.status === 'CANCELLED' ? 'Przerwana' : 'Bez kandydatów'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mb-6 border-t border-white/10" />
               <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Historia Awansowań</h3>
               {academy.promotedHistory.length === 0 ? (
                 <div className="text-center py-10">
@@ -1188,7 +1395,7 @@ export const AcademyView: React.FC = () => {
                   Decyzja akademii
                 </p>
                 <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">
-                  {youthConfirm.action === 'reject' ? 'Odrzucić zawodnika?' : 'Zwolnić zawodnika?'}
+                  {youthConfirm.action === 'dismiss' ? 'Zwolnić zawodnika?' : 'Odrzucić zawodnika?'}
                 </h3>
                 <p className="mt-3 text-sm font-medium leading-relaxed text-slate-300 normal-case">
                   {youthConfirm.name}
@@ -1205,7 +1412,8 @@ export const AcademyView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    dismissYouthPlayer(youthConfirm.id);
+                    if (youthConfirm.action === 'candidate') rejectScoutCandidate(youthConfirm.id);
+                    else dismissYouthPlayer(youthConfirm.id);
                     setYouthConfirm(null);
                   }}
                   className="rounded-2xl border border-rose-400/35 bg-rose-600/25 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-rose-100 transition-all hover:bg-rose-600/35"
@@ -1243,6 +1451,64 @@ export const AcademyView: React.FC = () => {
               >
                 ZWOLNIJ
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelMissionConfirm && (
+        <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-amber-500/25 bg-slate-950/95 p-8 shadow-[0_40px_100px_rgba(0,0,0,0.8)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-amber-400" />
+            <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
+            <div className="relative flex flex-col items-center gap-6 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[24px] border border-amber-400/30 bg-amber-500/15 text-3xl text-amber-300 shadow-[0_0_32px_rgba(251,191,36,0.2)]">!</div>
+              <div>
+                <p className="mb-2 text-[10px] text-amber-300 font-black italic uppercase tracking-tighter">Przerwanie misji skautingowej</p>
+                <h3 className="text-2xl text-white font-black italic uppercase tracking-tighter">Odwołać skauta?</h3>
+                <p className="mt-3 text-sm text-slate-300 font-black italic uppercase tracking-tighter">{cancelMissionConfirm.scoutName}</p>
+              </div>
+              <div className="w-full rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+                {cancelMissionConfirm.cost > 0 ? (
+                  <p className="text-[11px] leading-relaxed text-amber-200 font-black italic uppercase tracking-tighter">
+                    Koszt wysłania skauta w wysokości {cancelMissionConfirm.cost.toLocaleString('pl-PL')} PLN nie zostanie zwrócony.
+                  </p>
+                ) : (
+                  <p className="text-[11px] leading-relaxed text-amber-200 font-black italic uppercase tracking-tighter">
+                    Misja była bezpłatna, ale cały dotychczasowy postęp zostanie utracony.
+                  </p>
+                )}
+                <p className="mt-2 text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">Czy na pewno chcesz odwołać skauta?</p>
+              </div>
+              <div className="grid w-full grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCancelMissionConfirm(null)}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-[10px] text-slate-400 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white font-black italic uppercase tracking-tighter"
+                >
+                  Zostaw na misji
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const confirmation = cancelMissionConfirm;
+                    const ok = cancelAcademyScoutMission(confirmation.scoutId);
+                    setCancelMissionConfirm(null);
+                    showGameNotification(ok ? {
+                      title: 'Misja odwołana',
+                      message: `${confirmation.scoutName} jest ponownie dostępny.${confirmation.cost > 0 ? ' Koszt misji nie został zwrócony.' : ''}`,
+                      tone: 'warning'
+                    } : {
+                      title: 'Nie można odwołać misji',
+                      message: 'Misja została już zakończona albo skaut nie jest dostępny.',
+                      tone: 'warning'
+                    });
+                  }}
+                  className="rounded-2xl border border-rose-400/35 bg-rose-600/25 px-5 py-3 text-[10px] text-rose-100 transition-all hover:bg-rose-600/35 font-black italic uppercase tracking-tighter"
+                >
+                  Odwołaj skauta
+                </button>
+              </div>
             </div>
           </div>
         </div>

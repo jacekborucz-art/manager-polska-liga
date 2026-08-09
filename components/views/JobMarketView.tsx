@@ -1,9 +1,13 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PlayerPosition, Player, TransferOffer, TransferOfferStatus, PendingNegotiation, NegotiationStatus } from '../../types';
+import {
+  ViewState, PlayerPosition, Player,
+  TransferOffer, TransferOfferStatus, PendingNegotiation, NegotiationStatus,
+} from '../../types';
 import { PlayerMarketVisibilityService } from '../../services/PlayerMarketVisibilityService';
 import { ManagerJobService } from '../../services/ManagerJobService';
+import { TransferScoutingModal } from './TransferScoutingModal';
 
 type ContractStatusFilter = 'ALL' | 'FREE_AGENT' | 'CONTRACT' | 'TRANSFER_LIST';
 type MarketOriginFilter = 'ALL' | 'LOCAL' | 'FOREIGN';
@@ -39,7 +43,12 @@ const _persisted = {
 };
 
 export const JobMarketView: React.FC = () => {
-  const { coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails, transferOffers, pendingNegotiations, userTeamId, employedScouts, academy, isResigned, managerEmploymentStatus, managerProfile, managerJobOffers, applyForManagerJob, acceptManagerJobOffer, currentDate } = useGame();
+  const {
+    coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails,
+    transferOffers, pendingNegotiations, userTeamId, isResigned, managerEmploymentStatus,
+    managerProfile, managerJobOffers, applyForManagerJob, acceptManagerJobOffer, currentDate,
+    discoveredTransferPlayerIds,
+  } = useGame();
 
   // Filtry Piłkarzy - inicjalizowane z ostatnich zapamiętanych wartości
   const [searchTermPlayers, setSearchTermPlayers] = useState(_persisted.searchTermPlayers);
@@ -56,6 +65,7 @@ export const JobMarketView: React.FC = () => {
 
   const [filters, setFilters] = useState<typeof initialFilters>(_persisted.filters);
   const [showMyList, setShowMyList] = useState(false);
+  const [showScouting, setShowScouting] = useState(false);
   const [managerJobFeedback, setManagerJobFeedback] = useState<string | null>(null);
 
   const scrollRefPlayers = useRef<HTMLDivElement>(null);
@@ -97,25 +107,24 @@ export const JobMarketView: React.FC = () => {
 
   const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
   const clubById = useMemo(() => new Map(clubs.map(club => [club.id, club])), [clubs]);
+  const discoveredTransferPlayerIdSet = useMemo(() => new Set(discoveredTransferPlayerIds), [discoveredTransferPlayerIds]);
   const visibleMarketPlayers = useMemo(() => {
     const visibleByDefault: Player[] = [];
     const nonEuropeanFreeAgents: Player[] = [];
-    const activeMissions = academy?.activeMissions ?? [];
 
     allPlayersFlat.forEach(player => {
       const sourceClub = player.clubId === 'FREE_AGENTS' ? null : clubById.get(player.clubId);
+      const isDiscovered = discoveredTransferPlayerIdSet.has(player.id);
 
       if (player.clubId === 'FREE_AGENTS') {
-        const isScoutedMysteryPlayer =
-          PlayerMarketVisibilityService.isMysteryAgentHidden(player) &&
-          PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions);
+        const isScoutedMysteryPlayer = PlayerMarketVisibilityService.isMysteryAgentHidden(player) && isDiscovered;
         if (PlayerMarketVisibilityService.isMysteryAgentHidden(player) && !isScoutedMysteryPlayer) {
           return;
         }
 
         if (
           PlayerMarketVisibilityService.isEuropeanRegion(player.nationality) ||
-          PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions)
+          isDiscovered
         ) {
           visibleByDefault.push({
             ...player,
@@ -129,13 +138,13 @@ export const JobMarketView: React.FC = () => {
 
       if (
         PlayerMarketVisibilityService.isNaturallyVisiblePlayer(player, sourceClub) ||
-        PlayerMarketVisibilityService.hasRegionalScoutAccess(player.nationality, employedScouts, activeMissions)
+        isDiscovered
       ) {
         visibleByDefault.push(player);
       }
     });
 
-    const sampleSize = PlayerMarketVisibilityService.getNonEuropeanFreeAgentSampleSize(userClub, employedScouts);
+    const sampleSize = PlayerMarketVisibilityService.getNonEuropeanFreeAgentSampleSize(userClub, []);
     const sampledNonEuropeanFreeAgents = nonEuropeanFreeAgents
       .sort((a, b) =>
         PlayerMarketVisibilityService.getStablePlayerRoll(a, userTeamId) -
@@ -144,7 +153,7 @@ export const JobMarketView: React.FC = () => {
       .slice(0, sampleSize);
 
     return [...visibleByDefault, ...sampledNonEuropeanFreeAgents];
-  }, [allPlayersFlat, clubById, userClub, userTeamId, employedScouts, academy]);
+  }, [allPlayersFlat, clubById, userClub, userTeamId, discoveredTransferPlayerIdSet]);
   const hiddenMarketPlayersCount = Math.max(0, allPlayersFlat.length - visibleMarketPlayers.length);
 
   const nationalityOptions = useMemo(() =>
@@ -369,6 +378,12 @@ export const JobMarketView: React.FC = () => {
           )}
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowScouting(true)}
+              className="px-8 py-3 bg-amber-500/10 border border-amber-400/25 rounded-xl text-[9px] text-amber-300 hover:bg-amber-500/20 transition-all shadow-xl active:scale-95 group font-black italic uppercase tracking-tighter"
+            >
+              <span className="group-hover:text-amber-200 transition-colors font-black italic uppercase tracking-tighter">🔭 Scouting</span>
+            </button>
+            <button
               onClick={() => setShowMyList(true)}
               className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
             >
@@ -394,6 +409,8 @@ export const JobMarketView: React.FC = () => {
             </button>
           </div>
         </header>
+
+        {showScouting && <TransferScoutingModal onClose={() => setShowScouting(false)} />}
 
         {/* MOJA LISTA - OVERLAY */}
         {showMyList && (

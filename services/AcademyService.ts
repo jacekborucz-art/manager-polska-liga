@@ -615,23 +615,28 @@ export const AcademyService = {
     positionFilter?: import('../types').PlayerPosition,
     ageMin?: number,
     ageMax?: number,
+    missionDays?: number,
+    missionCost?: number,
+    scoutId?: string,
   ): AcademyScoutMission {
-    const daysNeeded = targetYouthPlayerId
+    const daysNeeded = missionDays ?? (targetYouthPlayerId
       ? (level <= 2 ? 14 : level <= 3 ? 10 : 7)
-      : calcScoutDays(regionFocus, level);
-    const cost = targetYouthPlayerId ? 0 : calcScoutCost(regionFocus, level);
+      : calcScoutDays(regionFocus, level));
+    const cost = missionCost ?? (targetYouthPlayerId ? 0 : calcScoutCost(regionFocus, level));
     const completion = new Date(currentDate);
     completion.setDate(completion.getDate() + daysNeeded);
     return {
       id: `SCOUT_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       targetYouthPlayerId,
       regionFocus,
+      startedDate: currentDate.toISOString().split('T')[0],
       completionDate: completion.toISOString().split('T')[0],
       isRegionScouting: !targetYouthPlayerId,
       cost,
       positionFilter,
       ageMin,
       ageMax,
+      scoutId,
     };
   },
 
@@ -800,18 +805,21 @@ export const AcademyService = {
     networkDepth: number = 10,
     completionDate: Date,
     clubReputation: number = 5,
+    discoveryChance?: number,
+    extraCandidateChance: number = 0,
   ): YouthPlayer[] {
     if (!mission.isRegionScouting || slotsAvailable <= 0) return [];
 
     // Szansa sukcesu: 45% (poziom 1) do 75% (poziom 5), +/-1% za punkt networkDepth względem 10
     const baseChance: Record<number, number> = { 1: 0.45, 2: 0.52, 3: 0.60, 4: 0.68, 5: 0.75 };
     const networkBonus = (networkDepth - 10) * 0.01;
-    const successChance = clamp((baseChance[academyLevel] ?? 0.50) + networkBonus, 0.20, 0.90);
+    const successChance = discoveryChance ?? clamp((baseChance[academyLevel] ?? 0.50) + networkBonus, 0.20, 0.90);
 
     if (Math.random() > successChance) return [];
 
     const maxFind = academyLevel <= 2 ? 2 : 3;
-    const count = Math.min(slotsAvailable, 1 + Math.floor(Math.random() * maxFind));
+    const baseCount = 1 + Math.floor(Math.random() * maxFind);
+    const count = Math.min(slotsAvailable, baseCount + (Math.random() < extraCandidateChance ? 1 : 0));
 
     const seed = completionDate.getTime() + Math.floor(Math.random() * 9999);
     const rng = seededRng(seed);
@@ -831,7 +839,11 @@ export const AcademyService = {
       const ageMin = mission.ageMin ?? 15;
       const ageMax = mission.ageMax ?? 21;
       const age = ageMin + Math.floor(rng() * (ageMax - ageMin + 1));
-      const hiddenTalent = rollHiddenTalent(academyLevel, clubReputation, rng);
+      let hiddenTalent = rollHiddenTalent(academyLevel, clubReputation, rng);
+      const eliteNetworkRerollChance = clamp((networkDepth - 10) * 0.025, 0, 0.25);
+      if (rng() < eliteNetworkRerollChance) {
+        hiddenTalent = Math.max(hiddenTalent, rollHiddenTalent(academyLevel, clubReputation, rng));
+      }
       const scoutBonus = Math.min(3, Math.max(0, Math.floor((networkDepth - 10) / 4)));
       const targetOverall = rollTargetYouthOverall(academyLevel, clubReputation, hiddenTalent, rng) + scoutBonus;
       const attrs = generateYouthAttributes(pos, hiddenTalent, rng, Math.min(80, targetOverall));

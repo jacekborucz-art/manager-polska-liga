@@ -26,6 +26,10 @@ export interface SaveState {
   scoutMarketRefreshDate: string;
   scoutMarketManualRefreshCount: number;
   scoutMarketPeriodStart: string;
+  transferScoutPool?: any[];
+  transferScoutingAssignments?: any[];
+  transferScoutingReports?: any[];
+  discoveredTransferPlayerIds?: string[];
   mysteryAgentOffer?: any;
   lineups: Record<string, any>;
   userTeamId: string | null;
@@ -321,6 +325,61 @@ function normalizeMessages(messages: unknown): any[] {
     ...message,
     date: asDate(message?.date),
   }));
+}
+
+function normalizeAcademyState(academy: any, currentDate: Date): any {
+  if (!academy || typeof academy !== 'object') return null;
+  const dateOnly = currentDate.toISOString().split('T')[0];
+  const legacyCandidates = asArray(academy.youthPlayers).filter((player: any) => player?.contractSigned === false);
+  const existingCandidates = asArray(academy.scoutingCandidates);
+  const candidateIds = new Set(existingCandidates.map((candidate: any) => candidate?.id));
+  const migratedCandidates = legacyCandidates
+    .filter((candidate: any) => !candidateIds.has(candidate?.id))
+    .map((candidate: any) => {
+      const deadline = new Date(currentDate);
+      deadline.setDate(deadline.getDate() + 14);
+      const attributeEstimates = Object.fromEntries(
+        Object.entries(candidate.attributes ?? {}).map(([key, value]) => {
+          const rating = typeof value === 'number' ? value : 1;
+          return [key, { min: Math.max(1, rating - 8), max: Math.min(100, rating + 8) }];
+        })
+      );
+      return {
+        ...candidate,
+        sourceMissionId: `LEGACY_${candidate.id}`,
+        scoutId: 'LEGACY_SCOUT',
+        discoveredDate: dateOnly,
+        decisionDeadline: deadline.toISOString().split('T')[0],
+        scoutReport: {
+          scoutName: 'Archiwalny raport',
+          confidence: 'LOW',
+          talentRating: candidate.revealedTalentRating,
+          attributeEstimates,
+          recommendation: 'OBSERVE',
+        },
+      };
+    });
+
+  const activeMissions = asArray(academy.activeMissions).map((mission: any) => ({
+    ...mission,
+    startedDate: asDateOnlyString(mission.startedDate, dateOnly),
+  }));
+  const currentYear = currentDate.getFullYear();
+  const annualIntakeAvailableYear = academy.annualIntakeAvailableYear
+    ?? (currentDate.getMonth() >= 7
+      && (academy.lastIntakeYear ?? 0) < currentYear
+      && !activeMissions.some((mission: any) => mission?.isAnnualIntake)
+      ? currentYear
+      : undefined);
+
+  return {
+    ...academy,
+    youthPlayers: asArray(academy.youthPlayers).filter((player: any) => player?.contractSigned !== false),
+    scoutingCandidates: [...existingCandidates, ...migratedCandidates],
+    scoutingHistory: asArray(academy.scoutingHistory),
+    activeMissions,
+    annualIntakeAvailableYear,
+  };
 }
 
 function normalizeClubManagementSource(club: any): any {
@@ -735,13 +794,17 @@ export function normalizeSaveState(data: SaveState): SaveState {
     players: normalizedPlayers,
     reserves: asArray(data.reserves),
     reserveCoachId: data.reserveCoachId ?? null,
-    academy: data.academy ?? null,
+    academy: normalizeAcademyState(data.academy, asDate(data.currentDate)),
     reserveReleaseDirective: (data as any).reserveReleaseDirective ?? null,
     scoutPool: asArray(data.scoutPool),
     scoutMarket: asArray(data.scoutMarket),
     scoutMarketRefreshDate: asDateOnlyString(data.scoutMarketRefreshDate),
     scoutMarketManualRefreshCount: data.scoutMarketManualRefreshCount ?? 0,
     scoutMarketPeriodStart: asDateOnlyString(data.scoutMarketPeriodStart),
+    transferScoutPool: asArray((data as any).transferScoutPool),
+    transferScoutingAssignments: asArray((data as any).transferScoutingAssignments),
+    transferScoutingReports: asArray((data as any).transferScoutingReports),
+    discoveredTransferPlayerIds: asArray((data as any).discoveredTransferPlayerIds).filter((id: any) => typeof id === 'string'),
     mysteryAgentOffer: data.mysteryAgentOffer ?? null,
     lineups: asRecord(data.lineups),
     seasonTemplate: normalizeSeasonTemplate(data.seasonTemplate),

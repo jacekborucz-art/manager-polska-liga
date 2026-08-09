@@ -23,9 +23,14 @@ PromotionPlayoffSingleMatchResult,
 ActivePlayoffMatchData,
 ClubAcademy,
 AcademyScoutMission,
+AcademyScoutCandidate,
 Region,
 YouthPlayer,
 Scout,
+TransferScout,
+TransferScoutingAssignment,
+TransferScoutingFilters,
+TransferScoutingReport,
 MatchHistoryEntry,
 WCQPlayoffState,
 WCState,
@@ -64,6 +69,7 @@ import { AiFriendlyMatchSimulator } from '../services/AiFriendlyMatchSimulator';
 import { KitSelection } from '../services/KitSelectionService';
 import { AcademyService, CLUBS_WITH_PRESET_ACADEMY, ACADEMY_MAX_SLOTS } from '../services/AcademyService';
 import { ScoutService } from '../services/ScoutService';
+import { TransferScoutingService } from '../services/TransferScoutingService';
 import { NationalTeamService } from '../services/NationalTeamService';
 import { RAW_CHAMPIONS_LEAGUE_CLUBS, generateEuropeanClubId } from '../resources/static_db/clubs/ChampionsLeagueTeams';
 import { RAW_EUROPA_LEAGUE_CLUBS, generateELClubId } from '../resources/static_db/clubs/EuropeLeagueTeams';
@@ -1121,6 +1127,16 @@ finalizeFreeAgentContract: (mailId: string) => void;
   submitTransferOffer: (playerId: string, offer: TransferClubBidInput) => TransferOfferSubmissionResult;
   submitLoanOffer: (playerId: string, offer: LoanOfferSubmissionInput) => LoanOfferSubmissionResult;
   finalizeTransferNegotiation: (offerId: string, contract: TransferContractInput, bypassBoardCheck?: boolean) => TransferOfferSubmissionResult;
+  transferScoutPool: TransferScout[];
+  employedTransferScouts: TransferScout[];
+  transferScoutMarket: TransferScout[];
+  transferScoutingAssignments: TransferScoutingAssignment[];
+  transferScoutingReports: TransferScoutingReport[];
+  discoveredTransferPlayerIds: string[];
+  hireTransferScout: (scoutId: string) => { ok: boolean; message: string };
+  fireTransferScout: (scoutId: string) => { ok: boolean; message: string };
+  startTransferScoutingAssignment: (scoutId: string, filters: TransferScoutingFilters) => { ok: boolean; message: string };
+  cancelTransferScoutingAssignment: (scoutId: string) => { ok: boolean; message: string };
   incomingOffers: IncomingTransferOffer[];
   viewedIncomingOfferId: string | null;
   respondToIncomingOffer: (
@@ -1202,9 +1218,13 @@ finalizeFreeAgentContract: (mailId: string) => void;
   dismissYouthPlayer: (youthId: string) => void;
   setYouthFocus: (youthId: string, attr: keyof import('../types').PlayerAttributes | null) => void;
   startScoutMission: (targetYouthPlayerId?: string, regionFocus?: Region, positionFilter?: import('../types').PlayerPosition, ageMin?: number, ageMax?: number, scoutId?: string) => boolean;
+  startAnnualYouthIntake: (scoutId: string, regionFocus?: Region) => boolean;
+  cancelAcademyScoutMission: (scoutId: string) => boolean;
   setAcademyRegionFocus: (region: Region | undefined) => void;
   setAcademyOperationalBudget: (amount: number) => void;
-  signYouthPlayerContract: (youthId: string) => void;
+  signYouthPlayerContract: (youthId: string) => boolean;
+  rejectScoutCandidate: (candidateId: string) => void;
+  startScoutCandidateFollowUp: (candidateId: string) => boolean;
   scoutPool: Scout[];
   scoutMarket: Scout[];
   employedScouts: Scout[];
@@ -1282,6 +1302,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
  const [scoutMarketRefreshDate, setScoutMarketRefreshDate] = useState<string>('');
  const [scoutMarketManualRefreshCount, setScoutMarketManualRefreshCount] = useState<number>(0);
  const [scoutMarketPeriodStart, setScoutMarketPeriodStart] = useState<string>('');
+ const [transferScoutPool, setTransferScoutPool] = useState<TransferScout[]>(() => TransferScoutingService.generateScoutPool(Date.now()));
+ const [transferScoutingAssignments, setTransferScoutingAssignments] = useState<TransferScoutingAssignment[]>([]);
+ const [transferScoutingReports, setTransferScoutingReports] = useState<TransferScoutingReport[]>([]);
+ const [discoveredTransferPlayerIds, setDiscoveredTransferPlayerIds] = useState<string[]>([]);
   const [mysteryAgentOffer, setMysteryAgentOffer] = useState<MysteryAgentOfferState | null>(null);
   const [lineups, setLineups] = useState<Record<string, Lineup>>({});
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
@@ -2323,6 +2347,10 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setScoutMarketRefreshDate('');
     setScoutMarketManualRefreshCount(0);
     setScoutMarketPeriodStart('');
+    setTransferScoutPool(TransferScoutingService.generateScoutPool(newSessionSeed));
+    setTransferScoutingAssignments([]);
+    setTransferScoutingReports([]);
+    setDiscoveredTransferPlayerIds([]);
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
     setCurrentDate(careerStartDate);
@@ -3555,6 +3583,10 @@ if (userTeamId) {
     scoutMarketRefreshDate,
     scoutMarketManualRefreshCount,
     scoutMarketPeriodStart,
+    transferScoutPool,
+    transferScoutingAssignments,
+    transferScoutingReports,
+    discoveredTransferPlayerIds,
     mysteryAgentOffer,
     lineups,
     userTeamId,
@@ -3879,6 +3911,12 @@ if (userTeamId) {
     setScoutMarketRefreshDate(data.scoutMarketRefreshDate);
     setScoutMarketManualRefreshCount(data.scoutMarketManualRefreshCount ?? 0);
     setScoutMarketPeriodStart(data.scoutMarketPeriodStart ?? '');
+    setTransferScoutPool(data.transferScoutPool?.length
+      ? data.transferScoutPool
+      : TransferScoutingService.generateScoutPool(data.sessionSeed ?? Date.now()));
+    setTransferScoutingAssignments(data.transferScoutingAssignments ?? []);
+    setTransferScoutingReports(data.transferScoutingReports ?? []);
+    setDiscoveredTransferPlayerIds(data.discoveredTransferPlayerIds ?? []);
     setMysteryAgentOffer(data.mysteryAgentOffer ?? null);
     setLineups(linkedReserveMigration.lineups);
     setUserTeamId(data.userTeamId);
@@ -4342,7 +4380,10 @@ const selectUserTeam = (clubId: string) => {
       setAcademy({
         level: presetLevel,
         youthPlayers: [],
+        scoutingCandidates: [],
+        scoutingHistory: [],
         lastIntakeYear: 0,
+        annualIntakeAvailableYear: currentDate.getMonth() >= 7 ? currentDate.getFullYear() : undefined,
         operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(presetLevel),
         upgradeInProgress: false,
         upgradeCompletionDate: undefined,
@@ -4360,6 +4401,10 @@ const selectUserTeam = (clubId: string) => {
     const market = ScoutService.generateMarket(pool, selectedClub.reputation ?? 5, selectedClub.board?.kompetencja);
     setScoutMarket(market);
     setScoutMarketRefreshDate(new Date().toISOString().split('T')[0]);
+    setTransferScoutPool(TransferScoutingService.generateScoutPool(sessionSeed || Date.now()));
+    setTransferScoutingAssignments([]);
+    setTransferScoutingReports([]);
+    setDiscoveredTransferPlayerIds([]);
 
     const lineup = LineupService.autoPickLineup(clubId, squad);
     setLineups(prev => ({ ...prev, [clubId]: lineup }));
@@ -5506,7 +5551,10 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     const newAcademy: ClubAcademy = {
       level: 1,
       youthPlayers: [],
+      scoutingCandidates: [],
+      scoutingHistory: [],
       lastIntakeYear: 0,
+      annualIntakeAvailableYear: currentDate.getMonth() >= 7 ? currentDate.getFullYear() : undefined,
       operationalBudgetWeekly: AcademyService.getDefaultOperationalBudget(1),
       upgradeInProgress: false,
       regionFocus: undefined,
@@ -5519,7 +5567,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       sender: 'Dyrektor Akademii',
       role: 'Akademia Piłkarska',
       subject: 'Otwarto Akademię Piłkarską Pierwszego Stopnia.',
-      body: 'Gratulacje! Akademia Piłkarska Pierwszego Stopnia jest gotowa. Co roku przyjmiemy nowych wychowanków. Proszę monitorować ich rozwój i zlecić skautom ocenę talentów i awansować najlepszych do rezerw lub pierwszego składu.',
+      body: 'Gratulacje! Akademia Piłkarska Pierwszego Stopnia jest gotowa. Od 1 sierpnia każdego roku możesz przypisać skauta do bezpłatnego naboru młodzieży. Znalezieni kandydaci trafią na shortlistę, a najlepszych możesz podpisać i później rozwijać w Akademii.',
       date: new Date(currentDate),
       isRead: false,
       type: MailType.BOARD,
@@ -5678,14 +5726,119 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     } : prev);
   }, [academy]);
 
-  const signYouthPlayerContract = useCallback((youthId: string) => {
+  const signYouthPlayerContract = useCallback((youthId: string): boolean => {
+    if (!academy) return false;
+    const candidate = academy.scoutingCandidates.find(entry => entry.id === youthId);
+    if (!candidate) {
+      if (!academy.youthPlayers.some(entry => entry.id === youthId)) return false;
+      setAcademy(prev => prev ? {
+        ...prev,
+        youthPlayers: prev.youthPlayers.map(yp => yp.id === youthId ? { ...yp, contractSigned: true } : yp),
+      } : prev);
+      return true;
+    }
+    if (academy.youthPlayers.length >= ACADEMY_MAX_SLOTS[academy.level]) return false;
+
+    setAcademy(prev => {
+      if (!prev) return prev;
+      const selected = prev.scoutingCandidates.find(entry => entry.id === youthId);
+      if (!selected || prev.youthPlayers.length >= ACADEMY_MAX_SLOTS[prev.level]) return prev;
+      return {
+        ...prev,
+        scoutingCandidates: prev.scoutingCandidates.filter(entry => entry.id !== youthId),
+        youthPlayers: [...prev.youthPlayers, { ...selected, contractSigned: true }],
+      };
+    });
+    return true;
+  }, [academy]);
+
+  const rejectScoutCandidate = useCallback((candidateId: string) => {
     setAcademy(prev => prev ? {
       ...prev,
-      youthPlayers: prev.youthPlayers.map(yp =>
-        yp.id === youthId ? { ...yp, contractSigned: true } : yp
-      ),
+      scoutingCandidates: prev.scoutingCandidates.filter(candidate => candidate.id !== candidateId),
     } : prev);
   }, []);
+
+  const startScoutCandidateFollowUp = useCallback((candidateId: string): boolean => {
+    if (!academy || !userTeamId) return false;
+    const candidate = academy.scoutingCandidates.find(entry => entry.id === candidateId);
+    if (!candidate || academy.activeMissions.some(mission => mission.targetScoutCandidateId === candidateId)) return false;
+    const scout = scoutPool.find(entry => entry.id === candidate.scoutId);
+    if (!scout || scout.employedByClubId !== userTeamId || scout.isOnMission) return false;
+    const sourceMission = academy.scoutingHistory.find(entry => entry.id === `HISTORY_${candidate.sourceMissionId}`);
+    const cost = ScoutService.getFollowUpCost(sourceMission?.cost ?? 12_000);
+    const userClub = clubs.find(club => club.id === userTeamId);
+    if (!userClub || userClub.budget < cost) return false;
+
+    const completionDate = new Date(currentDate);
+    completionDate.setDate(completionDate.getDate() + 7);
+    const decisionDeadline = new Date(completionDate);
+    decisionDeadline.setDate(decisionDeadline.getDate() + 14);
+    const mission: AcademyScoutMission = {
+      id: `SCOUT_FOLLOWUP_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      targetScoutCandidateId: candidateId,
+      regionFocus: candidate.nationality,
+      startedDate: new Date(currentDate).toISOString().split('T')[0],
+      completionDate: completionDate.toISOString().split('T')[0],
+      isRegionScouting: false,
+      cost,
+      positionFilter: candidate.position,
+      ageMin: candidate.age,
+      ageMax: candidate.age,
+      scoutId: scout.id,
+    };
+    setClubs(prev => prev.map(club => club.id === userTeamId ? { ...club, budget: club.budget - cost } : club));
+    addFinanceLog(userTeamId, `Dodatkowa obserwacja: ${candidate.firstName} ${candidate.lastName}`, -cost, currentDate);
+    setScoutPool(prev => prev.map(entry => entry.id === scout.id ? { ...entry, isOnMission: true } : entry));
+    setAcademy(prev => prev ? {
+      ...prev,
+      activeMissions: [...prev.activeMissions, mission],
+      scoutingCandidates: prev.scoutingCandidates.map(entry => entry.id === candidateId
+        ? { ...entry, decisionDeadline: decisionDeadline.toISOString().split('T')[0] }
+        : entry),
+    } : prev);
+    return true;
+  }, [academy, userTeamId, scoutPool, clubs, currentDate, addFinanceLog]);
+
+  const startAnnualYouthIntake = useCallback((scoutId: string, regionFocus?: Region): boolean => {
+    if (!academy || !userTeamId || !academy.annualIntakeAvailableYear) return false;
+    const intakeYear = academy.annualIntakeAvailableYear;
+    if (academy.lastIntakeYear >= intakeYear || academy.activeMissions.some(mission => mission.isAnnualIntake)) return false;
+    const scout = scoutPool.find(entry => entry.id === scoutId);
+    if (!scout || scout.employedByClubId !== userTeamId || scout.isOnMission) return false;
+    if (academy.activeMissions.some(mission => mission.scoutId === scout.id)) return false;
+
+    const completionDate = new Date(currentDate);
+    completionDate.setDate(completionDate.getDate() + ScoutService.getAnnualIntakeDays(scout, regionFocus));
+    const mission: AcademyScoutMission = {
+      id: `SCOUT_ANNUAL_${intakeYear}_${Date.now()}`,
+      regionFocus,
+      startedDate: new Date(currentDate).toISOString().split('T')[0],
+      completionDate: completionDate.toISOString().split('T')[0],
+      isRegionScouting: false,
+      isAnnualIntake: true,
+      annualIntakeYear: intakeYear,
+      cost: 0,
+      ageMin: 14,
+      ageMax: 17,
+      scoutId: scout.id,
+    };
+
+    setScoutPool(prev => prev.map(entry => entry.id === scout.id ? { ...entry, isOnMission: true } : entry));
+    setAcademy(prev => {
+      if (!prev
+          || prev.annualIntakeAvailableYear !== intakeYear
+          || prev.lastIntakeYear >= intakeYear
+          || prev.activeMissions.some(entry => entry.isAnnualIntake)) return prev;
+      return {
+        ...prev,
+        activeMissions: [...prev.activeMissions, mission],
+        lastIntakeYear: intakeYear,
+        annualIntakeAvailableYear: undefined,
+      };
+    });
+    return true;
+  }, [academy, userTeamId, scoutPool, currentDate]);
 
   const setYouthFocus = useCallback((youthId: string, attr: keyof import('../types').PlayerAttributes | null) => {
     if (!academy) return;
@@ -5699,24 +5852,78 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
 
   const startScoutMission = useCallback((targetYouthPlayerId?: string, regionFocus?: Region, positionFilter?: import('../types').PlayerPosition, ageMin?: number, ageMax?: number, scoutId?: string): boolean => {
     if (!academy || !userTeamId) return false;
+    const selectedRegion = targetYouthPlayerId ? (regionFocus ?? academy.regionFocus) : regionFocus;
+    const scout = scoutId ? scoutPool.find(entry => entry.id === scoutId) : undefined;
+    if (!targetYouthPlayerId) {
+      if (!scout || scout.employedByClubId !== userTeamId || scout.isOnMission) return false;
+      if (academy.activeMissions.some(entry => entry.scoutId === scout.id)) return false;
+      if ((ageMin ?? 15) < 15 || (ageMax ?? 21) > 21 || (ageMin ?? 15) > (ageMax ?? 21)) return false;
+    }
+    const missionDays = targetYouthPlayerId
+      ? undefined
+      : ScoutService.getMissionDays(scout, selectedRegion, academy.level);
+    const missionCost = targetYouthPlayerId
+      ? undefined
+      : ScoutService.getMissionCost(scout, selectedRegion, academy.level);
     const mission = AcademyService.buildScoutMission(
       targetYouthPlayerId,
-      regionFocus ?? academy.regionFocus,
+      selectedRegion,
       academy.level,
       currentDate,
       positionFilter,
       ageMin,
       ageMax,
+      missionDays,
+      missionCost,
+      scout?.id,
     );
-    if (scoutId) mission.scoutId = scoutId;
     const userClub = clubs.find(c => c.id === userTeamId);
     if (!userClub || userClub.budget < mission.cost) return false;
     setClubs(prev => prev.map(c => c.id === userTeamId ? { ...c, budget: c.budget - mission.cost } : c));
     addFinanceLog(userTeamId, 'Misja skautingowa akademii', -mission.cost, currentDate);
     setAcademy(prev => prev ? { ...prev, activeMissions: [...prev.activeMissions, mission] } : prev);
-    if (scoutId) setScoutPool(prev => prev.map(s => s.id === scoutId ? { ...s, isOnMission: true } : s));
+    if (scout) setScoutPool(prev => prev.map(s => s.id === scout.id ? { ...s, isOnMission: true } : s));
     return true;
-  }, [academy, userTeamId, clubs, currentDate, addFinanceLog]);
+  }, [academy, userTeamId, clubs, currentDate, addFinanceLog, scoutPool]);
+
+  const cancelAcademyScoutMission = useCallback((scoutId: string): boolean => {
+    if (!academy || !userTeamId) return false;
+    const mission = academy.activeMissions.find(entry => entry.scoutId === scoutId);
+    const scout = scoutPool.find(entry => entry.id === scoutId);
+    if (!mission || !scout || scout.employedByClubId !== userTeamId) return false;
+    const completionDate = new Date(currentDate).toISOString().split('T')[0];
+
+    setScoutPool(prev => prev.map(entry => entry.id === scoutId ? { ...entry, isOnMission: false } : entry));
+    setAcademy(prev => {
+      if (!prev || !prev.activeMissions.some(entry => entry.id === mission.id)) return prev;
+      return {
+        ...prev,
+        activeMissions: prev.activeMissions.filter(entry => entry.id !== mission.id),
+        annualIntakeAvailableYear: mission.isAnnualIntake
+          ? mission.annualIntakeYear
+          : prev.annualIntakeAvailableYear,
+        lastIntakeYear: mission.isAnnualIntake && mission.annualIntakeYear
+          ? Math.min(prev.lastIntakeYear, mission.annualIntakeYear - 1)
+          : prev.lastIntakeYear,
+        scoutingHistory: [{
+          id: `HISTORY_${mission.id}`,
+          scoutId,
+          scoutName: `${scout.firstName} ${scout.lastName}`,
+          regionFocus: mission.regionFocus,
+          positionFilter: mission.positionFilter,
+          ageMin: mission.ageMin ?? 15,
+          ageMax: mission.ageMax ?? 21,
+          startedDate: mission.startedDate,
+          completionDate,
+          cost: mission.cost,
+          status: 'CANCELLED',
+          foundCount: 0,
+          isAnnualIntake: mission.isAnnualIntake,
+        }, ...prev.scoutingHistory].slice(0, 100),
+      };
+    });
+    return true;
+  }, [academy, userTeamId, scoutPool, currentDate]);
 
   const setAcademyRegionFocus = useCallback((region: Region | undefined) => {
     setAcademy(prev => prev ? { ...prev, regionFocus: region } : prev);
@@ -5730,6 +5937,81 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
     () => scoutPool.filter(s => s.employedByClubId === userTeamId),
     [scoutPool, userTeamId]
   );
+
+  const employedTransferScouts = useMemo(
+    () => transferScoutPool.filter(scout => scout.employedByClubId === userTeamId),
+    [transferScoutPool, userTeamId]
+  );
+
+  const transferScoutMarket = useMemo(
+    () => transferScoutPool.filter(scout => !scout.employedByClubId).slice(0, 12),
+    [transferScoutPool]
+  );
+
+  const hireTransferScout = useCallback((scoutId: string): { ok: boolean; message: string } => {
+    if (!userTeamId) return { ok: false, message: 'Brak klubu gracza.' };
+    if (employedTransferScouts.length >= TransferScoutingService.getMaxScouts()) {
+      return { ok: false, message: 'Możesz zatrudnić maksymalnie 3 skautów transferowych.' };
+    }
+    const scout = transferScoutPool.find(entry => entry.id === scoutId);
+    const club = clubs.find(entry => entry.id === userTeamId);
+    if (!scout || scout.employedByClubId) return { ok: false, message: 'Ten skaut nie jest już dostępny.' };
+    if (!club) return { ok: false, message: 'Nie znaleziono klubu gracza.' };
+    const hiringFee = scout.weeklySalary * 4;
+    if (club.budget < hiringFee) return { ok: false, message: 'Klub nie ma środków na zatrudnienie tego skauta.' };
+
+    setClubs(prev => prev.map(entry => entry.id === userTeamId ? { ...entry, budget: entry.budget - hiringFee } : entry));
+    addFinanceLog(userTeamId, `Zatrudnienie skauta transferowego: ${scout.firstName} ${scout.lastName}`, -hiringFee, currentDate);
+    setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId ? { ...entry, employedByClubId: userTeamId } : entry));
+    return { ok: true, message: `${scout.firstName} ${scout.lastName} dołączył do działu skautingu.` };
+  }, [userTeamId, employedTransferScouts.length, transferScoutPool, clubs, addFinanceLog, currentDate]);
+
+  const fireTransferScout = useCallback((scoutId: string): { ok: boolean; message: string } => {
+    if (!userTeamId) return { ok: false, message: 'Brak klubu gracza.' };
+    const scout = transferScoutPool.find(entry => entry.id === scoutId && entry.employedByClubId === userTeamId);
+    if (!scout) return { ok: false, message: 'Nie znaleziono zatrudnionego skauta.' };
+    if (transferScoutingAssignments.some(assignment => assignment.scoutId === scoutId)) {
+      return { ok: false, message: 'Najpierw odwołaj aktywne zadanie tego skauta.' };
+    }
+    setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId
+      ? { ...entry, employedByClubId: undefined, isOnAssignment: false }
+      : entry
+    ));
+    return { ok: true, message: `${scout.firstName} ${scout.lastName} opuścił klub.` };
+  }, [userTeamId, transferScoutPool, transferScoutingAssignments]);
+
+  const startTransferScoutingAssignment = useCallback((
+    scoutId: string,
+    filters: TransferScoutingFilters,
+  ): { ok: boolean; message: string } => {
+    if (!userTeamId) return { ok: false, message: 'Brak klubu gracza.' };
+    const scout = transferScoutPool.find(entry => entry.id === scoutId && entry.employedByClubId === userTeamId);
+    const club = clubs.find(entry => entry.id === userTeamId);
+    if (!scout || scout.isOnAssignment) return { ok: false, message: 'Skaut jest już zajęty.' };
+    if (transferScoutingAssignments.some(assignment => assignment.scoutId === scoutId)) {
+      return { ok: false, message: 'Skaut ma już aktywne zadanie.' };
+    }
+    if (!club) return { ok: false, message: 'Nie znaleziono klubu gracza.' };
+    if (filters.ageMin < 16 || filters.ageMax > 43 || filters.ageMin > filters.ageMax) {
+      return { ok: false, message: 'Nieprawidłowy zakres wieku.' };
+    }
+    const assignment = TransferScoutingService.buildAssignment(scout, userTeamId, filters, currentDate);
+    if (club.budget < assignment.cost) return { ok: false, message: 'Klub nie ma środków na tę misję.' };
+
+    setClubs(prev => prev.map(entry => entry.id === userTeamId ? { ...entry, budget: entry.budget - assignment.cost } : entry));
+    addFinanceLog(userTeamId, `Skauting transferowy: ${scout.firstName} ${scout.lastName}`, -assignment.cost, currentDate);
+    setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId ? { ...entry, isOnAssignment: true } : entry));
+    setTransferScoutingAssignments(prev => [...prev, assignment]);
+    return { ok: true, message: `Zadanie rozpoczęte. Raport będzie gotowy ${assignment.completionDate}.` };
+  }, [userTeamId, transferScoutPool, clubs, transferScoutingAssignments, currentDate, addFinanceLog]);
+
+  const cancelTransferScoutingAssignment = useCallback((scoutId: string): { ok: boolean; message: string } => {
+    const assignment = transferScoutingAssignments.find(entry => entry.scoutId === scoutId);
+    if (!assignment) return { ok: false, message: 'Nie znaleziono aktywnego zadania.' };
+    setTransferScoutingAssignments(prev => prev.filter(entry => entry.id !== assignment.id));
+    setTransferScoutPool(prev => prev.map(entry => entry.id === scoutId ? { ...entry, isOnAssignment: false } : entry));
+    return { ok: true, message: 'Skaut został odwołany. Koszt zadania nie został zwrócony.' };
+  }, [transferScoutingAssignments]);
 
   const addMysteryAgentPlayerToHiddenPool = useCallback((offer: MysteryAgentOfferState) => {
     setPlayers(prev => {
@@ -6051,9 +6333,42 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
 
   const fireScout = useCallback((scoutId: string) => {
     if (!userTeamId) return;
+    const scout = scoutPool.find(entry => entry.id === scoutId);
     setScoutPool(prev => prev.map(s => s.id === scoutId ? { ...s, employedByClubId: undefined, isOnMission: false } : s));
-    setAcademy(prev => prev ? { ...prev, activeMissions: prev.activeMissions.filter(m => m.scoutId !== scoutId) } : prev);
-  }, [userTeamId]);
+    setAcademy(prev => {
+      if (!prev) return prev;
+      const cancelledMissions = prev.activeMissions.filter(
+        mission => mission.scoutId === scoutId && (mission.isRegionScouting || mission.isAnnualIntake)
+      );
+      const cancelledAnnualMission = cancelledMissions.find(mission => mission.isAnnualIntake);
+      return {
+        ...prev,
+        activeMissions: prev.activeMissions.filter(mission => mission.scoutId !== scoutId),
+        annualIntakeAvailableYear: cancelledAnnualMission?.annualIntakeYear ?? prev.annualIntakeAvailableYear,
+        lastIntakeYear: cancelledAnnualMission?.annualIntakeYear
+          ? Math.min(prev.lastIntakeYear, cancelledAnnualMission.annualIntakeYear - 1)
+          : prev.lastIntakeYear,
+        scoutingHistory: [
+          ...cancelledMissions.map(mission => ({
+            id: `HISTORY_${mission.id}`,
+            scoutId,
+            scoutName: scout ? `${scout.firstName} ${scout.lastName}` : 'Nieznany skaut',
+            regionFocus: mission.regionFocus,
+            positionFilter: mission.positionFilter,
+            ageMin: mission.ageMin ?? 15,
+            ageMax: mission.ageMax ?? 21,
+            startedDate: mission.startedDate,
+            completionDate: new Date(currentDate).toISOString().split('T')[0],
+            cost: mission.cost,
+            status: 'CANCELLED' as const,
+            foundCount: 0,
+            isAnnualIntake: mission.isAnnualIntake,
+          })),
+          ...prev.scoutingHistory,
+        ].slice(0, 100),
+      };
+    });
+  }, [userTeamId, scoutPool, currentDate]);
 
   // ── END AKADEMIA ────────────────────────────────────────────────────────────
 
@@ -12779,6 +13094,291 @@ const finalResult: SimulationOutput = {
     }
     // --- END INCOMING TRANSFER OFFERS ---
 
+    // ── SKAUTING TRANSFEROWY: zakończenie zadań i raporty ────────────────────
+    if (userTeamId && transferScoutingAssignments.length > 0) {
+      const dateOnly = nextDay.toISOString().split('T')[0];
+      const completedAssignments = transferScoutingAssignments.filter(assignment => assignment.completionDate <= dateOnly);
+      if (completedAssignments.length > 0) {
+        const userClub = clubs.find(club => club.id === userTeamId);
+        if (userClub) {
+          const completedReports = completedAssignments.flatMap(assignment => {
+            const scout = transferScoutPool.find(entry => entry.id === assignment.scoutId);
+            if (!scout) return [];
+            return [TransferScoutingService.resolveAssignment(
+              assignment,
+              scout,
+              userClub,
+              clubs,
+              players,
+              nextDay,
+            )];
+          });
+          const discoveredIds = completedReports.flatMap(report => report.candidates.map(candidate => candidate.playerId));
+          const completedIds = new Set(completedAssignments.map(assignment => assignment.id));
+          const scoutIds = new Set(completedAssignments.map(assignment => assignment.scoutId));
+
+          setTransferScoutingAssignments(prev => prev.filter(assignment => !completedIds.has(assignment.id)));
+          setTransferScoutPool(prev => prev.map(scout => scoutIds.has(scout.id) ? { ...scout, isOnAssignment: false } : scout));
+          setTransferScoutingReports(prev => [...completedReports, ...prev].slice(0, 50));
+          setDiscoveredTransferPlayerIds(prev => Array.from(new Set([...prev, ...discoveredIds])));
+
+          const reportMails: MailMessage[] = completedReports.map(report => ({
+            id: `TRANSFER_SCOUT_REPORT_${report.id}`,
+            sender: report.scoutName,
+            role: 'Dział skautingu transferowego',
+            subject: report.candidates.length > 0
+              ? `Raport skautingowy: ${report.candidates.length} kandydatów`
+              : 'Raport skautingowy: brak kandydatów',
+            body: report.candidates.length > 0
+              ? `Zakończyłem poszukiwania. Znalazłem ${report.candidates.length} zawodników spełniających kryteria. Pełny raport jest dostępny w Centrum Transferowym w oknie SCOUTING.`
+              : 'Zakończyłem poszukiwania, ale nie znalazłem zawodników spełniających wszystkie kryteria. Warto rozszerzyć zakres zadania.',
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.SCOUT,
+            priority: report.candidates.length > 0 ? 70 : 45,
+          }));
+          if (reportMails.length > 0) setMessages(prev => [...reportMails, ...prev]);
+        }
+      }
+    }
+
+    if (userTeamId && nextDay.getDay() === 1) {
+      const employed = transferScoutPool.filter(scout => scout.employedByClubId === userTeamId);
+      const totalSalary = employed.reduce((sum, scout) => sum + scout.weeklySalary, 0);
+      if (totalSalary > 0) {
+        setClubs(prev => prev.map(club => club.id === userTeamId ? { ...club, budget: club.budget - totalSalary } : club));
+        addFinanceLog(userTeamId, `Wynagrodzenia skautów transferowych (${employed.length})`, -totalSalary, nextDay);
+      }
+    }
+
+    // ── AKADEMIA: codzienne rozliczenie misji i terminów shortlisty ──────────
+    if (academy && userTeamId) {
+      const dateOnly = nextDay.toISOString().split('T')[0];
+      const { updatedMissions, completedMissions, updatedYouthPlayers } =
+        AcademyService.processCompletedMissions(academy, nextDay);
+      const expiredCandidates = academy.scoutingCandidates.filter(candidate => candidate.decisionDeadline < dateOnly);
+
+      if (completedMissions.length > 0 || expiredCandidates.length > 0) {
+        const scoutIdsToFree = completedMissions.filter(mission => mission.scoutId).map(mission => mission.scoutId!);
+        if (scoutIdsToFree.length > 0) {
+          setScoutPool(prev => prev.map(scout => scoutIdsToFree.includes(scout.id) ? { ...scout, isOnMission: false } : scout));
+        }
+
+        const academyClubReputation = clubs.find(club => club.id === userTeamId)?.reputation ?? 5;
+        const annualMissionResults = new Map<string, AcademyScoutCandidate[]>();
+        const regionalMissionResults = new Map<string, AcademyScoutCandidate[]>();
+        const refinedCandidateReports = new Map<string, import('../types').AcademyScoutReport>();
+        const historyEntries: ClubAcademy['scoutingHistory'] = [];
+
+        completedMissions.forEach(mission => {
+          if (!mission.targetScoutCandidateId || !mission.scoutId) return;
+          const candidate = academy.scoutingCandidates.find(entry => entry.id === mission.targetScoutCandidateId);
+          const scout = scoutPool.find(entry => entry.id === mission.scoutId);
+          if (candidate && scout) {
+            refinedCandidateReports.set(candidate.id, ScoutService.refineCandidateReport(candidate, scout));
+          }
+        });
+
+        completedMissions.forEach(mission => {
+          if (!mission.isAnnualIntake || !mission.scoutId) return;
+          const scout = scoutPool.find(entry => entry.id === mission.scoutId);
+          if (!scout) return;
+          const found = AcademyService.generateYouthIntake(
+            academy.level,
+            mission.regionFocus,
+            mission.annualIntakeYear ?? nextDay.getFullYear(),
+            0,
+            academyClubReputation,
+          );
+          const candidates = found.map(youth => {
+            const decisionDeadline = new Date(nextDay);
+            decisionDeadline.setDate(decisionDeadline.getDate() + 30);
+            const scoutReport = ScoutService.createCandidateReport(youth, scout);
+            return {
+              ...youth,
+              contractSigned: false,
+              revealedTalentRating: scoutReport.talentRating,
+              sourceMissionId: mission.id,
+              scoutId: scout.id,
+              discoveredDate: dateOnly,
+              decisionDeadline: decisionDeadline.toISOString().split('T')[0],
+              scoutReport,
+            } satisfies AcademyScoutCandidate;
+          });
+          annualMissionResults.set(mission.id, candidates);
+          historyEntries.push({
+            id: `HISTORY_${mission.id}`,
+            scoutId: scout.id,
+            scoutName: `${scout.firstName} ${scout.lastName}`,
+            regionFocus: mission.regionFocus,
+            ageMin: 14,
+            ageMax: 17,
+            startedDate: mission.startedDate,
+            completionDate: dateOnly,
+            cost: 0,
+            status: candidates.length > 0 ? 'SUCCESS' : 'EMPTY',
+            foundCount: candidates.length,
+            isAnnualIntake: true,
+          });
+        });
+
+        completedMissions.forEach(mission => {
+          if (mission.isAnnualIntake) return;
+          if (!mission.isRegionScouting || !mission.scoutId) return;
+          const scout = scoutPool.find(entry => entry.id === mission.scoutId);
+          if (!scout) return;
+          const discoveryChance = ScoutService.getDiscoveryChance(scout, mission.regionFocus, academy.level);
+          const extraCandidateChance = Math.min(
+            0.35,
+            Math.max(0, scout.networkDepth - 14) * 0.04 + (scout.personality === 'RISK_TAKER' ? 0.12 : 0)
+          );
+          const found = AcademyService.resolveRegionalScoutingResult(
+            mission,
+            academy.level,
+            4,
+            scout.networkDepth,
+            nextDay,
+            academyClubReputation,
+            discoveryChance,
+            extraCandidateChance,
+          );
+          const candidates = found.map(youth => {
+            const decisionDeadline = new Date(nextDay);
+            decisionDeadline.setDate(decisionDeadline.getDate() + 14);
+            const scoutReport = ScoutService.createCandidateReport(youth, scout);
+            return {
+              ...youth,
+              revealedTalentRating: scoutReport.talentRating,
+              sourceMissionId: mission.id,
+              scoutId: scout.id,
+              discoveredDate: dateOnly,
+              decisionDeadline: decisionDeadline.toISOString().split('T')[0],
+              scoutReport,
+            } satisfies AcademyScoutCandidate;
+          });
+          regionalMissionResults.set(mission.id, candidates);
+          historyEntries.push({
+            id: `HISTORY_${mission.id}`,
+            scoutId: scout.id,
+            scoutName: `${scout.firstName} ${scout.lastName}`,
+            regionFocus: mission.regionFocus,
+            positionFilter: mission.positionFilter,
+            ageMin: mission.ageMin ?? 15,
+            ageMax: mission.ageMax ?? 21,
+            startedDate: mission.startedDate,
+            completionDate: dateOnly,
+            cost: mission.cost,
+            status: candidates.length > 0 ? 'SUCCESS' : 'EMPTY',
+            foundCount: candidates.length,
+          });
+        });
+
+        const missionMails: MailMessage[] = completedMissions.map(mission => {
+          if (mission.isAnnualIntake) {
+            const candidates = annualMissionResults.get(mission.id) ?? [];
+            return {
+              id: `SCOUT_DONE_${mission.id}`,
+              sender: 'Dyrektor Akademii',
+              role: 'Akademia Piłkarska',
+              subject: `Coroczny nabór zakończony — ${candidates.length} kandydatów`,
+              body: candidates.length > 0
+                ? `Skaut zakończył coroczny nabór i przygotował shortlistę ${candidates.length} młodych zawodników: ${candidates.map(candidate => `${candidate.firstName} ${candidate.lastName} (${candidate.age} l.)`).join(', ')}. Masz 30 dni na podpisanie, odrzucenie lub zlecenie dodatkowej obserwacji. Miejsce w Akademii jest sprawdzane dopiero przy podpisaniu zawodnika.`
+                : 'Skaut zakończył coroczny nabór, ale nie przygotował żadnej rekomendacji.',
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: 75,
+            };
+          }
+          if (mission.isRegionScouting) {
+            const candidates = regionalMissionResults.get(mission.id) ?? [];
+            const body = candidates.length > 0
+              ? `Skaut zakończył misję i przygotował shortlistę ${candidates.length} kandydat${candidates.length === 1 ? 'a' : 'ów'}: ${candidates.map(candidate => `${candidate.firstName} ${candidate.lastName} (${candidate.age} l.)`).join(', ')}. Masz 14 dni na decyzję w zakładce Skautowanie.`
+              : 'Skaut zakończył misję z pustymi rękami. Tym razem nie znalazł kandydatów spełniających wymagania.';
+            return {
+              id: `SCOUT_DONE_${mission.id}`,
+              sender: 'Szef Skautingu Akademii',
+              role: 'Akademia Piłkarska',
+              subject: candidates.length > 0 ? `Nowa shortlista — ${candidates.length} kandydat${candidates.length === 1 ? '' : 'ów'}` : 'Skaut wrócił bez kandydatów',
+              body,
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: candidates.length > 0 ? 65 : 40,
+            };
+          }
+          if (mission.targetScoutCandidateId) {
+            const candidate = academy.scoutingCandidates.find(entry => entry.id === mission.targetScoutCandidateId);
+            return {
+              id: `SCOUT_DONE_${mission.id}`,
+              sender: 'Szef Skautingu Akademii',
+              role: 'Akademia Piłkarska',
+              subject: `Raport uzupełniający: ${candidate?.lastName ?? '—'}`,
+              body: candidate
+                ? `Zakończono dodatkową obserwację ${candidate.firstName} ${candidate.lastName}. Zakresy ocen zostały zawężone, a raport zaktualizowany na shortliście.`
+                : 'Zakończono dodatkową obserwację kandydata.',
+              date: new Date(nextDay),
+              isRead: false,
+              type: MailType.STAFF,
+              priority: 55,
+            };
+          }
+          const targetYouth = updatedYouthPlayers.find(youth => youth.id === mission.targetYouthPlayerId);
+          return {
+            id: `SCOUT_DONE_${mission.id}`,
+            sender: 'Szef Skautingu Akademii',
+            role: 'Akademia Piłkarska',
+            subject: `Raport szkoleniowy: ${targetYouth?.lastName ?? '—'}`,
+            body: targetYouth
+              ? `Raport o ${targetYouth.firstName} ${targetYouth.lastName}: talent oceniony jako ${targetYouth.revealedTalentRating ?? 'AVERAGE'}.`
+              : 'Zakończono obserwację. Raport jest dostępny w Akademii.',
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 50,
+          };
+        });
+        if (expiredCandidates.length > 0) {
+          missionMails.push({
+            id: `SCOUT_CANDIDATES_EXPIRED_${dateOnly}`,
+            sender: 'Szef Skautingu Akademii',
+            role: 'Akademia Piłkarska',
+            subject: 'Wygasł termin decyzji o kandydatach',
+            body: `Z shortlisty usunięto ${expiredCandidates.length} kandydat${expiredCandidates.length === 1 ? 'a' : 'ów'}, ponieważ minął termin na podjęcie decyzji.`,
+            date: new Date(nextDay),
+            isRead: false,
+            type: MailType.STAFF,
+            priority: 45,
+          });
+        }
+        if (missionMails.length > 0) setMessages(prev => [...missionMails, ...prev]);
+
+        const newCandidates = [
+          ...Array.from(annualMissionResults.values()).flat(),
+          ...Array.from(regionalMissionResults.values()).flat(),
+        ];
+        setAcademy(prev => prev ? {
+          ...prev,
+          youthPlayers: updatedYouthPlayers,
+          activeMissions: updatedMissions,
+          scoutingCandidates: [
+            ...prev.scoutingCandidates
+              .filter(candidate => candidate.decisionDeadline >= dateOnly)
+              .map(candidate => {
+                const refinedReport = refinedCandidateReports.get(candidate.id);
+                return refinedReport ? {
+                  ...candidate,
+                  revealedTalentRating: refinedReport.talentRating,
+                  scoutReport: refinedReport,
+                } : candidate;
+              }),
+            ...newCandidates,
+          ],
+          scoutingHistory: [...historyEntries, ...prev.scoutingHistory].slice(0, 100),
+        } : prev);
+      }
+    }
+
     // ── AKADEMIA: tygodniowy tick (każdy poniedziałek) ───────────────────────
     if (academy && userTeamId && nextDay.getDay() === 1) {
       const academyUserClub = clubs.find(c => c.id === userTeamId);
@@ -12795,70 +13395,7 @@ const finalResult: SimulationOutput = {
         academyStaffQuality
       );
 
-      // 2. Sprawdź zakończone misje skautingowe
-      const { updatedMissions, completedMissions, updatedYouthPlayers } =
-        AcademyService.processCompletedMissions({ ...academy, youthPlayers: developed }, nextDay);
-
-      // 3. Zwolnij skautów po zakończeniu misji
-      const scoutIdsToFree = completedMissions.filter(m => m.scoutId).map(m => m.scoutId!);
-      if (scoutIdsToFree.length > 0) {
-        setScoutPool(prev => prev.map(s => scoutIdsToFree.includes(s.id) ? { ...s, isOnMission: false } : s));
-      }
-
-      // 3b. Wyniki misji regionalnych — skaut może wrócić z pustymi rękami
-      let finalYouthPlayers = [...updatedYouthPlayers];
-      const regionalMissionResults = new Map<string, YouthPlayer[]>();
-      const academyClubReputation = clubs.find(c => c.id === userTeamId)?.reputation ?? 5;
-      completedMissions.forEach(m => {
-        if (!m.isRegionScouting) return;
-        const scout = scoutPool.find(s => s.id === m.scoutId);
-        const networkDepth = scout?.networkDepth ?? 10;
-        const slotsLeft = ACADEMY_MAX_SLOTS[academy.level] - finalYouthPlayers.length;
-        const found = AcademyService.resolveRegionalScoutingResult(m, academy.level, slotsLeft, networkDepth, new Date(nextDay), academyClubReputation);
-        regionalMissionResults.set(m.id, found);
-        finalYouthPlayers = [...finalYouthPlayers, ...found];
-      });
-
-      // Maile o zakończonych misjach (poza updaterem — unikamy podwójnego wywołania w StrictMode)
-      if (completedMissions.length > 0) {
-        const mails: MailMessage[] = completedMissions.map(m => {
-          if (m.isRegionScouting) {
-            const foundYouths = regionalMissionResults.get(m.id) ?? [];
-            const body = foundYouths.length > 0
-              ? `Skaut wrócił z misji skautingowej. Udało się pozyskać ${foundYouths.length} wychowanka${foundYouths.length > 1 ? 'ów' : ''}: ${foundYouths.map(y => `${y.firstName} ${y.lastName} (${y.age} l.)`).join(', ')}. Sprawdź zakładkę Wychowankowie.`
-              : `Skaut wrócił z misji z pustymi rękami. Tym razem nie udało się znaleźć odpowiednich kandydatów do akademii.`;
-            return {
-              id: `SCOUT_DONE_${m.id}`,
-              sender: 'Szef Skautingu Akademii',
-              role: 'Akademia Piłkarska',
-              subject: foundYouths.length > 0 ? `Skaut wrócił — znaleziono ${foundYouths.length} talent${foundYouths.length > 1 ? 'ów' : ''}` : 'Skaut wrócił bez kandydatów',
-              body,
-              date: new Date(nextDay),
-              isRead: false,
-              type: MailType.STAFF,
-              priority: foundYouths.length > 0 ? 65 : 40,
-            };
-          }
-          const targetYouth = finalYouthPlayers.find(yp => yp.id === m.targetYouthPlayerId);
-          const body = targetYouth
-            ? `Raport o ${targetYouth.firstName} ${targetYouth.lastName}: talent oceniony jako ${targetYouth.revealedTalentRating ?? 'AVERAGE'}. Zalecamy dalszą obserwację.`
-            : `Zakończono obserwację. Raport dostępny w Akademii.`;
-          return {
-            id: `SCOUT_DONE_${m.id}`,
-            sender: 'Szef Skautingu Akademii',
-            role: 'Akademia Piłkarska',
-            subject: m.targetYouthPlayerId ? `Raport skautingowy: ${targetYouth?.lastName ?? '—'}` : 'Raport skautingowy',
-            body,
-            date: new Date(nextDay),
-            isRead: false,
-            type: MailType.STAFF,
-            priority: 50,
-          };
-        });
-        setMessages(msgs => [...mails, ...msgs]);
-      }
-
-      // 4. Sprawdź zakończenie upgrade'u akademii
+      // 2. Sprawdź zakończenie upgrade'u akademii
       const upgradeCheck = AcademyService.checkUpgradeCompletion(academy, nextDay);
       if (upgradeCheck.completed && upgradeCheck.newLevel) {
         const upgradeMail: MailMessage = {
@@ -12875,16 +13412,18 @@ const finalResult: SimulationOutput = {
         setMessages(msgs => [upgradeMail, ...msgs]);
       }
 
-      // Czysty updater — bez efektów ubocznych (setMessages/setScoutPool wywołane wyżej)
-      const capturedFinalYouthPlayers = finalYouthPlayers;
-      const capturedUpdatedMissions = updatedMissions;
+      // Czysty updater — bez efektów ubocznych
       const capturedUpgradeCheck = upgradeCheck;
       setAcademy(prev => {
         if (!prev) return prev;
         const baseResult: ClubAcademy = {
           ...prev,
-          youthPlayers: capturedFinalYouthPlayers,
-          activeMissions: capturedUpdatedMissions,
+          youthPlayers: developed.map(developedYouth => {
+            const latestYouth = prev.youthPlayers.find(youth => youth.id === developedYouth.id);
+            return latestYouth?.revealedTalentRating && !developedYouth.revealedTalentRating
+              ? { ...developedYouth, revealedTalentRating: latestYouth.revealedTalentRating }
+              : developedYouth;
+          }),
         };
         if (capturedUpgradeCheck.completed && capturedUpgradeCheck.newLevel) {
           return {
@@ -12938,40 +13477,26 @@ const finalResult: SimulationOutput = {
       }
     }
 
-    // ── AKADEMIA: nabór wychowanków (1 Sierpnia każdego roku) ─────────────────
+    // ── AKADEMIA: udostępnienie corocznego naboru (1 sierpnia) ────────────────
     if (academy && userTeamId && nextDay.getMonth() === 7 && nextDay.getDate() === 1
         && academy.lastIntakeYear < nextDay.getFullYear()) {
-      const academyClubReputation = clubs.find(c => c.id === userTeamId)?.reputation ?? 5;
-      const newYouths = AcademyService.generateYouthIntake(
-        academy.level,
-        academy.regionFocus,
-        nextDay.getFullYear(),
-        academy.youthPlayers.length,
-        academyClubReputation
-      );
-      if (newYouths.length > 0) {
-        const intakeMail: MailMessage = {
-          id: `ACAD_INTAKE_${nextDay.getFullYear()}`,
-          sender: 'Dyrektor Akademii',
-          role: 'Akademia Piłkarska',
-          subject: `Nowy Nabór Akademii ${nextDay.getFullYear()}`,
-          body: `Do akademii dołączyło ${newYouths.length} nowych wychowanków (rocznik ${nextDay.getFullYear()}). Ich ukryte talenty czekają na odkrycie przez skautów. Odwiedź Akademię, aby sprawdzić profil każdego zawodnika.`,
-          date: new Date(nextDay),
-          isRead: false,
-          type: MailType.STAFF,
-          priority: 75,
-        };
-        setMessages(msgs => [intakeMail, ...msgs]);
-        const capturedNewYouths = newYouths;
-        setAcademy(prev => {
-          if (!prev || prev.lastIntakeYear >= nextDay.getFullYear()) return prev;
-          return {
-            ...prev,
-            youthPlayers: [...prev.youthPlayers, ...capturedNewYouths],
-            lastIntakeYear: nextDay.getFullYear(),
-          };
-        });
-      }
+      const intakeYear = nextDay.getFullYear();
+      const intakeMail: MailMessage = {
+        id: `ACAD_INTAKE_AVAILABLE_${intakeYear}`,
+        sender: 'Dyrektor Akademii',
+        role: 'Akademia Piłkarska',
+        subject: `Coroczny nabór ${intakeYear} jest dostępny`,
+        body: 'Tegoroczny nabór młodzieży jest gotowy. Przejdź do Akademii, otwórz zakładkę Skautowanie i przypisz dostępnego skauta. Misja jest bezpłatna, a znalezieni zawodnicy trafią na shortlistę zamiast automatycznie zajmować miejsca w Akademii.',
+        date: new Date(nextDay),
+        isRead: false,
+        type: MailType.STAFF,
+        priority: 75,
+      };
+      setMessages(msgs => [intakeMail, ...msgs]);
+      setAcademy(prev => {
+        if (!prev || prev.lastIntakeYear >= intakeYear || prev.activeMissions.some(mission => mission.isAnnualIntake)) return prev;
+        return { ...prev, annualIntakeAvailableYear: intakeYear };
+      });
     }
 
     // ── AKADEMIA: decyzja właściciela o rozbudowie (sprawdzana codziennie) ────
@@ -18303,8 +18828,10 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     reserves, setReserves, managedReserveClubId, reserveReleaseDirective, setReserveReleaseDirective, resolveReserveReleaseDirective, reserveCoachId,
     reserveFixtures, setReserveFixtures,
     reserveMatchResults, setReserveMatchResults,
-    academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract,
+    academy, initAcademy, submitUpgradeProposal, startAcademyUpgrade, promoteYouthPlayer, dismissYouthPlayer, setYouthFocus, startScoutMission, startAnnualYouthIntake, cancelAcademyScoutMission, setAcademyRegionFocus, setAcademyOperationalBudget, signYouthPlayerContract, rejectScoutCandidate, startScoutCandidateFollowUp,
     scoutPool, scoutMarket, employedScouts, hireScout, fireScout, refreshScoutMarket, scoutMarketRefreshDate, scoutMarketManualRefreshCount, scoutMarketPeriodStart,
+    transferScoutPool, employedTransferScouts, transferScoutMarket, transferScoutingAssignments, transferScoutingReports, discoveredTransferPlayerIds,
+    hireTransferScout, fireTransferScout, startTransferScoutingAssignment, cancelTransferScoutingAssignment,
     mysteryAgentOffer, submitMysteryAgentOffer, requestMysteryAgentBoardFunds, declineMysteryAgentOffer,
     pendingOpenTalk, setPendingOpenTalk, pendingOpenRoleMindflow, setPendingOpenRoleMindflow,
     pendingOpenTransferRequestDialog, setPendingOpenTransferRequestDialog, resolvePlayerTransferRequestDialog,

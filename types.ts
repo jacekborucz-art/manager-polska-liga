@@ -2029,14 +2029,57 @@ export interface YouthPlayer {
 export interface AcademyScoutMission {
   id: string;
   targetYouthPlayerId?: string;
+  targetScoutCandidateId?: string;
   regionFocus?: Region;
+  startedDate: string;
   completionDate: string;
   isRegionScouting: boolean;
+  isAnnualIntake?: boolean;
+  annualIntakeYear?: number;
   cost: number;
   positionFilter?: PlayerPosition;
   ageMin?: number;
   ageMax?: number;
   scoutId?: string;
+}
+
+export interface ScoutAttributeEstimate {
+  min: number;
+  max: number;
+}
+
+export type ScoutReportConfidence = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+
+export interface AcademyScoutReport {
+  scoutName: string;
+  confidence: ScoutReportConfidence;
+  talentRating?: NonNullable<YouthPlayer['revealedTalentRating']>;
+  attributeEstimates: Partial<Record<keyof PlayerAttributes, ScoutAttributeEstimate>>;
+  recommendation: 'REJECT' | 'OBSERVE' | 'SIGN';
+}
+
+export interface AcademyScoutCandidate extends YouthPlayer {
+  sourceMissionId: string;
+  scoutId: string;
+  discoveredDate: string;
+  decisionDeadline: string;
+  scoutReport: AcademyScoutReport;
+}
+
+export interface AcademyScoutingHistoryEntry {
+  id: string;
+  scoutId: string;
+  scoutName: string;
+  regionFocus?: Region;
+  positionFilter?: PlayerPosition;
+  ageMin: number;
+  ageMax: number;
+  startedDate: string;
+  completionDate: string;
+  cost: number;
+  status: 'SUCCESS' | 'EMPTY' | 'CANCELLED';
+  foundCount: number;
+  isAnnualIntake?: boolean;
 }
 
 // ── SYSTEM SKAUTÓW ─────────────────────────────────────────────────────────────────────────────
@@ -2064,6 +2107,80 @@ export interface Scout {
   isOnMission: boolean;
 }
 
+// ── SKAUTING TRANSFEROWY ────────────────────────────────────────────────────
+
+export type TransferLikelihood = 'LOW' | 'MEDIUM' | 'LIKELY' | 'CERTAIN';
+export type TransferLikelihoodFilter = 'ANY' | TransferLikelihood;
+export type TransferScoutingContractStatus = 'FREE_AGENT' | 'EXPIRING' | 'VALID';
+
+export interface TransferScout {
+  id: string;
+  firstName: string;
+  lastName: string;
+  age: number;
+  nationality: Region;
+  judgment: number;
+  reach: number;
+  speed: number;
+  experience: number;
+  regionalSpecialty?: Region;
+  positionSpecialty?: PlayerPosition;
+  weeklySalary: number;
+  employedByClubId?: string;
+  isOnAssignment: boolean;
+}
+
+export interface TransferScoutingRange {
+  min: number;
+  max: number;
+}
+
+export interface TransferScoutingFilters {
+  position?: PlayerPosition;
+  region?: Region;
+  nationalityCountry?: string;
+  ageMin: number;
+  ageMax: number;
+  contractStatus: TransferScoutingContractStatus;
+  /** Pole zachowane wyłącznie dla zgodności ze starszymi zapisami gry. */
+  maxMarketValue?: number;
+  likelihood: TransferLikelihoodFilter;
+  /** Pole zachowane wyłącznie dla zgodności z rozpoczętymi misjami ze starszych zapisów. */
+  minimumLikelihood?: TransferLikelihood;
+  attributes: Partial<Record<keyof PlayerAttributes, TransferScoutingRange>>;
+}
+
+export interface TransferScoutingAssignment {
+  id: string;
+  scoutId: string;
+  clubId: string;
+  startedDate: string;
+  completionDate: string;
+  cost: number;
+  filters: TransferScoutingFilters;
+}
+
+export interface TransferScoutingCandidateReport {
+  playerId: string;
+  matchScore: number;
+  likelihood: TransferLikelihood;
+  probabilityMin: number;
+  probabilityMax: number;
+  estimatedMarketValue: TransferScoutingRange;
+  estimatedAnnualSalary: TransferScoutingRange;
+  recommendation: 'WATCH' | 'APPROACH' | 'PRIORITY';
+}
+
+export interface TransferScoutingReport {
+  id: string;
+  assignmentId: string;
+  scoutId: string;
+  scoutName: string;
+  completedDate: string;
+  filters: TransferScoutingFilters;
+  candidates: TransferScoutingCandidateReport[];
+}
+
 export interface AcademyPromotedEntry {
   id: string;
   firstName: string;
@@ -2077,7 +2194,10 @@ export interface AcademyPromotedEntry {
 export interface ClubAcademy {
   level: 1 | 2 | 3 | 4 | 5;
   youthPlayers: YouthPlayer[];
+  scoutingCandidates: AcademyScoutCandidate[];
+  scoutingHistory: AcademyScoutingHistoryEntry[];
   lastIntakeYear: number;
+  annualIntakeAvailableYear?: number;
   operationalBudgetWeekly: number;
   upgradeInProgress: boolean;
   upgradeCompletionDate?: string;

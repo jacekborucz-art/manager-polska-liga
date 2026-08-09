@@ -1,4 +1,8 @@
-import { Scout, ScoutPersonality, Region, PlayerPosition, ClubAcademy, BoardAttributeLevel } from '../types';
+import {
+  Scout, ScoutPersonality, Region, PlayerPosition, ClubAcademy, BoardAttributeLevel,
+  PlayerAttributes, YouthPlayer, AcademyScoutReport, ScoutReportConfidence,
+  AcademyScoutCandidate,
+} from '../types';
 import { NameGeneratorService } from './NameGeneratorService';
 import { AcademyService } from './AcademyService';
 
@@ -14,13 +18,25 @@ const SALARY_PER_POINT = 850; // PLN/tyg na punkt
 // Mnożnik skrócenia czasu misji przez reportSpeed (1-20)
 // reportSpeed 10 = brak zmiany, 20 = -30% czasu
 function speedMultiplier(reportSpeed: number): number {
-  return 1.0 - ((reportSpeed - 1) / 19) * 0.30;
+  return Math.max(0.70, Math.min(1.27, 1.0 - ((reportSpeed - 10) / 10) * 0.30));
 }
 
 // Mnożnik kosztu przez networkDepth (1-20)
 // networkDepth 10 = brak zmiany, 20 = -20% kosztu
 function costMultiplier(networkDepth: number): number {
-  return 1.0 - ((networkDepth - 1) / 19) * 0.20;
+  return Math.max(0.80, Math.min(1.18, 1.0 - ((networkDepth - 10) / 10) * 0.20));
+}
+
+function getPersonalityReportMultiplier(personality: ScoutPersonality): number {
+  if (personality === 'CONSERVATIVE') return 0.80;
+  if (personality === 'AMBITIOUS') return 0.90;
+  if (personality === 'RISK_TAKER') return 1.20;
+  return 1.0;
+}
+
+function getReportConfidenceValue(scout: Scout, targetPosition?: PlayerPosition): number {
+  const specialtyBonus = scout.positionSpecialty === targetPosition ? 2 : 0;
+  return Math.min(20, (scout.judgmentAccuracy + scout.experience) / 2 + specialtyBonus);
 }
 
 // Personalności — wpływ na generowanie
@@ -176,6 +192,15 @@ export const ScoutService = {
     return Math.max(14, Math.round(days));
   },
 
+  // Coroczny nabór jest darmowy, ale nadal zajmuje czas przypisanego skauta.
+  getAnnualIntakeDays(scout: Scout, regionFocus: Region | undefined): number {
+    let days = 21 * speedMultiplier(scout.reportSpeed);
+    if (scout.regionalSpecialty && scout.regionalSpecialty === regionFocus) {
+      days *= 0.85;
+    }
+    return Math.max(10, Math.round(days));
+  },
+
   // Oblicza koszt misji z uwzględnieniem skauta
   getMissionCost(
     scout: Scout | undefined,
@@ -192,6 +217,28 @@ export const ScoutService = {
     return Math.max(3_000, Math.round(cost / 500) * 500);
   },
 
+  getDiscoveryChance(
+    scout: Scout,
+    regionFocus: Region | undefined,
+    academyLevel: ClubAcademy['level']
+  ): number {
+    const baseChance: Record<number, number> = { 1: 0.45, 2: 0.52, 3: 0.60, 4: 0.68, 5: 0.75 };
+    const networkBonus = (scout.networkDepth - 10) * 0.01;
+    const regionalBonus = scout.regionalSpecialty === regionFocus ? 0.05 : 0;
+    const personalityBonus = scout.personality === 'RISK_TAKER'
+      ? 0.03
+      : scout.personality === 'CONSERVATIVE'
+        ? -0.02
+        : scout.personality === 'AMBITIOUS'
+          ? 0.01
+          : 0;
+    return Math.max(0.20, Math.min(0.90, (baseChance[academyLevel] ?? 0.50) + networkBonus + regionalBonus + personalityBonus));
+  },
+
+  getFollowUpCost(originalMissionCost: number): number {
+    return Math.max(3_000, Math.round((originalMissionCost * 0.25) / 500) * 500);
+  },
+
   // Ocena talentu przez skauta (zamiast poziomu akademii)
   revealTalentWithScout(
     hiddenTalent: number,
@@ -200,7 +247,7 @@ export const ScoutService = {
   ): import('../types').YouthPlayer['revealedTalentRating'] {
     // Bazowy szum: im wyższe judgmentAccuracy + experience, tym mniejszy
     const accuracyStat = scout ? (scout.judgmentAccuracy + scout.experience) / 2 : 5;
-    let noise = 20 - accuracyStat * 0.8; // noise: ~20 przy stat=5, ~4 przy stat=20
+    let noise = (20 - accuracyStat * 0.8) * (scout ? getPersonalityReportMultiplier(scout.personality) : 1);
     // Bonus pozycyjny: zmniejsza szum o 30%
     if (scout?.positionSpecialty && scout.positionSpecialty === targetPosition) {
       noise *= 0.70;
@@ -213,22 +260,86 @@ export const ScoutService = {
     return 'LOW';
   },
 
+  getReportConfidence(scout: Scout, targetPosition?: PlayerPosition): ScoutReportConfidence {
+    const score = getReportConfidenceValue(scout, targetPosition);
+    if (score >= 17) return 'VERY_HIGH';
+    if (score >= 13) return 'HIGH';
+    if (score >= 9) return 'MEDIUM';
+    return 'LOW';
+  },
+
+  createCandidateReport(youth: YouthPlayer, scout: Scout): AcademyScoutReport {
+    const score = getReportConfidenceValue(scout, youth.position);
+    let spread = Math.round(12 - score * 0.42);
+    spread = Math.max(2, spread);
+    if (scout.positionSpecialty === youth.position) spread = Math.max(2, Math.round(spread * 0.70));
+    spread = Math.max(2, Math.round(spread * getPersonalityReportMultiplier(scout.personality)));
+
+    const attributeEstimates: Partial<Record<keyof PlayerAttributes, { min: number; max: number }>> = {};
+    (Object.keys(youth.attributes) as (keyof PlayerAttributes)[]).forEach(key => {
+      const actual = youth.attributes[key];
+      const perceivedCenter = Math.max(1, Math.min(100, Math.round(actual + (Math.random() - 0.5) * spread)));
+      attributeEstimates[key] = {
+        min: Math.max(1, perceivedCenter - spread),
+        max: Math.min(100, perceivedCenter + spread),
+      };
+    });
+
+    const talentRating = ScoutService.revealTalentWithScout(youth.hiddenTalent, scout, youth.position);
+    return {
+      scoutName: `${scout.firstName} ${scout.lastName}`,
+      confidence: ScoutService.getReportConfidence(scout, youth.position),
+      talentRating,
+      attributeEstimates,
+      recommendation: talentRating === 'EXCEPTIONAL' || talentRating === 'HIGH'
+        ? 'SIGN'
+        : talentRating === 'AVERAGE'
+          ? 'OBSERVE'
+          : 'REJECT',
+    };
+  },
+
+  refineCandidateReport(candidate: AcademyScoutCandidate, scout: Scout): AcademyScoutReport {
+    const freshReport = ScoutService.createCandidateReport(candidate, scout);
+    const attributeEstimates: AcademyScoutReport['attributeEstimates'] = {};
+    (Object.keys(candidate.scoutReport.attributeEstimates) as (keyof PlayerAttributes)[]).forEach(key => {
+      const previous = candidate.scoutReport.attributeEstimates[key];
+      const fresh = freshReport.attributeEstimates[key];
+      if (!previous || !fresh) return;
+      const center = Math.round((fresh.min + fresh.max) / 2);
+      const previousHalfWidth = Math.max(1, Math.floor((previous.max - previous.min) / 2));
+      const freshHalfWidth = Math.max(1, Math.floor((fresh.max - fresh.min) / 2));
+      const refinedHalfWidth = Math.max(1, Math.min(previousHalfWidth - 1, freshHalfWidth - 1));
+      attributeEstimates[key] = {
+        min: Math.max(1, center - refinedHalfWidth),
+        max: Math.min(100, center + refinedHalfWidth),
+      };
+    });
+    const confidenceOrder: ScoutReportConfidence[] = ['LOW', 'MEDIUM', 'HIGH', 'VERY_HIGH'];
+    const currentConfidenceIndex = confidenceOrder.indexOf(candidate.scoutReport.confidence);
+    return {
+      ...freshReport,
+      confidence: confidenceOrder[Math.min(confidenceOrder.length - 1, currentConfidenceIndex + 1)],
+      attributeEstimates,
+    };
+  },
+
   // Etykieta osobowości
   getPersonalityLabel(personality: ScoutPersonality): { label: string; color: string; description: string } {
     switch (personality) {
-      case 'RISK_TAKER':    return { label: 'Ryzykant',       color: 'text-orange-400 border-orange-500/40 bg-orange-500/10', description: 'Szuka diamentów — wysoka sieć kontaktów, ale może przegapić przeciętnych' };
-      case 'CONSERVATIVE':  return { label: 'Konserwatywny',  color: 'text-blue-400 border-blue-500/40 bg-blue-500/10',       description: 'Niezawodny i dokładny, rzadko się myli, ale nie odkryje geniusza' };
-      case 'VERSATILE':     return { label: 'Wszechstronny',  color: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10', description: 'Brak specjalizacji, ale działa skutecznie wszędzie' };
-      case 'AMBITIOUS':     return { label: 'Ambitny',        color: 'text-violet-400 border-violet-500/40 bg-violet-500/10',  description: 'Szybkie raporty i dobra ocena, wymaga lepszego klubu' };
+      case 'RISK_TAKER':    return { label: 'Ryzykant',       color: 'text-orange-400',  description: 'Szuka diamentów — wysoka sieć kontaktów, ale może przegapić przeciętnych' };
+      case 'CONSERVATIVE':  return { label: 'Konserwatywny',  color: 'text-blue-400',    description: 'Niezawodny i dokładny, rzadko się myli, ale nie odkryje geniusza' };
+      case 'VERSATILE':     return { label: 'Wszechstronny',  color: 'text-emerald-400', description: 'Brak specjalizacji, ale działa skutecznie wszędzie' };
+      case 'AMBITIOUS':     return { label: 'Ambitny',        color: 'text-violet-400',  description: 'Szybkie raporty i dobra ocena, wymaga lepszego klubu' };
     }
   },
 
   // Etykieta jakości skauta na podstawie sumy statystyk
-  getScoutTier(scout: Scout): { label: string; color: string } {
+  getScoutTier(scout: Scout): { label: string; color: string; stars: number } {
     const total = scout.judgmentAccuracy + scout.networkDepth + scout.reportSpeed + scout.experience;
-    if (total >= 65) return { label: 'Ekspert',       color: 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10' };
-    if (total >= 50) return { label: 'Doświadczony',  color: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' };
-    if (total >= 35) return { label: 'Przeciętny',    color: 'text-slate-300 border-slate-500/40 bg-slate-500/10' };
-    return              { label: 'Początkujący',    color: 'text-rose-400 border-rose-500/40 bg-rose-500/10' };
+    if (total >= 65) return { label: 'Ekspert',       color: 'border-amber-500/40 bg-amber-500/10', stars: 4 };
+    if (total >= 50) return { label: 'Doświadczony',  color: 'border-amber-500/40 bg-amber-500/10', stars: 3 };
+    if (total >= 35) return { label: 'Przeciętny',    color: 'border-amber-500/40 bg-amber-500/10', stars: 2 };
+    return              { label: 'Początkujący',    color: 'border-amber-500/40 bg-amber-500/10', stars: 1 };
   },
 };
