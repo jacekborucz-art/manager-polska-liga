@@ -1,9 +1,115 @@
-import { Player, Club, PendingNegotiation, NegotiationStatus, ManagerProfile } from '../types';
+import {
+  Player,
+  Club,
+  PendingNegotiation,
+  NegotiationStatus,
+  ManagerProfile,
+  FreeAgentContractDemands,
+  FreeAgentDemandRngBand,
+  PlayerPosition,
+} from '../types';
 import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
 import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
+import { FinanceService } from './FinanceService';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
+
+const stableUnit = (key: string, salt: string): number => {
+  const source = `${key}|${salt}`;
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  hash += hash << 13;
+  hash ^= hash >>> 7;
+  hash += hash << 3;
+  hash ^= hash >>> 17;
+  hash += hash << 5;
+  return (hash >>> 0) / 4294967296;
+};
+
+const median = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+};
+
+const roundAnnualMoney = (value: number): number =>
+  Math.max(20_000, Math.round(value / 10_000) * 10_000);
+
+const roundSigningMoney = (value: number): number =>
+  Math.max(0, Math.round(value / 10_000) * 10_000);
+
+const roundPerformanceMoney = (value: number): number => {
+  const step = value >= 100_000 ? 5_000 : value >= 20_000 ? 1_000 : 500;
+  return Math.max(500, Math.round(value / step) * step);
+};
+
+const getFallbackLeagueFactor = (club: Club): number => {
+  const tier = FinanceService.getClubTier(club);
+  const reputation = clamp(club.reputation || 1, 1, 20);
+  if (tier <= 1) return clamp(0.68 + reputation * 0.035, 0.72, 1.38);
+  if (tier === 2) return clamp(0.42 + reputation * 0.028, 0.48, 0.88);
+  if (tier === 3) return clamp(0.28 + reputation * 0.022, 0.32, 0.68);
+  return clamp(0.20 + reputation * 0.017, 0.24, 0.52);
+};
+
+const getAgeSalaryMultiplier = (age: number): number => {
+  if (age <= 18) return 0.70;
+  if (age <= 21) return 0.82;
+  if (age <= 24) return 0.93;
+  if (age <= 29) return 1;
+  if (age <= 32) return 0.96;
+  if (age <= 35) return 0.86;
+  return 0.72;
+};
+
+const getPersonalitySalaryMultiplier = (player: Player): number => {
+  if (player.moralePersonality === 'EGOIST') return 1.10;
+  if (player.moralePersonality === 'AMBITIOUS') return 1.06;
+  if (player.moralePersonality === 'CONFIDENT') return 1.03;
+  if (player.moralePersonality === 'LOYAL') return 0.95;
+  if (player.moralePersonality === 'PROFESSIONAL') return 0.98;
+  if (player.moralePersonality === 'CALM') return 0.97;
+  return 1;
+};
+
+const getPositionGuaranteeMultiplier = (position: PlayerPosition): number => {
+  if (position === PlayerPosition.DEF) return 1.10;
+  if (position === PlayerPosition.GK) return 1.03;
+  if (position === PlayerPosition.MID) return 1.02;
+  return 1;
+};
+
+const getPreferredContractYears = (player: Player, club: Club, seedKey: string): number => {
+  const roll = stableUnit(seedKey, 'contract-years');
+  let years: number;
+  if (player.age <= 18) years = roll < 0.65 ? 5 : 4;
+  else if (player.age <= 21) years = roll < 0.55 ? 4 : roll < 0.88 ? 5 : 3;
+  else if (player.age <= 24) years = roll < 0.55 ? 4 : 3;
+  else if (player.age <= 29) years = roll < 0.68 ? 3 : 4;
+  else if (player.age <= 32) years = roll < 0.58 ? 3 : 2;
+  else if (player.age <= 35) years = roll < 0.72 ? 2 : 1;
+  else years = roll < 0.15 ? 2 : 1;
+
+  const playerReputation = player.reputacja ?? clamp(Math.round((player.overallRating - 38) / 3), 1, 20);
+  if (player.age <= 30 && playerReputation - club.reputation >= 5) years = Math.max(1, years - 1);
+  return years;
+};
+
+const getDemandRng = (seedKey: string): { band: FreeAgentDemandRngBand; multiplier: number } => {
+  const bandRoll = stableUnit(seedKey, 'demand-band');
+  const valueRoll = stableUnit(seedKey, 'demand-value');
+  if (bandRoll < 0.96) return { band: 'NORMAL', multiplier: 0.85 + valueRoll * 0.35 };
+  if (bandRoll < 0.99) return { band: 'TOUGH', multiplier: 1.20 + valueRoll * 0.25 };
+  if (bandRoll < 0.999) return { band: 'VERY_HIGH', multiplier: 1.45 + valueRoll * 0.35 };
+  return { band: 'EXTREME', multiplier: 2 + valueRoll };
+};
 
 const getClubTier = (club: Club): number => {
   if (typeof club.tier === 'number' && Number.isFinite(club.tier)) {
@@ -163,7 +269,203 @@ export const FreeAgentNegotiationService = {
     return { interested: true, message: '' };
   },
 
-  createNegotiationEntry: (player: Player, club: Club, salary: number, bonus: number, years: number, currentDate: Date, squad: Player[], goalBonus?: number, assistBonus?: number, cleanSheetBonus?: number): PendingNegotiation => {
+  calculateContractDemands: (
+    player: Player,
+    club: Club,
+    squad: Player[],
+    leaguePlayers: Player[],
+    currentDate: Date,
+    managerProfile?: ManagerProfile | null
+  ): FreeAgentContractDemands => {
+    const seedKey = `${player.id}|${club.id}|${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`;
+    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
+    const fallbackMarketSalary = fairSalary * getFallbackLeagueFactor(club);
+    const normalizeComparableSalary = (comparable: Player): number => {
+      const comparableFairSalary = FinanceService.getFairMarketSalary(comparable.overallRating);
+      const overallCorrection = comparableFairSalary > 0
+        ? Math.pow(fairSalary / comparableFairSalary, 0.72)
+        : 1;
+      return comparable.annualSalary * overallCorrection;
+    };
+
+    const exactComparables = leaguePlayers.filter(comparable =>
+      comparable.id !== player.id &&
+      comparable.annualSalary > 0 &&
+      comparable.position === player.position &&
+      Math.abs(comparable.overallRating - player.overallRating) <= 4 &&
+      Math.abs(comparable.age - player.age) <= 6
+    );
+    const widerComparables = exactComparables.length >= 5
+      ? exactComparables
+      : leaguePlayers.filter(comparable =>
+          comparable.id !== player.id &&
+          comparable.annualSalary > 0 &&
+          comparable.position === player.position &&
+          Math.abs(comparable.overallRating - player.overallRating) <= 7
+        );
+    const comparablePool = widerComparables.length >= 4
+      ? widerComparables
+      : leaguePlayers.filter(comparable =>
+          comparable.id !== player.id &&
+          comparable.annualSalary > 0 &&
+          comparable.position === player.position
+        );
+    const normalizedComparableMedian = median(comparablePool.map(normalizeComparableSalary));
+    const squadPositionMedian = median(
+      squad
+        .filter(squadPlayer => squadPlayer.annualSalary > 0 && squadPlayer.position === player.position)
+        .map(squadPlayer => normalizeComparableSalary(squadPlayer))
+    );
+
+    let marketSalary = fallbackMarketSalary;
+    if (normalizedComparableMedian > 0) {
+      marketSalary = normalizedComparableMedian * 0.78 + fallbackMarketSalary * 0.22;
+    }
+    if (squadPositionMedian > 0) {
+      marketSalary = marketSalary * 0.88 + squadPositionMedian * 0.12;
+    }
+    marketSalary = clamp(marketSalary, fallbackMarketSalary * 0.55, fallbackMarketSalary * 1.80);
+
+    const playerReputation = player.reputacja ?? clamp(Math.round((player.overallRating - 38) / 3), 1, 20);
+    const reputationMultiplier = clamp(1 + (playerReputation - 10) * 0.025, 0.82, 1.30);
+    const prestigeCompensation = clamp(1 + Math.max(0, playerReputation - club.reputation) * 0.025, 1, 1.30);
+    const demandRng = getDemandRng(seedKey);
+    const managerExpectationMultiplier = ManagerNegotiationInfluenceService.calculate(managerProfile).expectationMultiplier;
+    const salaryBeforeRng =
+      marketSalary *
+      getAgeSalaryMultiplier(player.age) *
+      reputationMultiplier *
+      prestigeCompensation *
+      getPositionGuaranteeMultiplier(player.position) *
+      getPersonalitySalaryMultiplier(player) *
+      managerExpectationMultiplier;
+    const salary = roundAnnualMoney(salaryBeforeRng * demandRng.multiplier);
+
+    const signingAgeRatio = player.age <= 22 ? 0.16 : player.age <= 29 ? 0.26 : player.age <= 33 ? 0.34 : 0.44;
+    const signingReputationPremium = 1 + Math.max(0, playerReputation - 10) * 0.025;
+    const signingVariation = 0.88 + stableUnit(seedKey, 'signing-bonus') * 0.24;
+    const bonus = roundSigningMoney(salary * signingAgeRatio * signingReputationPremium * signingVariation);
+    const years = getPreferredContractYears(player, club, seedKey);
+
+    const finishingQuality = (player.attributes.finishing + player.attributes.attacking) / 2;
+    const creativeQuality = (player.attributes.passing + player.attributes.vision) / 2;
+    let goalBonus: number | undefined;
+    let assistBonus: number | undefined;
+    let cleanSheetBonus: number | undefined;
+
+    if (player.position === PlayerPosition.GK) {
+      const goalkeeperQuality = (player.attributes.goalkeeping + player.attributes.positioning + player.attributes.technique) / 3;
+      cleanSheetBonus = roundPerformanceMoney(salary * 0.0032 * clamp(0.65 + goalkeeperQuality / 160, 0.75, 1.28));
+    } else if (player.position === PlayerPosition.MID) {
+      if (finishingQuality >= 62) {
+        goalBonus = roundPerformanceMoney(salary * 0.0038 * clamp(0.62 + finishingQuality / 170, 0.72, 1.24));
+      }
+      if (creativeQuality >= 55) {
+        assistBonus = roundPerformanceMoney(salary * 0.0032 * clamp(0.65 + creativeQuality / 165, 0.74, 1.25));
+      }
+    } else if (player.position === PlayerPosition.FWD) {
+      goalBonus = roundPerformanceMoney(salary * 0.0045 * clamp(0.65 + finishingQuality / 155, 0.78, 1.32));
+      if (creativeQuality >= 68) {
+        assistBonus = roundPerformanceMoney(salary * 0.0028 * clamp(0.65 + creativeQuality / 175, 0.74, 1.20));
+      }
+    }
+
+    return {
+      salary,
+      bonus,
+      years,
+      goalBonus,
+      assistBonus,
+      cleanSheetBonus,
+      marketSalary: roundAnnualMoney(marketSalary),
+      comparablePlayers: comparablePool.length,
+      rngBand: demandRng.band,
+    };
+  },
+
+  evaluateOfferAgainstDemands: (
+    player: Player,
+    offer: Pick<PendingNegotiation, 'salary' | 'bonus' | 'years' | 'goalBonus' | 'assistBonus' | 'cleanSheetBonus'>,
+    demands: FreeAgentContractDemands
+  ): {
+    accepted: boolean;
+    reason: string;
+    demands: Pick<FreeAgentContractDemands, 'salary' | 'bonus' | 'years' | 'goalBonus' | 'assistBonus' | 'cleanSheetBonus'> | null;
+  } => {
+    const salaryFit = offer.salary / Math.max(1, demands.salary);
+    const bonusFit = demands.bonus > 0 ? offer.bonus / demands.bonus : 1;
+    const expectedPerformanceTotal =
+      (demands.goalBonus ?? 0) +
+      (demands.assistBonus ?? 0) +
+      (demands.cleanSheetBonus ?? 0);
+    const offeredPerformanceTotal =
+      (offer.goalBonus ?? 0) +
+      (offer.assistBonus ?? 0) +
+      (offer.cleanSheetBonus ?? 0);
+    const performanceFit = expectedPerformanceTotal > 0
+      ? offeredPerformanceTotal / expectedPerformanceTotal
+      : 1;
+    const yearsGap = Math.abs(offer.years - demands.years);
+    const yearsFit = yearsGap === 0 ? 1 : yearsGap === 1 ? 0.88 : 0.68;
+
+    const salarySurplusAnnual = Math.max(0, offer.salary - demands.salary);
+    const bonusShortfallAnnual = Math.max(0, demands.bonus - offer.bonus) / Math.max(1, offer.years);
+    const compensatedBonusFit = demands.bonus > 0
+      ? (offer.bonus + salarySurplusAnnual * offer.years * 0.55) / demands.bonus
+      : 1;
+    const effectiveBonusFit = Math.max(bonusFit, compensatedBonusFit);
+    const guaranteedFloorMet = salaryFit >= 0.70 || salarySurplusAnnual >= bonusShortfallAnnual;
+
+    const isVeteran = player.age >= 33;
+    const isYoung = player.age <= 23;
+    const salaryWeight = isVeteran ? 0.45 : isYoung ? 0.62 : 0.57;
+    const signingWeight = isVeteran ? 0.38 : isYoung ? 0.15 : 0.23;
+    const yearsWeight = isVeteran ? 0.12 : isYoung ? 0.18 : 0.12;
+    const performanceWeight = expectedPerformanceTotal > 0
+      ? 1 - salaryWeight - signingWeight - yearsWeight
+      : 0;
+    const normalizedBaseWeight = salaryWeight + signingWeight + yearsWeight + performanceWeight;
+    const offerScore = (
+      clamp(salaryFit, 0, 1.20) * salaryWeight +
+      clamp(effectiveBonusFit, 0, 1.20) * signingWeight +
+      yearsFit * yearsWeight +
+      clamp(performanceFit, 0, 1.20) * performanceWeight
+    ) / Math.max(0.01, normalizedBaseWeight);
+
+    const counterDemands = {
+      salary: demands.salary,
+      bonus: demands.bonus,
+      years: demands.years,
+      goalBonus: demands.goalBonus,
+      assistBonus: demands.assistBonus,
+      cleanSheetBonus: demands.cleanSheetBonus,
+    };
+
+    if (salaryFit < 0.45) {
+      return {
+        accepted: false,
+        reason: 'Oferta jest tak niska, że mój klient nie widzi podstaw do dalszych rozmów.',
+        demands: null,
+      };
+    }
+    if (offerScore >= 0.96 && guaranteedFloorMet) {
+      return { accepted: true, reason: 'Zgadzamy się na przedstawione warunki.', demands: null };
+    }
+    if (offerScore >= 0.68) {
+      return {
+        accepted: false,
+        reason: 'Jesteśmy gotowi kontynuować rozmowy, ale oferta musi być bliższa oczekiwaniom mojego klienta.',
+        demands: counterDemands,
+      };
+    }
+    return {
+      accepted: false,
+      reason: 'Warunki są zbyt dalekie od realiów kontraktowych mojego klienta.',
+      demands: salaryFit >= 0.55 ? counterDemands : null,
+    };
+  },
+
+  createNegotiationEntry: (player: Player, club: Club, salary: number, bonus: number, years: number, currentDate: Date, squad: Player[], goalBonus?: number, assistBonus?: number, cleanSheetBonus?: number, agentDemands?: FreeAgentContractDemands): PendingNegotiation => {
     const avgSalary = squad.length > 0 ? squad.reduce((sum, currentPlayer) => sum + currentPlayer.annualSalary, 0) / squad.length : 120000;
     const expected = player.overallRating * 2000;
     const rating = salary / expected;
@@ -186,6 +488,7 @@ export const FreeAgentNegotiationService = {
       goalBonus,
       assistBonus,
       cleanSheetBonus,
+      agentDemands,
       responseDate: responseDate.toISOString(),
       status: NegotiationStatus.PENDING
     };

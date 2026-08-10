@@ -5378,9 +5378,22 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         userClub,
         scoutingInfluence,
       );
-      let decision = prestigeBlockReason && !scoutOpenedTalks
+      let decision: {
+        accepted: boolean;
+        reason: string;
+        demands: {
+          salary: number;
+          bonus: number;
+          years?: number;
+          goalBonus?: number;
+          assistBonus?: number;
+          cleanSheetBonus?: number;
+        } | null;
+      } = prestigeBlockReason && !scoutOpenedTalks
         ? { accepted: false, reason: prestigeBlockReason, demands: null }
-        : FinanceService.evaluateContractLogic(
+        : neg.agentDemands
+          ? FreeAgentNegotiationService.evaluateOfferAgainstDemands(player, neg, neg.agentDemands)
+          : FinanceService.evaluateContractLogic(
             player, neg.salary, neg.bonus,
             new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(),
             simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
@@ -5407,7 +5420,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         sender: `Agent gracza ${player.lastName}`,
         role: 'Agencja Menadżerska',
         subject: decision.accepted ? 'Decyzja w sprawie kontraktu: ZGODA' : 'Decyzja w sprawie kontraktu: ODMOWA',
-        body: `${decision.reason}${decision.demands ? `\n\nOczekiwana pensja roczna: ${decision.demands.salary.toLocaleString('pl-PL')} PLN\nOczekiwany bonus za podpis: ${decision.demands.bonus.toLocaleString('pl-PL')} PLN` : ''}`,
+        body: `${decision.reason}${decision.demands ? `\n\nOczekiwana pensja roczna: ${decision.demands.salary.toLocaleString('pl-PL')} PLN\nOczekiwany bonus za podpis: ${decision.demands.bonus.toLocaleString('pl-PL')} PLN${decision.demands.years ? `\nOczekiwana długość kontraktu: ${decision.demands.years} ${decision.demands.years === 1 ? 'rok' : 'lata'}` : ''}${decision.demands.goalBonus ? `\nBonus za gola: ${decision.demands.goalBonus.toLocaleString('pl-PL')} PLN` : ''}${decision.demands.assistBonus ? `\nBonus za asystę: ${decision.demands.assistBonus.toLocaleString('pl-PL')} PLN` : ''}${decision.demands.cleanSheetBonus ? `\nBonus za czyste konto: ${decision.demands.cleanSheetBonus.toLocaleString('pl-PL')} PLN` : ''}` : ''}`,
         date: new Date(simDate),
         isRead: false,
         type: MailType.SYSTEM,
@@ -5434,7 +5447,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
  setMessages(prev => [mail, ...prev]);
 
     // JEŚLI OFERTA ZOSTAŁA ODRZUCONA (metadata.accepted jest false) I JEST TO WOLNY AGENT
-      if (!decision.accepted && player.clubId === 'FREE_AGENTS') {
+      if (!decision.accepted && !decision.demands && player.clubId === 'FREE_AGENTS') {
         const lockoutDate = new Date(simDate);
         lockoutDate.setMonth(lockoutDate.getMonth() + 3);
         

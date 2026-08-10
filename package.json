@@ -25,6 +25,7 @@
     "test:emergency-goalkeeper": "esbuild tests/EmergencyGoalkeeperTests.ts --bundle --platform=node --format=cjs --outfile=tmp/emergency-goalkeeper-tests.cjs && node tmp/emergency-goalkeeper-tests.cjs",
     "test:user-first-team-minimum": "esbuild tests/UserFirstTeamMinimumTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-first-team-minimum-tests.cjs && node tmp/user-first-team-minimum-tests.cjs",
     "test:pending-free-agent-transfer": "esbuild tests/PendingFreeAgentTransferTests.ts --bundle --platform=node --format=cjs --outfile=tmp/pending-free-agent-transfer-tests.cjs && node tmp/pending-free-agent-transfer-tests.cjs",
+    "test:free-agent-contract-demands": "esbuild tests/FreeAgentContractDemandTests.ts --bundle --platform=node --format=cjs --outfile=tmp/free-agent-contract-demand-tests.cjs && node tmp/free-agent-contract-demand-tests.cjs",
     "test:reserve-squad-movement": "esbuild tests/ReserveTeamSquadMovementTests.ts --bundle --platform=node --format=cjs --outfile=tmp/reserve-squad-movement-tests.cjs && node tmp/reserve-squad-movement-tests.cjs",
     "test:managed-reserve-team": "esbuild tests/ManagedReserveTeamTests.ts --bundle --platform=node --format=cjs --outfile=tmp/managed-reserve-team-tests.cjs && node tmp/managed-reserve-team-tests.cjs",
     "test:cup-v2-balance": "esbuild tests/CupMatchEngineV2BalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-balance-tests.cjs && node tmp/cup-v2-balance-tests.cjs",

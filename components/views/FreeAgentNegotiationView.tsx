@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState } from '../../types';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
@@ -45,6 +45,22 @@ export const FreeAgentNegotiationView: React.FC = () => {
     () => (userTeamId ? players[userTeamId] || [] : []),
     [players, userTeamId]
   );
+  const leaguePlayers = useMemo(() => {
+    if (!myClub) return [];
+    const leagueClubIds = new Set(
+      clubs.filter(club => club.leagueId === myClub.leagueId).map(club => club.id)
+    );
+    return Object.entries(players)
+      .filter(([clubId]) => leagueClubIds.has(clubId))
+      .flatMap(([, squad]) => squad);
+  }, [clubs, myClub, players]);
+  const demandPeriodKey = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`;
+  const agentDemands = useMemo(
+    () => player && myClub
+      ? FreeAgentNegotiationService.calculateContractDemands(player, myClub, mySquad, leaguePlayers, currentDate, managerProfile)
+      : null,
+    [player, myClub, mySquad, leaguePlayers, demandPeriodKey, managerProfile]
+  );
 
   const spendableTransferBudget = myClub?.transferBudget || 0;
 
@@ -66,19 +82,29 @@ export const FreeAgentNegotiationView: React.FC = () => {
   }, [myClub, player]);
 
   const [salary, setSalary] = useState(() => {
-    const suggested = player ? player.overallRating * 1800 : 50000;
+    const suggested = agentDemands?.salary ?? (player ? player.overallRating * 1800 : 50000);
     return Math.min(suggested, maxSalaryAllowed);
   });
-  const [bonus, setBonus] = useState(() => Math.min(25000, maxBonusAllowed));
-  const [years, setYears] = useState(2);
-  const [goalBonus, setGoalBonus] = useState(() => player ? Math.round(player.overallRating * 80 / 500) * 500 : 0);
-  const [assistBonus, setAssistBonus] = useState(() => player ? Math.round(player.overallRating * 50 / 500) * 500 : 0);
-  const [cleanSheetBonus, setCleanSheetBonus] = useState(() => player ? Math.round(player.overallRating * 80 / 500) * 500 : 0);
+  const [bonus, setBonus] = useState(() => Math.min(agentDemands?.bonus ?? 25000, maxBonusAllowed));
+  const [years, setYears] = useState(() => agentDemands?.years ?? 2);
+  const [goalBonus, setGoalBonus] = useState(() => agentDemands?.goalBonus ?? 0);
+  const [assistBonus, setAssistBonus] = useState(() => agentDemands?.assistBonus ?? 0);
+  const [cleanSheetBonus, setCleanSheetBonus] = useState(() => agentDemands?.cleanSheetBonus ?? 0);
   const [isSending, setIsSending] = useState(false);
   const [agentReaction, setAgentReaction] = useState<{ type: string; msg: string } | null>(null);
   const [boardVeto, setBoardVeto] = useState<{ msg: string } | null>(null);
   const [extraBudget, setExtraBudget] = useState(0);
   const [boardRequestResult, setBoardRequestResult] = useState<BoardRequestResult | null>(null);
+
+  useEffect(() => {
+    if (!agentDemands) return;
+    setSalary(Math.min(agentDemands.salary, maxSalaryAllowed));
+    setBonus(Math.min(agentDemands.bonus, maxBonusAllowed));
+    setYears(agentDemands.years);
+    setGoalBonus(agentDemands.goalBonus ?? 0);
+    setAssistBonus(agentDemands.assistBonus ?? 0);
+    setCleanSheetBonus(agentDemands.cleanSheetBonus ?? 0);
+  }, [player?.id, myClub?.id, agentDemands?.salary, agentDemands?.bonus, agentDemands?.years, maxSalaryAllowed, maxBonusAllowed]);
 
   const agentInterest = useMemo(() => {
     if (!player || !myClub) return { interested: true, message: '' };
@@ -109,6 +135,9 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const availableBudget = spendableTransferBudget + extraBudget;
   const totalCostPreview = salary * years + bonus;
   const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
+  const goalBonusMax = Math.max(5_000, (agentDemands?.goalBonus ?? 0) * 2, goalBonus);
+  const assistBonusMax = Math.max(5_000, (agentDemands?.assistBonus ?? 0) * 2, assistBonus);
+  const cleanSheetBonusMax = Math.max(5_000, (agentDemands?.cleanSheetBonus ?? 0) * 2, cleanSheetBonus);
   const boardRequestsUsed = myClub.boardBudgetRequestsThisSeason ?? 0;
   const canRequestBoard = totalCostPreview > availableBudget && boardRequestsUsed < 2 && extraBudget === 0;
 
@@ -165,7 +194,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
     setIsSending(true);
 
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
-    const expected = FinanceService.calculateFAExpectations(player, myClub.reputation, avgSquadSalary) * managerInfluence.expectationMultiplier;
+    const expected = agentDemands?.salary
+      ?? FinanceService.calculateFAExpectations(player, myClub.reputation, avgSquadSalary) * managerInfluence.expectationMultiplier;
     const ratio = salary / expected;
 
     let reaction = { type: 'GOOD', msg: 'Dziekujemy. Przeanalizujemy warunki i wrocimy z odpowiedzia.' };
@@ -200,7 +230,6 @@ export const FreeAgentNegotiationView: React.FC = () => {
       }
 
       if (reaction.type !== 'INSULT') {
-        const isGK = player.position === 'GK';
         const newNegotiation = FreeAgentNegotiationService.createNegotiationEntry(
           player,
           myClub,
@@ -209,9 +238,10 @@ export const FreeAgentNegotiationView: React.FC = () => {
           years,
           currentDate,
           mySquad,
-          isGK ? undefined : goalBonus || undefined,
-          isGK ? undefined : assistBonus || undefined,
-          isGK ? cleanSheetBonus || undefined : undefined
+          agentDemands?.goalBonus !== undefined ? goalBonus || undefined : undefined,
+          agentDemands?.assistBonus !== undefined ? assistBonus || undefined : undefined,
+          agentDemands?.cleanSheetBonus !== undefined ? cleanSheetBonus || undefined : undefined,
+          agentDemands ?? undefined
         );
         setPendingNegotiations(prev => [...prev, newNegotiation]);
       }
@@ -224,7 +254,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
     <div className="h-screen w-full bg-slate-950 flex items-center justify-center p-6 animate-fade-in overflow-hidden relative">
       <div className="absolute inset-0 bg-[url('https://i.ibb.co/JwgrBtvC/biuro2-1.png')] bg-cover bg-center opacity-20" />
 
-      <div className="max-w-4xl w-full bg-slate-900/90 border border-white/10 rounded-[50px] backdrop-blur-3xl shadow-2xl p-12 flex flex-col gap-10 relative z-10">
+      <div className="max-w-6xl max-h-[94vh] overflow-y-auto w-full bg-slate-900/90 border border-white/10 rounded-[50px] backdrop-blur-3xl shadow-2xl p-8 flex flex-col gap-6 relative z-10">
         <header className="flex justify-between items-center border-b border-white/5 pb-8">
           <div>
             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em]">Biuro Negocjacji</span>
@@ -242,6 +272,45 @@ export const FreeAgentNegotiationView: React.FC = () => {
             Anuluj
           </button>
         </header>
+
+        {isInterested && agentDemands && (
+          <section className="bg-amber-500/5 border border-amber-400/20 rounded-[28px] p-5">
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <h3 className="font-black italic uppercase tracking-tighter text-sm text-amber-300">
+                Oczekiwania agenta
+              </h3>
+              <span className="font-black italic uppercase tracking-tighter text-[10px] text-slate-500">
+                Punkt wyjścia do negocjacji
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="bg-black/25 rounded-xl px-3 py-3">
+                <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Kontrakt</span>
+                <strong className="font-black italic uppercase tracking-tighter text-sm text-white">{agentDemands.years} {agentDemands.years === 1 ? 'rok' : 'lata'}</strong>
+              </div>
+              <div className="bg-black/25 rounded-xl px-3 py-3">
+                <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Pensja roczna</span>
+                <strong className="font-black italic uppercase tracking-tighter text-sm text-emerald-400">{agentDemands.salary.toLocaleString('pl-PL')} PLN</strong>
+              </div>
+              <div className="bg-black/25 rounded-xl px-3 py-3">
+                <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Za podpis</span>
+                <strong className="font-black italic uppercase tracking-tighter text-sm text-blue-400">{agentDemands.bonus.toLocaleString('pl-PL')} PLN</strong>
+              </div>
+              <div className="bg-black/25 rounded-xl px-3 py-3">
+                <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Za gola</span>
+                <strong className="font-black italic uppercase tracking-tighter text-sm text-amber-400">{agentDemands.goalBonus !== undefined ? `${agentDemands.goalBonus.toLocaleString('pl-PL')} PLN` : 'Nie dotyczy'}</strong>
+              </div>
+              <div className="bg-black/25 rounded-xl px-3 py-3">
+                <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Za asystę</span>
+                <strong className="font-black italic uppercase tracking-tighter text-sm text-sky-400">{agentDemands.assistBonus !== undefined ? `${agentDemands.assistBonus.toLocaleString('pl-PL')} PLN` : 'Nie dotyczy'}</strong>
+              </div>
+              <div className="bg-black/25 rounded-xl px-3 py-3">
+                <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Czyste konto</span>
+                <strong className="font-black italic uppercase tracking-tighter text-sm text-violet-400">{agentDemands.cleanSheetBonus !== undefined ? `${agentDemands.cleanSheetBonus.toLocaleString('pl-PL')} PLN` : 'Nie dotyczy'}</strong>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {!isInterested ? (
@@ -320,7 +389,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   </div>
                 </div>
 
-                {player.position === 'GK' ? (
+                {agentDemands?.cleanSheetBonus !== undefined && (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center px-1">
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za czyste konto</span>
@@ -328,7 +397,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                         <input
                           type="number"
                           value={cleanSheetBonus}
-                          onChange={e => setCleanSheetBonus(Math.min(parseInt(e.target.value, 10) || 0, 25000))}
+                          onChange={e => setCleanSheetBonus(Math.min(parseInt(e.target.value, 10) || 0, cleanSheetBonusMax))}
                           className="bg-transparent border-none outline-none text-xl font-black text-violet-400 font-mono italic w-32 text-right"
                         />
                         <span className="text-xs font-black text-slate-500">PLN</span>
@@ -337,7 +406,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                     <input
                       type="range"
                       min="0"
-                      max="25000"
+                      max={cleanSheetBonusMax}
                       step="500"
                       value={cleanSheetBonus}
                       onChange={e => setCleanSheetBonus(parseInt(e.target.value, 10))}
@@ -345,11 +414,11 @@ export const FreeAgentNegotiationView: React.FC = () => {
                     />
                     <div className="flex justify-between px-1">
                       <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
-                      <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 25 000</span>
+                      <span className="text-[8px] font-bold text-slate-600 uppercase">Max: {cleanSheetBonusMax.toLocaleString('pl-PL')}</span>
                     </div>
                   </div>
-                ) : (
-                  <>
+                )}
+                {agentDemands?.goalBonus !== undefined && (
                     <div className="space-y-4">
                       <div className="flex justify-between items-center px-1">
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za gola</span>
@@ -357,7 +426,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                           <input
                             type="number"
                             value={goalBonus}
-                            onChange={e => setGoalBonus(Math.min(parseInt(e.target.value, 10) || 0, 25000))}
+                            onChange={e => setGoalBonus(Math.min(parseInt(e.target.value, 10) || 0, goalBonusMax))}
                             className="bg-transparent border-none outline-none text-xl font-black text-amber-400 font-mono italic w-32 text-right"
                           />
                           <span className="text-xs font-black text-slate-500">PLN</span>
@@ -366,7 +435,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                       <input
                         type="range"
                         min="0"
-                        max="25000"
+                        max={goalBonusMax}
                         step="500"
                         value={goalBonus}
                         onChange={e => setGoalBonus(parseInt(e.target.value, 10))}
@@ -374,9 +443,11 @@ export const FreeAgentNegotiationView: React.FC = () => {
                       />
                       <div className="flex justify-between px-1">
                         <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
-                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 25 000</span>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: {goalBonusMax.toLocaleString('pl-PL')}</span>
                       </div>
                     </div>
+                )}
+                {agentDemands?.assistBonus !== undefined && (
                     <div className="space-y-4">
                       <div className="flex justify-between items-center px-1">
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za asyste</span>
@@ -384,7 +455,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                           <input
                             type="number"
                             value={assistBonus}
-                            onChange={e => setAssistBonus(Math.min(parseInt(e.target.value, 10) || 0, 18000))}
+                            onChange={e => setAssistBonus(Math.min(parseInt(e.target.value, 10) || 0, assistBonusMax))}
                             className="bg-transparent border-none outline-none text-xl font-black text-sky-400 font-mono italic w-32 text-right"
                           />
                           <span className="text-xs font-black text-slate-500">PLN</span>
@@ -393,7 +464,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                       <input
                         type="range"
                         min="0"
-                        max="18000"
+                        max={assistBonusMax}
                         step="500"
                         value={assistBonus}
                         onChange={e => setAssistBonus(parseInt(e.target.value, 10))}
@@ -401,10 +472,9 @@ export const FreeAgentNegotiationView: React.FC = () => {
                       />
                       <div className="flex justify-between px-1">
                         <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
-                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: 18 000</span>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">Max: {assistBonusMax.toLocaleString('pl-PL')}</span>
                       </div>
                     </div>
-                  </>
                 )}
               </div>
 

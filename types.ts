@@ -429,6 +429,10 @@ export interface MailMessage {
     demands?: {
       salary: number;
       bonus: number;
+      years?: number;
+      goalBonus?: number;
+      assistBonus?: number;
+      cleanSheetBonus?: number;
     } | null;
   } | {
     type: 'INCOMING_TRANSFER_OFFER';
@@ -1047,6 +1051,20 @@ export enum NegotiationStatus {
   REJECTED = 'REJECTED'
 }
 
+export type FreeAgentDemandRngBand = 'NORMAL' | 'TOUGH' | 'VERY_HIGH' | 'EXTREME';
+
+export interface FreeAgentContractDemands {
+  salary: number;
+  bonus: number;
+  years: number;
+  goalBonus?: number;
+  assistBonus?: number;
+  cleanSheetBonus?: number;
+  marketSalary: number;
+  comparablePlayers: number;
+  rngBand: FreeAgentDemandRngBand;
+}
+
 export interface PendingNegotiation {
   id: string;
   playerId: string;
@@ -1057,6 +1075,8 @@ export interface PendingNegotiation {
   goalBonus?: number;
   assistBonus?: number;
   cleanSheetBonus?: number;
+  /** Oczekiwania zamrożone w chwili rozpoczęcia rozmów; nie losują się ponownie po zmianie dnia lub widoku. */
+  agentDemands?: FreeAgentContractDemands;
   responseDate: string; // Data ISO, kiedy agent odpowie
   status: NegotiationStatus;
 }
