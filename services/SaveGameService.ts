@@ -12,6 +12,7 @@ export interface SaveState {
   savedAt: string;
   currentDate: Date;
   sessionSeed: number;
+  datapackCareerStartYear?: number | null;
   clubs: any[];
   leagues: any[];
   players: Record<string, any[]>;
@@ -789,6 +790,9 @@ export function normalizeSaveState(data: SaveState): SaveState {
     savedAt: asDateString(data.savedAt, new Date().toISOString()),
     currentDate: asDate(data.currentDate),
     sessionSeed: Number.isFinite(data.sessionSeed) ? data.sessionSeed : Date.now(),
+    datapackCareerStartYear: Number.isInteger(data.datapackCareerStartYear)
+      ? data.datapackCareerStartYear
+      : null,
     clubs: normalizedClubs,
     leagues: asArray(data.leagues),
     players: normalizedPlayers,

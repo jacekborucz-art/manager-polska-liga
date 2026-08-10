@@ -11,6 +11,12 @@ import {
 import { FinanceService } from './FinanceService';
 import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
 
+export type PolishLowerLeagueLoanSource =
+  | 'POLISH_HIGHER_LEAGUE'
+  | 'FOREIGN_EUROPE_REP_10_MAX'
+  | 'ELITE_ONE_IN_MILLION'
+  | 'INELIGIBLE';
+
 const TIMING_LABELS: Record<TransferTiming, string> = {
   [TransferTiming.IMMEDIATE]: 'Natychmiast',
   [TransferTiming.IN_SIX_MONTHS]: 'Na kolejne okno transferowe',
@@ -67,6 +73,89 @@ export const IncomingTransferService = {
 
   getClubTier(club: Club): number {
     return FinanceService.getClubTier(club);
+  },
+
+  /**
+   * Ogranicza nierealne wypożyczenia z klubów europejskiej czołówki do Polski.
+   * Zwrócenie `null` oznacza, że para klubów nie wymaga specjalnego ograniczenia.
+   * Losowanie jest deterministyczne dla przekazanego ziarna, więc ponawianie tej
+   * samej oferty tego samego dnia nie daje graczowi kolejnych prób RNG.
+   */
+  getEliteEuropeanToPolishLoanChance(buyerClub: Club, sellerClub: Club): number | null {
+    const isPolishBuyer = buyerClub.country === 'POL' || buyerClub.leagueId.startsWith('L_PL_');
+    const isForeignEuropeanSeller =
+      sellerClub.country !== 'POL' &&
+      ['L_CL', 'L_EL', 'L_CONF'].includes(sellerClub.leagueId);
+    const isEliteSeller = sellerClub.reputation >= 15;
+
+    if (!isPolishBuyer || !isForeignEuropeanSeller || !isEliteSeller) return null;
+
+    if (['L_PL_2', 'L_PL_3', 'L_PL_4'].includes(buyerClub.leagueId)) {
+      return 0.000001;
+    }
+
+    if (buyerClub.leagueId === 'L_PL_1' && buyerClub.reputation < 15) {
+      return 0.0001;
+    }
+
+    return null;
+  },
+
+  passesLoanRealismGate(buyerClub: Club, sellerClub: Club, seed: number): boolean {
+    const restrictedChance = IncomingTransferService.getEliteEuropeanToPolishLoanChance(
+      buyerClub,
+      sellerClub
+    );
+    return restrictedChance === null || IncomingTransferService.seededRandom(seed + 911_731) < restrictedChance;
+  },
+
+  /**
+   * Polskie kluby z poziomów L_PL_2-L_PL_4 korzystają z zamkniętej puli
+   * wypożyczeń: wyższe ligi polskie albo zagraniczna Europa z reputacją do 10.
+   * Poprzedni wyjątek dla europejskiej elity pozostaje możliwy raz na milion.
+   */
+  getPolishLowerLeagueLoanSource(
+    buyerClub: Club,
+    sellerClub: Club
+  ): PolishLowerLeagueLoanSource | null {
+    if (!['L_PL_2', 'L_PL_3', 'L_PL_4'].includes(buyerClub.leagueId)) return null;
+
+    const buyerTier = IncomingTransferService.getClubTier(buyerClub);
+    const sellerTier = IncomingTransferService.getClubTier(sellerClub);
+    const isPolishSeller = sellerClub.country === 'POL' || sellerClub.leagueId.startsWith('L_PL_');
+    if (isPolishSeller && sellerTier < buyerTier) return 'POLISH_HIGHER_LEAGUE';
+
+    const isForeignEuropeanSeller =
+      !isPolishSeller &&
+      ['L_CL', 'L_EL', 'L_CONF'].includes(sellerClub.leagueId);
+    if (isForeignEuropeanSeller && sellerClub.reputation <= 10) {
+      return 'FOREIGN_EUROPE_REP_10_MAX';
+    }
+    if (isForeignEuropeanSeller && sellerClub.reputation >= 15) {
+      return 'ELITE_ONE_IN_MILLION';
+    }
+
+    return 'INELIGIBLE';
+  },
+
+  matchesPolishLowerLeagueLoanSourceDraw(
+    buyerClub: Club,
+    sellerClub: Club,
+    currentDate: Date | string
+  ): boolean {
+    const source = IncomingTransferService.getPolishLowerLeagueLoanSource(buyerClub, sellerClub);
+    if (source === null || source === 'ELITE_ONE_IN_MILLION') return true;
+    if (source === 'INELIGIBLE') return false;
+
+    const sourceSeed = IncomingTransferService.buildOfferSeed(
+      currentDate,
+      buyerClub.id,
+      'POLISH_LOWER_LEAGUE_LOAN_SOURCE'
+    );
+    const preferredSource = IncomingTransferService.seededRandom(sourceSeed + 85_015) < 0.85
+      ? 'POLISH_HIGHER_LEAGUE'
+      : 'FOREIGN_EUROPE_REP_10_MAX';
+    return source === preferredSource;
   },
 
   getBuyerIdealOverall(club: Club): number {
@@ -185,8 +274,29 @@ export const IncomingTransferService = {
       !!sellerClub.country &&
       buyerClub.country !== sellerClub.country;
 
+    const polishLowerLeagueSource = IncomingTransferService.getPolishLowerLeagueLoanSource(
+      buyerClub,
+      sellerClub
+    );
+    if (polishLowerLeagueSource === 'POLISH_HIGHER_LEAGUE') return 'LOWER_LEAGUE';
+    if (
+      polishLowerLeagueSource === 'FOREIGN_EUROPE_REP_10_MAX' ||
+      polishLowerLeagueSource === 'ELITE_ONE_IN_MILLION'
+    ) {
+      return 'FOREIGN_LOWER_REP';
+    }
+    if (polishLowerLeagueSource === 'INELIGIBLE') return null;
+
     if (buyerTier > sellerTier) return 'LOWER_LEAGUE';
     if (buyerClub.leagueId === sellerClub.leagueId) return 'SAME_LEAGUE';
+    if (
+      foreignClub &&
+      buyerClub.leagueId === 'L_PL_1' &&
+      buyerClub.reputation >= 15 &&
+      sellerClub.reputation >= 15
+    ) {
+      return 'FOREIGN_LOWER_REP';
+    }
     if (foreignClub && repGap >= 2 && repGap <= 4) return 'FOREIGN_LOWER_REP';
     return null;
   },
@@ -242,6 +352,12 @@ export const IncomingTransferService = {
     // squad need or generating loan terms. This blocks both reserve-team buyers
     // and a parent first team attempting to loan from its own reserve team.
     if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+      return { shouldGenerate: false, category: null };
+    }
+    if (!IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(buyerClub, sellerClub, currentDate)) {
+      return { shouldGenerate: false, category: null };
+    }
+    if (!IncomingTransferService.passesLoanRealismGate(buyerClub, sellerClub, seed)) {
       return { shouldGenerate: false, category: null };
     }
     if (!player.isAvailableForLoan || player.loan || player.transferPendingClubId) {

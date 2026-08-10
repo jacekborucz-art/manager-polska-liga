@@ -959,24 +959,167 @@ marketValue: FinanceService.calculateMarketValue(p, clubRep, leagueTier, clubInf
     }) as Player[];
   },
 
-  generateYouthPlayersForClub: (club: Club, currentSquad: Player[], seasonYear: number): Player[] => {
-    const needed = Math.max(0, 22 - currentSquad.length);
+  /**
+   * Uzupełnia rezerwy po awaryjnym przesunięciu zawodników do pierwszej
+   * drużyny. Każdy junior ma dokładnie pozycję zwolnioną przez awansowanego
+   * gracza i wiek 16–18 lat.
+   */
+  generateReserveReplacementJuniors: (
+    reserveClub: Club,
+    currentReserveSquad: Player[],
+    positions: PlayerPosition[],
+    currentDate: Date
+  ): Player[] => {
+    if (positions.length === 0) return [];
+
+    const isPolish = reserveClub.leagueId.startsWith('L_PL_') ||
+      reserveClub.country === 'POL' || reserveClub.country === 'Polska';
+    const tier = Math.min(4, Math.max(1, reserveClub.tier ?? 4));
+    const reputation = Math.max(1, reserveClub.reputation - 1);
+    const usedNames = new Set(currentReserveSquad.map(player => `${player.firstName} ${player.lastName}`));
+
+    return positions.map((position, index) => {
+      const region = isPolish ? Region.POLAND : NameGeneratorService.getRandomForeignRegion();
+      let namePair;
+      let fullName;
+      let attempts = 0;
+      do {
+        namePair = NameGeneratorService.getRandomName(region);
+        fullName = `${namePair.firstName} ${namePair.lastName}`;
+        attempts += 1;
+      } while (usedNames.has(fullName) && attempts < 50);
+      usedNames.add(fullName);
+
+      const age = 16 + Math.floor(Math.random() * 3);
+      const genData = PlayerAttributesGenerator.generateAttributes(
+        position,
+        tier,
+        reputation,
+        age,
+        !isPolish
+      );
+      const monthlySalary = 800 + Math.max(0, Math.min(25, genData.overall - 30)) / 25 * 3200;
+      const annualSalary = Math.round((monthlySalary * (0.90 + Math.random() * 0.20) * 12) / 100) * 100;
+      const contractEndYear = currentDate.getFullYear() + 2 + Math.floor(Math.random() * 3);
+      const junior: Player = {
+        id: `RES_JUNIOR_${reserveClub.id}_${currentDate.getTime()}_${index}_${Math.random().toString(36).slice(2, 7)}`,
+        firstName: namePair.firstName,
+        lastName: namePair.lastName,
+        clubId: reserveClub.id,
+        position,
+        nationality: region,
+        nationalityCountry: pickNationalityForRegion(region),
+        age,
+        fatigueDebt: 0,
+        reputacja: PlayerPrestigeService.calculateGeneratedReputation(genData.overall, reputation),
+        lojalnosc: Math.floor(Math.random() * 99) + 1,
+        overallRating: genData.overall,
+        attributes: genData.attributes,
+        stats: {
+          matchesPlayed: 0,
+          minutesPlayed: 0,
+          goals: 0,
+          assists: 0,
+          yellowCards: 0,
+          redCards: 0,
+          cleanSheets: 0,
+          seasonalChanges: {},
+          ratingHistory: [],
+        },
+        health: { status: HealthStatus.HEALTHY },
+        condition: 100,
+        suspensionMatches: 0,
+        contractEndDate: new Date(contractEndYear, 5, 30).toISOString(),
+        annualSalary,
+        marketValue: 0,
+        isOnTransferList: false,
+        isAvailableForLoan: false,
+        interestedClubs: [],
+        isUntouchable: false,
+        negotiationStep: 0,
+        negotiationLockoutUntil: null,
+        contractLockoutUntil: null,
+        boardLockoutUntil: null,
+        isNegotiationPermanentBlocked: false,
+        transferLockoutUntil: null,
+        freeAgentLockoutUntil: null,
+        freeAgentClubLockouts: {},
+        history: [{
+          clubName: reserveClub.name,
+          clubId: reserveClub.id,
+          fromYear: currentDate.getFullYear(),
+          fromMonth: currentDate.getMonth() + 1,
+          toYear: null,
+          toMonth: null,
+        }],
+      } as Player;
+
+      return {
+        ...junior,
+        marketValue: FinanceService.calculateMarketValue(
+          junior,
+          reputation,
+          tier,
+          reserveClub.country
+        ),
+      };
+    });
+  },
+
+  generateYouthPlayersForClub: (
+    club: Club,
+    currentSquad: Player[],
+    seasonYear: number,
+    targetSquadSize = 22
+  ): Player[] => {
+    const normalizedTargetSize = Math.max(1, Math.round(targetSquadSize));
+    const needed = Math.max(0, normalizedTargetSize - currentSquad.length);
     if (needed === 0) return [];
 
-    const currentGKs = currentSquad.filter(p => p.position === PlayerPosition.GK).length;
-    const gkNeeded = Math.max(0, 2 - currentGKs);
-    const fieldNeeded = needed - gkNeeded;
-
-    const defCount = Math.round(fieldNeeded * 0.35);
-    const midCount = Math.round(fieldNeeded * 0.35);
-    const fwdCount = fieldNeeded - defCount - midCount;
-
-    const positions: PlayerPosition[] = [
-      ...Array(gkNeeded).fill(PlayerPosition.GK),
-      ...Array(Math.max(0, defCount)).fill(PlayerPosition.DEF),
-      ...Array(Math.max(0, midCount)).fill(PlayerPosition.MID),
-      ...Array(Math.max(0, fwdCount)).fill(PlayerPosition.FWD),
-    ];
+    let positions: PlayerPosition[];
+    if (normalizedTargetSize === 22) {
+      // Zachowujemy dotychczasowy rozkład corocznych uzupełnień do 22 graczy.
+      const currentGKs = currentSquad.filter(p => p.position === PlayerPosition.GK).length;
+      const gkNeeded = Math.max(0, 2 - currentGKs);
+      const fieldNeeded = needed - gkNeeded;
+      const defCount = Math.round(fieldNeeded * 0.35);
+      const midCount = Math.round(fieldNeeded * 0.35);
+      const fwdCount = fieldNeeded - defCount - midCount;
+      positions = [
+        ...Array(gkNeeded).fill(PlayerPosition.GK),
+        ...Array(Math.max(0, defCount)).fill(PlayerPosition.DEF),
+        ...Array(Math.max(0, midCount)).fill(PlayerPosition.MID),
+        ...Array(Math.max(0, fwdCount)).fill(PlayerPosition.FWD),
+      ];
+    } else {
+      // Awaryjne uzupełnienie datapacka dobiera najpierw najbardziej brakujące
+      // pozycje względem zdrowej, szesnastoosobowej kadry meczowej.
+      const targetRatios: Record<PlayerPosition, number> = {
+        [PlayerPosition.GK]: 2 / 16,
+        [PlayerPosition.DEF]: 5 / 16,
+        [PlayerPosition.MID]: 5 / 16,
+        [PlayerPosition.FWD]: 4 / 16,
+      };
+      const positionOrder = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+      const counts: Record<PlayerPosition, number> = {
+        [PlayerPosition.GK]: currentSquad.filter(p => p.position === PlayerPosition.GK).length,
+        [PlayerPosition.DEF]: currentSquad.filter(p => p.position === PlayerPosition.DEF).length,
+        [PlayerPosition.MID]: currentSquad.filter(p => p.position === PlayerPosition.MID).length,
+        [PlayerPosition.FWD]: currentSquad.filter(p => p.position === PlayerPosition.FWD).length,
+      };
+      positions = [];
+      for (let slot = 0; slot < needed; slot++) {
+        const position = [...positionOrder].sort((a, b) => {
+          const targetA = Math.max(1, Math.round(normalizedTargetSize * targetRatios[a]));
+          const targetB = Math.max(1, Math.round(normalizedTargetSize * targetRatios[b]));
+          const coverageA = counts[a] / targetA;
+          const coverageB = counts[b] / targetB;
+          return coverageA - coverageB || positionOrder.indexOf(a) - positionOrder.indexOf(b);
+        })[0];
+        positions.push(position);
+        counts[position] += 1;
+      }
+    }
 
     const isPolish = club.leagueId.startsWith('L_PL_');
     const tier = club.tier ?? 4;

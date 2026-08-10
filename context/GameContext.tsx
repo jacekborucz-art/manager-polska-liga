@@ -106,6 +106,9 @@ import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { DatapackClubService } from '../services/DatapackClubService';
+import { DatapackSeasonSquadRepairService } from '../services/DatapackSeasonSquadRepairService';
+import { EmergencyGoalkeeperService } from '../services/EmergencyGoalkeeperService';
+import { UserFirstTeamMinimumService } from '../services/UserFirstTeamMinimumService';
 import { ClubReputationService } from '../services/ClubReputationService';
 import type { EuropeanClubTrophy } from '../services/ClubReputationService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
@@ -1521,6 +1524,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
   const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
   const activeEditorDatapackRef = React.useRef<unknown | null>(null);
+  const [datapackCareerStartYear, setDatapackCareerStartYear] = useState<number | null>(null);
   const importEditorFullPackHandlerRef = React.useRef<((
     data: unknown,
     options?: ImportEditorFullPackOptions
@@ -2387,6 +2391,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     }
 
     activeEditorDatapackRef.current = null;
+    setDatapackCareerStartYear(null);
     const startYear = careerStartYear;
     const careerStartDate = new Date(startYear, 6, 1);
     const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
@@ -3662,6 +3667,7 @@ if (userTeamId) {
     savedAt: new Date().toISOString(),
     currentDate,
     sessionSeed,
+    datapackCareerStartYear,
     clubs,
     leagues,
     players,
@@ -3917,6 +3923,7 @@ if (userTeamId) {
 
   const loadGameFromFile = (data: SaveState): void => {
     activeEditorDatapackRef.current = null;
+    setDatapackCareerStartYear(data.datapackCareerStartYear ?? null);
     const loadedDate = data.currentDate instanceof Date ? data.currentDate : new Date(data.currentDate);
     const loadedSeasonStartYear = data.seasonTemplate?.seasonStartYear
       ?? ReserveTeamFinanceService.getSeasonStartYear(loadedDate);
@@ -3978,6 +3985,62 @@ if (userTeamId) {
         ))
       : ensuredNationalCoachData.updatedClubs;
 
+    // Starsze zapisy mogły zostać utworzone z kadrą pierwszego zespołu poniżej
+    // bezpiecznego minimum. Najpierw przesuwamy zawodników z rezerw według
+    // brakujących pozycji, a dopiero potem sprawdzamy awaryjnego bramkarza.
+    const loadedFirstTeamMinimumResult = UserFirstTeamMinimumService.ensureMinimum(
+      loadedClubsWithReserveRosters,
+      linkedReserveMigration.players,
+      linkedReserveMigration.legacyReserves,
+      linkedReserveMigration.lineups,
+      data.userTeamId,
+      linkedReserveMigration.linkedReserveClubId,
+      loadedDate,
+      data.isResigned
+    );
+
+    // Naprawia także zapis utworzony przed poprawką konfliktu setPlayers.
+    // Jeżeli mail o juniorze już istnieje, odtwarzamy brakującego zawodnika bez
+    // wysyłania drugiej identycznej wiadomości.
+    const previousEmergencyHireMail = retainedMessages.find(message =>
+      message.subject.startsWith('Awaryjny bramkarz:') &&
+      Math.abs(getDayDifference(new Date(message.date), loadedDate)) <= 7
+    );
+    const restoredEmergencyLastName = previousEmergencyHireMail?.subject
+      .match(/^Awaryjny bramkarz:\s*(.+?)\s+dołączył do składu$/)?.[1]
+      ?.trim();
+    const loadedEmergencyGoalkeeperResult = EmergencyGoalkeeperService.process(
+      loadedFirstTeamMinimumResult.updatedClubs,
+      loadedFirstTeamMinimumResult.updatedPlayers,
+      loadedFirstTeamMinimumResult.updatedLineups,
+      data.userTeamId,
+      loadedDate,
+      data.isResigned,
+      restoredEmergencyLastName
+    );
+    const emergencyTemplateId = loadedEmergencyGoalkeeperResult.action === 'HIRED'
+      ? 'staff_emergency_gk_hired'
+      : loadedEmergencyGoalkeeperResult.action === 'RELEASED'
+        ? 'staff_emergency_gk_fired'
+        : null;
+    const emergencySubjectPrefix = loadedEmergencyGoalkeeperResult.action === 'HIRED'
+      ? 'Awaryjny bramkarz:'
+      : 'Powrót bramkarza';
+    const hasMatchingEmergencyMail = retainedMessages.some(message =>
+      message.subject.startsWith(emergencySubjectPrefix)
+    );
+    const loadedMessages = emergencyTemplateId && !hasMatchingEmergencyMail
+      ? [
+          {
+            ...MailService.createFromTemplate(emergencyTemplateId, {
+              'PLAYER': loadedEmergencyGoalkeeperResult.emergencyGoalkeeper!.lastName,
+            }),
+            date: new Date(loadedDate),
+          },
+          ...retainedMessages,
+        ]
+      : retainedMessages;
+
     if (linkedReserveMigration.migratedPlayerCount > 0) {
       console.info(
         `[SAVE migration] Moved ${linkedReserveMigration.migratedPlayerCount} legacy reserve players ` +
@@ -3987,12 +4050,12 @@ if (userTeamId) {
     setCurrentDate(data.currentDate);
     setSessionSeed(data.sessionSeed);
     setRuntimeSimulationSeed(generateRuntimeSeed());
-    setClubs(loadedClubsWithReserveRosters);
+    setClubs(loadedEmergencyGoalkeeperResult.updatedClubs);
     setLeagues(data.leagues);
     // FIX: see repairDuplicatePlayerIds above — cleans up any duplicate-player-id corruption
     // already baked into the save being loaded (from before the write-site fixes).
-    setPlayers(linkedReserveMigration.players);
-    setLegacyReserves(linkedReserveMigration.legacyReserves);
+    setPlayers(loadedEmergencyGoalkeeperResult.updatedPlayers);
+    setLegacyReserves(loadedFirstTeamMinimumResult.updatedLegacyReserves);
     setReserveReleaseDirective(
       linkedReserveMigration.linkedReserveClubId ? null : (data.reserveReleaseDirective ?? null)
     );
@@ -4017,7 +4080,7 @@ if (userTeamId) {
     setTransferScoutingReports(data.transferScoutingReports ?? []);
     setDiscoveredTransferPlayerIds(data.discoveredTransferPlayerIds ?? []);
     setMysteryAgentOffer(data.mysteryAgentOffer ?? null);
-    setLineups(linkedReserveMigration.lineups);
+    setLineups(loadedEmergencyGoalkeeperResult.updatedLineups);
     setUserTeamId(data.userTeamId);
     setSeasonTemplate(data.seasonTemplate);
     setLeagueSchedules(data.leagueSchedules);
@@ -4028,7 +4091,7 @@ if (userTeamId) {
     setManagerProfile(data.managerProfile);
     setManagerJobOffers(data.managerJobOffers ?? []);
     setSeasonNumber(data.seasonNumber);
-    setMessages(retainedMessages);
+    setMessages(loadedMessages);
     setMediaRelationships(data.mediaRelationships ?? {});
     setSentUnfriendlyPressMonths(data.sentUnfriendlyPressMonths ?? []);
     setSentFriendlyPressMonths(data.sentFriendlyPressMonths ?? []);
@@ -4096,7 +4159,7 @@ if (userTeamId) {
     setPzpnDisciplinaryEvents((data.pzpnDisciplinaryEvents || []) as PzpnDisciplinaryEvent[]);
     const restoredSentMailIds = data.sentMailIds && data.sentMailIds.length > 0
       ? data.sentMailIds
-      : (data.messages || []).map((message: any) => message?.id).filter(Boolean);
+      : loadedMessages.map((message: any) => message?.id).filter(Boolean);
     sentMailIdsRef.current = new Set(restoredSentMailIds);
     lastProcessedLeagueDateRef.current = data.lastProcessedLeagueDate ?? null;
     MatchHistoryService.clear();
@@ -4418,6 +4481,7 @@ if (userTeamId) {
       UEFASuperCupService.generateFixture(startYear, clubsWithSquads),
     ]);
     activeEditorDatapackRef.current = raw;
+    setDatapackCareerStartYear(startYear);
     navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
 
     return {
@@ -7333,53 +7397,6 @@ Asystent`,
         setMessages(prev => [trainingReminderMail, ...prev]);
       }
     }
-
-// --- EMERGENCY GK PROTOCOL (STAGE 1 PRO) ---
-    if (userTeamId && !isResigned) {
-      const userSquad = players[userTeamId] || [];
-      const realGks = userSquad.filter(p => p.position === PlayerPosition.GK && !p.id.startsWith('EMERGENCY_GK_'));
-      const availableRealGks = realGks.filter(p => p.health.status === HealthStatus.HEALTHY && p.suspensionMatches === 0);
-      const emergencyGk = userSquad.find(p => p.id.startsWith('EMERGENCY_GK_'));
-
-      // 1. Wykrycie kryzysu (Brak GK)
-      if (availableRealGks.length === 0 && !emergencyGk) {
-         const userClub = clubs.find(c => c.id === userTeamId)!;
-         const tier = parseInt(userClub.leagueId.split('_')[2] || '4');
-         const newJunior = SeasonTransitionService.generateEmergencyGK(userTeamId, tier, userClub.reputation);
-         
-         setPlayers(prev => ({ ...prev, [userTeamId]: [...(prev[userTeamId] || []), newJunior] }));
-         
-         // Automatyczne wstawienie do składu, aby odblokować przycisk meczu
-         const currentLineup = lineups[userTeamId];
-         if (currentLineup) {
-           updateLineup(userTeamId, {
-             ...currentLineup,
-             startingXI: [newJunior.id, ...currentLineup.startingXI.slice(1)]
-           });
-         }
-
-         const hireMail = MailService.createFromTemplate('staff_emergency_gk_hired', { 'PLAYER': newJunior.lastName });
-         setMessages(prev => [hireMail, ...prev]);
-      }
-      
-      // 2. Powrót do normalności (Cleanup)
-      // Warunek: Realny GK zdrowy, bez kartek i kondycja >= 90%
-      if (emergencyGk && realGks.some(p => p.health.status === HealthStatus.HEALTHY && p.suspensionMatches === 0 && p.condition >= 90)) {
-         setPlayers(prev => ({ ...prev, [userTeamId]: (prev[userTeamId] || []).filter(p => p.id !== emergencyGk.id) }));
-         
-         const currentLineup = lineups[userTeamId];
-         if (currentLineup) {
-           updateLineup(userTeamId, {
-             ...currentLineup,
-             startingXI: currentLineup.startingXI.map(id => id === emergencyGk.id ? null : id)
-           });
-         }
-
-         const fireMail = MailService.createFromTemplate('staff_emergency_gk_fired', { 'PLAYER': emergencyGk.lastName });
-         setMessages(prev => [fireMail, ...prev]);
-      }
-    }
-    // --- END OF EMERGENCY GK PROTOCOL ---
 
     // ── Dzienny przegląd kontuzji w reprezentacjach narodowych ────────────────
     DebugLoggerService.checkpoint('DAY_PHASE', `NT_DAILY_START ${dateToProcess.toDateString()}`);
@@ -10722,6 +10739,8 @@ Asystent`,
     // 2 lipca: automatyczny przegląd składów AI na początku sezonu
     let postReviewPlayers = recoveredPlayers;
     let postReviewClubs = simulation.updatedClubs;
+    let postReviewLegacyReserves = legacyReserves;
+    let shouldCommitLegacyReservePromotion = false;
 
     /**
      * Refresh foreign background-league statistics inside the single daily
@@ -11042,6 +11061,7 @@ Asystent`,
     // punkt wracał do starego stanu `lineups`, przez co wynik prepareAllTeams
     // znikał przed applySimulationResult, a kluby zostawały przy startowym 4-4-2.
     let postLoanLineups = simulation.updatedLineups;
+
     {
       let loanPlayersChanged = false;
       let loanLineupsChanged = false;
@@ -11204,6 +11224,98 @@ Asystent`,
         postReviewPlayers = nextPlayersExp;
       }
     }
+
+    // Specjalna naprawa startu 2026/27 z datapackiem. Jest wykonywana dopiero po
+    // usunięciu wygasłych kontraktów, aby liczba zawodników odpowiadała faktycznej
+    // kadrze. Warunek roku/datapacka sprawia, że pozostałe kariery nie ponoszą
+    // kosztu skanowania klubów.
+    if (DatapackSeasonSquadRepairService.shouldRun(dateToProcess, datapackCareerStartYear)) {
+      const squadRepair = DatapackSeasonSquadRepairService.repair(
+        postReviewClubs,
+        postReviewPlayers,
+        dateToProcess,
+        datapackCareerStartYear
+      );
+      if (squadRepair.repairedClubIds.length > 0) {
+        postReviewClubs = squadRepair.updatedClubs;
+        postReviewPlayers = squadRepair.updatedPlayers;
+        const repairedLineups = { ...postLoanLineups };
+        squadRepair.repairedClubIds.forEach(clubId => {
+          if (!repairedLineups[clubId]) return;
+          repairedLineups[clubId] = LineupService.repairLineup(
+            repairedLineups[clubId],
+            postReviewPlayers[clubId] ?? []
+          );
+        });
+        postLoanLineups = repairedLineups;
+        DebugLoggerService.log(
+          'DATAPACK_SQUAD_REPAIR',
+          `${dateToProcess.toISOString().split('T')[0]}: uzupełniono ${squadRepair.generatedPlayerCount} zawodników w ${squadRepair.repairedClubIds.length} klubach.`
+        );
+      }
+    }
+
+    // Ostatnia siatka bezpieczeństwa dla klubu gracza: po rozliczeniu końców
+    // wypożyczeń i wygasłych kontraktów uzupełniamy pierwszą drużynę do 14 osób.
+    // Kandydaci są wybierani z rezerw według braków pozycyjnych, nie tylko OVR.
+    const dailyLinkedReserveClubId = userTeamId
+      ? ReserveTeamLeagueService.getPlayableReserveClubId(userTeamId, postReviewClubs)
+      : null;
+    const firstTeamMinimumResult = UserFirstTeamMinimumService.ensureMinimum(
+      postReviewClubs,
+      postReviewPlayers,
+      postReviewLegacyReserves,
+      postLoanLineups,
+      userTeamId,
+      dailyLinkedReserveClubId,
+      dateToProcess,
+      isResigned
+    );
+    if (firstTeamMinimumResult.movements.length > 0) {
+      postReviewClubs = firstTeamMinimumResult.updatedClubs;
+      postReviewPlayers = firstTeamMinimumResult.updatedPlayers;
+      postReviewLegacyReserves = firstTeamMinimumResult.updatedLegacyReserves;
+      postLoanLineups = firstTeamMinimumResult.updatedLineups;
+      shouldCommitLegacyReservePromotion = !dailyLinkedReserveClubId;
+      DebugLoggerService.log(
+        'USER_FIRST_TEAM_MINIMUM',
+        `${dateToProcess.toISOString().split('T')[0]}: przesunięto ${firstTeamMinimumResult.movements.length} zawodników z rezerw i wygenerowano ${firstTeamMinimumResult.generatedJuniors.length} juniorów; w pierwszej drużynie jest teraz ${(postReviewPlayers[userTeamId!] ?? []).length}.`
+      );
+    }
+
+    // Awaryjnego bramkarza sprawdzamy dopiero po promocjach z rezerw. Dzięki
+    // temu zdrowy bramkarz rezerw ma pierwszeństwo przed generowanym juniorem.
+    const recentEmergencyHireMail = messages.find(message =>
+      message.subject.startsWith('Awaryjny bramkarz:') &&
+      Math.abs(getDayDifference(new Date(message.date), dateToProcess)) <= 7
+    );
+    const recentEmergencyLastName = recentEmergencyHireMail?.subject
+      .match(/^Awaryjny bramkarz:\s*(.+?)\s+dołączył do składu$/)?.[1]
+      ?.trim();
+    const emergencyGoalkeeperResult = EmergencyGoalkeeperService.process(
+      postReviewClubs,
+      postReviewPlayers,
+      postLoanLineups,
+      userTeamId,
+      dateToProcess,
+      isResigned,
+      recentEmergencyLastName
+    );
+    if (emergencyGoalkeeperResult.action) {
+      postReviewClubs = emergencyGoalkeeperResult.updatedClubs;
+      postReviewPlayers = emergencyGoalkeeperResult.updatedPlayers;
+      postLoanLineups = emergencyGoalkeeperResult.updatedLineups;
+
+      const hireAlreadyAnnounced = emergencyGoalkeeperResult.action === 'HIRED' && !!recentEmergencyHireMail;
+      if (!hireAlreadyAnnounced) {
+        const emergencyGoalkeeper = emergencyGoalkeeperResult.emergencyGoalkeeper!;
+        const templateId = emergencyGoalkeeperResult.action === 'HIRED'
+          ? 'staff_emergency_gk_hired'
+          : 'staff_emergency_gk_fired';
+        const emergencyMail = MailService.createFromTemplate(templateId, { 'PLAYER': emergencyGoalkeeper.lastName });
+        setMessages(prev => [{ ...emergencyMail, date: new Date(dateToProcess) }, ...prev]);
+      }
+    }
     DebugLoggerService.checkpoint('DAY_PHASE', `CONTRACT_EXPIRY_AFTER ${dateToProcess.toDateString()}`);
 
     const aiTrainingEarly = AiWeeklyTrainingService.processWeeklyTraining(
@@ -11258,6 +11370,10 @@ const finalResult: SimulationOutput = {
        // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
     applySimulationResult(finalResult);
 
+    if (shouldCommitLegacyReservePromotion) {
+      setLegacyReserves(postReviewLegacyReserves);
+    }
+
     if (loanReturnMails.length > 0) {
       prependUniqueMessages(loanReturnMails);
     }
@@ -11308,7 +11424,7 @@ const finalResult: SimulationOutput = {
     }
 
     // 4d. Symulacja meczu rezerw w tle
-    if (!managedReserveClubId && userTeamId && reserves.length > 0 && reserveCoachId) {
+    if (!managedReserveClubId && userTeamId && postReviewLegacyReserves.length > 0 && reserveCoachId) {
       const todayIso = dateToProcess.toISOString().split('T')[0];
       const reserveFixture = reserveFixtures.find(f => !f.resultId && (typeof f.date === 'string' ? f.date : new Date(f.date).toISOString().split('T')[0]).startsWith(todayIso));
       if (reserveFixture) {
@@ -11319,7 +11435,7 @@ const finalResult: SimulationOutput = {
         const reserveCoachObj = coaches[reserveCoachId];
         if (reserveCoachObj) {
           const engineResult = ReserveMatchEngine.simulate(
-            reserves,
+            postReviewLegacyReserves,
             opponentPlayers,
             reserveCoachObj,
             oppReputation,
@@ -11403,7 +11519,7 @@ const finalResult: SimulationOutput = {
     }
 
     // 4e. Regeneracja kondycji rezerw
-    if (!managedReserveClubId && reserves.length > 0) {
+    if (!managedReserveClubId && postReviewLegacyReserves.length > 0) {
       setReserves(prev => {
         const reservesMap = { RES: prev };
         return RecoveryService.applyDailyRecovery(reservesMap, dateToProcess, TrainingIntensity.NORMAL, recoveryDelta, 1.0)['RES'];
@@ -17719,6 +17835,31 @@ const finalResult: SimulationOutput = {
         ok: false,
         status: 'VALIDATION_ERROR',
         message: 'Ten zawodnik ma aktywną ścieżkę transferową albo inną ofertę. Wypożyczenie jest zablokowane, żeby uniknąć konfliktu interesów.',
+      };
+    }
+
+    const lowerLeagueLoanSource = IncomingTransferService.getPolishLowerLeagueLoanSource(
+      buyerClub,
+      sellerClub
+    );
+    if (lowerLeagueLoanSource === 'INELIGIBLE') {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: 'Polityka wypożyczeń klubu dopuszcza zawodników z wyższych lig polskich albo z zagranicznych klubów europejskich o reputacji nie większej niż 10.',
+      };
+    }
+
+    const realismGateSeed = IncomingTransferService.buildOfferSeed(
+      currentDate,
+      buyerClub.id,
+      `${targetPlayer.id}_USER_LOAN_REALISM_${sessionSeed}`
+    );
+    if (!IncomingTransferService.passesLoanRealismGate(buyerClub, sellerClub, realismGateSeed)) {
+      return {
+        ok: false,
+        status: 'PLAYER_REFUSED',
+        message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie uważa wypożyczenia do ${buyerClub.name} za realistyczny krok w rozwoju kariery.`,
       };
     }
 
