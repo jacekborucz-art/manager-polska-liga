@@ -1322,6 +1322,12 @@ export const FinanceService = {
     return squad.reduce((sum, p) => sum + (p.annualSalary || 0), 0);
   },
 
+  calculateFreeAgentContractCommitment: (annualSalary: number, years: number, signingBonus: number): number =>
+    Math.max(0, annualSalary) * Math.max(1, years) + Math.max(0, signingBonus),
+
+  calculateRemainingContractBudget: (availableBudget: number, annualSalary: number, years: number, signingBonus: number): number =>
+    Math.max(0, availableBudget - FinanceService.calculateFreeAgentContractCommitment(annualSalary, years, signingBonus)),
+
   // Oblicza rynkową wartość pensji dla danego OVR (punkt odniesienia dla Zarządu)
    getFairMarketSalary: (ovr: number): number => {
     const base = Math.pow(ovr / 50, 4) * 125000;
@@ -1342,24 +1348,49 @@ export const FinanceService = {
   },
 
   evaluateFASigningBoardDecision: (player: Player, proposedSalary: number, proposedBonus: number, squad: Player[], club: Club): { approved: boolean, reason: string } => {
-    // 1. BLOKADA KSIĘGOWEGO: proponowana pensja > 25% budżetu transferowego
-    // (Nie porównujemy łącznego funduszu płac do budżetu – to są zupełnie różne pojęcia finansowe)
-    const salaryCap = club.budget * 0.25;
-    if (proposedSalary > salaryCap) {
-      return { approved: false, reason: `DYREKTOR FINANSOWY: Proponowana pensja przekracza 25% naszego budżetu transferowego (limit: ${Math.floor(salaryCap).toLocaleString()} PLN).` };
-    }
+    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
+    const tier = FinanceService.getClubTier(club);
 
-    // 2. BLOKADA STRUKTURALNA (Porównanie z liderami płac)
-    const highestSalary = squad.length > 0 ? Math.max(...squad.map(p => p.annualSalary)) : 0;
-    if (proposedSalary > highestSalary * 2 && highestSalary > 0 && player.overallRating < 82) {
+    // 1. BLOKADA PŁYNNOŚCI: pojedyncza pensja może być wysoka, ale nie może
+    // pochłaniać nieproporcjonalnej części całej gotówki słabszego klubu.
+    // Rozsądna kwota rynkowa pozostaje dozwolona nawet przy małej kasie.
+    const liquiditySalaryCap = club.budget * (tier >= 3 ? 0.35 : 0.30);
+    if (proposedSalary > liquiditySalaryCap && proposedSalary > fairSalary * 1.15) {
       return {
         approved: false,
-        reason: `PREZES: Ta oferta zniszczy naszą hierarchię w szatni! Nie damy nowemu graczowi dwa razy więcej niż zarabia nasz najlepszy zawodnik (${highestSalary.toLocaleString()} PLN).`
+        reason: `DYREKTOR FINANSOWY: Ta pensja jest zbyt dużym obciążeniem dla gotówki klubu. Przy obecnych finansach zarząd nie zaakceptuje kwoty powyżej około ${Math.floor(liquiditySalaryCap / 10_000) * 10_000} PLN rocznie.`
+      };
+    }
+
+    // 2. HIERARCHIA PŁAC: zarząd pozwala na jednego wyraźnie droższego gracza,
+    // jeżeli jego pensja nadal odpowiada rynkowi i poziomowi sportowemu. VETO
+    // zostaje dopiero dla kwot rażąco odstających od szatni oraz wartości gracza.
+    const highestSalary = squad.length > 0 ? Math.max(...squad.map(p => p.annualSalary)) : 0;
+    const averageOverall = squad.length > 0
+      ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length
+      : player.overallRating;
+    const bestSamePositionOverall = squad
+      .filter(squadPlayer => squadPlayer.position === player.position)
+      .reduce((best, squadPlayer) => Math.max(best, squadPlayer.overallRating), 0);
+    const isClearSportingUpgrade =
+      player.overallRating >= averageOverall + 4 ||
+      player.overallRating >= bestSamePositionOverall + 2;
+    const hierarchyMultiplier = isClearSportingUpgrade
+      ? (tier >= 3 ? 3.50 : 3.10)
+      : player.overallRating >= averageOverall
+        ? (tier >= 3 ? 2.75 : 2.55)
+        : (tier >= 3 ? 2.40 : 2.25);
+    const marketBasedHierarchyFloor = fairSalary * (tier >= 3 ? 0.72 : 0.68);
+    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, marketBasedHierarchyFloor);
+
+    if (highestSalary > 0 && proposedSalary > hierarchySalaryCap) {
+      return {
+        approved: false,
+        reason: `PREZES: Możemy zgodzić się na najlepiej opłacanego zawodnika w zespole, ale ta kwota zbyt mocno odbiega od poziomu sportowego i obecnej hierarchii płac. Najwyższa pensja w kadrze wynosi ${highestSalary.toLocaleString('pl-PL')} PLN.`
       };
     }
 
     // 3. OCENA WARTOŚCI RYNKOWEJ (Usunięto lukę dla OVR 78+)
-    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
     const overpayRatio = proposedSalary / fairSalary;
     const allowedOverpay = 1.2 + ((10 - club.boardStrictness) / 10); // Max 2.1x przy bardzo luźnym zarządzie
 

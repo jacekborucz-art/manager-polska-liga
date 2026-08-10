@@ -18575,7 +18575,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     };
 
     // 1. Zabierz bonus i wartość kontraktu (pensja × lata) z budżetu transferowego
-    const contractCost = bonus + salary * years;
+    const contractCost = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
     if (contractCost > userClub.transferBudget) {
       return failForNoFunds();
     }

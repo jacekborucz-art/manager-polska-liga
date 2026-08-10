@@ -133,7 +133,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const isInterested = agentInterest.interested;
   const visibleAgentInterestMessage = sanitizeAgentInterestMessage(agentInterest.message);
   const availableBudget = spendableTransferBudget + extraBudget;
-  const totalCostPreview = salary * years + bonus;
+  const totalCostPreview = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
   const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
   const goalBonusMax = Math.max(5_000, (agentDemands?.goalBonus ?? 0) * 2, goalBonus);
   const assistBonusMax = Math.max(5_000, (agentDemands?.assistBonus ?? 0) * 2, assistBonus);
@@ -179,15 +179,15 @@ export const FreeAgentNegotiationView: React.FC = () => {
       ? mySquad.reduce((sum, squadPlayer) => sum + squadPlayer.annualSalary, 0) / mySquad.length
       : 120000;
 
-    const totalCost = salary * years + bonus;
-    const boardCheck = FinanceService.evaluateFASigningBoardDecision(player, salary, bonus, mySquad, myClub);
-    if (!boardCheck.approved) {
-      setBoardVeto({ msg: boardCheck.reason });
+    const totalCost = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
+    if (totalCost > availableBudget) {
+      setBoardVeto({ msg: `Łączny koszt kontraktu (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).` });
       return;
     }
 
-    if (totalCost > availableBudget) {
-      setBoardVeto({ msg: `Łączny koszt kontraktu (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).` });
+    const boardCheck = FinanceService.evaluateFASigningBoardDecision(player, salary, bonus, mySquad, myClub);
+    if (!boardCheck.approved) {
+      setBoardVeto({ msg: boardCheck.reason });
       return;
     }
 
@@ -498,9 +498,21 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   ))}
                 </div>
                 <div className="mt-6 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl text-center">
-                  <p className="text-[14px] text-slate-500 font-black italic text-white">
-                    "Zarzad pozwala na przeznaczenie do 25% budzetu na jedna pensje wolnego agenta."
+                  <p className="font-black italic uppercase tracking-tighter text-[12px] text-white">
+                    Zarząd dopuści droższy kontrakt, jeżeli mieści się w budżecie i nie jest rażąco oderwany od rynku.
                   </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-black/30 p-4">
+                    <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Koszt gwarantowany</span>
+                    <strong className="font-black italic uppercase tracking-tighter text-sm text-amber-400">{totalCostPreview.toLocaleString('pl-PL')} PLN</strong>
+                  </div>
+                  <div className="rounded-2xl bg-black/30 p-4">
+                    <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Budżet po podpisaniu</span>
+                    <strong className={`font-black italic uppercase tracking-tighter text-sm ${totalCostPreview <= availableBudget ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {FinanceService.calculateRemainingContractBudget(availableBudget, salary, years, bonus).toLocaleString('pl-PL')} PLN
+                    </strong>
+                  </div>
                 </div>
               </div>
             </>
