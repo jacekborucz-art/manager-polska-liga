@@ -105,6 +105,7 @@ import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
+import { DatapackClubService } from '../services/DatapackClubService';
 import { ClubReputationService } from '../services/ClubReputationService';
 import type { EuropeanClubTrophy } from '../services/ClubReputationService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
@@ -1069,7 +1070,7 @@ interface GameContextType {
   startNewGame: (careerStartYear?: number, options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }) => void;
   getSaveState: () => SaveState;
   loadGameFromFile: (data: SaveState) => void;
-  importEditorFullPack: (data: unknown, options?: { nextView?: ViewState }) => { success: boolean; message: string };
+  importEditorFullPack: (data: unknown, options?: { nextView?: ViewState; careerStartYear?: number }) => { success: boolean; message: string };
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
   advanceDay: () => void;
@@ -4070,18 +4071,24 @@ if (userTeamId) {
     setViewState(ViewState.DASHBOARD);
   };
 
-  const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState }): { success: boolean; message: string } => {
+  const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState; careerStartYear?: number }): { success: boolean; message: string } => {
     const raw = data as any;
     if (!raw || raw.type !== 'editor_full_pack' || !Array.isArray(raw.clubs)) {
       return { success: false, message: 'Wybrany plik nie jest paczką full pack edytora.' };
     }
 
-    const startYear = 2025;
+    const datapackStartYear = Number(raw.careerStartYear);
+    const startYear = Number.isInteger(options?.careerStartYear)
+      ? options!.careerStartYear!
+      : Number.isInteger(datapackStartYear)
+        ? datapackStartYear
+        : START_DATE.getFullYear();
+    const careerStartDate = new Date(startYear, 6, 1);
     const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
     const template = SeasonTemplateGenerator.generate(startYear);
     const baseClubs = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS, UNEMPLOYED_MANAGER_CLUB];
     const baseClubMap = new Map(baseClubs.map(club => [club.id, club]));
-    const importedClubs = raw.clubs
+    const normalizedImportedClubs = raw.clubs
       .map((entry: any) => {
         const clubId = typeof entry?.id === 'string' ? entry.id : typeof entry?.clubId === 'string' ? entry.clubId : '';
         if (!clubId) return null;
@@ -4098,13 +4105,15 @@ if (userTeamId) {
       })
       .filter(Boolean) as Club[];
 
-    if (importedClubs.length === 0) {
+    if (normalizedImportedClubs.length === 0) {
       return { success: false, message: 'Full pack nie zawiera poprawnych klubów.' };
     }
 
-    const finalClubs = importedClubs.some(club => club.id === UNEMPLOYED_MANAGER_CLUB_ID)
-      ? importedClubs
-      : [...importedClubs, UNEMPLOYED_MANAGER_CLUB];
+    const finalClubs = DatapackClubService.applyCareerStartStructure(
+      baseClubs,
+      normalizedImportedClubs,
+      startYear
+    );
     const hasImportedCoaches = raw.coaches && typeof raw.coaches === 'object';
     const importedCoachesRaw = hasImportedCoaches
       ? raw.coaches as Record<string, Coach>
@@ -4163,7 +4172,7 @@ if (userTeamId) {
         cupSuspensionMatches: p.cupSuspensionMatches ?? 0,
         euroSuspensionMatches: p.euroSuspensionMatches ?? 0,
         nationalSuspensionMatches: p.nationalSuspensionMatches ?? 0,
-        contractEndDate: p.contractEndDate ?? new Date(START_DATE.getFullYear() + 2, START_DATE.getMonth(), START_DATE.getDate()).toISOString(),
+        contractEndDate: p.contractEndDate ?? new Date(startYear + 2, careerStartDate.getMonth(), careerStartDate.getDate()).toISOString(),
         annualSalary: p.annualSalary ?? Math.round(overall * 800),
         marketValue: p.marketValue ?? Math.round(overall * 3000),
         loan: p.loan ?? null,
@@ -4225,14 +4234,35 @@ if (userTeamId) {
       importedPlayers.FREE_AGENTS = FreeAgentService.generatePool(99).map(PlayerMoraleService.ensurePlayerState);
     }
 
-    const importedLineups = hasFullPlayerDump && raw.lineups && typeof raw.lineups === 'object'
+    const completedSquadData = DatapackClubService.ensureSquads(
+      finalClubs,
+      importedPlayers,
+      new Set([
+        UNEMPLOYED_MANAGER_CLUB_ID,
+        ...baseClubs
+          .filter(baseClub => {
+            const careerClub = finalClubs.find(club => club.id === baseClub.id);
+            return !careerClub || !['L_PL_1', 'L_PL_2', 'L_PL_3'].includes(careerClub.leagueId);
+          })
+          .map(club => club.id),
+      ])
+    );
+    const clubsWithSquads = completedSquadData.clubs;
+    const completedPlayers = completedSquadData.players;
+    const importedLineupsBase = hasFullPlayerDump && raw.lineups && typeof raw.lineups === 'object'
       ? raw.lineups as Record<string, Lineup>
-      : Object.fromEntries(Object.entries(importedPlayers)
-          .filter(([clubId, squad]) => clubId !== 'FREE_AGENTS' && Array.isArray(squad) && squad.length > 0)
-          .map(([clubId, squad]) => [
-            clubId,
-            LineupService.autoPickLineup(clubId, squad as Player[], '4-4-2', Object.values(importedCoaches).find(coach => coach.currentClubId === clubId) ?? null)
-          ]));
+      : {};
+    const importedLineups = Object.fromEntries(Object.entries(completedPlayers)
+      .filter(([clubId, squad]) => clubId !== 'FREE_AGENTS' && Array.isArray(squad) && squad.length > 0)
+      .map(([clubId, squad]) => [
+        clubId,
+        importedLineupsBase[clubId] ?? LineupService.autoPickLineup(
+          clubId,
+          squad as Player[],
+          '4-4-2',
+          Object.values(importedCoaches).find(coach => coach.currentClubId === clubId) ?? null
+        )
+      ]));
     const defaultNationalTeams = NationalTeamService.initializeNationalTeams();
     const defaultNTMap = new Map(defaultNationalTeams.map(team => [team.id, team]));
     const importedNationalTeams = Array.isArray(raw.nationalTeams)
@@ -4257,7 +4287,7 @@ if (userTeamId) {
     const repairedImportedNationalData = repairNationalTeamSquadsForLoadedData(
       importedNationalTeams,
       importedCoaches,
-      importedPlayers
+      completedPlayers
     );
 
     setIsResigned(false);
@@ -4266,10 +4296,10 @@ if (userTeamId) {
     ChampionshipHistoryService.clear();
     sentMailIdsRef.current = new Set();
     lastProcessedLeagueDateRef.current = null;
-    setCurrentDate(START_DATE);
+    setCurrentDate(careerStartDate);
     setSessionSeed(generateRuntimeSeed());
     setRuntimeSimulationSeed(generateRuntimeSeed());
-    setClubs(finalClubs);
+    setClubs(clubsWithSquads);
     setLeagues(STATIC_LEAGUES);
     setPlayers(repairedImportedNationalData.players);
     setLineups(importedLineups);
@@ -4281,8 +4311,8 @@ if (userTeamId) {
     setManagerProfile(null);
     setSeasonTemplate(template);
     setSeasonNumber(1);
-    setLeagueSchedules(generateSchedules(template, finalClubs));
-    setLastRecoveryDate(START_DATE);
+    setLeagueSchedules(generateSchedules(template, clubsWithSquads));
+    setLastRecoveryDate(careerStartDate);
     setMessages([]);
     setMediaRelationships({});
     setSentUnfriendlyPressMonths([]);
@@ -4349,14 +4379,14 @@ if (userTeamId) {
     setReserveMatchResults([]);
     setAcademy(null);
     setGlobalFixtures([
-      SuperCupService.generateFixture(2025, finalClubs),
-      UEFASuperCupService.generateFixture(2025, finalClubs),
+      SuperCupService.generateFixture(startYear, clubsWithSquads),
+      UEFASuperCupService.generateFixture(startYear, clubsWithSquads),
     ]);
     navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
 
     return {
       success: true,
-      message: `Zaimportowano full pack: ${finalClubs.length} klubów i ${repairedImportedNationalData.nationalTeams.length} reprezentacji.`,
+      message: `Zaimportowano full pack: ${clubsWithSquads.length} klubów i ${repairedImportedNationalData.nationalTeams.length} reprezentacji. Wygenerowano kadry dla ${completedSquadData.generatedClubIds.length} klubów bez zawodników.`,
     };
   };
 

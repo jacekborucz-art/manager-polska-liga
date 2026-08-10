@@ -19,6 +19,7 @@
     "test:polish-supercup-background": "esbuild tests/PolishSuperCupBackgroundPerformanceTests.ts --bundle --platform=node --format=cjs --banner:js=\"globalThis.window=globalThis.window||{};\" --outfile=tmp/polish-supercup-background-tests.cjs && node tmp/polish-supercup-background-tests.cjs",
     "test:club-adaptation": "esbuild tests/PlayerClubAdaptationTests.ts --bundle --platform=node --format=cjs --outfile=tmp/player-club-adaptation-tests.cjs && node tmp/player-club-adaptation-tests.cjs",
     "test:polish-league-seasons": "esbuild tests/PolishLeagueSeasonTests.ts --bundle --platform=node --format=cjs --outfile=tmp/polish-league-season-tests.cjs && node tmp/polish-league-season-tests.cjs",
+    "test:datapack-clubs": "esbuild tests/DatapackClubTests.ts --bundle --platform=node --format=cjs --outfile=tmp/datapack-club-tests.cjs && node tmp/datapack-club-tests.cjs",
     "test:reserve-squad-movement": "esbuild tests/ReserveTeamSquadMovementTests.ts --bundle --platform=node --format=cjs --outfile=tmp/reserve-squad-movement-tests.cjs && node tmp/reserve-squad-movement-tests.cjs",
     "test:managed-reserve-team": "esbuild tests/ManagedReserveTeamTests.ts --bundle --platform=node --format=cjs --outfile=tmp/managed-reserve-team-tests.cjs && node tmp/managed-reserve-team-tests.cjs",
     "test:cup-v2-balance": "esbuild tests/CupMatchEngineV2BalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-balance-tests.cjs && node tmp/cup-v2-balance-tests.cjs",

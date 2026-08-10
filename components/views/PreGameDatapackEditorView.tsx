@@ -23,6 +23,7 @@ import { PlayerAttributesGenerator } from '../../services/PlayerAttributesGenera
 import { STAFF_ROLE_ATTRS } from '../../services/StaffGenerationService';
 import { CoachService } from '../../services/CoachService';
 import { pickNationalityForRegion, REGION_TO_NT_LIST } from '../../services/NationalityService';
+import { DatapackClubService } from '../../services/DatapackClubService';
 
 type EditorScreen = 'MENU' | 'TEAMS' | 'NATIONAL_TEAMS';
 type TeamTab = 'SQUAD' | 'CLUB' | 'FINANCE' | 'KITS' | 'STAFF' | 'BOARD';
@@ -1186,16 +1187,18 @@ export const PreGameDatapackEditorView: React.FC = () => {
     const exportPlayers = selectedClubId && squad.length && !players[selectedClubId]
       ? { ...players, [selectedClubId]: getCurrentSquadForPersistence() }
       : players;
-    const exportClubs = selectedClubId && selectedClubId !== FREE_AGENTS_ID && exportPlayers[selectedClubId]
+    const clubsWithCurrentRoster = selectedClubId && selectedClubId !== FREE_AGENTS_ID && exportPlayers[selectedClubId]
       ? clubs.map(club => club.id === selectedClubId
         ? { ...club, rosterIds: exportPlayers[selectedClubId].map(player => player.id) }
         : club
       )
       : clubs;
+    const exportClubs = clubsWithCurrentRoster.map(DatapackClubService.prepareClubForExport);
     const data = {
       type: 'editor_full_pack',
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
+      careerStartYear: currentDate.getFullYear(),
       clubs: exportClubs,
       players: exportPlayers,
       coaches,
