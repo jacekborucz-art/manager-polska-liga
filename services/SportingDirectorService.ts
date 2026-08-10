@@ -16,6 +16,35 @@ type AttributeKey =
   | 'developmentVision'
   | 'financialDiscipline';
 
+export interface SportingDirectorFreeAgentAssessment {
+  blocked: boolean;
+  resistance: number;
+  totalCommitment: number;
+  budgetUsage: number;
+  wageBillBefore: number;
+  wageBillAfter: number;
+  averageSalary: number;
+  highestSalary: number;
+  salaryRatio: number;
+  positionFit: number;
+  youngAsset: boolean;
+  reasonCode: 'BUDGET' | 'WAGE_STRUCTURE' | 'CONTRACT_LENGTH' | 'POSITION' | 'POLICY';
+  reason: string;
+}
+
+/*
+ * The assessment below is the single source of truth for a sporting director's
+ * free-agent veto. Both the initial yes/no decision and the later conversation
+ * consume the same snapshot. Keeping these values together prevents the UI from
+ * explaining one financial risk while the appeal service evaluates another.
+ *
+ * Important separation of responsibilities:
+ * - FinanceService handles hard affordability and board-level spending rules.
+ * - This service models the sporting director's softer policy objection.
+ * - SportingDirectorContractAppealService resolves the manager's response.
+ * A soft director veto may be overturned. A hard lack of funds may not.
+ */
+
 const EUROPEAN_NATIONALITIES: DirectorNationality[] = [
   { region: Region.GERMANY, country: 'Niemcy' },
   { region: Region.FRANCE, country: 'Francja' },
@@ -1151,6 +1180,103 @@ const buildDirectorAdvice = (params: {
   return notes.slice(0, 3);
 };
 
+const buildFreeAgentSigningAssessment = (params: {
+  club: Club;
+  player: Player;
+  squad: Player[];
+  contract: TransferContractInput;
+}): SportingDirectorFreeAgentAssessment => {
+  const { club, player, squad, contract } = params;
+  const director = club.sportingDirector;
+  const totalCommitment = contract.salary * contract.years + contract.bonus;
+  const budgetUsage = club.transferBudget > 0 ? totalCommitment / club.transferBudget : 9;
+  const wageBillBefore = getTotalWageBill(squad);
+  const wageBillAfter = wageBillBefore + contract.salary;
+  const averageSalary = squad.length > 0 ? wageBillBefore / squad.length : contract.salary;
+  const highestSalary = squad.length > 0
+    ? Math.max(...squad.map(squadPlayer => Math.max(0, squadPlayer.annualSalary || 0)))
+    : 0;
+  const salaryRatio = averageSalary > 0 ? contract.salary / averageSalary : 1;
+  const positionFit = getPositionFitScore(player, squad);
+  const youngAsset = isYoungAsset(player);
+
+  if (!director) {
+    return {
+      blocked: false,
+      resistance: 0,
+      totalCommitment,
+      budgetUsage,
+      wageBillBefore,
+      wageBillAfter,
+      averageSalary,
+      highestSalary,
+      salaryRatio,
+      positionFit,
+      youngAsset,
+      reasonCode: 'POLICY',
+      reason: 'Brak dyrektora sportowego.',
+    };
+  }
+
+  /*
+   * Resistance is intentionally continuous rather than a list of independent
+   * veto rules. A controlling, financially strict director starts higher, while
+   * flexibility lowers resistance. Contract context then moves the same score:
+   * budget pressure, wage hierarchy, age/length risk and squad need all matter.
+   */
+  let resistance = director.control * 1.4 + director.financialDiscipline * 1.9 - director.flexibility * 1.15;
+  if (budgetUsage > 0.45) resistance += 14;
+  if (budgetUsage > 0.7) resistance += 18;
+  if (salaryRatio > 1.65) resistance += 16;
+  if (salaryRatio > 2.2) resistance += 18;
+  if (player.age >= 31 && contract.years >= 3) resistance += 24;
+  if (player.age >= 34 && contract.years >= 2) resistance += 16;
+  if (positionFit < -5) resistance += 18;
+  if (positionFit >= 8) resistance -= 14;
+  if (youngAsset && director.developmentVision >= 13) resistance -= 16;
+  if (director.personality === 'ACCOUNTANT') resistance += 12;
+  if (director.personality === 'TALENT_HUNTER' && youngAsset) resistance -= 16;
+  if (director.personality === 'PARTNER') resistance -= 10;
+  if (director.relationshipWithManager < 35) resistance += 10;
+
+  // Crossing 70 opens the dialogue; it does not cancel the accepted contract yet.
+  const blocked = resistance >= 70;
+  const reasonCode: SportingDirectorFreeAgentAssessment['reasonCode'] = budgetUsage > 0.7
+    ? 'BUDGET'
+    : salaryRatio > 2.2
+      ? 'WAGE_STRUCTURE'
+      : player.age >= 31 && contract.years >= 3
+        ? 'CONTRACT_LENGTH'
+        : positionFit < -5
+          ? 'POSITION'
+          : 'POLICY';
+  const reason = reasonCode === 'BUDGET'
+    ? `Kontrakt dla ${playerName(player)} za mocno obciąża budżet transferowy.`
+    : reasonCode === 'WAGE_STRUCTURE'
+      ? 'Pensja jest zbyt wysoka względem struktury płac w kadrze.'
+      : reasonCode === 'CONTRACT_LENGTH'
+        ? 'Nie akceptuję tak długiego kontraktu dla zawodnika w tym wieku.'
+        : reasonCode === 'POSITION'
+          ? 'Ta pozycja nie wymaga tak kosztownego wzmocnienia.'
+          : 'Ten kontrakt nie pasuje do polityki sportowej i finansowej klubu.';
+
+  return {
+    blocked,
+    resistance,
+    totalCommitment,
+    budgetUsage,
+    wageBillBefore,
+    wageBillAfter,
+    averageSalary,
+    highestSalary,
+    salaryRatio,
+    positionFit,
+    youngAsset,
+    reasonCode,
+    reason,
+  };
+};
+
 export const SportingDirectorService = {
   generateForClub(club: Club, rng: () => number = Math.random): SportingDirector {
     const nationality = pickNationality(rng);
@@ -2070,36 +2196,12 @@ export const SportingDirectorService = {
     squad: Player[];
     contract: TransferContractInput;
     date: Date;
-  }): { blocked: boolean; message: string; updatedClub: Club; mail?: MailMessage; relationDelta: number } {
+  }): { blocked: boolean; message: string; updatedClub: Club; mail?: MailMessage; relationDelta: number; assessment?: SportingDirectorFreeAgentAssessment } {
     const { club, player, squad, contract, date } = params;
     const director = club.sportingDirector;
     if (!director) return { blocked: false, message: 'Brak dyrektora sportowego.', updatedClub: club, relationDelta: 0 };
-
-    const totalCommitment = contract.salary * contract.years + contract.bonus;
-    const budgetUsage = club.transferBudget > 0 ? totalCommitment / club.transferBudget : 9;
-    const averageSalary = squad.length > 0
-      ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.annualSalary, 0) / squad.length
-      : contract.salary;
-    const salaryRatio = averageSalary > 0 ? contract.salary / averageSalary : 1;
-    const positionFit = getPositionFitScore(player, squad);
-    const youngAsset = isYoungAsset(player);
-
-    let resistance = director.control * 1.4 + director.financialDiscipline * 1.9 - director.flexibility * 1.15;
-    if (budgetUsage > 0.45) resistance += 14;
-    if (budgetUsage > 0.7) resistance += 18;
-    if (salaryRatio > 1.65) resistance += 16;
-    if (salaryRatio > 2.2) resistance += 18;
-    if (player.age >= 31 && contract.years >= 3) resistance += 24;
-    if (player.age >= 34 && contract.years >= 2) resistance += 16;
-    if (positionFit < -5) resistance += 18;
-    if (positionFit >= 8) resistance -= 14;
-    if (youngAsset && director.developmentVision >= 13) resistance -= 16;
-    if (director.personality === 'ACCOUNTANT') resistance += 12;
-    if (director.personality === 'TALENT_HUNTER' && youngAsset) resistance -= 16;
-    if (director.personality === 'PARTNER') resistance -= 10;
-    if (director.relationshipWithManager < 35) resistance += 10;
-
-    const blocked = resistance >= 70;
+    const assessment = buildFreeAgentSigningAssessment({ club, player, squad, contract });
+    const { blocked, budgetUsage, salaryRatio, positionFit, youngAsset, totalCommitment } = assessment;
     const positive = !blocked && (positionFit >= 8 || youngAsset || salaryRatio <= 0.9) && budgetUsage <= 0.55;
     const relationDelta = blocked ? -2 : positive ? 1 : 0;
     const updatedDirector: SportingDirector = {
@@ -2109,21 +2211,13 @@ export const SportingDirectorService = {
     const updatedClub: Club = { ...club, sportingDirector: updatedDirector };
 
     const reason = blocked
-      ? budgetUsage > 0.7
-        ? `Kontrakt dla ${playerName(player)} za mocno obciaza budzet transferowy.`
-        : salaryRatio > 2.2
-          ? `Pensja jest zbyt wysoka wzgledem struktury plac w kadrze.`
-          : player.age >= 31 && contract.years >= 3
-            ? `Nie akceptuje tak dlugiego kontraktu dla zawodnika w tym wieku.`
-            : positionFit < -5
-              ? `Ta pozycja nie wymaga tak kosztownego wzmocnienia.`
-              : `Ten kontrakt nie pasuje do polityki sportowej i finansowej klubu.`
+      ? assessment.reason
       : positive
         ? `${playerName(player)} jest sensownym ruchem na wolnym rynku. Akceptuje podpis.`
         : 'Dyrektor sportowy nie blokuje kontraktu, ale bedzie obserwowal jego skutki.';
 
     if (!blocked && !positive) {
-      return { blocked: false, message: reason, updatedClub: club, relationDelta: 0 };
+      return { blocked: false, message: reason, updatedClub: club, relationDelta: 0, assessment };
     }
 
     const body = blocked
@@ -2156,6 +2250,7 @@ export const SportingDirectorService = {
       message: reason,
       updatedClub,
       relationDelta,
+      assessment,
       mail: buildDirectorMail({
         club,
         director,

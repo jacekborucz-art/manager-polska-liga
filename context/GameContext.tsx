@@ -64,6 +64,8 @@ MysteryAgentContractOffer,
 MysteryAgentNegotiationResult,
 MysteryAgentBoardRequestResult,
 ReserveReleaseDirective,
+SportingDirectorContractVetoAction,
+SportingDirectorContractVetoActionResult,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { TrainingFacilityService } from '../services/TrainingFacilityService';
@@ -126,6 +128,7 @@ import { CoachService } from '../services/CoachService';
 import { StaffGenerationService } from '../services/StaffGenerationService';
 import { ClubManagementService } from '../services/ClubManagementService';
 import { SportingDirectorService } from '../services/SportingDirectorService';
+import { SportingDirectorContractAppealService } from '../services/SportingDirectorContractAppealService';
 import { RefereeService } from '../services/RefereeService';
 import { FreeAgentService } from '../services/FreeAgentService';
 import { AiContractService } from '@/services/AiContractService';
@@ -1167,6 +1170,7 @@ setPendingNegotiations: React.Dispatch<React.SetStateAction<PendingNegotiation[]
   activeFriendlyConditions: FriendlyMatchConditions | null;
   setActiveFriendlyConditions: React.Dispatch<React.SetStateAction<FriendlyMatchConditions | null>>;
 finalizeFreeAgentContract: (mailId: string) => void;
+  respondToSportingDirectorContractVeto: (mailId: string, action: SportingDirectorContractVetoAction) => SportingDirectorContractVetoActionResult;
   transferOffers: TransferOffer[];
   submitTransferOffer: (playerId: string, offer: TransferClubBidInput) => TransferOfferSubmissionResult;
   submitLoanOffer: (playerId: string, offer: LoanOfferSubmissionInput) => LoanOfferSubmissionResult;
@@ -5521,7 +5525,10 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         metadata: undefined
       };
 
-      setMessages(prev => [withdrawalMail, ...prev.filter(m2 => m2.id !== mail.id)]);
+      setMessages(prev => [withdrawalMail, ...prev.filter(m2 =>
+        m2.id !== mail.id &&
+        !(m2.metadata?.type === 'SPORTING_DIRECTOR_CONTRACT_VETO' && m2.metadata.case.contractMailId === mail.id)
+      )]);
     });
   };
 
@@ -18508,12 +18515,39 @@ const finalResult: SimulationOutput = {
     };
   }, [userTeamId, transferOffers, clubs, players, currentDate, managerProfile, transferScoutingReports, transferScoutPool]);
 
-const finalizeFreeAgentContract = useCallback((mailId: string) => {
+/*
+ * Final free-agent signing pipeline
+ * ---------------------------------
+ * The player has already accepted the negotiated terms when this function runs.
+ * The remaining order is important and must not be rearranged casually:
+ *
+ * 1. Validate that the accepted player and contract are still available.
+ * 2. Enforce hard affordability. This can never be bypassed by an appeal.
+ * 3. Enforce the board's hard wage/budget veto (unless an existing exceptional
+ *    board approval token has already authorized the deal).
+ * 4. Ask the sporting director for a soft policy review.
+ * 5. If vetoed, keep the accepted contract pending, create a linked conversation
+ *    mail and stop before charging the club or moving the player.
+ * 6. If approved, charge the complete commitment and move the player atomically.
+ *
+ * `bypassDirectorApproval` is private flow control used only after the director
+ * or owner approves the persisted appeal case. It skips step 4, but deliberately
+ * repeats hard finance checks so an appeal cannot create money or overspend.
+ */
+const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApproval = false) => {
     const mail = messages.find(m => m.id === mailId);
     // TUTAJ WSTAW TEN KOD (Weryfikacja typu metadanych)
     if (!mail || !mail.metadata || mail.metadata.type !== 'CONTRACT_OFFER' || !userTeamId) return;
 
     const { playerId, salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus } = mail.metadata;
+    if (mail.metadata.directorReviewPending && !bypassDirectorApproval) {
+      showGameNotification({
+        title: 'Kontrakt oczekuje na decyzję',
+        message: 'Najpierw zakończ rozmowę z dyrektorem sportowym w sprawie jego weta.',
+        tone: 'warning',
+      });
+      return;
+    }
     // KONIEC KODU
     const freeAgents = players['FREE_AGENTS'] || [];
     const playerToSign = freeAgents.find(p => p.id === playerId);
@@ -18630,7 +18664,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       }
     }
 
-    const directorFreeAgentDecision = userClub.sportingDirector
+    // A director review is a reversible policy veto, unlike the hard checks above.
+    const directorFreeAgentDecision = userClub.sportingDirector && !bypassDirectorApproval
       ? SportingDirectorService.evaluateFreeAgentSigningDecision({
           club: userClub,
           player: resolvedPlayer,
@@ -18641,45 +18676,62 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       : null;
 
     if (directorFreeAgentDecision?.blocked) {
-      const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
-      setPlayers(prevPlayers => ({
-        ...prevPlayers,
-        ['FREE_AGENTS']: (prevPlayers['FREE_AGENTS'] || []).map(player =>
-          player.id === resolvedPlayer.id
-            ? {
-                ...player,
-                freeAgentLockoutUntil: null,
-                isNegotiationPermanentBlocked: false,
-                freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
-                  player.freeAgentClubLockouts,
-                  userTeamId,
-                  lockoutDate.toISOString()
-                )
-              }
-            : player
-        )
-      }));
       setClubs(prev => prev.map(c => c.id === userTeamId ? directorFreeAgentDecision.updatedClub : c));
-      const offendedMail: MailMessage = {
-        id: `MAIL_FA_DIRECTOR_VETO_${mail.id}`,
-        sender: `Agent gracza ${resolvedPlayer.lastName}`,
-        role: 'Agencja Menadzerska',
-        subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
-        body: `Po zaakceptowaniu warunkow klub ${userClub.name} wycofal sie z podpisania kontraktu. Moj klient potraktowal to jako brak powagi. Przez najblizsze miesiace nie bedziemy wracac do rozmow z tym klubem.`,
-        date: new Date(currentDate),
-        isRead: false,
-        type: MailType.SYSTEM,
-        priority: 97
+      const vetoMailId = directorFreeAgentDecision.mail?.id ?? `MAIL_FA_DIRECTOR_VETO_${mail.id}`;
+      const assessment = directorFreeAgentDecision.assessment;
+      if (!assessment) return;
+      // Snapshot facts and RNG once; the mail becomes the persisted case record.
+      const vetoCase = SportingDirectorContractAppealService.createCase({
+        contractMailId: mail.id,
+        vetoMailId,
+        club: userClub,
+        player: resolvedPlayer,
+        contract: { salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus },
+        assessment,
+        date: currentDate,
+      });
+      const reviewExpiry = new Date(currentDate);
+      reviewExpiry.setDate(reviewExpiry.getDate() + 7);
+      const vetoMail: MailMessage = {
+        ...(directorFreeAgentDecision.mail ?? {
+          id: vetoMailId,
+          sender: `${userClub.sportingDirector?.firstName ?? ''} ${userClub.sportingDirector?.lastName ?? ''}`.trim(),
+          role: 'Dyrektor sportowy',
+          subject: `Weto kontraktu: ${resolvedPlayer.lastName}`,
+          body: directorFreeAgentDecision.message,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 90,
+        }),
+        metadata: { type: 'SPORTING_DIRECTOR_CONTRACT_VETO', case: vetoCase },
       };
-      setMessages(prev => [offendedMail, ...prev.filter(existingMail => existingMail.id !== mailId)]);
-      if (directorFreeAgentDecision.mail) {
-        prependUniqueMessages([directorFreeAgentDecision.mail], true);
-      }
+      /*
+       * Keep both mails linked. The original contract owns the transaction and is
+       * marked non-finalizable, while the veto mail owns the conversation. The
+       * seven-day extension gives the user time to finish the internal discussion.
+       */
+      setMessages(prev => [
+        vetoMail,
+        ...prev.filter(existingMail => existingMail.id !== vetoMail.id).map(existingMail =>
+          existingMail.id === mail.id && existingMail.metadata?.type === 'CONTRACT_OFFER'
+            ? {
+                ...existingMail,
+                metadata: {
+                  ...existingMail.metadata,
+                  directorReviewPending: true,
+                  directorVetoMailId: vetoMail.id,
+                  acceptanceExpiryDate: reviewExpiry.toISOString(),
+                },
+              }
+            : existingMail
+        ),
+      ]);
 
       return showGameNotification({
         title: 'Weto dyrektora sportowego',
-        message: `${directorFreeAgentDecision.message} Zawodnik i jego agent zerwali rozmowy z klubem na kilka miesiecy.`,
-        tone: 'error'
+        message: `${directorFreeAgentDecision.message} Kontrakt oczekuje na rozmowę z dyrektorem sportowym.`,
+        tone: 'warning'
       });
     }
 
@@ -18761,6 +18813,163 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       tone: 'success'
     });
   }, [messages, players, userTeamId, currentDate, clubs, showGameNotification]);
+
+  /*
+   * Side-effect coordinator for the otherwise pure appeal service. Every response
+   * first persists the returned state, then this function applies exactly one of
+   * four terminal outcomes: sign, withdraw, fire, or continue the conversation.
+   * Keeping terminal effects here ensures finances, squads, employment and mail
+   * cannot diverge from the saved state-machine outcome.
+   */
+  const respondToSportingDirectorContractVeto = useCallback((
+    vetoMailId: string,
+    action: SportingDirectorContractVetoAction,
+  ): SportingDirectorContractVetoActionResult => {
+    const vetoMail = messages.find(message => message.id === vetoMailId);
+    if (!vetoMail || vetoMail.metadata?.type !== 'SPORTING_DIRECTOR_CONTRACT_VETO' || !userTeamId) {
+      return { ok: false, message: 'Ta sprawa kontraktowa nie jest już aktywna.', closeMail: true };
+    }
+
+    const vetoCase = vetoMail.metadata.case;
+    const contractMail = messages.find(message => message.id === vetoCase.contractMailId);
+    const userClub = clubs.find(club => club.id === userTeamId);
+    const player = (players['FREE_AGENTS'] || []).find(candidate => candidate.id === vetoCase.playerId);
+    if (!contractMail || contractMail.metadata?.type !== 'CONTRACT_OFFER' || !userClub || !player) {
+      return { ok: false, message: 'Nie można już dokończyć tej sprawy kontraktowej.', closeMail: true };
+    }
+
+    const decision = SportingDirectorContractAppealService.applyAction({
+      state: vetoMail.metadata.case,
+      action,
+      club: userClub,
+      managerProfile,
+    });
+
+    // Persist non-terminal progress immediately so save/load resumes the same round.
+    setMessages(prev => prev.map(message =>
+      message.id === vetoMailId && message.metadata?.type === 'SPORTING_DIRECTOR_CONTRACT_VETO'
+        ? { ...message, metadata: { ...message.metadata, case: decision.state } }
+        : message
+    ));
+
+    if (decision.state.stage !== 'RESOLVED') {
+      const director = userClub.sportingDirector;
+      if (director && decision.relationDelta !== 0) {
+        setClubs(prev => prev.map(club => club.id === userTeamId ? {
+          ...club,
+          sportingDirector: {
+            ...director,
+            relationshipWithManager: Math.max(0, Math.min(100, director.relationshipWithManager + decision.relationDelta)),
+          },
+        } : club));
+      }
+      return { ok: true, message: decision.message, state: decision.state };
+    }
+
+    const updatedDirector = userClub.sportingDirector
+      ? {
+          ...userClub.sportingDirector,
+          relationshipWithManager: Math.max(0, Math.min(100, userClub.sportingDirector.relationshipWithManager + decision.relationDelta)),
+        }
+      : undefined;
+    const clubPatch: Partial<Club> = {
+      sportingDirector: updatedDirector,
+      boardConfidence: Math.max(0, Math.min(100, (userClub.boardConfidence ?? 60) + decision.boardConfidenceDelta)),
+      ...(action === 'ULTIMATUM' ? { lastContractUltimatumDate: currentDate.toISOString() } : {}),
+    };
+
+    /* Director/owner approval re-enters the normal signing pipeline. Only the soft
+     * director review is bypassed; current funds and board constraints are checked. */
+    if (decision.approved) {
+      setClubs(prev => prev.map(club => club.id === userTeamId ? { ...club, ...clubPatch } : club));
+      finalizeFreeAgentContract(contractMail.id, true);
+      setMessages(prev => prev.filter(message => message.id !== vetoMailId));
+      showGameNotification({
+        title: decision.state.outcome === 'OWNER_APPROVED' ? 'Zarząd ustąpił' : 'Dyrektor wycofał weto',
+        message: decision.message,
+        tone: 'success',
+      });
+      return { ok: true, message: decision.message, state: decision.state, closeMail: true };
+    }
+
+    // Withdrawal cancels both linked mails and quietly damages agent availability.
+    if (decision.withdrawn) {
+      const lockoutDate = getHiddenOffenseLockoutDate(currentDate);
+      setPlayers(prev => ({
+        ...prev,
+        ['FREE_AGENTS']: (prev['FREE_AGENTS'] || []).map(candidate => candidate.id === player.id ? {
+          ...candidate,
+          freeAgentLockoutUntil: null,
+          isNegotiationPermanentBlocked: false,
+          freeAgentClubLockouts: FreeAgentNegotiationService.buildClubLockouts(
+            candidate.freeAgentClubLockouts,
+            userTeamId,
+            lockoutDate.toISOString(),
+          ),
+        } : candidate),
+      }));
+      const withdrawalMail: MailMessage = {
+        id: `MAIL_FA_DIRECTOR_WITHDRAW_${contractMail.id}`,
+        sender: `Agent gracza ${player.lastName}`,
+        role: 'Agencja Menadżerska',
+        subject: `Rozmowy zakończone: ${player.firstName} ${player.lastName}`,
+        body: `Klub ${userClub.name} wycofał się z uzgodnionego kontraktu po wewnętrznym sporze. Mój klient nie będzie wracał do rozmów z tym klubem przez najbliższe miesiące.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 94,
+      };
+      setMessages(prev => [withdrawalMail, ...prev.filter(message => message.id !== vetoMailId && message.id !== contractMail.id)]);
+      showGameNotification({ title: 'Transfer anulowany', message: decision.message, tone: 'warning' });
+      return { ok: true, message: decision.message, state: decision.state, closeMail: true };
+    }
+
+    /*
+     * A rejected ultimatum is equivalent to a normal manager dismissal: calculate
+     * the league position and EXP penalty, appoint an AI replacement, detach the
+     * user from the club and clear club-specific pending activity.
+     */
+    if (decision.fired) {
+      const leagueClubs = clubs.filter(club => club.leagueId === userClub.leagueId);
+      const sorted = [...leagueClubs].sort((left, right) =>
+        right.stats.points - left.stats.points || right.stats.goalDifference - left.stats.goalDifference || right.stats.goalsFor - left.stats.goalsFor
+      );
+      const rank = Math.max(1, sorted.findIndex(club => club.id === userClub.id) + 1);
+      const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
+      const replacementClub: Club = { ...userClub, ...clubPatch };
+      const updatedCoaches = { ...coaches };
+      assignReplacementCoachToClub(updatedCoaches, replacementClub, currentDate, userClub.coachId);
+      setCoaches(updatedCoaches);
+      setClubs(prev => prev.map(club => club.id === userClub.id ? replacementClub : club));
+      if (expPenalty > 0) {
+        setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, [{
+          sourceKey: `manager-fired-ultimatum:${userClub.id}:${currentDate.toISOString().split('T')[0]}`,
+          date: currentDate,
+          season: seasonNumber,
+          delta: -expPenalty,
+          competition: userClub.name,
+          label: 'Zwolnienie po ultimatum kontraktowym',
+        }]));
+      }
+      const firedMail = createManagerFiredMail(
+        userClub,
+        'Ultimatum postawione właścicielowi w sprawie zawetowanego kontraktu.',
+        rank,
+        currentDate,
+        expPenalty,
+      );
+      setMessages(prev => [firedMail, ...prev.filter(message => message.id !== vetoMailId && message.id !== contractMail.id)]);
+      setIsResigned(true);
+      setManagerEmploymentStatus('FIRED');
+      setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
+      setIncomingOffers([]);
+      setActiveTrainingId(null);
+      showGameNotification({ title: 'Zwolnienie z klubu', message: decision.message, tone: 'error' });
+      return { ok: true, message: decision.message, state: decision.state, closeMail: true };
+    }
+
+    return { ok: false, message: decision.message, state: decision.state };
+  }, [clubs, coaches, currentDate, finalizeFreeAgentContract, managerProfile, messages, players, seasonNumber, showGameNotification, userTeamId]);
 
   useEffect(() => {
     const duePreContracts = transferOffers.filter(offer =>
@@ -19277,7 +19486,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports, aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
-      setMessages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, setMediaRelationships, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
+      setMessages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, setMediaRelationships, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, respondToSportingDirectorContractVeto, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
             markMessageRead, deleteMessage, addPendingPressArticle, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, matchSimulationSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,

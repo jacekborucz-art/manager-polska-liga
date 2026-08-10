@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { SoccerBall } from './SoccerBall';
 
 type ProcessingOptions = {
   title?: string;
@@ -172,14 +173,26 @@ export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     <ProcessingContext.Provider value={value}>
       {children}
       {processing && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/82 backdrop-blur-[4px]">
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/82 backdrop-blur-[4px]"
+          role="dialog"
+          aria-modal="true"
+          aria-live="polite"
+          aria-labelledby="processing-overlay-title"
+          aria-describedby="processing-overlay-message"
+        >
           <div className="relative w-[520px] max-w-[calc(100vw-32px)] overflow-hidden border-2 border-cyan-200/45 bg-[#030814] px-9 py-8 text-center shadow-[0_30px_100px_rgba(0,0,0,0.9),0_0_36px_rgba(34,211,238,0.16)]">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
-            <div className="mx-auto mb-5 h-12 w-12 rounded-full border-4 border-cyan-300/25 border-t-cyan-100 animate-spin" />
-            <h2 className="font-black italic uppercase tracking-tighter text-3xl leading-none text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+            <div className="relative mx-auto mb-6 h-20 w-20" aria-hidden="true">
+              <div className="processing-ball-idle absolute inset-x-0 top-0 flex justify-center">
+                <SoccerBall className="h-14 w-14 drop-shadow-[0_8px_14px_rgba(0,0,0,0.7)]" />
+              </div>
+              <div className="processing-ball-shadow absolute bottom-1 left-1/2 h-2 w-12 -translate-x-1/2 rounded-full bg-black/70 blur-[3px]" />
+            </div>
+            <h2 id="processing-overlay-title" className="font-black italic uppercase tracking-tighter text-3xl leading-none text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
               {processing.title}
             </h2>
-            <p className="font-black italic uppercase tracking-tighter mx-auto mt-5 max-w-[430px] text-base leading-snug text-cyan-50 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+            <p id="processing-overlay-message" className="font-black italic uppercase tracking-tighter mx-auto mt-5 max-w-[430px] text-base leading-snug text-cyan-50 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
               {processing.message}
             </p>
             <p className="font-black italic uppercase tracking-tighter mt-5 text-xs leading-snug text-white/75">
@@ -188,9 +201,39 @@ export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             <p className="font-black italic uppercase tracking-tighter mx-auto mt-4 max-w-[440px] text-[11px] leading-snug text-yellow-200">
               Jeśli przeglądarka pokaże komunikat, że strona nie odpowiada, nie martw się i poczekaj. Gra nadal przetwarza dane.
             </p>
-            <div className="mt-7 h-1 w-full overflow-hidden bg-white/15">
-              <div className="h-full w-1/2 animate-pulse bg-cyan-200" />
+            <div
+              className="relative mt-8 h-3 w-full overflow-hidden rounded-full border border-cyan-200/20 bg-white/10"
+              role="progressbar"
+              aria-label="Postęp przetwarzania danych"
+              aria-valuetext="Trwa przetwarzanie"
+            >
+              <div aria-hidden="true" className="processing-progress-bar absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-cyan-500 via-cyan-100 to-emerald-300 shadow-[0_0_16px_rgba(103,232,249,0.75)]" />
             </div>
+            <style>{`
+              @keyframes processing-ball-idle {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-12px); }
+              }
+              .processing-ball-idle { animation: processing-ball-idle 1.6s ease-in-out infinite; will-change: transform; }
+
+              @keyframes processing-ball-shadow {
+                0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.5; }
+                50% { transform: translateX(-50%) scaleX(0.65); opacity: 0.22; }
+              }
+              .processing-ball-shadow { animation: processing-ball-shadow 1.6s ease-in-out infinite; will-change: transform, opacity; }
+
+              @keyframes processing-progress-bar {
+                0% { transform: translateX(-110%); }
+                100% { transform: translateX(310%); }
+              }
+              .processing-progress-bar { animation: processing-progress-bar 1.35s ease-in-out infinite; will-change: transform; }
+
+              @media (prefers-reduced-motion: reduce) {
+                .processing-ball-idle,
+                .processing-ball-shadow,
+                .processing-progress-bar { animation-duration: 3.5s; }
+              }
+            `}</style>
           </div>
         </div>
       )}

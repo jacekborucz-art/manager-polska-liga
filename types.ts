@@ -400,6 +400,85 @@ export interface AiWeeklyTrainingState {
   validUntil: string;
 }
 
+/**
+ * Sporting-director contract veto conversation
+ * ------------------------------------------------
+ * This state machine starts only after the player and his agent have accepted a
+ * free-agent contract, but before the club commits money or moves the player to
+ * the squad. The accepted CONTRACT_OFFER mail remains the source transaction;
+ * a separate veto mail stores the conversation state below.
+ *
+ * Persisting the complete case in mail metadata is intentional. It makes the
+ * dialogue save-game safe and, most importantly, preserves the random seed so
+ * reopening a mail or reloading a save cannot reroll an appeal or ultimatum.
+ */
+export type SportingDirectorContractArgument =
+  | 'SPORTING_QUALITY'
+  | 'POSITION_NEED'
+  | 'MARKET_OPPORTUNITY'
+  | 'MANAGER_TRUST';
+
+export type SportingDirectorContractReply =
+  | 'USE_DATA'
+  | 'OFFER_COMPROMISE'
+  | 'TAKE_RESPONSIBILITY';
+
+export type SportingDirectorContractVetoAction =
+  | SportingDirectorContractArgument
+  | SportingDirectorContractReply
+  | 'ULTIMATUM'
+  | 'WITHDRAW';
+
+export type SportingDirectorContractVetoStage =
+  | 'EXPLANATION'
+  | 'COUNTER_ARGUMENT'
+  | 'APPEAL_FAILED'
+  | 'RESOLVED';
+
+export interface SportingDirectorContractVetoState {
+  /** Link back to the accepted contract that may eventually be finalized. */
+  contractMailId: string;
+  playerId: string;
+  playerName: string;
+  playerOverall: number;
+  playerAge: number;
+  position: PlayerPosition;
+  salary: number;
+  years: number;
+  bonus: number;
+  totalCommitment: number;
+  transferBudget: number;
+  budgetUsage: number;
+  wageBillBefore: number;
+  wageBillAfter: number;
+  averageSalary: number;
+  highestSalary: number;
+  salaryRatio: number;
+  positionFit: number;
+  resistance: number;
+  reasonCode: 'BUDGET' | 'WAGE_STRUCTURE' | 'CONTRACT_LENGTH' | 'POSITION' | 'POLICY';
+  reason: string;
+  /** Current state-machine node; the UI renders actions strictly from this value. */
+  stage: SportingDirectorContractVetoStage;
+  /** Stable seed generated once when the veto case is opened. */
+  seed: number;
+  selectedArgument?: SportingDirectorContractArgument;
+  argumentScore?: number;
+  directorResponse?: string;
+  appealSummary?: string;
+  /** False during the club-wide 12-month cooldown or after an ultimatum is used. */
+  ultimatumAvailable: boolean;
+  /** Terminal result. Undefined while the conversation is still active. */
+  outcome?: 'DIRECTOR_APPROVED' | 'OWNER_APPROVED' | 'MANAGER_FIRED' | 'WITHDRAWN';
+}
+
+export interface SportingDirectorContractVetoActionResult {
+  ok: boolean;
+  message: string;
+  state?: SportingDirectorContractVetoState;
+  closeMail?: boolean;
+}
+
 export interface MailMessage {
   id: string;
   sender: string;
@@ -434,6 +513,13 @@ export interface MailMessage {
       assistBonus?: number;
       cleanSheetBonus?: number;
     } | null;
+    /** Prevents direct signing while the linked sporting-director case is active. */
+    directorReviewPending?: boolean;
+    /** Allows expiry/cleanup code to remove both sides of the pending transaction. */
+    directorVetoMailId?: string;
+  } | {
+    type: 'SPORTING_DIRECTOR_CONTRACT_VETO';
+    case: SportingDirectorContractVetoState;
   } | {
     type: 'INCOMING_TRANSFER_OFFER';
     offerId: string;
@@ -1885,6 +1971,8 @@ export interface Club {
   reserveSquadLastEmergencyMoveDate?: string;
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
+  /** ISO date used to enforce one contract ultimatum per rolling 12 months. */
+  lastContractUltimatumDate?: string;
   oneTimePlayerBonusesThisSeason?: number;
   boardBudgetMonitorState?: 'NORMAL' | 'ALERT' | 'SURPLUS';
   boardBudgetLastShiftDate?: string;

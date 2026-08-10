@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { ViewState } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { ReserveTeamLeagueService } from '../../services/ReserveTeamLeagueService';
+import { useProcessing } from '../ui/ProcessingOverlay';
 
 const CAREER_START_OPTIONS = [
   { year: 2025, label: '2025/26', description: 'Start od 1 lipca 2025' },
@@ -38,6 +39,7 @@ const ClubSelectionBadge: React.FC<{
 
 export const TeamSelection: React.FC = () => {
   const { clubs, currentDate, managerProfile, selectUserTeam, startNewGame, navigateTo } = useGame();
+  const { isProcessing, runWithProcessing } = useProcessing();
   
   const [selectedLeagueTier, setSelectedLeagueTier] = useState<number | 'FOREIGN'>(1);
   const [selectedCountry, setSelectedCountry] = useState<'ENG' | 'ITA' | 'ESP' | 'GER' | 'FRA' | 'OTHER'>('ENG');
@@ -98,11 +100,20 @@ export const TeamSelection: React.FC = () => {
   const selectedCareerSeasonLabel = `${selectedCareerStartYear}/${String(selectedCareerStartYear + 1).slice(-2)}`;
 
   const handleSeasonChange = (year: number) => {
-    if (year === selectedCareerStartYear) return;
-    startNewGame(year, {
-      preserveManagerProfile: managerProfile,
-      nextView: ViewState.TEAM_SELECTION,
-      preserveImportedDatapack: true,
+    if (year === selectedCareerStartYear || isProcessing) return;
+    const seasonLabel = `${year}/${String(year + 1).slice(-2)}`;
+
+    void runWithProcessing(() => {
+      startNewGame(year, {
+        preserveManagerProfile: managerProfile,
+        nextView: ViewState.TEAM_SELECTION,
+        preserveImportedDatapack: true,
+      });
+    }, {
+      title: `Ładowanie sezonu ${seasonLabel}`,
+      message: 'System przygotowuje kluby, składy, kontrakty i rozgrywki dla wybranego sezonu.',
+      status: 'Proszę czekać — nie zamykaj gry',
+      minVisibleMs: 650,
     });
   };
 
@@ -162,7 +173,9 @@ export const TeamSelection: React.FC = () => {
                   <button
                     key={option.year}
                     onClick={() => handleSeasonChange(option.year)}
+                    disabled={isProcessing}
                     className={`px-5 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border
+                      ${isProcessing ? 'cursor-wait opacity-60' : ''}
                       ${selectedCareerStartYear === option.year
                         ? 'bg-cyan-600 border-cyan-300 text-white shadow-[0_0_15px_rgba(34,211,238,0.45)]'
                         : 'bg-slate-900/50 border-white/5 text-slate-500 hover:text-slate-200 hover:border-cyan-400/30'

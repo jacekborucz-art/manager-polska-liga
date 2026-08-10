@@ -9,6 +9,7 @@ import { MediaInterviewService } from '../../services/MediaInterviewService';
 import { KitPreview } from '../common/KitPreview';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { MatchReportModalPolishLeague } from './MatchReportModalPolishLeague';
+import { SportingDirectorContractVetoPanel } from './SportingDirectorContractVetoPanel';
 
 interface MailDetailsModalProps {
   mail: MailMessage;
@@ -966,6 +967,7 @@ const WCQPlayoffPolandMail: React.FC<{ mail: MailMessage }> = ({ mail }) => {
 export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClose }) => {
   const {
     finalizeFreeAgentContract,
+    respondToSportingDirectorContractVeto,
     terminateLoanEarly,
     deleteMessage,
     navigateWithoutHistory,
@@ -997,6 +999,14 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   const { closeModal, exitClass } = useModalClose(onClose);
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
+  /*
+   * Dashboard keeps the originally selected mail object while this modal is open.
+   * Mirror only the veto case locally so each dialogue response renders at once;
+   * GameContext still persists the authoritative copy for save/load continuity.
+   */
+  const [contractVetoState, setContractVetoState] = useState(
+    mail.metadata?.type === 'SPORTING_DIRECTOR_CONTRACT_VETO' ? mail.metadata.case : null,
+  );
   const displayBody = getSeasonAwareMailBody(mail);
 
   const openContractNegotiationForPlayer = (playerId: string) => {
@@ -1084,6 +1094,12 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     !!activeDirectorObjective &&
     activeDirectorObjective.status === 'ACTIVE' &&
     activeDirectorObjective.id === mail.metadata.objectiveId;
+
+  const handleContractVetoAction = (action: import('../../types').SportingDirectorContractVetoAction) => {
+    const result = respondToSportingDirectorContractVeto(mail.id, action);
+    if (result.state) setContractVetoState(result.state);
+    if (result.closeMail) onClose();
+  };
 
   const getTypeStyle = (type: MailType) => {
     switch (type) {
@@ -1219,6 +1235,13 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               <div dangerouslySetInnerHTML={{ __html: mail.body }} />
             ) : mail.metadata?.type === 'TEAM_OF_WEEK' ? (
               <TeamOfWeekPitch mail={mail} />
+            ) : mail.metadata?.type === 'SPORTING_DIRECTOR_CONTRACT_VETO' && contractVetoState ? (
+              <SportingDirectorContractVetoPanel
+                state={contractVetoState}
+                directorName={userClub?.sportingDirector ? `${userClub.sportingDirector.firstName} ${userClub.sportingDirector.lastName}` : 'Dyrektor sportowy'}
+                ownerName={userClub?.management?.owner ? `${userClub.management.owner.firstName} ${userClub.management.owner.lastName}` : 'Właściciel klubu'}
+                onAction={handleContractVetoAction}
+              />
             ) : mail.metadata?.type === 'SEASON_SUMMARY' || mail.id.startsWith('SEASON_SUMMARY_') ? (
               <SeasonSummaryMail mail={mail} clubs={clubs} playersMap={players} />
             ) : getWCQPlayoffPolandMailData(mail) ? (
@@ -1389,7 +1412,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               </button>
             )}
 
-            {mail.metadata?.type === 'CONTRACT_OFFER' && mail.metadata.accepted && (
+            {mail.metadata?.type === 'CONTRACT_OFFER' && mail.metadata.accepted && !mail.metadata.directorReviewPending && (
               <button
                 onClick={() => {
                   finalizeFreeAgentContract(mail.id);
@@ -1398,6 +1421,15 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 className="mr-4 rounded-2xl bg-emerald-600 px-10 py-4 text-xs font-black italic uppercase tracking-widest text-white shadow-xl transition-all hover:scale-105 active:scale-95"
               >
                 Podpisz kontrakt
+              </button>
+            )}
+
+            {mail.metadata?.type === 'CONTRACT_OFFER' && mail.metadata.accepted && mail.metadata.directorReviewPending && (
+              <button
+                disabled
+                className="font-black italic uppercase tracking-tighter mr-4 cursor-wait rounded-2xl border border-amber-400/20 bg-amber-500/10 px-10 py-4 text-xs text-amber-200"
+              >
+                Oczekuje na decyzję dyrektora
               </button>
             )}
 
