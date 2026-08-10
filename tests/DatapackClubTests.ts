@@ -39,6 +39,27 @@ const preparedCustomClub = preparedClubs.find(club => club.id === customClub.id)
 assert.equal(preparedCustomClub.leagueId, 'L_PL_4', 'nowy polski klub z datapacka musi trafić do puli ligowej');
 assert.equal(preparedCustomClub.tier, 4, 'nowy polski klub nie może sam przypisać się do grywalnej ligi');
 
+const preparedClubs2026 = DatapackClubService.applyCareerStartStructure(
+  STATIC_CLUBS,
+  [importedLegia, customClub],
+  2026
+);
+assert.equal(
+  preparedClubs2026.find(club => club.id === legia.id)?.name,
+  'Legia Testowa',
+  'zmiana sezonu na 2026/27 musi zachować dane klubu z datapacka'
+);
+assert.equal(
+  preparedClubs2026.find(club => club.id === 'PL_WISLA_KRAKOW')?.leagueId,
+  'L_PL_1',
+  'zmiana sezonu musi nałożyć układ ligi 2026/27 na dane z datapacka'
+);
+assert.equal(
+  preparedClubs2026.find(club => club.id === customClub.id)?.leagueId,
+  'L_PL_4',
+  'niestandardowy klub z datapacka musi pozostać w puli także po zmianie sezonu'
+);
+
 (['L_PL_1', 'L_PL_2', 'L_PL_3'] as const).forEach(leagueId => {
   assert.equal(
     preparedClubs.filter(club => club.leagueId === leagueId).length,

@@ -102,6 +102,7 @@ export const TeamSelection: React.FC = () => {
     startNewGame(year, {
       preserveManagerProfile: managerProfile,
       nextView: ViewState.TEAM_SELECTION,
+      preserveImportedDatapack: true,
     });
   };
 

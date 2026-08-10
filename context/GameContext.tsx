@@ -995,6 +995,18 @@ interface GameNotificationState {
   actionLabel?: string;
 }
 
+type StartNewGameOptions = {
+  preserveManagerProfile?: ManagerProfile | null;
+  nextView?: ViewState;
+  preserveImportedDatapack?: boolean;
+};
+
+type ImportEditorFullPackOptions = {
+  nextView?: ViewState;
+  careerStartYear?: number;
+  preserveManagerProfile?: ManagerProfile | null;
+};
+
 interface GameContextType {
   currentDate: Date;
   viewState: ViewState;
@@ -1067,10 +1079,10 @@ interface GameContextType {
   trainingProgressHistory: number[];
   reserveProgressHistory: ReserveProgressPoint[];
 
-  startNewGame: (careerStartYear?: number, options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }) => void;
+  startNewGame: (careerStartYear?: number, options?: StartNewGameOptions) => void;
   getSaveState: () => SaveState;
   loadGameFromFile: (data: SaveState) => void;
-  importEditorFullPack: (data: unknown, options?: { nextView?: ViewState; careerStartYear?: number }) => { success: boolean; message: string };
+  importEditorFullPack: (data: unknown, options?: ImportEditorFullPackOptions) => { success: boolean; message: string };
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
   advanceDay: () => void;
@@ -1508,6 +1520,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
   const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
   const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
+  const activeEditorDatapackRef = React.useRef<unknown | null>(null);
+  const importEditorFullPackHandlerRef = React.useRef<((
+    data: unknown,
+    options?: ImportEditorFullPackOptions
+  ) => { success: boolean; message: string }) | null>(null);
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [mediaRelationships, setMediaRelationships] = useState<Record<string, number>>({});
   const [sentUnfriendlyPressMonths, setSentUnfriendlyPressMonths] = useState<string[]>([]);
@@ -2351,8 +2368,25 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
   const startNewGame = (
     careerStartYear = 2025,
-    options?: { preserveManagerProfile?: ManagerProfile | null; nextView?: ViewState }
+    options?: StartNewGameOptions
   ) => {
+    if (
+      options?.preserveImportedDatapack &&
+      activeEditorDatapackRef.current &&
+      importEditorFullPackHandlerRef.current
+    ) {
+      const reappliedDatapack = importEditorFullPackHandlerRef.current(
+        activeEditorDatapackRef.current,
+        {
+          careerStartYear,
+          nextView: options.nextView,
+          preserveManagerProfile: options.preserveManagerProfile,
+        }
+      );
+      if (reappliedDatapack.success) return;
+    }
+
+    activeEditorDatapackRef.current = null;
     const startYear = careerStartYear;
     const careerStartDate = new Date(startYear, 6, 1);
     const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
@@ -3882,6 +3916,7 @@ if (userTeamId) {
   };
 
   const loadGameFromFile = (data: SaveState): void => {
+    activeEditorDatapackRef.current = null;
     const loadedDate = data.currentDate instanceof Date ? data.currentDate : new Date(data.currentDate);
     const loadedSeasonStartYear = data.seasonTemplate?.seasonStartYear
       ?? ReserveTeamFinanceService.getSeasonStartYear(loadedDate);
@@ -4071,7 +4106,7 @@ if (userTeamId) {
     setViewState(ViewState.DASHBOARD);
   };
 
-  const importEditorFullPack = (data: unknown, options?: { nextView?: ViewState; careerStartYear?: number }): { success: boolean; message: string } => {
+  const importEditorFullPack = (data: unknown, options?: ImportEditorFullPackOptions): { success: boolean; message: string } => {
     const raw = data as any;
     if (!raw || raw.type !== 'editor_full_pack' || !Array.isArray(raw.clubs)) {
       return { success: false, message: 'Wybrany plik nie jest paczką full pack edytora.' };
@@ -4308,7 +4343,7 @@ if (userTeamId) {
     setNationalTeams(repairedImportedNationalData.nationalTeams);
     setUefaNationalRankingState(UefaNationalRankingService.createInitialState(repairedImportedNationalData.nationalTeams));
     setUserTeamId(null);
-    setManagerProfile(null);
+    setManagerProfile(options?.preserveManagerProfile ?? null);
     setSeasonTemplate(template);
     setSeasonNumber(1);
     setLeagueSchedules(generateSchedules(template, clubsWithSquads));
@@ -4382,6 +4417,7 @@ if (userTeamId) {
       SuperCupService.generateFixture(startYear, clubsWithSquads),
       UEFASuperCupService.generateFixture(startYear, clubsWithSquads),
     ]);
+    activeEditorDatapackRef.current = raw;
     navigateTo(options?.nextView ?? ViewState.MANAGER_CREATION);
 
     return {
@@ -4389,6 +4425,7 @@ if (userTeamId) {
       message: `Zaimportowano full pack: ${clubsWithSquads.length} klubów i ${repairedImportedNationalData.nationalTeams.length} reprezentacji. Wygenerowano kadry dla ${completedSquadData.generatedClubIds.length} klubów bez zawodników.`,
     };
   };
+  importEditorFullPackHandlerRef.current = importEditorFullPack;
 
   const saveManagerProfile = (profile: ManagerProfile) => {
     setManagerProfile(ManagerExperienceService.ensureManagerExperience(profile));
