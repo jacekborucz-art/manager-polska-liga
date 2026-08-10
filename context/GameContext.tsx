@@ -5334,7 +5334,7 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       
       if (!player || !userClub) return;
 
-      if (player.clubId !== 'FREE_AGENTS') {
+      if (player.clubId !== 'FREE_AGENTS' || player.transferPendingClubId) {
         const choseOtherMail: MailMessage = {
           id: `MAIL_NEG_OTHER_${neg.id}`,
           sender: `Agent gracza ${player.lastName}`,
@@ -18508,6 +18508,14 @@ const finalizeFreeAgentContract = useCallback((mailId: string) => {
     const userSquad = players[userTeamId] || [];
 
     if (!playerToSign || !userClub) return;
+    if (playerToSign.transferPendingClubId) {
+      setMessages(prev => prev.filter(message => message.id !== mailId));
+      return showGameNotification({
+        title: 'Transfer już uzgodniony',
+        message: `${playerToSign.firstName} ${playerToSign.lastName} podpisał już umowę z innym klubem.`,
+        tone: 'warning'
+      });
+    }
     const resolvedPlayer = playerToSign;
 
     const failForNoFunds = () => {

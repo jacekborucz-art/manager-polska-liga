@@ -82,8 +82,15 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   const agentInterest = useMemo(() => {
     if (!player || !myClub) return { interested: true, message: '' };
+    if (player.transferPendingClubId) {
+      const destination = clubs.find(club => club.id === player.transferPendingClubId);
+      return {
+        interested: false,
+        message: `Zawodnik podpisał już umowę z klubem ${destination?.name ?? 'inny klub'}.`,
+      };
+    }
     return FreeAgentNegotiationService.evaluateInitialInterest(player, myClub, mySquad, managerProfile);
-  }, [player, myClub, mySquad, managerProfile]);
+  }, [player, myClub, mySquad, managerProfile, clubs]);
 
   const isAlreadyNegotiating = useMemo(() => {
     if (!player) return false;

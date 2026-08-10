@@ -1391,19 +1391,21 @@ export const PlayerCard: React.FC = () => {
               <div className="mt-1">
                 {player.clubId === 'FREE_AGENTS' ? (
                   <button
-                    disabled={!!activeFreeAgentLockoutUntil}
+                    disabled={hasPendingTransfer || !!activeFreeAgentLockoutUntil}
                     onClick={() => {
                       navigateWithoutHistory(ViewState.FREE_AGENT_NEGOTIATION);
                     }}
-                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60
-                      ${activeFreeAgentLockoutUntil
+                    className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-tighter text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60
+                      ${hasPendingTransfer || activeFreeAgentLockoutUntil
                         ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
                         : 'bg-emerald-600 hover:bg-emerald-500 text-white border-t-emerald-300/60 border-x-emerald-500/40 hover:scale-[1.02]'}`}
                     style={button3DStyle}
                   >
-                    {activeFreeAgentLockoutUntil
+                    {hasPendingTransfer
+                      ? 'TRANSFER UZGODNIONY'
+                      : activeFreeAgentLockoutUntil
                       ? `Kontakt możliwy po ${new Date(activeFreeAgentLockoutUntil).toLocaleDateString('pl-PL')}`
-                      : "OTWÓRZ BIURO NEGOCJACJI 🤝"}
+                      : "OTWÓRZ BIURO NEGOCJACJI 🤝"}
                   </button>
                 ) : !isResigned ? (
                   <div className="space-y-2">

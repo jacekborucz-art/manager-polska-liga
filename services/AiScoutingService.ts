@@ -305,6 +305,9 @@ export const AiScoutingService = {
       const topCandidates = candidates
         .sort((a, b) => b.score - a.score)
         .filter(c => {
+          // Podpisana umowa wyłącza zawodnika z rynku również wtedy, gdy do
+          // dnia przejścia technicznie widnieje jeszcze w FREE_AGENTS.
+          if (c.player.transferPendingClubId) return false;
           // Apply the source-specific parent/reserve restriction before the
           // maximum-interest limit is consumed. Otherwise an illegal internal
           // target could occupy one of the club's limited scouting slots and
@@ -328,6 +331,7 @@ export const AiScoutingService = {
 
         // ZABEZPIECZENIE 1: klub nie może figurować jako zainteresowany własnym zawodnikiem
         if (player.loan) continue;
+        if (player.transferPendingClubId) continue;
         if (player.clubId === club.id) continue;
         if (!AiScoutingService._meetsSquadQualityFloor(player, squad, true)) continue;
         // ZABEZPIECZENIE 2: jeden zawodnik może być obserwowany maksymalnie przez 10 klubów.
@@ -490,6 +494,7 @@ export const AiScoutingService = {
 
     const candidates = allPlayers.filter(p => {
       if (p.loan) return false;
+      if (p.transferPendingClubId) return false;
       // Tylko zawodnicy na potrzebnej pozycji
       if (p.position !== position) return false;
       // Nie ze swojej własnej drużyny
@@ -602,6 +607,7 @@ export const AiScoutingService = {
 
     const pool = allPlayers.filter(p => {
       if (p.loan) return false;
+      if (p.transferPendingClubId) return false;
       if (p.clubId === club.id) return false;
       if (!AiScoutingService._meetsSquadQualityFloor(p, buyerSquad)) return false;
       if (p.overallRating < minOvr || p.overallRating > maxOvr) return false;

@@ -1019,6 +1019,9 @@ const _buildFreeAgentCandidates = (
 ): Player[] => {
   const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
   return pool.filter(fa => {
+    // Wolny agent z podpisaną umową nie wraca na rynek. Może znajdować się w
+    // FREE_AGENTS tylko przejściowo, do daty zameldowania w nowym klubie.
+    if (fa.transferPendingClubId) return false;
     const needFA = needsFA.find(n => n.position === fa.position);
     if (!needFA) return false;
     if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
@@ -1044,6 +1047,27 @@ const _buildFreeAgentCandidates = (
     const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
     return scoreB - scoreA || a.age - b.age;
   });
+};
+
+const _protectPendingTransferPlayerFromMarket = (player: Player): Player => {
+  if (!player.transferPendingClubId) return player;
+  if (
+    (player.interestedClubs?.length ?? 0) === 0 &&
+    !player.aiNegotiationClubId &&
+    !player.aiNegotiationResponseDate &&
+    !player.isOnTransferList &&
+    !player.isAvailableForLoan
+  ) return player;
+
+  return {
+    ...player,
+    interestedClubs: [],
+    aiNegotiationClubId: undefined,
+    aiNegotiationResponseDate: undefined,
+    isOnTransferList: false,
+    transferListPrice: undefined,
+    isAvailableForLoan: false,
+  };
 };
 
 // PERF (dodane 2026-08-01, refaktor bez zmiany zachowania): wydzielone z pętli
@@ -2219,7 +2243,11 @@ processAiRecruitment: (
     const newOffers: PendingNegotiation[] = []; // AI nie używa już flow PendingNegotiation
     const logEntries: AiTransferLogEntry[] = [];
 
-    const freeAgents = updatedPlayersMap['FREE_AGENTS'] || [];
+    const rawFreeAgents = updatedPlayersMap['FREE_AGENTS'] || [];
+    const freeAgents = rawFreeAgents.map(_protectPendingTransferPlayerFromMarket);
+    if (freeAgents.some((freeAgent, index) => freeAgent !== rawFreeAgents[index])) {
+      updatedPlayersMap['FREE_AGENTS'] = freeAgents;
+    }
     if (freeAgents.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap, newOffers, logEntries };
 
     const clubMap = new Map(updatedClubs.map(c => [c.id, c]));
@@ -2247,6 +2275,7 @@ processAiRecruitment: (
         ? (updatedPlayersMap['FREE_AGENTS'] || [])
             .filter(fa =>
               _isGulfMegaOfferTarget(fa, clubMap) &&
+              !fa.transferPendingClubId &&
               !fa.aiNegotiationClubId &&
               !FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)
             )
@@ -2409,10 +2438,15 @@ processAiRecruitment: (
     const logEntries: AiTransferLogEntry[] = [];
 
     const freeAgents = updatedPlayersMap['FREE_AGENTS'] || [];
+    const freeAgentsWithoutConflictingNegotiations = freeAgents.map(_protectPendingTransferPlayerFromMarket);
+    if (freeAgentsWithoutConflictingNegotiations.some((freeAgent, index) => freeAgent !== freeAgents[index])) {
+      updatedPlayersMap['FREE_AGENTS'] = freeAgentsWithoutConflictingNegotiations;
+    }
     const today = currentDate.getTime();
     const clubMap = new Map(updatedClubs.map(c => [c.id, c]));
 
-    const due = freeAgents.filter(fa =>
+    const due = freeAgentsWithoutConflictingNegotiations.filter(fa =>
+      !fa.transferPendingClubId &&
       fa.aiNegotiationClubId &&
       fa.aiNegotiationResponseDate &&
       new Date(fa.aiNegotiationResponseDate).getTime() <= today
@@ -3460,20 +3494,32 @@ processAiRecruitment: (
     let updatedClubs = [...clubs];
     let updatedPlayersMap = { ...playersMap };
     const logEntries: AiTransferLogEntry[] = [];
-    const today = currentDate.getTime();
+    const today = new Date(currentDate).setHours(0, 0, 0, 0);
+
+    // Normalizacja starych zapisów/datapacków: zawodnik z zawartą umową nie
+    // może jednocześnie pozostawać na liście zainteresowań, w negocjacjach ani
+    // być oferowany do wypożyczenia przed datą przejścia.
+    Object.entries(updatedPlayersMap).forEach(([clubId, squad]) => {
+      let changed = false;
+      const normalizedSquad = squad.map(player => {
+        const normalizedPlayer = _protectPendingTransferPlayerFromMarket(player);
+        if (normalizedPlayer !== player) changed = true;
+        return normalizedPlayer;
+      });
+      if (changed) updatedPlayersMap[clubId] = normalizedSquad;
+    });
 
     // Okno transferowe zamknięte — zawodnicy z tagiem TRSF czekają, nie są przenoszeni
     const windowOpen = _isTransferWindowOpen(currentDate);
 
     for (const sellerClubId of Object.keys(updatedPlayersMap)) {
-      if (sellerClubId === 'FREE_AGENTS') continue;
-
+      const sourceIsFreeAgent = sellerClubId === 'FREE_AGENTS';
       const squad = updatedPlayersMap[sellerClubId] || [];
       const due = squad.filter(p =>
         p.transferPendingClubId &&
         p.transferReportDate &&
         (windowOpen || (p.transferPendingFee ?? 0) === 0) &&
-        new Date(p.transferReportDate).getTime() <= today
+        new Date(p.transferReportDate).setHours(0, 0, 0, 0) <= today
       );
 
       for (const player of due) {
@@ -3481,7 +3527,7 @@ processAiRecruitment: (
         const buyerClub = updatedClubs.find(c => c.id === buyerClubId);
         const sellerClub = updatedClubs.find(c => c.id === sellerClubId);
 
-        if (!buyerClub || !sellerClub) {
+        if (!buyerClub || (!sourceIsFreeAgent && !sellerClub)) {
           updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).map(p =>
             p.id === player.id ? { ...p, transferPendingClubId: undefined, transferReportDate: undefined } : p
           );
@@ -3499,7 +3545,12 @@ processAiRecruitment: (
         // Club-structure restrictions take priority over the normal prestige
         // rule because an internal parent/reserve transfer is invalid regardless
         // of the clubs' reputations or the player's willingness to move.
-        const transferBlockReason = clubStructureBlockReason ?? PrestigeTransferGuardService.getBlockedReason(player, buyerClub);
+        // Umowa widoczna przy wolnym agencie została już podpisana przed datą
+        // przejścia (np. pochodzi z datapacka). Nie losujemy ponownie zgody i nie
+        // anulujemy jej filtrem prestiżu w dniu rejestracji.
+        const transferBlockReason = sourceIsFreeAgent
+          ? clubStructureBlockReason
+          : clubStructureBlockReason ?? PrestigeTransferGuardService.getBlockedReason(player, buyerClub);
         if (transferBlockReason) {
           const refundFee = player.transferPendingFee ?? 0;
           if (refundFee > 0) {
@@ -3511,7 +3562,7 @@ processAiRecruitment: (
                   transferBudget: (c.transferBudget || 0) + refundFee,
                 };
               }
-              if (c.id === sellerClubId) return { ...c, budget: c.budget - refundFee };
+              if (sellerClub && c.id === sellerClubId) return { ...c, budget: c.budget - refundFee };
               return c;
             });
           }
@@ -3536,19 +3587,20 @@ processAiRecruitment: (
             playerName: `${player.lastName} ${player.firstName}`,
             playerOvr: player.overallRating,
             playerPosition: player.position,
-            fromClub: sellerClub.name,
+            fromClub: sellerClub?.name ?? 'Bez klubu',
             toClub: buyerClub.name,
             status: 'PLAYER_REJECTED',
             reason: transferBlockReason,
             fee: refundFee,
             playerId: player.id,
-            fromClubId: sellerClub.id,
+            fromClubId: sellerClub?.id,
             toClubId: buyerClub.id,
           });
           continue;
         }
 
-        const repDeltaRes = buyerClub.reputation - sellerClub.reputation;
+        const sourceReputation = sellerClub?.reputation ?? buyerClub.reputation;
+        const repDeltaRes = buyerClub.reputation - sourceReputation;
         const salaryMultAI_Res = repDeltaRes <= -2 ? 1.40 : repDeltaRes === -1 ? 1.25 : 1.12;
         const proposedSalary = player.transferPendingSalary ?? Math.max(FinanceLogic.getFairMarketSalary(player.overallRating), Math.round(player.annualSalary * salaryMultAI_Res));
         const ageBonusMult_Res = player.age < 24 ? 0.40 : player.age <= 29 ? 0.65 : player.age <= 33 ? 1.00 : 1.30;
@@ -3567,7 +3619,7 @@ processAiRecruitment: (
           );
         }
 
-        if (buyerClub.budget + gulfOwnerShortfallCover < proposedBonus) {
+        if (!sourceIsFreeAgent && sellerClub && buyerClub.budget + gulfOwnerShortfallCover < proposedBonus) {
           // Zwrot opłaty transferowej — kupujący zapłacił przy negocjacji, ale transfer odpada.
           // Bez zwrotu klub traci pieniądze i nie dostaje zawodnika.
           const refundFee = player.transferPendingFee ?? TransferSellerLogicService.estimateAskingPrice(player, sellerClub, updatedPlayersMap[sellerClubId] || [], currentDate);
@@ -3618,15 +3670,16 @@ processAiRecruitment: (
 
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth() + 1;
+        const sourceClubName = sellerClub?.name ?? 'BEZ KLUBU';
         const playerForHistory = (!player.history || player.history.length === 0)
-          ? { ...player, history: [{ clubName: sellerClub.name, clubId: sellerClubId, fromYear: currentYear - 1, fromMonth: 7, toYear: null as null, toMonth: null as null }] }
+          ? { ...player, history: [{ clubName: sourceClubName, clubId: sellerClubId, fromYear: currentYear - 1, fromMonth: 7, toYear: null as null, toMonth: null as null }] }
           : player;
         const updatedHistory = PlayerCareerService.movePlayer(
           playerForHistory,
           { clubName: buyerClub.name, clubId: buyerClubId },
           currentYear,
           currentMonth,
-          { clubName: sellerClub.name, clubId: sellerClubId },
+          { clubName: sourceClubName, clubId: sellerClubId },
           player.transferPendingFee
         );
 
@@ -3644,8 +3697,11 @@ processAiRecruitment: (
           transferPendingSalary: undefined,
           transferPendingBonus: undefined,
           transferPendingContractYears: undefined,
+          aiNegotiationClubId: undefined,
+          aiNegotiationResponseDate: undefined,
           isOnTransferList: false,
-          interestedClubs: (player.interestedClubs || []).filter(clubId => clubId !== buyerClubId),
+          isAvailableForLoan: false,
+          interestedClubs: [],
           history: updatedHistory,
           transferLockoutUntil: _buildTransferLockoutUntil(currentDate),
           transferOfferBanUntil: _buildTransferOfferBanUntil(currentDate)
@@ -3653,7 +3709,7 @@ processAiRecruitment: (
         const transferredPlayer = PlayerClubAdaptationService.beginForClub(
           PlayerReputationGrowthService.applyTransferUpgrade(
             transferredPlayerBase,
-            sellerClub.reputation,
+            sourceReputation,
             buyerClub.reputation
           ),
           buyerClubId,
@@ -3662,7 +3718,19 @@ processAiRecruitment: (
 
         // Przenieś zawodnika
         updatedPlayersMap[sellerClubId] = (updatedPlayersMap[sellerClubId] || []).filter(p => p.id !== player.id);
-        updatedPlayersMap[buyerClubId] = [...(updatedPlayersMap[buyerClubId] || []), transferredPlayer];
+        updatedPlayersMap[buyerClubId] = [
+          ...(updatedPlayersMap[buyerClubId] || []).filter(p => p.id !== player.id),
+          transferredPlayer,
+        ];
+        updatedClubs = updatedClubs.map(club => {
+          if (!sourceIsFreeAgent && club.id === sellerClubId) {
+            return { ...club, rosterIds: club.rosterIds.filter(playerId => playerId !== player.id) };
+          }
+          if (club.id === buyerClubId) {
+            return { ...club, rosterIds: [...club.rosterIds.filter(playerId => playerId !== player.id), player.id] };
+          }
+          return club;
+        });
 
         logEntries.push({
           id: `RES_SIGNED_${player.id}_${buyerClubId}_${currentDate.getTime()}`,
@@ -3670,12 +3738,12 @@ processAiRecruitment: (
           playerName: `${player.lastName} ${player.firstName}`,
           playerOvr: player.overallRating,
           playerPosition: player.position,
-          fromClub: sellerClub.name,
+          fromClub: sourceClubName === 'BEZ KLUBU' ? 'Bez klubu' : sourceClubName,
           toClub: buyerClub.name,
           status: 'TRANSFER_SIGNED',
           fee: player.transferPendingFee,
           playerId: player.id,
-          fromClubId: sellerClub.id,
+          fromClubId: sellerClub?.id,
           toClubId: buyerClub.id,
           isGulfMegaOffer: !!player.retirementLockUntil && _isGulfStarHunterClub(buyerClub),
           salary: player.retirementLockUntil ? proposedSalary : undefined,
@@ -3685,7 +3753,7 @@ processAiRecruitment: (
 
         // Tylko bonus dla zawodnika przy meldunku — opłata transferowa zapłacona już przy podpisaniu
         updatedClubs = updatedClubs.map(c => {
-          if (c.id === buyerClubId) return { ...c, budget: c.budget - proposedBonus };
+          if (c.id === buyerClubId) return { ...c, budget: Math.max(0, c.budget - proposedBonus) };
           return c;
         });
       }
