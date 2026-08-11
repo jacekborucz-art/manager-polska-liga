@@ -18633,9 +18633,14 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
       });
     };
 
-    // 1. Zabierz bonus i wartość kontraktu (pensja × lata) z budżetu transferowego
-    const contractCost = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
-    if (contractCost > userClub.transferBudget) {
+    /*
+     * A free-agent signing reserves only the current season's salary and the
+     * one-time signing bonus. Future salaries are financed from the budgets of
+     * their respective seasons; contract length still remains part of the deal
+     * accepted by the player, but it must not prepay years two through five.
+     */
+    const currentSeasonContractCost = FinanceService.calculateFreeAgentCurrentSeasonCost(salary, bonus);
+    if (currentSeasonContractCost > userClub.transferBudget) {
       return failForNoFunds();
     }
 
@@ -18760,7 +18765,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
       });
     }
 
-    const nextTransferBudget = Math.max(0, userClub.transferBudget - contractCost);
+    const nextTransferBudget = Math.max(0, userClub.transferBudget - currentSeasonContractCost);
 
     setClubs(prev => prev.map(c => c.id === userTeamId ? {
       ...(directorFreeAgentDecision?.relationDelta ? directorFreeAgentDecision.updatedClub : c),
@@ -18772,9 +18777,9 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
         {
           id: Math.random().toString(36).substr(2, 9),
           date: currentDate.toISOString().split('T')[0],
-          amount: -contractCost,
+          amount: -currentSeasonContractCost,
           type: 'EXPENSE' as const,
-          description: `Kontrakt z wolnym agentem: ${resolvedPlayer.lastName} (${years}L × ${salary.toLocaleString('pl-PL')} PLN + bonus)`
+          description: `Kontrakt z wolnym agentem: ${resolvedPlayer.lastName} (1. sezon: ${salary.toLocaleString('pl-PL')} PLN + bonus; umowa ${years}L)`
         },
         ...(c.financeHistory || [])
       ].slice(0, 50)

@@ -1322,11 +1322,24 @@ export const FinanceService = {
     return squad.reduce((sum, p) => sum + (p.annualSalary || 0), 0);
   },
 
+  /**
+   * Full guaranteed value used to compare the offer with the agent's expectations.
+   * Contract length belongs here because a longer deal is genuinely worth more to
+   * the player, even though the club does not prepay every future season at signing.
+   */
   calculateFreeAgentContractCommitment: (annualSalary: number, years: number, signingBonus: number): number =>
     Math.max(0, annualSalary) * Math.max(1, years) + Math.max(0, signingBonus),
 
-  calculateRemainingContractBudget: (availableBudget: number, annualSalary: number, years: number, signingBonus: number): number =>
-    Math.max(0, availableBudget - FinanceService.calculateFreeAgentContractCommitment(annualSalary, years, signingBonus)),
+  /**
+   * Immediate charge against the current season's transfer/contract budget.
+   * Future annual salaries are funded from future season budgets, so only the first
+   * annual salary and the one-time signing bonus are reserved when the deal is signed.
+   */
+  calculateFreeAgentCurrentSeasonCost: (annualSalary: number, signingBonus: number): number =>
+    Math.max(0, annualSalary) + Math.max(0, signingBonus),
+
+  calculateRemainingContractBudget: (availableBudget: number, annualSalary: number, _years: number, signingBonus: number): number =>
+    Math.max(0, availableBudget - FinanceService.calculateFreeAgentCurrentSeasonCost(annualSalary, signingBonus)),
 
   // Oblicza rynkową wartość pensji dla danego OVR (punkt odniesienia dla Zarządu)
    getFairMarketSalary: (ovr: number): number => {

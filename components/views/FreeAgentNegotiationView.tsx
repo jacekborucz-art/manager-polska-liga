@@ -122,13 +122,14 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const isInterested = agentInterest.interested;
   const visibleAgentInterestMessage = sanitizeAgentInterestMessage(agentInterest.message);
   const availableBudget = spendableTransferBudget;
-  const totalCostPreview = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
-  const isOfferWithinBudget = totalCostPreview <= availableBudget;
-  const remainingBudget = Math.max(0, availableBudget - totalCostPreview);
-  const budgetShortfall = Math.max(0, totalCostPreview - availableBudget);
+  const guaranteedContractValue = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
+  const currentSeasonCostPreview = FinanceService.calculateFreeAgentCurrentSeasonCost(salary, bonus);
+  const isOfferWithinBudget = currentSeasonCostPreview <= availableBudget;
+  const remainingBudget = Math.max(0, availableBudget - currentSeasonCostPreview);
+  const budgetShortfall = Math.max(0, currentSeasonCostPreview - availableBudget);
   const budgetUsagePercent = availableBudget > 0
-    ? Math.min(100, (totalCostPreview / availableBudget) * 100)
-    : totalCostPreview > 0 ? 100 : 0;
+    ? Math.min(100, (currentSeasonCostPreview / availableBudget) * 100)
+    : currentSeasonCostPreview > 0 ? 100 : 0;
   const goalBonusMax = Math.max(5_000, (agentDemands?.goalBonus ?? 0) * 2, goalBonus);
   const assistBonusMax = Math.max(5_000, (agentDemands?.assistBonus ?? 0) * 2, assistBonus);
   const cleanSheetBonusMax = Math.max(5_000, (agentDemands?.cleanSheetBonus ?? 0) * 2, cleanSheetBonus);
@@ -146,7 +147,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const handleContractYearsChange = (nextYears: number) => setYears(nextYears);
 
   const handleBoardRequest = () => {
-    const shortfall = totalCostPreview - availableBudget;
+    const shortfall = currentSeasonCostPreview - availableBudget;
     const result = BoardBudgetRequestService.evaluateBoardRequest(player, myClub, mySquad, shortfall);
     setBoardRequestResult(result);
     setClubs(prev => prev.map(c => c.id === myClub.id
@@ -192,9 +193,9 @@ export const FreeAgentNegotiationView: React.FC = () => {
       ? mySquad.reduce((sum, squadPlayer) => sum + squadPlayer.annualSalary, 0) / mySquad.length
       : 120000;
 
-    const totalCost = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
-    if (totalCost > availableBudget) {
-      setBoardVeto({ msg: `Łączny koszt kontraktu (${totalCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).` });
+    const currentSeasonCost = FinanceService.calculateFreeAgentCurrentSeasonCost(salary, bonus);
+    if (currentSeasonCost > availableBudget) {
+      setBoardVeto({ msg: `Koszt kontraktu w bieżącym sezonie (${currentSeasonCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).` });
       return;
     }
 
@@ -271,14 +272,14 @@ export const FreeAgentNegotiationView: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-full bg-slate-950 flex items-center justify-center p-6 animate-fade-in overflow-hidden relative">
+    <div className="h-screen w-full bg-slate-950 flex items-center justify-center p-4 animate-fade-in overflow-hidden relative">
       <div className="absolute inset-0 bg-[url('https://i.ibb.co/JwgrBtvC/biuro2-1.png')] bg-cover bg-center opacity-20" />
 
-      <div className="max-w-6xl max-h-[94vh] overflow-y-auto w-full bg-slate-900/90 border border-white/10 rounded-[50px] backdrop-blur-3xl shadow-2xl p-8 flex flex-col gap-6 relative z-10">
-        <header className="flex justify-between items-center border-b border-white/5 pb-8">
+      <div className="negotiation-shell max-w-6xl max-h-[calc(100vh-32px)] overflow-hidden w-full bg-slate-900/90 border border-white/10 rounded-[42px] backdrop-blur-3xl shadow-2xl px-7 py-5 flex flex-col gap-4 relative z-10">
+        <header className="flex justify-between items-center border-b border-white/5 pb-4">
           <div>
             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em]">Biuro Negocjacji</span>
-            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter mt-1">
+            <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter mt-0.5">
               {player.firstName} {player.lastName}
             </h2>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
@@ -294,8 +295,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
         </header>
 
         {isInterested && agentDemands && (
-          <section className="bg-amber-500/5 border border-amber-400/20 rounded-[28px] p-5">
-            <div className="flex items-center justify-between gap-4 mb-4">
+          <section className="bg-amber-500/5 border border-amber-400/20 rounded-[24px] p-4">
+            <div className="flex items-center justify-between gap-4 mb-2">
               <h3 className="font-black italic uppercase tracking-tighter text-sm text-amber-300">
                 Oczekiwania agenta
               </h3>
@@ -304,27 +305,27 @@ export const FreeAgentNegotiationView: React.FC = () => {
               </span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              <div className="bg-black/25 rounded-xl px-3 py-3">
+              <div className="bg-black/25 rounded-xl px-3 py-2">
                 <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Kontrakt</span>
                 <strong className="font-black italic uppercase tracking-tighter text-sm text-white">{agentDemands.years} {agentDemands.years === 1 ? 'rok' : 'lata'}</strong>
               </div>
-              <div className="bg-black/25 rounded-xl px-3 py-3">
+              <div className="bg-black/25 rounded-xl px-3 py-2">
                 <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Pensja roczna</span>
                 <strong className="font-black italic uppercase tracking-tighter text-sm text-emerald-400">{agentDemands.salary.toLocaleString('pl-PL')} PLN</strong>
               </div>
-              <div className="bg-black/25 rounded-xl px-3 py-3">
+              <div className="bg-black/25 rounded-xl px-3 py-2">
                 <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Za podpis</span>
                 <strong className="font-black italic uppercase tracking-tighter text-sm text-blue-400">{agentDemands.bonus.toLocaleString('pl-PL')} PLN</strong>
               </div>
-              <div className="bg-black/25 rounded-xl px-3 py-3">
+              <div className="bg-black/25 rounded-xl px-3 py-2">
                 <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Za gola</span>
                 <strong className="font-black italic uppercase tracking-tighter text-sm text-amber-400">{agentDemands.goalBonus !== undefined ? `${agentDemands.goalBonus.toLocaleString('pl-PL')} PLN` : 'Nie dotyczy'}</strong>
               </div>
-              <div className="bg-black/25 rounded-xl px-3 py-3">
+              <div className="bg-black/25 rounded-xl px-3 py-2">
                 <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Za asystę</span>
                 <strong className="font-black italic uppercase tracking-tighter text-sm text-sky-400">{agentDemands.assistBonus !== undefined ? `${agentDemands.assistBonus.toLocaleString('pl-PL')} PLN` : 'Nie dotyczy'}</strong>
               </div>
-              <div className="bg-black/25 rounded-xl px-3 py-3">
+              <div className="bg-black/25 rounded-xl px-3 py-2">
                 <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Czyste konto</span>
                 <strong className="font-black italic uppercase tracking-tighter text-sm text-violet-400">{agentDemands.cleanSheetBonus !== undefined ? `${agentDemands.cleanSheetBonus.toLocaleString('pl-PL')} PLN` : 'Nie dotyczy'}</strong>
               </div>
@@ -333,37 +334,37 @@ export const FreeAgentNegotiationView: React.FC = () => {
         )}
 
         {isInterested && (
-          <section className={`rounded-[28px] border p-5 ${
+          <section className={`rounded-[24px] border p-4 ${
             isOfferWithinBudget
               ? 'border-emerald-400/25 bg-emerald-500/5'
               : 'border-red-400/30 bg-red-500/5'
           }`}>
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="mb-2 flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-sm text-white font-black italic uppercase tracking-tighter">Dostępna pula na kontrakt</h3>
                 <p className="mt-1 text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
-                  Z tej puli klub pokrywa wszystkie lata pensji oraz bonus za podpis
+                  Z bieżącego budżetu klub pokrywa pierwszy rok pensji oraz bonus za podpis
                 </p>
               </div>
-              <strong className="text-2xl text-emerald-400 font-black italic uppercase tracking-tighter">
+              <strong className="text-xl text-emerald-400 font-black italic uppercase tracking-tighter">
                 {availableBudget.toLocaleString('pl-PL')} PLN
               </strong>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-2xl bg-black/30 p-4">
-                <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Pensje przez cały kontrakt</span>
+              <div className="rounded-xl bg-black/30 px-4 py-2.5">
+                <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Pensja za pierwszy rok</span>
                 <strong className="text-sm text-emerald-300 font-black italic uppercase tracking-tighter">
-                  {(salary * years).toLocaleString('pl-PL')} PLN
+                  {salary.toLocaleString('pl-PL')} PLN
                 </strong>
               </div>
-              <div className="rounded-2xl bg-black/30 p-4">
+              <div className="rounded-xl bg-black/30 px-4 py-2.5">
                 <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Jednorazowy bonus za podpis</span>
                 <strong className="text-sm text-blue-300 font-black italic uppercase tracking-tighter">
                   {bonus.toLocaleString('pl-PL')} PLN
                 </strong>
               </div>
-              <div className="rounded-2xl bg-black/30 p-4">
+              <div className="rounded-xl bg-black/30 px-4 py-2.5">
                 <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
                   {isOfferWithinBudget ? 'Pozostanie w puli' : 'Brakuje do złożenia oferty'}
                 </span>
@@ -373,19 +374,19 @@ export const FreeAgentNegotiationView: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/40">
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-black/40">
               <div
                 className={`h-full rounded-full transition-[width] duration-300 ${isOfferWithinBudget ? 'bg-emerald-500' : 'bg-red-500'}`}
                 style={{ width: `${budgetUsagePercent}%` }}
               />
             </div>
-            <p className="mt-3 text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">
-              Łączny koszt gwarantowany: {salary.toLocaleString('pl-PL')} PLN × {years} {years === 1 ? 'rok' : 'lata'} + {bonus.toLocaleString('pl-PL')} PLN = {totalCostPreview.toLocaleString('pl-PL')} PLN. Bonusy meczowe są warunkowe i nie pomniejszają tej puli z góry.
+            <p className="mt-2 text-[8px] text-slate-400 font-black italic uppercase tracking-tighter">
+              Obciążenie bieżącego budżetu: {salary.toLocaleString('pl-PL')} PLN + {bonus.toLocaleString('pl-PL')} PLN = {currentSeasonCostPreview.toLocaleString('pl-PL')} PLN. Pełna wartość {years}-letniej umowy dla zawodnika: {guaranteedContractValue.toLocaleString('pl-PL')} PLN.
             </p>
           </section>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+        <div className="grid min-h-0 grid-cols-1 gap-6 md:grid-cols-2">
           {!isInterested ? (
             <div className="col-span-2 bg-red-600/10 border-2 border-red-600/30 p-12 rounded-[40px] text-center animate-pulse">
               <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter mb-4">
@@ -397,8 +398,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="space-y-8">
-                <div className="space-y-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center px-1">
                     <div>
                       <span className="block text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">Pensja roczna</span>
@@ -434,7 +435,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="flex justify-between items-center px-1">
                     <div>
                       <span className="block text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">Bonus za podpis</span>
@@ -471,7 +472,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                 </div>
 
                 {agentDemands?.cleanSheetBonus !== undefined && (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <div className="flex justify-between items-center px-1">
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za czyste konto</span>
                       <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
@@ -500,7 +501,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   </div>
                 )}
                 {agentDemands?.goalBonus !== undefined && (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       <div className="flex justify-between items-center px-1">
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za gola</span>
                         <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
@@ -529,7 +530,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                     </div>
                 )}
                 {agentDemands?.assistBonus !== undefined && (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       <div className="flex justify-between items-center px-1">
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za asyste</span>
                         <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
@@ -559,38 +560,71 @@ export const FreeAgentNegotiationView: React.FC = () => {
                 )}
               </div>
 
-              <div className="space-y-8 bg-black/20 p-8 rounded-[40px] border border-white/5">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block text-center mb-4">
-                  Długość kontraktu
-                </span>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map(yearOption => (
-                    <button
-                      key={yearOption}
-                      onClick={() => handleContractYearsChange(yearOption)}
-                      className={`flex-1 py-4 rounded-2xl font-black border transition-all ${
-                        years === yearOption
-                          ? 'bg-white text-black border-white shadow-lg'
-                          : 'bg-black/40 text-slate-500 border-white/5 hover:border-white/20'
-                      }`}
-                    >
-                      {yearOption} {yearOption === 1 ? 'Rok' : 'Lata'}
-                    </button>
-                  ))}
+              <div className="space-y-5 bg-black/20 p-5 rounded-[28px] border border-white/5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="block text-[10px] text-slate-500 font-black italic uppercase tracking-tighter">
+                    Długość kontraktu
+                  </span>
+                  <strong className="text-lg text-white font-black italic uppercase tracking-tighter">
+                    {years} {years === 1 ? 'rok' : years < 5 ? 'lata' : 'lat'}
+                  </strong>
                 </div>
-                <div className="mt-6 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl text-center">
-                  <p className="font-black italic uppercase tracking-tighter text-[12px] text-white">
-                    Zarząd dopuści droższy kontrakt, jeżeli mieści się w budżecie i nie jest rażąco oderwany od rynku.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-black/30 p-4">
-                    <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Łączny koszt umowy</span>
-                    <strong className="font-black italic uppercase tracking-tighter text-sm text-amber-400">{totalCostPreview.toLocaleString('pl-PL')} PLN</strong>
+
+                <div className="px-2">
+                  <div className="relative h-8">
+                    <div className="absolute left-0 right-0 top-3 h-1 rounded-full bg-slate-800" />
+                    <div
+                      className="absolute left-0 top-3 h-1 rounded-full bg-emerald-500 transition-[width] duration-200"
+                      style={{ width: `${((years - 1) / 4) * 100}%` }}
+                    />
+                    {[1, 2, 3, 4, 5].map((yearOption, index) => (
+                      <span
+                        key={yearOption}
+                        className={`pointer-events-none absolute top-[7px] h-4 w-4 -translate-x-1/2 rounded-full border-2 transition-all ${
+                          years === yearOption
+                            ? 'scale-125 border-white bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]'
+                            : years > yearOption
+                              ? 'border-emerald-400 bg-emerald-500'
+                              : 'border-slate-600 bg-slate-900'
+                        }`}
+                        style={{ left: `${index * 25}%` }}
+                      />
+                    ))}
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      step="1"
+                      value={years}
+                      onChange={event => handleContractYearsChange(parseInt(event.target.value, 10))}
+                      aria-label="Długość kontraktu w latach"
+                      className="absolute inset-0 z-10 h-8 w-full cursor-pointer opacity-0"
+                    />
                   </div>
-                  <div className="rounded-2xl bg-black/30 p-4">
+                  <div className="flex justify-between">
+                    {[1, 2, 3, 4, 5].map(yearOption => (
+                      <button
+                        key={yearOption}
+                        type="button"
+                        onClick={() => handleContractYearsChange(yearOption)}
+                        className={`w-5 text-center text-[10px] transition-colors font-black italic uppercase tracking-tighter ${
+                          years === yearOption ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        {yearOption}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-black/30 px-4 py-3">
+                    <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Koszt w tym sezonie</span>
+                    <strong className="font-black italic uppercase tracking-tighter text-sm text-amber-400">{currentSeasonCostPreview.toLocaleString('pl-PL')} PLN</strong>
+                  </div>
+                  <div className="rounded-xl bg-black/30 px-4 py-3">
                     <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Budżet po podpisaniu</span>
-                    <strong className={`font-black italic uppercase tracking-tighter text-sm ${totalCostPreview <= availableBudget ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <strong className={`font-black italic uppercase tracking-tighter text-sm ${currentSeasonCostPreview <= availableBudget ? 'text-emerald-400' : 'text-red-400'}`}>
                       {FinanceService.calculateRemainingContractBudget(availableBudget, salary, years, bonus).toLocaleString('pl-PL')} PLN
                     </strong>
                   </div>
@@ -609,7 +643,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
         <button
           onClick={isOfferWithinBudget ? handleConfirm : handleBoardRequest}
           disabled={isSending || !isInterested || isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard)}
-          className={`w-full py-6 rounded-[30px] font-black italic uppercase tracking-tighter text-2xl transition-all shadow-2xl border-b-8 active:scale-95 ${
+          className={`w-full py-4 rounded-[24px] font-black italic uppercase tracking-tighter text-xl transition-all shadow-2xl border-b-[6px] active:scale-95 ${
             (!isInterested || isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard))
               ? 'bg-slate-800 border-slate-900 text-slate-500 cursor-not-allowed'
               : !isOfferWithinBudget

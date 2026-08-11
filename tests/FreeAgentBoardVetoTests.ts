@@ -79,10 +79,17 @@ assert.equal(liquidityBreakingOffer.approved, false, 'Zarząd powinien blokować
 
 const commitment = FinanceService.calculateFreeAgentContractCommitment(120_000, 2, 40_000);
 assert.equal(commitment, 280_000);
-assert.equal(FinanceService.calculateRemainingContractBudget(club.transferBudget, 120_000, 2, 40_000), 320_000);
+const currentSeasonCost = FinanceService.calculateFreeAgentCurrentSeasonCost(120_000, 40_000);
+assert.equal(currentSeasonCost, 160_000, 'Bieżący budżet obejmuje tylko pierwszy rok pensji i bonus za podpis.');
+assert.equal(FinanceService.calculateRemainingContractBudget(club.transferBudget, 120_000, 2, 40_000), 440_000);
+assert.equal(
+  FinanceService.calculateRemainingContractBudget(club.transferBudget, 120_000, 5, 40_000),
+  440_000,
+  'Długość umowy nie może obciążać bieżącego budżetu pensjami z przyszłych sezonów.',
+);
 assert.ok(
   FinanceService.calculateFreeAgentContractCommitment(120_000, 3, 40_000) > commitment,
-  'Dłuższy kontrakt musi mocniej ograniczać kolejne transfery.',
+  'Dłuższy kontrakt nadal ma większą pełną wartość dla zawodnika i agenta.',
 );
 
 console.log('FreeAgentBoardVetoTests: OK');
