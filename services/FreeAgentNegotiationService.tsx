@@ -7,10 +7,12 @@ import {
   FreeAgentContractDemands,
   FreeAgentDemandRngBand,
   PlayerPosition,
+  TransferScoutNegotiationInfluence,
 } from '../types';
 import { ManagerNegotiationInfluenceService } from './ManagerNegotiationInfluenceService';
 import { PrestigeTransferGuardService } from './PrestigeTransferGuardService';
 import { FinanceService } from './FinanceService';
+import { getScoutNegotiationPower } from './TransferPlayerDecisionService';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
@@ -28,6 +30,39 @@ const stableUnit = (key: string, salt: string): number => {
   hash ^= hash >>> 17;
   hash += hash << 5;
   return (hash >>> 0) / 4294967296;
+};
+
+export interface FreeAgentOfferDecisionContext {
+  club?: Club;
+  managerProfile?: ManagerProfile | null;
+  scout?: TransferScoutNegotiationInfluence;
+  /** Stable [0, 1) roll stored on PendingNegotiation. */
+  decisionRoll?: number;
+  /** Optional prestige/destination ceiling calculated by the transfer system. */
+  acceptanceChanceCap?: number;
+}
+
+export interface FreeAgentOfferDecision {
+  accepted: boolean;
+  reason: string;
+  demands: Pick<FreeAgentContractDemands, 'salary' | 'bonus' | 'years' | 'goalBonus' | 'assistBonus' | 'cleanSheetBonus'> | null;
+  /** Diagnostic values are persisted/used internally and are not shown to users. */
+  acceptanceChance: number;
+  decisionRoll: number;
+}
+
+const getPersonalityAcceptanceModifier = (player: Player, club?: Club): number => {
+  const personality = player.moralePersonality;
+  if (personality === 'LOYAL') return 0.03;
+  if (personality === 'PROFESSIONAL') return 0.02;
+  if (personality === 'CALM') return 0.01;
+  if (personality === 'EGOIST') return -0.04;
+  if (personality === 'CONFIDENT') return -0.01;
+  if (personality === 'AMBITIOUS') {
+    const playerReputation = player.reputacja ?? clamp(Math.round((player.overallRating - 38) / 3), 1, 20);
+    return (club?.reputation ?? playerReputation) >= playerReputation ? 0.01 : -0.04;
+  }
+  return 0;
 };
 
 const median = (values: number[]): number => {
@@ -160,6 +195,9 @@ const getRealisticClubCeiling = (club: Club, player: Player, squad: Player[]): n
 };
 
 export const FreeAgentNegotiationService = {
+  /** Public deterministic roll helper used by save-compatible negotiation gates. */
+  getStableDecisionRoll: (key: string, salt: string): number => stableUnit(key, salt),
+
   getClubLockoutUntil: (player: Player, clubId: string | null | undefined, currentDate: Date): string | null => {
     if (!clubId) return null;
 
@@ -386,14 +424,19 @@ export const FreeAgentNegotiationService = {
   evaluateOfferAgainstDemands: (
     player: Player,
     offer: Pick<PendingNegotiation, 'salary' | 'bonus' | 'years' | 'goalBonus' | 'assistBonus' | 'cleanSheetBonus'>,
-    demands: FreeAgentContractDemands
-  ): {
-    accepted: boolean;
-    reason: string;
-    demands: Pick<FreeAgentContractDemands, 'salary' | 'bonus' | 'years' | 'goalBonus' | 'assistBonus' | 'cleanSheetBonus'> | null;
-  } => {
+    demands: FreeAgentContractDemands,
+    decisionContext: FreeAgentOfferDecisionContext = {},
+  ): FreeAgentOfferDecision => {
     const salaryFit = offer.salary / Math.max(1, demands.salary);
-    const bonusFit = demands.bonus > 0 ? offer.bonus / demands.bonus : 1;
+    /*
+     * Annual salary and signing bonus are interchangeable parts of the guaranteed
+     * package. Comparing their complete values makes 220k/year + 30k signing over
+     * two years equivalent to 200k/year + 70k signing. Conditional performance
+     * bonuses and the preferred contract length remain separate considerations.
+     */
+    const expectedGuaranteedTotal = demands.salary * demands.years + demands.bonus;
+    const offeredGuaranteedTotal = offer.salary * offer.years + offer.bonus;
+    const guaranteedFit = offeredGuaranteedTotal / Math.max(1, expectedGuaranteedTotal);
     const expectedPerformanceTotal =
       (demands.goalBonus ?? 0) +
       (demands.assistBonus ?? 0) +
@@ -408,29 +451,14 @@ export const FreeAgentNegotiationService = {
     const yearsGap = Math.abs(offer.years - demands.years);
     const yearsFit = yearsGap === 0 ? 1 : yearsGap === 1 ? 0.88 : 0.68;
 
-    const salarySurplusAnnual = Math.max(0, offer.salary - demands.salary);
-    const bonusShortfallAnnual = Math.max(0, demands.bonus - offer.bonus) / Math.max(1, offer.years);
-    const compensatedBonusFit = demands.bonus > 0
-      ? (offer.bonus + salarySurplusAnnual * offer.years * 0.55) / demands.bonus
-      : 1;
-    const effectiveBonusFit = Math.max(bonusFit, compensatedBonusFit);
-    const guaranteedFloorMet = salaryFit >= 0.70 || salarySurplusAnnual >= bonusShortfallAnnual;
-
-    const isVeteran = player.age >= 33;
-    const isYoung = player.age <= 23;
-    const salaryWeight = isVeteran ? 0.45 : isYoung ? 0.62 : 0.57;
-    const signingWeight = isVeteran ? 0.38 : isYoung ? 0.15 : 0.23;
-    const yearsWeight = isVeteran ? 0.12 : isYoung ? 0.18 : 0.12;
-    const performanceWeight = expectedPerformanceTotal > 0
-      ? 1 - salaryWeight - signingWeight - yearsWeight
-      : 0;
-    const normalizedBaseWeight = salaryWeight + signingWeight + yearsWeight + performanceWeight;
+    const performanceWeight = expectedPerformanceTotal > 0 ? 0.10 : 0;
+    const yearsWeight = 0.12;
+    const guaranteedWeight = 1 - performanceWeight - yearsWeight;
     const offerScore = (
-      clamp(salaryFit, 0, 1.20) * salaryWeight +
-      clamp(effectiveBonusFit, 0, 1.20) * signingWeight +
+      clamp(guaranteedFit, 0, 1.20) * guaranteedWeight +
       yearsFit * yearsWeight +
       clamp(performanceFit, 0, 1.20) * performanceWeight
-    ) / Math.max(0.01, normalizedBaseWeight);
+    );
 
     const counterDemands = {
       salary: demands.salary,
@@ -441,34 +469,113 @@ export const FreeAgentNegotiationService = {
       cleanSheetBonus: demands.cleanSheetBonus,
     };
 
-    if (salaryFit < 0.45) {
+    /* A signing bonus cannot replace the annual wage completely. The low salary
+     * floor prevents exploitative zero-wage structures while still allowing a
+     * manager to move most guaranteed money between the two components. */
+    if (guaranteedFit < 0.45 || (salaryFit < 0.35 && guaranteedFit < 0.95)) {
       return {
         accepted: false,
         reason: 'Oferta jest tak niska, że mój klient nie widzi podstaw do dalszych rozmów.',
         demands: null,
+        acceptanceChance: 0,
+        decisionRoll: decisionContext.decisionRoll ?? 0,
       };
     }
-    if (offerScore >= 0.96 && guaranteedFloorMet) {
-      return { accepted: true, reason: 'Zgadzamy się na przedstawione warunki.', demands: null };
-    }
-    if (offerScore >= 0.68) {
+
+    if (offerScore >= 0.68 && salaryFit >= 0.35) {
+      /*
+       * Convert the continuous offer quality into a smooth probability curve.
+       * Around score 0.68 there is only a small exceptional chance; an exact
+       * request is close to 94%, and a meaningfully better package approaches 99%.
+       * No normal valid offer is absolutely guaranteed.
+       */
+      const curveChance = 1 / (1 + Math.exp(-14 * (offerScore - 0.86)));
+      const exactTermsBonus =
+        guaranteedFit >= 0.99 &&
+        yearsGap === 0 &&
+        performanceFit >= 0.90
+          ? 0.055
+          : 0;
+      const managerModifier = ManagerNegotiationInfluenceService.calculate(
+        decisionContext.managerProfile,
+      ).chanceAdjustment;
+      const playerReputation = player.reputacja ?? clamp(Math.round((player.overallRating - 38) / 3), 1, 20);
+      const clubReputationModifier = decisionContext.club
+        ? clamp(((decisionContext.club.reputation ?? 1) - playerReputation) * 0.012, -0.12, 0.08)
+        : 0;
+      const personalityModifier = getPersonalityAcceptanceModifier(player, decisionContext.club);
+      const scoutModifier = getScoutNegotiationPower(decisionContext.scout) * 0.06;
+      const uncappedChance = clamp(
+        curveChance + exactTermsBonus + managerModifier + clubReputationModifier + personalityModifier + scoutModifier,
+        0.01,
+        0.99,
+      );
+      const acceptanceChance = typeof decisionContext.acceptanceChanceCap === 'number'
+        ? Math.min(uncappedChance, clamp(decisionContext.acceptanceChanceCap, 0.000001, 1))
+        : uncappedChance;
+      const decisionRoll = clamp(
+        decisionContext.decisionRoll ?? stableUnit(
+          `${player.id}|${offer.salary}|${offer.bonus}|${offer.years}|${offer.goalBonus ?? 0}|${offer.assistBonus ?? 0}|${offer.cleanSheetBonus ?? 0}`,
+          'fallback-final-offer',
+        ),
+        0,
+        0.999999999,
+      );
+
+      if (decisionRoll < acceptanceChance) {
+        return {
+          accepted: true,
+          reason: 'Zgadzamy się na przedstawione warunki.',
+          demands: null,
+          acceptanceChance,
+          decisionRoll,
+        };
+      }
+
+      const prestigeCapBlocked =
+        typeof decisionContext.acceptanceChanceCap === 'number' &&
+        acceptanceChance < uncappedChance &&
+        decisionRoll < uncappedChance;
+      if (prestigeCapBlocked && decisionContext.club) {
+        return {
+          accepted: false,
+          reason: PrestigeTransferGuardService.getRejectionReason(player, decisionContext.club),
+          demands: null,
+          acceptanceChance,
+          decisionRoll,
+        };
+      }
+
       return {
         accepted: false,
-        reason: 'Jesteśmy gotowi kontynuować rozmowy, ale oferta musi być bliższa oczekiwaniom mojego klienta.',
+        reason: offerScore >= 0.96
+          ? 'Warunki są bardzo bliskie porozumienia, ale mój klient nie jest jeszcze gotowy ich zaakceptować. Oczekujemy ostatniej poprawy oferty.'
+          : 'Jesteśmy gotowi kontynuować rozmowy, ale oferta musi być bliższa oczekiwaniom mojego klienta.',
         demands: counterDemands,
+        acceptanceChance,
+        decisionRoll,
       };
     }
     return {
       accepted: false,
       reason: 'Warunki są zbyt dalekie od realiów kontraktowych mojego klienta.',
-      demands: salaryFit >= 0.55 ? counterDemands : null,
+      demands: guaranteedFit >= 0.55 ? counterDemands : null,
+      acceptanceChance: 0,
+      decisionRoll: decisionContext.decisionRoll ?? 0,
     };
   },
 
   createNegotiationEntry: (player: Player, club: Club, salary: number, bonus: number, years: number, currentDate: Date, squad: Player[], goalBonus?: number, assistBonus?: number, cleanSheetBonus?: number, agentDemands?: FreeAgentContractDemands): PendingNegotiation => {
     const avgSalary = squad.length > 0 ? squad.reduce((sum, currentPlayer) => sum + currentPlayer.annualSalary, 0) / squad.length : 120000;
-    const expected = player.overallRating * 2000;
-    const rating = salary / expected;
+    const fallbackExpectedSalary = player.overallRating * 2000;
+    /* Response time follows the same guaranteed-package model as final evaluation.
+     * Otherwise a high-salary/low-bonus offer and its mathematically equivalent
+     * low-salary/high-bonus variant could receive inconsistent agent behaviour. */
+    const expectedGuaranteedTotal = agentDemands
+      ? agentDemands.salary * agentDemands.years + agentDemands.bonus
+      : fallbackExpectedSalary * years;
+    const offeredGuaranteedTotal = salary * years + bonus;
+    const rating = offeredGuaranteedTotal / Math.max(1, expectedGuaranteedTotal);
 
     let daysToWait = 2;
     if (rating < 0.5) daysToWait = 1;
@@ -478,8 +585,11 @@ export const FreeAgentNegotiationService = {
     const responseDate = new Date(currentDate);
     responseDate.setDate(responseDate.getDate() + daysToWait);
 
+    const negotiationId = `NEG_${Date.now()}_${player.id}`;
+    const decisionSeed = `${negotiationId}|${club.id}|${salary}|${bonus}|${years}|${goalBonus ?? 0}|${assistBonus ?? 0}|${cleanSheetBonus ?? 0}`;
+
     return {
-      id: `NEG_${Date.now()}_${player.id}`,
+      id: negotiationId,
       playerId: player.id,
       clubId: club.id,
       salary,
@@ -489,6 +599,8 @@ export const FreeAgentNegotiationService = {
       assistBonus,
       cleanSheetBonus,
       agentDemands,
+      decisionSeed,
+      decisionRoll: stableUnit(decisionSeed, 'final-player-decision'),
       responseDate: responseDate.toISOString(),
       status: NegotiationStatus.PENDING
     };

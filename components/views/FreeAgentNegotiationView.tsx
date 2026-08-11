@@ -5,6 +5,7 @@ import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiation
 import { FinanceService } from '@/services/FinanceService';
 import { BoardBudgetRequestService, BoardRequestResult } from '../../services/BoardBudgetRequestService';
 import { ManagerNegotiationInfluenceService } from '../../services/ManagerNegotiationInfluenceService';
+import { FreeAgentContractPackageService } from '../../services/FreeAgentContractPackageService';
 
 const sanitizeAgentInterestMessage = (message: string): string => {
   const normalized = message.toLowerCase();
@@ -135,11 +136,63 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const availableBudget = spendableTransferBudget + extraBudget;
   const totalCostPreview = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
   const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
+  const maxGuaranteedPackage = currentSalaryCap * years + maxBonusAllowed;
   const goalBonusMax = Math.max(5_000, (agentDemands?.goalBonus ?? 0) * 2, goalBonus);
   const assistBonusMax = Math.max(5_000, (agentDemands?.assistBonus ?? 0) * 2, assistBonus);
   const cleanSheetBonusMax = Math.max(5_000, (agentDemands?.cleanSheetBonus ?? 0) * 2, cleanSheetBonus);
   const boardRequestsUsed = myClub.boardBudgetRequestsThisSeason ?? 0;
   const canRequestBoard = totalCostPreview > availableBudget && boardRequestsUsed < 2 && extraBudget === 0;
+
+  /*
+   * Salary and signing bonus share one guaranteed package. Each handler delegates
+   * to a pure allocator so changing one field preserves `salary * years + bonus`.
+   * The package field is the only control that raises or lowers the total offer;
+   * goal/assist/clean-sheet bonuses remain separate conditional incentives.
+   */
+  const applyGuaranteedAllocation = (allocation: ReturnType<typeof FreeAgentContractPackageService.allocateTotal>) => {
+    setSalary(allocation.annualSalary);
+    setBonus(allocation.signingBonus);
+  };
+
+  const guaranteedPackageLimits = (contractYears = years) => ({
+    years: contractYears,
+    maxAnnualSalary: currentSalaryCap,
+    maxSigningBonus: maxBonusAllowed,
+  });
+
+  const handleGuaranteedPackageChange = (requestedTotal: number) => {
+    applyGuaranteedAllocation(FreeAgentContractPackageService.allocateTotal(
+      requestedTotal,
+      salary,
+      guaranteedPackageLimits(),
+    ));
+  };
+
+  const handleSalaryChange = (requestedSalary: number) => {
+    applyGuaranteedAllocation(FreeAgentContractPackageService.allocateSalary(
+      totalCostPreview,
+      requestedSalary,
+      guaranteedPackageLimits(),
+    ));
+  };
+
+  const handleSigningBonusChange = (requestedBonus: number) => {
+    applyGuaranteedAllocation(FreeAgentContractPackageService.allocateBonus(
+      totalCostPreview,
+      requestedBonus,
+      guaranteedPackageLimits(),
+    ));
+  };
+
+  const handleContractYearsChange = (nextYears: number) => {
+    const allocation = FreeAgentContractPackageService.allocateSalary(
+      totalCostPreview,
+      salary,
+      guaranteedPackageLimits(nextYears),
+    );
+    setYears(nextYears);
+    applyGuaranteedAllocation(allocation);
+  };
 
   const handleBoardRequest = () => {
     const shortfall = totalCostPreview - availableBudget;
@@ -194,9 +247,16 @@ export const FreeAgentNegotiationView: React.FC = () => {
     setIsSending(true);
 
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
-    const expected = agentDemands?.salary
-      ?? FinanceService.calculateFAExpectations(player, myClub.reputation, avgSquadSalary) * managerInfluence.expectationMultiplier;
-    const ratio = salary / expected;
+    const fallbackExpectedSalary = FinanceService.calculateFAExpectations(
+      player,
+      myClub.reputation,
+      avgSquadSalary,
+    ) * managerInfluence.expectationMultiplier;
+    const expectedGuaranteedPackage = agentDemands
+      ? FreeAgentContractPackageService.calculateTotal(agentDemands.salary, agentDemands.years, agentDemands.bonus)
+      : fallbackExpectedSalary * years;
+    const offeredGuaranteedPackage = FreeAgentContractPackageService.calculateTotal(salary, years, bonus);
+    const ratio = offeredGuaranteedPackage / Math.max(1, expectedGuaranteedPackage);
 
     let reaction = { type: 'GOOD', msg: 'Dziekujemy. Przeanalizujemy warunki i wrocimy z odpowiedzia.' };
     if (ratio < 0.45) {
@@ -325,6 +385,36 @@ export const FreeAgentNegotiationView: React.FC = () => {
           ) : (
             <>
               <div className="space-y-8">
+                <div className="space-y-4 rounded-[24px] border border-amber-400/15 bg-amber-500/5 p-4">
+                  <div className="flex justify-between items-center gap-4 px-1">
+                    <div>
+                      <span className="font-black italic uppercase tracking-tighter block text-[10px] text-amber-300">Wspólny pakiet gwarantowany</span>
+                      <span className="font-black italic uppercase tracking-tighter mt-1 block text-[8px] text-slate-500">Pensja × lata + bonus za podpis</span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-400/15 bg-black/40 px-3 py-1">
+                      <input
+                        type="number"
+                        value={totalCostPreview}
+                        onChange={event => handleGuaranteedPackageChange(parseInt(event.target.value, 10) || 0)}
+                        className="font-black italic uppercase tracking-tighter w-32 border-none bg-transparent text-right font-mono text-xl text-amber-300 outline-none"
+                      />
+                      <span className="font-black italic uppercase tracking-tighter text-xs text-slate-500">PLN</span>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={Math.max(maxGuaranteedPackage, 0)}
+                    step="1000"
+                    value={totalCostPreview}
+                    onChange={event => handleGuaranteedPackageChange(parseInt(event.target.value, 10))}
+                    className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-amber-500"
+                  />
+                  <p className="font-black italic uppercase tracking-tighter text-[8px] leading-relaxed text-slate-500">
+                    Zmień wartość pakietu tutaj. Suwaki pensji i bonusu poniżej tylko dzielą tę samą kwotę.
+                  </p>
+                </div>
+
                 <div className="space-y-4">
                   <div className="flex justify-between items-center px-1">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pensja Roczna</span>
@@ -334,7 +424,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                         value={salary}
                         onChange={e => {
                           const value = parseInt(e.target.value, 10) || 0;
-                          setSalary(Math.min(value, currentSalaryCap));
+                          handleSalaryChange(value);
                         }}
                         className="bg-transparent border-none outline-none text-xl font-black text-emerald-400 font-mono italic w-32 text-right"
                       />
@@ -347,7 +437,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                     max={Math.max(currentSalaryCap, 0)}
                     step="5000"
                     value={salary}
-                    onChange={e => setSalary(Math.min(parseInt(e.target.value, 10), currentSalaryCap))}
+                    onChange={e => handleSalaryChange(parseInt(e.target.value, 10))}
                     className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                   />
                   <div className="flex justify-between px-1">
@@ -365,7 +455,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                         value={bonus}
                         onChange={e => {
                           const value = parseInt(e.target.value, 10) || 0;
-                          setBonus(Math.min(value, maxBonusAllowed));
+                          handleSigningBonusChange(value);
                         }}
                         className="bg-transparent border-none outline-none text-xl font-black text-blue-400 font-mono italic w-32 text-right"
                       />
@@ -378,7 +468,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                     max={maxBonusAllowed}
                     step="1000"
                     value={bonus}
-                    onChange={e => setBonus(parseInt(e.target.value, 10))}
+                    onChange={e => handleSigningBonusChange(parseInt(e.target.value, 10))}
                     className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                   />
                   <div className="flex justify-between px-1">
@@ -486,7 +576,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   {[1, 2, 3, 4, 5].map(yearOption => (
                     <button
                       key={yearOption}
-                      onClick={() => setYears(yearOption)}
+                      onClick={() => handleContractYearsChange(yearOption)}
                       className={`flex-1 py-4 rounded-2xl font-black border transition-all ${
                         years === yearOption
                           ? 'bg-white text-black border-white shadow-lg'

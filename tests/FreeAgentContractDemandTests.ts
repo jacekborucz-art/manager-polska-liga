@@ -7,6 +7,7 @@ import {
   Region,
 } from '../types';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
+import { FreeAgentContractPackageService } from '../services/FreeAgentContractPackageService';
 
 const currentDate = new Date('2026-07-10T00:00:00.000Z');
 
@@ -152,16 +153,120 @@ const exactOffer = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
   forward.player,
   forward.demands,
   forward.demands,
+  { decisionRoll: 0.01 },
 );
 assert.equal(exactOffer.accepted, true, 'Oferta zgodna z żądaniami powinna zostać przyjęta.');
+
+const expectedGuaranteedTotal = forward.demands.salary * forward.demands.years + forward.demands.bonus;
+const annualRaise = Math.min(10_000, Math.floor(forward.demands.bonus / Math.max(1, forward.demands.years)));
+const redistributedOffer = {
+  ...forward.demands,
+  salary: forward.demands.salary + annualRaise,
+  bonus: forward.demands.bonus - annualRaise * forward.demands.years,
+};
+assert.equal(
+  redistributedOffer.salary * redistributedOffer.years + redistributedOffer.bonus,
+  expectedGuaranteedTotal,
+  'Podwyżka pensji musi analogicznie obniżyć bonus i zachować wartość gwarantowaną.',
+);
+assert.equal(
+  FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+    forward.player,
+    redistributedOffer,
+    forward.demands,
+    { decisionRoll: 0.01 },
+  ).accepted,
+  true,
+  'Agent powinien traktować równowartościową zmianę pensja/bonus jako ten sam pakiet.',
+);
+
+const uiAllocation = FreeAgentContractPackageService.allocateSalary(
+  470_000,
+  220_000,
+  { years: 2, maxAnnualSalary: 300_000, maxSigningBonus: 200_000 },
+);
+assert.deepEqual(
+  uiAllocation,
+  { annualSalary: 220_000, signingBonus: 30_000, guaranteedTotal: 470_000 },
+  'Dwuletni pakiet 470k po podwyżce pensji do 220k powinien obniżyć bonus do 30k.',
+);
+const reversedAllocation = FreeAgentContractPackageService.allocateBonus(
+  uiAllocation.guaranteedTotal,
+  70_000,
+  { years: 2, maxAnnualSalary: 300_000, maxSigningBonus: 200_000 },
+);
+assert.deepEqual(
+  reversedAllocation,
+  { annualSalary: 200_000, signingBonus: 70_000, guaranteedTotal: 470_000 },
+  'Podniesienie bonusu z 30k do 70k powinno obniżyć pensję roczną o 20k.',
+);
 
 const insultingOffer = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
   forward.player,
   { ...forward.demands, salary: Math.round(forward.demands.salary * 0.4), bonus: 0, goalBonus: 0, assistBonus: 0 },
   forward.demands,
+  { decisionRoll: 0.01 },
 );
 assert.equal(insultingOffer.accepted, false);
 assert.equal(insultingOffer.demands, null, 'Obraźliwa oferta powinna zakończyć rozmowy bez kontroferty.');
+
+const exactOfferRejectedByRng = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+  forward.player,
+  forward.demands,
+  forward.demands,
+  { decisionRoll: 0.999 },
+);
+assert.equal(exactOfferRejectedByRng.accepted, false, 'Nawet pełna oferta powinna zachować małe ryzyko odmowy RNG.');
+assert.ok(
+  exactOfferRejectedByRng.acceptanceChance >= 0.85 && exactOfferRejectedByRng.acceptanceChance <= 0.99,
+  `Pełna oferta powinna mieć wysoką, ale nie stuprocentową szansę: ${exactOfferRejectedByRng.acceptanceChance}`,
+);
+
+const repeatedRngDecision = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+  forward.player,
+  forward.demands,
+  forward.demands,
+  { decisionRoll: 0.999 },
+);
+assert.deepEqual(
+  repeatedRngDecision,
+  exactOfferRejectedByRng,
+  'Ta sama oferta i zapisany roll muszą zawsze zwracać ten sam wynik.',
+);
+
+const loyalDecision = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+  { ...forward.player, moralePersonality: 'LOYAL' },
+  forward.demands,
+  forward.demands,
+  { club: lowClub, decisionRoll: 0.999 },
+);
+const egoistDecision = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+  { ...forward.player, moralePersonality: 'EGOIST' },
+  forward.demands,
+  forward.demands,
+  { club: lowClub, decisionRoll: 0.999 },
+);
+assert.ok(
+  loyalDecision.acceptanceChance > egoistDecision.acceptanceChance,
+  'Osobowość zawodnika musi modyfikować końcową szansę przy tej samej ofercie.',
+);
+
+const strongClubDecision = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+  forward.player,
+  forward.demands,
+  forward.demands,
+  { club: highClub, decisionRoll: 0.999 },
+);
+const weakClubDecision = FreeAgentNegotiationService.evaluateOfferAgainstDemands(
+  forward.player,
+  forward.demands,
+  forward.demands,
+  { club: lowClub, decisionRoll: 0.999 },
+);
+assert.ok(
+  strongClubDecision.acceptanceChance > weakClubDecision.acceptanceChance,
+  'Reputacja klubu musi wpływać na końcowe RNG przy identycznych warunkach.',
+);
 
 const bandCounts = { NORMAL: 0, TOUGH: 0, VERY_HIGH: 0, EXTREME: 0 };
 for (let index = 0; index < 10_000; index += 1) {

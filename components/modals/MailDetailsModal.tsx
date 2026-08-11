@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useModalClose } from '../ui/useModalClose';
-import { Club, MailMessage, MailType, Newspaper, ViewState } from '../../types';
+import { Club, MailMessage, MailType, Newspaper, PlayerPosition, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
 import awansEkstraklasaImg from '../../Graphic/cup/awans-do-ekst.png';
 import { LeagueFinanceReportModal } from './LeagueFinanceReportModal';
@@ -15,6 +15,55 @@ interface MailDetailsModalProps {
   mail: MailMessage;
   onClose: () => void;
 }
+
+const CONTRACT_POSITION_LABELS: Record<PlayerPosition, string> = {
+  [PlayerPosition.GK]: 'Bramkarz',
+  [PlayerPosition.DEF]: 'Obrońca',
+  [PlayerPosition.MID]: 'Pomocnik',
+  [PlayerPosition.FWD]: 'Napastnik',
+};
+
+interface ContractResponsePlayerSummaryProps {
+  firstName: string;
+  lastName: string;
+  age: number;
+  position: PlayerPosition;
+  overallRating: number;
+}
+
+/**
+ * Compact identity card displayed above an accepted contract response. It uses
+ * the live player record when possible and the immutable mail snapshot otherwise.
+ * Keeping this view separate from the body string makes the four key facts easy
+ * to scan and avoids parsing human-readable mail text back into structured data.
+ */
+const ContractResponsePlayerSummary: React.FC<ContractResponsePlayerSummaryProps> = ({
+  firstName,
+  lastName,
+  age,
+  position,
+  overallRating,
+}) => (
+  <div className="rounded-[22px] border border-emerald-400/25 bg-gradient-to-r from-emerald-500/12 via-cyan-500/8 to-slate-950/40 p-5 shadow-[inset_4px_0_0_rgba(52,211,153,0.85)]">
+    <p className="font-black italic uppercase tracking-tighter text-[9px] text-emerald-300/80">Zawodnik</p>
+    <div className="mt-2 flex flex-wrap items-end justify-between gap-5">
+      <h3 className="font-black italic uppercase tracking-tighter text-[25px] leading-none text-white">
+        {firstName} {lastName}
+      </h3>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-black italic uppercase tracking-tighter rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] text-sky-100">
+          {age} lat
+        </span>
+        <span className="font-black italic uppercase tracking-tighter rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-[11px] text-cyan-200">
+          {CONTRACT_POSITION_LABELS[position]}
+        </span>
+        <span className="font-black italic uppercase tracking-tighter rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-4 py-2 text-[11px] text-emerald-200">
+          {overallRating} OVR
+        </span>
+      </div>
+    </div>
+  </div>
+);
 
 const formatMailDate = (
   dateValue: MailMessage['date'] | string | number | null | undefined,
@@ -1008,6 +1057,26 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     mail.metadata?.type === 'SPORTING_DIRECTOR_CONTRACT_VETO' ? mail.metadata.case : null,
   );
   const displayBody = getSeasonAwareMailBody(mail);
+  /*
+   * Contract-response mail normally points to a free agent who is still in the
+   * global player map. Prefer that live record, then fall back to the snapshot
+   * stored when the response was generated. Older saves without the optional
+   * snapshot remain compatible and simply omit the summary if the player vanished.
+   */
+  const liveContractPlayer = mail.metadata?.type === 'CONTRACT_OFFER'
+    ? Object.values(players).flat().find(player => player.id === mail.metadata?.playerId)
+    : undefined;
+  const contractResponsePlayer = liveContractPlayer
+    ? {
+        firstName: liveContractPlayer.firstName,
+        lastName: liveContractPlayer.lastName,
+        age: liveContractPlayer.age,
+        position: liveContractPlayer.position,
+        overallRating: liveContractPlayer.overallRating,
+      }
+    : mail.metadata?.type === 'CONTRACT_OFFER'
+      ? mail.metadata.playerSnapshot
+      : undefined;
 
   const openContractNegotiationForPlayer = (playerId: string) => {
     const isFreeAgent = (players['FREE_AGENTS'] || []).some(p => p.id === playerId);
@@ -1280,9 +1349,14 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                 );
               })()
             ) : (
-              <p className="whitespace-pre-wrap text-[18px] font-medium leading-9 text-sky-50 [font-family:Archivo,sans-serif]">
-                {displayBody}
-              </p>
+              <div className="space-y-6">
+                {mail.metadata?.type === 'CONTRACT_OFFER' && mail.metadata.accepted && contractResponsePlayer && (
+                  <ContractResponsePlayerSummary {...contractResponsePlayer} />
+                )}
+                <p className="whitespace-pre-wrap text-[18px] font-medium leading-9 text-sky-50 [font-family:Archivo,sans-serif]">
+                  {displayBody}
+                </p>
+              </div>
             )}
           </div>
         </div>

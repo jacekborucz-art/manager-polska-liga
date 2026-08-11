@@ -503,8 +503,20 @@ export interface MailMessage {
     responseDate: string;
     acceptanceExpiryDate?: string;
   status: NegotiationStatus;
-  isAiOffer: boolean;
+    isAiOffer: boolean;
     playerId: string;
+    /**
+     * Immutable player identity shown in the historical contract-response mail.
+     * The live player may later move clubs, age or change OVR, so the mail keeps
+     * the values that were true when the agent sent the response.
+     */
+    playerSnapshot?: {
+      firstName: string;
+      lastName: string;
+      age: number;
+      position: PlayerPosition;
+      overallRating: number;
+    };
     demands?: {
       salary: number;
       bonus: number;
@@ -1163,6 +1175,13 @@ export interface PendingNegotiation {
   cleanSheetBonus?: number;
   /** Oczekiwania zamrożone w chwili rozpoczęcia rozmów; nie losują się ponownie po zmianie dnia lub widoku. */
   agentDemands?: FreeAgentContractDemands;
+  /**
+   * Stable identity and pre-rolled value for the final player decision. Saving
+   * both prevents reopening a mail or reloading a save from rerolling the offer.
+   * Optional fields keep negotiations from older saves compatible.
+   */
+  decisionSeed?: string;
+  decisionRoll?: number;
   responseDate: string; // Data ISO, kiedy agent odpowie
   status: NegotiationStatus;
 }

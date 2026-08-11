@@ -5363,6 +5363,13 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
             status: NegotiationStatus.REJECTED,
             isAiOffer: false,
             playerId: player.id,
+            playerSnapshot: {
+              firstName: player.firstName,
+              lastName: player.lastName,
+              age: player.age,
+              position: player.position,
+              overallRating: player.overallRating,
+            },
             demands: null
           }
         };
@@ -5375,13 +5382,25 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
         transferScoutingReports,
         transferScoutPool,
       );
+      /*
+       * Every gate for this offer uses stable rolls derived from the persisted
+       * negotiation seed. Reloading before the response date therefore cannot
+       * reroll either the scout opening or the final player decision.
+       */
+      const negotiationDecisionSeed = neg.decisionSeed ?? neg.id;
       const prestigeBlockReason = PrestigeTransferGuardService.getBlockedReason(player, userClub);
-      const scoutOpenedTalks = !!prestigeBlockReason && Math.random() <= getScoutTalkOpeningChance(
+      const scoutOpenedTalks = !!prestigeBlockReason && FreeAgentNegotiationService.getStableDecisionRoll(
+        negotiationDecisionSeed,
+        'scout-opens-talks',
+      ) <= getScoutTalkOpeningChance(
         player,
         null,
         userClub,
         scoutingInfluence,
       );
+      const scoutAcceptanceCap = scoutingInfluence
+        ? getScoutAdjustedAcceptanceChanceCap(player, null, userClub, scoutingInfluence)
+        : undefined;
       let decision: {
         accepted: boolean;
         reason: string;
@@ -5396,28 +5415,21 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
       } = prestigeBlockReason && !scoutOpenedTalks
         ? { accepted: false, reason: prestigeBlockReason, demands: null }
         : neg.agentDemands
-          ? FreeAgentNegotiationService.evaluateOfferAgainstDemands(player, neg, neg.agentDemands)
+          ? FreeAgentNegotiationService.evaluateOfferAgainstDemands(player, neg, neg.agentDemands, {
+              club: userClub,
+              managerProfile,
+              scout: scoutingInfluence,
+              decisionRoll: neg.decisionRoll ?? FreeAgentNegotiationService.getStableDecisionRoll(
+                negotiationDecisionSeed,
+                'final-player-decision',
+              ),
+              acceptanceChanceCap: scoutAcceptanceCap,
+            })
           : FinanceService.evaluateContractLogic(
             player, neg.salary, neg.bonus,
             new Date(simDate.getFullYear() + neg.years, 5, 30).toISOString(),
             simDate, userClub.reputation, FinanceService.getClubTier(userClub), managerProfile
           );
-
-      if (decision.accepted && scoutingInfluence) {
-        const destinationChanceCap = getScoutAdjustedAcceptanceChanceCap(
-          player,
-          null,
-          userClub,
-          scoutingInfluence,
-        );
-        if (Math.random() > destinationChanceCap) {
-          decision = {
-            accepted: false,
-            reason: PrestigeTransferGuardService.getRejectionReason(player, userClub),
-            demands: null,
-          };
-        }
-      }
 
       const mail: MailMessage = {
         id: `MAIL_NEG_${neg.id}`,
@@ -5444,6 +5456,19 @@ setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeM
           status: decision.accepted ? NegotiationStatus.ACCEPTED : NegotiationStatus.REJECTED,
           isAiOffer: false,
           playerId: player.id,
+          /*
+           * Keep a historical player snapshot on the response itself. MailDetails
+           * prefers current player data while the negotiation is active, but this
+           * fallback keeps old save-game mail readable after transfers or OVR/age
+           * progression changes the live player record.
+           */
+          playerSnapshot: {
+            firstName: player.firstName,
+            lastName: player.lastName,
+            age: player.age,
+            position: player.position,
+            overallRating: player.overallRating,
+          },
           demands: decision.demands
         }
       };
