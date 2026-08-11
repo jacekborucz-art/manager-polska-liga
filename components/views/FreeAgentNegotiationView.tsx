@@ -19,6 +19,11 @@ const sanitizeAgentInterestMessage = (message: string): string => {
     : message;
 };
 
+const OFFER_MONEY_STEP = 10_000;
+
+const normalizeOfferMoney = (value: number): number =>
+  Math.max(0, Math.round((Number.isFinite(value) ? value : 0) / OFFER_MONEY_STEP) * OFFER_MONEY_STEP);
+
 export const FreeAgentNegotiationView: React.FC = () => {
   const {
     viewedPlayerId,
@@ -65,28 +70,11 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   const spendableTransferBudget = myClub?.transferBudget || 0;
 
-  const maxSalaryAllowed = useMemo(() => {
-    if (!myClub || !player) return 500000;
-
-    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
-    const budgetCap = Math.max(150000, Math.floor(spendableTransferBudget * 0.25));
-    const marketCap = fairSalary * (player.overallRating >= 80 ? 4.5 : player.overallRating >= 72 ? 3.5 : 3);
-
-    return Math.floor(Math.min(budgetCap, marketCap, spendableTransferBudget));
-  }, [myClub, player, spendableTransferBudget]);
-
-  const maxBonusAllowed = useMemo(() => {
-    if (!myClub || !player) return 0;
-    const ovrFactor = Math.pow(player.overallRating / 80, 2);
-    const scaledMax = myClub.signingBonusPool * ovrFactor;
-    return Math.floor(Math.min(myClub.signingBonusPool, scaledMax));
-  }, [myClub, player]);
-
   const [salary, setSalary] = useState(() => {
     const suggested = agentDemands?.salary ?? (player ? player.overallRating * 1800 : 50000);
-    return Math.min(suggested, maxSalaryAllowed);
+    return normalizeOfferMoney(suggested);
   });
-  const [bonus, setBonus] = useState(() => Math.min(agentDemands?.bonus ?? 25000, maxBonusAllowed));
+  const [bonus, setBonus] = useState(() => normalizeOfferMoney(agentDemands?.bonus ?? 25000));
   const [years, setYears] = useState(() => agentDemands?.years ?? 2);
   const [goalBonus, setGoalBonus] = useState(() => agentDemands?.goalBonus ?? 0);
   const [assistBonus, setAssistBonus] = useState(() => agentDemands?.assistBonus ?? 0);
@@ -99,13 +87,13 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   useEffect(() => {
     if (!agentDemands) return;
-    setSalary(Math.min(agentDemands.salary, maxSalaryAllowed));
-    setBonus(Math.min(agentDemands.bonus, maxBonusAllowed));
+    setSalary(normalizeOfferMoney(agentDemands.salary));
+    setBonus(normalizeOfferMoney(agentDemands.bonus));
     setYears(agentDemands.years);
     setGoalBonus(agentDemands.goalBonus ?? 0);
     setAssistBonus(agentDemands.assistBonus ?? 0);
     setCleanSheetBonus(agentDemands.cleanSheetBonus ?? 0);
-  }, [player?.id, myClub?.id, agentDemands?.salary, agentDemands?.bonus, agentDemands?.years, maxSalaryAllowed, maxBonusAllowed]);
+  }, [player?.id, myClub?.id, agentDemands?.salary, agentDemands?.bonus, agentDemands?.years]);
 
   const agentInterest = useMemo(() => {
     if (!player || !myClub) return { interested: true, message: '' };
@@ -133,66 +121,29 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   const isInterested = agentInterest.interested;
   const visibleAgentInterestMessage = sanitizeAgentInterestMessage(agentInterest.message);
-  const availableBudget = spendableTransferBudget + extraBudget;
+  const availableBudget = spendableTransferBudget;
   const totalCostPreview = FinanceService.calculateFreeAgentContractCommitment(salary, years, bonus);
-  const currentSalaryCap = Math.min(maxSalaryAllowed, availableBudget);
-  const maxGuaranteedPackage = currentSalaryCap * years + maxBonusAllowed;
+  const isOfferWithinBudget = totalCostPreview <= availableBudget;
+  const remainingBudget = Math.max(0, availableBudget - totalCostPreview);
+  const budgetShortfall = Math.max(0, totalCostPreview - availableBudget);
+  const budgetUsagePercent = availableBudget > 0
+    ? Math.min(100, (totalCostPreview / availableBudget) * 100)
+    : totalCostPreview > 0 ? 100 : 0;
   const goalBonusMax = Math.max(5_000, (agentDemands?.goalBonus ?? 0) * 2, goalBonus);
   const assistBonusMax = Math.max(5_000, (agentDemands?.assistBonus ?? 0) * 2, assistBonus);
   const cleanSheetBonusMax = Math.max(5_000, (agentDemands?.cleanSheetBonus ?? 0) * 2, cleanSheetBonus);
   const boardRequestsUsed = myClub.boardBudgetRequestsThisSeason ?? 0;
-  const canRequestBoard = totalCostPreview > availableBudget && boardRequestsUsed < 2 && extraBudget === 0;
+  const canRequestBoard = !isOfferWithinBudget && boardRequestsUsed < 2;
 
   /*
-   * Salary and signing bonus share one guaranteed package. Each handler delegates
-   * to a pure allocator so changing one field preserves `salary * years + bonus`.
-   * The package field is the only control that raises or lowers the total offer;
-   * goal/assist/clean-sheet bonuses remain separate conditional incentives.
+   * Salary, signing bonus and contract length are deliberately independent inputs.
+   * Earlier versions preserved one hidden package total, which caused one slider to
+   * move another value. The UI now changes only the field touched by the user; the
+   * guaranteed cost below is a transparent summary, never an allocation controller.
    */
-  const applyGuaranteedAllocation = (allocation: ReturnType<typeof FreeAgentContractPackageService.allocateTotal>) => {
-    setSalary(allocation.annualSalary);
-    setBonus(allocation.signingBonus);
-  };
-
-  const guaranteedPackageLimits = (contractYears = years) => ({
-    years: contractYears,
-    maxAnnualSalary: currentSalaryCap,
-    maxSigningBonus: maxBonusAllowed,
-  });
-
-  const handleGuaranteedPackageChange = (requestedTotal: number) => {
-    applyGuaranteedAllocation(FreeAgentContractPackageService.allocateTotal(
-      requestedTotal,
-      salary,
-      guaranteedPackageLimits(),
-    ));
-  };
-
-  const handleSalaryChange = (requestedSalary: number) => {
-    applyGuaranteedAllocation(FreeAgentContractPackageService.allocateSalary(
-      totalCostPreview,
-      requestedSalary,
-      guaranteedPackageLimits(),
-    ));
-  };
-
-  const handleSigningBonusChange = (requestedBonus: number) => {
-    applyGuaranteedAllocation(FreeAgentContractPackageService.allocateBonus(
-      totalCostPreview,
-      requestedBonus,
-      guaranteedPackageLimits(),
-    ));
-  };
-
-  const handleContractYearsChange = (nextYears: number) => {
-    const allocation = FreeAgentContractPackageService.allocateSalary(
-      totalCostPreview,
-      salary,
-      guaranteedPackageLimits(nextYears),
-    );
-    setYears(nextYears);
-    applyGuaranteedAllocation(allocation);
-  };
+  const handleSalaryChange = (requestedSalary: number) => setSalary(normalizeOfferMoney(requestedSalary));
+  const handleSigningBonusChange = (requestedBonus: number) => setBonus(normalizeOfferMoney(requestedBonus));
+  const handleContractYearsChange = (nextYears: number) => setYears(nextYears);
 
   const handleBoardRequest = () => {
     const shortfall = totalCostPreview - availableBudget;
@@ -206,7 +157,16 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
   const handleBoardRequestConfirm = () => {
     if (boardRequestResult && boardRequestResult.grantedAmount > 0) {
-      setExtraBudget(boardRequestResult.grantedAmount);
+      const grantedAmount = boardRequestResult.grantedAmount;
+      setExtraBudget(previousAmount => previousAmount + grantedAmount);
+      /*
+       * A board grant must become real club money. Keeping it only in local view
+       * state made an accepted offer fail later when the contract was finalized.
+       */
+      setClubs(previousClubs => previousClubs.map(club => club.id === myClub.id
+        ? { ...club, transferBudget: club.transferBudget + grantedAmount }
+        : club
+      ));
     }
     setBoardRequestResult(null);
   };
@@ -372,6 +332,59 @@ export const FreeAgentNegotiationView: React.FC = () => {
           </section>
         )}
 
+        {isInterested && (
+          <section className={`rounded-[28px] border p-5 ${
+            isOfferWithinBudget
+              ? 'border-emerald-400/25 bg-emerald-500/5'
+              : 'border-red-400/30 bg-red-500/5'
+          }`}>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm text-white font-black italic uppercase tracking-tighter">Dostępna pula na kontrakt</h3>
+                <p className="mt-1 text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
+                  Z tej puli klub pokrywa wszystkie lata pensji oraz bonus za podpis
+                </p>
+              </div>
+              <strong className="text-2xl text-emerald-400 font-black italic uppercase tracking-tighter">
+                {availableBudget.toLocaleString('pl-PL')} PLN
+              </strong>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-2xl bg-black/30 p-4">
+                <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Pensje przez cały kontrakt</span>
+                <strong className="text-sm text-emerald-300 font-black italic uppercase tracking-tighter">
+                  {(salary * years).toLocaleString('pl-PL')} PLN
+                </strong>
+              </div>
+              <div className="rounded-2xl bg-black/30 p-4">
+                <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Jednorazowy bonus za podpis</span>
+                <strong className="text-sm text-blue-300 font-black italic uppercase tracking-tighter">
+                  {bonus.toLocaleString('pl-PL')} PLN
+                </strong>
+              </div>
+              <div className="rounded-2xl bg-black/30 p-4">
+                <span className="block text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
+                  {isOfferWithinBudget ? 'Pozostanie w puli' : 'Brakuje do złożenia oferty'}
+                </span>
+                <strong className={`text-sm font-black italic uppercase tracking-tighter ${isOfferWithinBudget ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {(isOfferWithinBudget ? remainingBudget : budgetShortfall).toLocaleString('pl-PL')} PLN
+                </strong>
+              </div>
+            </div>
+
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/40">
+              <div
+                className={`h-full rounded-full transition-[width] duration-300 ${isOfferWithinBudget ? 'bg-emerald-500' : 'bg-red-500'}`}
+                style={{ width: `${budgetUsagePercent}%` }}
+              />
+            </div>
+            <p className="mt-3 text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">
+              Łączny koszt gwarantowany: {salary.toLocaleString('pl-PL')} PLN × {years} {years === 1 ? 'rok' : 'lata'} + {bonus.toLocaleString('pl-PL')} PLN = {totalCostPreview.toLocaleString('pl-PL')} PLN. Bonusy meczowe są warunkowe i nie pomniejszają tej puli z góry.
+            </p>
+          </section>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {!isInterested ? (
             <div className="col-span-2 bg-red-600/10 border-2 border-red-600/30 p-12 rounded-[40px] text-center animate-pulse">
@@ -385,97 +398,75 @@ export const FreeAgentNegotiationView: React.FC = () => {
           ) : (
             <>
               <div className="space-y-8">
-                <div className="space-y-4 rounded-[24px] border border-amber-400/15 bg-amber-500/5 p-4">
-                  <div className="flex justify-between items-center gap-4 px-1">
-                    <div>
-                      <span className="font-black italic uppercase tracking-tighter block text-[10px] text-amber-300">Wspólny pakiet gwarantowany</span>
-                      <span className="font-black italic uppercase tracking-tighter mt-1 block text-[8px] text-slate-500">Pensja × lata + bonus za podpis</span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl border border-amber-400/15 bg-black/40 px-3 py-1">
-                      <input
-                        type="number"
-                        value={totalCostPreview}
-                        onChange={event => handleGuaranteedPackageChange(parseInt(event.target.value, 10) || 0)}
-                        className="font-black italic uppercase tracking-tighter w-32 border-none bg-transparent text-right font-mono text-xl text-amber-300 outline-none"
-                      />
-                      <span className="font-black italic uppercase tracking-tighter text-xs text-slate-500">PLN</span>
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max={Math.max(maxGuaranteedPackage, 0)}
-                    step="1000"
-                    value={totalCostPreview}
-                    onChange={event => handleGuaranteedPackageChange(parseInt(event.target.value, 10))}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-amber-500"
-                  />
-                  <p className="font-black italic uppercase tracking-tighter text-[8px] leading-relaxed text-slate-500">
-                    Zmień wartość pakietu tutaj. Suwaki pensji i bonusu poniżej tylko dzielą tę samą kwotę.
-                  </p>
-                </div>
-
                 <div className="space-y-4">
                   <div className="flex justify-between items-center px-1">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pensja Roczna</span>
-                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+                    <div>
+                      <span className="block text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">Pensja roczna</span>
+                      <span className="mt-1 block text-[8px] text-slate-600 font-black italic uppercase tracking-tighter">Zmiana pensji nie zmienia bonusu za podpis</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSalaryChange(salary - OFFER_MONEY_STEP)}
+                        className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-slate-300 transition-colors hover:bg-white/10 font-black italic uppercase tracking-tighter"
+                      >
+                        − 10 000
+                      </button>
+                      <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
                       <input
                         type="number"
+                        min="0"
+                        step={OFFER_MONEY_STEP}
                         value={salary}
-                        onChange={e => {
-                          const value = parseInt(e.target.value, 10) || 0;
-                          handleSalaryChange(value);
-                        }}
+                        onChange={event => setSalary(Math.max(0, parseInt(event.target.value, 10) || 0))}
                         className="bg-transparent border-none outline-none text-xl font-black text-emerald-400 font-mono italic w-32 text-right"
                       />
-                      <span className="text-xs font-black text-slate-500">PLN</span>
+                        <span className="text-xs text-slate-500 font-black italic uppercase tracking-tighter">PLN</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSalaryChange(salary + OFFER_MONEY_STEP)}
+                        className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-slate-300 transition-colors hover:bg-white/10 font-black italic uppercase tracking-tighter"
+                      >
+                        + 10 000
+                      </button>
                     </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max={Math.max(currentSalaryCap, 0)}
-                    step="5000"
-                    value={salary}
-                    onChange={e => handleSalaryChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                  />
-                  <div className="flex justify-between px-1">
-                    <span className="text-[8px] font-bold text-slate-600 uppercase">Min: 0</span>
-                    <span className="text-[8px] font-bold text-slate-600 uppercase">Limit placowy: {currentSalaryCap.toLocaleString()}</span>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center px-1">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bonus za podpis</span>
-                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+                    <div>
+                      <span className="block text-[10px] text-slate-300 font-black italic uppercase tracking-tighter">Bonus za podpis</span>
+                      <span className="mt-1 block text-[8px] text-slate-600 font-black italic uppercase tracking-tighter">Zmiana bonusu nie zmienia pensji rocznej</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSigningBonusChange(bonus - OFFER_MONEY_STEP)}
+                        className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-slate-300 transition-colors hover:bg-white/10 font-black italic uppercase tracking-tighter"
+                      >
+                        − 10 000
+                      </button>
+                      <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
                       <input
                         type="number"
+                        min="0"
+                        step={OFFER_MONEY_STEP}
                         value={bonus}
-                        onChange={e => {
-                          const value = parseInt(e.target.value, 10) || 0;
-                          handleSigningBonusChange(value);
-                        }}
+                        onChange={event => setBonus(Math.max(0, parseInt(event.target.value, 10) || 0))}
                         className="bg-transparent border-none outline-none text-xl font-black text-blue-400 font-mono italic w-32 text-right"
                       />
-                      <span className="text-xs font-black text-slate-500">PLN</span>
+                        <span className="text-xs text-slate-500 font-black italic uppercase tracking-tighter">PLN</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSigningBonusChange(bonus + OFFER_MONEY_STEP)}
+                        className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-slate-300 transition-colors hover:bg-white/10 font-black italic uppercase tracking-tighter"
+                      >
+                        + 10 000
+                      </button>
                     </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max={maxBonusAllowed}
-                    step="1000"
-                    value={bonus}
-                    onChange={e => handleSigningBonusChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                  <div className="flex justify-between px-1">
-                    <span className="text-[8px] font-bold text-slate-600 uppercase">Brak</span>
-                    <span className="text-[8px] font-bold text-slate-600 uppercase">
-                      Limit (OVR): {maxBonusAllowed.toLocaleString()}
-                    </span>
                   </div>
                 </div>
 
@@ -570,7 +561,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
               <div className="space-y-8 bg-black/20 p-8 rounded-[40px] border border-white/5">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block text-center mb-4">
-                  Dlugosc Kontraktu
+                  Długość kontraktu
                 </span>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map(yearOption => (
@@ -594,7 +585,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-black/30 p-4">
-                    <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Koszt gwarantowany</span>
+                    <span className="font-black italic uppercase tracking-tighter block text-[9px] text-slate-500">Łączny koszt umowy</span>
                     <strong className="font-black italic uppercase tracking-tighter text-sm text-amber-400">{totalCostPreview.toLocaleString('pl-PL')} PLN</strong>
                   </div>
                   <div className="rounded-2xl bg-black/30 p-4">
@@ -609,40 +600,48 @@ export const FreeAgentNegotiationView: React.FC = () => {
           )}
         </div>
 
-        {isInterested && canRequestBoard && (
-          <button
-            onClick={handleBoardRequest}
-            className="w-full py-4 rounded-[20px] font-black italic text-lg uppercase tracking-tighter transition-all border-b-4 bg-amber-600 hover:bg-amber-500 text-white border-amber-800 active:scale-95"
-          >
-            PROŚBA DO ZARZĄDU O DODATKOWY BUDŻET
-            <span className="block text-xs font-bold normal-case tracking-normal mt-1 text-amber-200">
-              Brakuje: {(totalCostPreview - availableBudget).toLocaleString('pl-PL')} PLN | Pozostałe wnioski: {2 - boardRequestsUsed}
-            </span>
-          </button>
-        )}
-
         {isInterested && extraBudget > 0 && (
-          <p className="text-center text-emerald-400 text-[11px] font-black uppercase tracking-widest">
+          <p className="text-center text-emerald-400 text-[11px] font-black italic uppercase tracking-tighter">
             Zarząd przyznał dodatkowe {extraBudget.toLocaleString('pl-PL')} PLN — budżet rozszerzony
           </p>
         )}
 
         <button
-          onClick={handleConfirm}
-          disabled={isSending || !isInterested || isAlreadyNegotiating}
-          className={`w-full py-6 rounded-[30px] font-black italic text-2xl uppercase tracking-tighter transition-all shadow-2xl border-b-8 active:scale-95 ${
-            (!isInterested || isAlreadyNegotiating)
+          onClick={isOfferWithinBudget ? handleConfirm : handleBoardRequest}
+          disabled={isSending || !isInterested || isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard)}
+          className={`w-full py-6 rounded-[30px] font-black italic uppercase tracking-tighter text-2xl transition-all shadow-2xl border-b-8 active:scale-95 ${
+            (!isInterested || isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard))
               ? 'bg-slate-800 border-slate-900 text-slate-500 cursor-not-allowed'
-              : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-800'
+              : !isOfferWithinBudget
+                ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-800'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-800'
           }`}
         >
           {isSending
-            ? 'PRZESYLANIE OFERTY...'
+            ? 'PRZESYŁANIE OFERTY...'
             : isAlreadyNegotiating
               ? 'OFERTA W ANALIZIE...'
               : !isInterested
                 ? 'BRAK ZAINTERESOWANIA'
-                : 'WYSLIJ OFERTE DO AGENTA'}
+                : !isOfferWithinBudget
+                  ? canRequestBoard
+                    ? (
+                      <>
+                        PROŚBA DO ZARZĄDU O DODATKOWY BUDŻET
+                        <span className="mt-1 block text-xs text-amber-200 font-black italic uppercase tracking-tighter">
+                          Brakuje {budgetShortfall.toLocaleString('pl-PL')} PLN • pozostałe wnioski: {2 - boardRequestsUsed}
+                        </span>
+                      </>
+                    )
+                    : (
+                      <>
+                        BUDŻET PRZEKROCZONY
+                        <span className="mt-1 block text-xs text-slate-400 font-black italic uppercase tracking-tighter">
+                          Zmniejsz ofertę o {budgetShortfall.toLocaleString('pl-PL')} PLN
+                        </span>
+                      </>
+                    )
+                  : 'WYŚLIJ OFERTĘ DO AGENTA'}
         </button>
 
         {isAlreadyNegotiating && (

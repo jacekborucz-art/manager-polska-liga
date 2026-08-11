@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../context/GameContext';
-import { ViewState, PreMatchStudioData, Player, Club, PlayerPosition } from '../types';
+import { ViewState, PreMatchStudioData, Player } from '../types';
 import { PreMatchStudioService } from '../services/PreMatchStudioService';
 import { TacticRepository } from '../resources/tactics_db';
 import { PlayerPresentationService } from '../services/PlayerPresentationService';
-import { KitSelectionService } from '../services/KitSelectionService';
+import { KitSelection } from '../services/KitSelectionService';
 import { PolandWeatherService } from '../services/PolandWeatherService';
 import { AttendanceService } from '../services/AttendanceService';
 import { RivalryService } from '../services/RivalryService';
 import { PolishCupVenueService } from '../services/PolishCupVenueService';
+import { PreMatchKitSelectionService } from '../services/PreMatchKitSelectionService';
 
-// Import lokalnych zdjęć piłkarzy
-import { getPlayerCardImage } from '../resources/PlayerCardAssets';
+import { KitVariant } from '../resources/PlayerCardAssets';
 import { getClubLogo } from '../resources/ClubLogoAssets';
+import { KitPreview } from '../components/common/KitPreview';
+import { MatchKitSelectionModal } from '../components/common/MatchKitSelectionModal';
 
 import startMecz from '../Graphic/themes/PucharPolski.png';
 
@@ -26,11 +28,14 @@ export const PreMatchCupStudioView: React.FC = () => {
     lineups, 
     currentDate, 
     viewRefereeDetails,
-    nextEvent 
+    nextEvent,
+    setPendingMatchKits
   } = useGame();
 
   const [data, setData] = useState<PreMatchStudioData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showKitModal, setShowKitModal] = useState(false);
+  const [matchKits, setMatchKits] = useState<KitSelection | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -58,6 +63,7 @@ export const PreMatchCupStudioView: React.FC = () => {
       
       const seasonalWeather = PolandWeatherService.getWeather(currentDate, fixture.id);
       setData({ ...studioData, weather: seasonalWeather });
+      setMatchKits(PreMatchKitSelectionService.selectInitialKits(home, away));
       setLoading(false);
     };
 
@@ -77,11 +83,6 @@ export const PreMatchCupStudioView: React.FC = () => {
     if (label.includes("FINAŁ")) return "FINAŁ PUCHARU POLSKI";
     return label.toUpperCase();
   }, [nextEvent]);
-
-  const matchKits = useMemo(() => {
-    if (!data) return null;
-    return KitSelectionService.selectOptimalKits(data.homeClub, data.awayClub);
-  }, [data]);
 
   const squadDetails = useMemo(() => {
     if (!data) return null;
@@ -210,8 +211,23 @@ export const PreMatchCupStudioView: React.FC = () => {
   }
 
   const formatPlayerName = (p: Player) => `${p.firstName.charAt(0)}. ${p.lastName}`;
+  const isUserHome = data.homeClub.id === userTeamId;
+  const userClub = isUserHome ? data.homeClub : data.awayClub;
 
-  const getJerseyUrl = (clubId: string, hex: string) => getPlayerCardImage(clubId, hex);
+  /**
+   * Cup matches now use the same user-choice flow as league matches. Selecting a
+   * shirt also recalculates the opponent's most contrasting active variant, then
+   * the complete pairing is retained until the live cup engine starts.
+   */
+  const handleKitSelect = (selectedVariant: KitVariant) => {
+    setMatchKits(PreMatchKitSelectionService.selectForUserVariant(
+      data.homeClub,
+      data.awayClub,
+      userClub.id,
+      selectedVariant
+    ));
+    setShowKitModal(false);
+  };
 
   return (
     <div className="h-screen w-full text-slate-100 flex flex-col p-6 animate-fade-in overflow-hidden relative selection:bg-rose-500">
@@ -292,9 +308,40 @@ export const PreMatchCupStudioView: React.FC = () => {
 
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
            <div className="flex items-center justify-center gap-12 w-full max-w-3xl animate-slide-up">
-                      <div className="relative group">
-                 <div className="absolute inset-0 bg-rose-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                 <img src={getJerseyUrl(data.homeClub.id, matchKits.home.primary)} alt="Home" className="w-44 h-64 object-cover rounded-3xl border-2 border-white/10 shadow-2xl relative z-10 transform -rotate-2" />
+              <div className="flex min-w-44 flex-col items-center gap-3">
+                 <div className="relative group">
+                    <div className="absolute -inset-4 bg-rose-600/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    <div
+                       className="relative flex h-64 w-44 items-center justify-center overflow-hidden rounded-3xl border-2 border-white/20 bg-black/30 shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
+                       style={{ boxShadow: `0 0 45px ${matchKits.home.primary}44` }}
+                    >
+                       {getClubLogo(data.homeClub.id) && (
+                         <img
+                           src={getClubLogo(data.homeClub.id)}
+                           alt=""
+                           className="absolute h-[145%] w-[145%] max-w-none -rotate-12 object-contain opacity-20"
+                         />
+                       )}
+                       <KitPreview
+                         shirt={matchKits.home.primary}
+                         shirtSecondary={matchKits.home.shirtSecondary}
+                         shorts={matchKits.home.secondary}
+                         socks={matchKits.home.secondary}
+                         pattern={matchKits.home.pattern}
+                         className="relative z-10 h-40 w-40"
+                       />
+                    </div>
+                 </div>
+                 <div className="h-9">
+                    {isUserHome && (
+                      <button
+                        onClick={() => setShowKitModal(true)}
+                        className="rounded-2xl border border-yellow-400/30 bg-yellow-500/20 px-5 py-2 text-[10px] text-yellow-300 transition-all hover:bg-yellow-500/35 hover:text-yellow-100 active:translate-y-[2px] font-black italic uppercase tracking-tighter"
+                      >
+                        👕 Zmień koszulkę
+                      </button>
+                    )}
+                 </div>
               </div>
               <div className="flex-1 space-y-6">
                  {[
@@ -316,9 +363,40 @@ export const PreMatchCupStudioView: React.FC = () => {
                     </div>
                  ))}
               </div>
-                         <div className="relative group">
-                 <div className="absolute inset-0 bg-blue-600/20 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                 <img src={getJerseyUrl(data.awayClub.id, matchKits.away.primary)} alt="Away" className="w-44 h-64 object-cover rounded-3xl border-2 border-white/10 shadow-2xl relative z-10 transform rotate-2" />
+              <div className="flex min-w-44 flex-col items-center gap-3">
+                 <div className="relative group">
+                    <div className="absolute -inset-4 bg-blue-600/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    <div
+                       className="relative flex h-64 w-44 items-center justify-center overflow-hidden rounded-3xl border-2 border-white/20 bg-black/30 shadow-2xl transition-transform duration-500 group-hover:scale-[1.02]"
+                       style={{ boxShadow: `0 0 45px ${matchKits.away.primary}44` }}
+                    >
+                       {getClubLogo(data.awayClub.id) && (
+                         <img
+                           src={getClubLogo(data.awayClub.id)}
+                           alt=""
+                           className="absolute h-[145%] w-[145%] max-w-none rotate-12 object-contain opacity-20"
+                         />
+                       )}
+                       <KitPreview
+                         shirt={matchKits.away.primary}
+                         shirtSecondary={matchKits.away.shirtSecondary}
+                         shorts={matchKits.away.secondary}
+                         socks={matchKits.away.secondary}
+                         pattern={matchKits.away.pattern}
+                         className="relative z-10 h-40 w-40"
+                       />
+                    </div>
+                 </div>
+                 <div className="h-9">
+                    {!isUserHome && (
+                      <button
+                        onClick={() => setShowKitModal(true)}
+                        className="rounded-2xl border border-yellow-400/30 bg-yellow-500/20 px-5 py-2 text-[10px] text-yellow-300 transition-all hover:bg-yellow-500/35 hover:text-yellow-100 active:translate-y-[2px] font-black italic uppercase tracking-tighter"
+                      >
+                        👕 Zmień koszulkę
+                      </button>
+                    )}
+                 </div>
               </div>
            </div>
 
@@ -335,7 +413,11 @@ export const PreMatchCupStudioView: React.FC = () => {
            <div className="flex items-stretch justify-center gap-4">
               <button onClick={() => navigateTo(ViewState.SQUAD_VIEW)} className="px-12 py-5 rounded-[30px] bg-emerald-600/30 border-b-8 border-emerald-900 text-emerald-400 font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl">✏️ ZMIEŃ SKŁAD</button>
               <button
-                 onClick={() => { if (lineupValidation.isValid) navigateTo(ViewState.MATCH_LIVE_CUP); }}
+                 onClick={() => {
+                   if (!lineupValidation.isValid) return;
+                   setPendingMatchKits(matchKits);
+                   navigateTo(ViewState.MATCH_LIVE_CUP);
+                 }}
                  disabled={!lineupValidation.isValid}
                  className={`group relative px-20 py-5 rounded-[30px] font-black italic text-xl uppercase tracking-tighter transition-all border-b-8 ${lineupValidation.isValid ? 'bg-rose-600 hover:bg-rose-500 text-white hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(225,29,72,0.3)] border-rose-800' : 'bg-slate-700/50 text-slate-500 border-slate-800 cursor-not-allowed opacity-60'}`}
               >ROZPOCZNIJ MECZ 🏆</button>
@@ -420,7 +502,16 @@ export const PreMatchCupStudioView: React.FC = () => {
              </div>
            </div>
         </div>
-      </div>
+       </div>
+
+      {showKitModal && (
+        <MatchKitSelectionModal
+          club={userClub}
+          selectedKit={isUserHome ? matchKits.home : matchKits.away}
+          onClose={() => setShowKitModal(false)}
+          onSelect={handleKitSelect}
+        />
+      )}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

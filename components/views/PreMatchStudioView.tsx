@@ -8,11 +8,12 @@ import { KitSelectionService, KitSelection } from '../../services/KitSelectionSe
 import { LineupService } from '../../services/LineupService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
+import { PreMatchKitSelectionService } from '../../services/PreMatchKitSelectionService';
 
-// Import lokalnych zdjęć piłkarzy
-import { getClubKitVariantsForClub, KitVariant } from '../../resources/PlayerCardAssets';
+import { KitVariant } from '../../resources/PlayerCardAssets';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { KitPreview } from '../common/KitPreview';
+import { MatchKitSelectionModal } from '../common/MatchKitSelectionModal';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
 
 // Import lokalnego tła
@@ -111,52 +112,6 @@ const PitchPlayerKit: React.FC<{
   );
 };
 
-function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
-  let minDist = KitSelectionService.getColorDistance(kA.hex, kB.hex);
-  if (kA.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.shirtSecondaryHex, kB.hex));
-  if (kB.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.shirtSecondaryHex));
-  if (kA.shirtSecondaryHex && kB.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.shirtSecondaryHex, kB.shirtSecondaryHex));
-  if (kA.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.hex));
-  if (kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.secondaryHex));
-  if (kA.secondaryHex && kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.secondaryHex));
-  return minDist;
-}
-
-function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
-  const homeVariants = getClubKitVariantsForClub(homeClub);
-  const awayVariants = getClubKitVariantsForClub(awayClub);
-  const hKit = homeVariants[0];
-  let bestAwayIdx = 0;
-  let maxDistance = -1;
-
-  for (let a = 0; a < awayVariants.length; a++) {
-    const distance = kitEffectiveDistance(hKit, awayVariants[a]);
-    if (distance > maxDistance) {
-      maxDistance = distance;
-      bestAwayIdx = a;
-    }
-  }
-
-  const aKit = awayVariants[bestAwayIdx];
-
-  return {
-    home: {
-      primary: hKit.hex,
-      shirtSecondary: hKit.shirtSecondaryHex,
-      secondary: hKit.secondaryHex ?? hKit.hex,
-      pattern: hKit.pattern,
-      text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
-    },
-    away: {
-      primary: aKit.hex,
-      shirtSecondary: aKit.shirtSecondaryHex,
-      secondary: aKit.secondaryHex ?? aKit.hex,
-      pattern: aKit.pattern,
-      text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
-    }
-  };
-}
-
 export const PreMatchStudioView: React.FC = () => {
   const { navigateTo, userTeamId, clubs, fixtures, players, lineups, currentDate, viewRefereeDetails, setPendingMatchKits } = useGame();
   const [data, setData] = useState<PreMatchStudioData | null>(null);
@@ -193,7 +148,7 @@ export const PreMatchStudioView: React.FC = () => {
         fixture, home, away, hLineup, aLineup, hPlayers, aPlayers, clubs
       );
       setData(studioData);
-      setMatchKits(selectKitsFromVariants(home, away));
+      setMatchKits(PreMatchKitSelectionService.selectInitialKits(home, away));
       setLoading(false);
     };
 
@@ -229,40 +184,14 @@ export const PreMatchStudioView: React.FC = () => {
 
   const isUserHome = data.homeClub.id === userTeamId;
   const userClub = isUserHome ? data.homeClub : data.awayClub;
-  const opponentClub = isUserHome ? data.awayClub : data.homeClub;
 
   const handleKitSelect = (selectedVariant: KitVariant) => {
-    if (!matchKits) return;
-    const userVariants = getClubKitVariantsForClub(userClub);
-    const selectedIdx = userVariants.findIndex(v => (v.id ?? v.hex) === (selectedVariant.id ?? selectedVariant.hex));
-    const nextUserVariant = userVariants[(selectedIdx + 1) % userVariants.length];
-    const opponentVariants = getClubKitVariantsForClub(opponentClub);
-    let bestOppIdx = 0, maxDist = -1;
-    for (let i = 0; i < opponentVariants.length; i++) {
-      const dist = kitEffectiveDistance(selectedVariant, opponentVariants[i]);
-      if (dist > maxDist) { maxDist = dist; bestOppIdx = i; }
-    }
-    const bestOppVariant = opponentVariants[bestOppIdx];
-    const nextOppVariant = opponentVariants[(bestOppIdx + 1) % opponentVariants.length];
-    const opponentKit = {
-      primary: bestOppVariant.hex,
-      shirtSecondary: bestOppVariant.shirtSecondaryHex,
-      secondary: bestOppVariant.secondaryHex ?? nextOppVariant.hex,
-      pattern: bestOppVariant.pattern,
-      text: KitSelectionService.isColorLight(bestOppVariant.hex) ? '#000000' : '#ffffff'
-    };
-    const playerKit = {
-      primary: selectedVariant.hex,
-      shirtSecondary: selectedVariant.shirtSecondaryHex,
-      secondary: selectedVariant.secondaryHex ?? nextUserVariant.hex,
-      pattern: selectedVariant.pattern,
-      text: KitSelectionService.isColorLight(selectedVariant.hex) ? '#000000' : '#ffffff'
-    };
-    if (isUserHome) {
-      setMatchKits({ home: playerKit, away: opponentKit });
-    } else {
-      setMatchKits({ home: opponentKit, away: playerKit });
-    }
+    setMatchKits(PreMatchKitSelectionService.selectForUserVariant(
+      data.homeClub,
+      data.awayClub,
+      userClub.id,
+      selectedVariant
+    ));
     setShowKitModal(false);
   };
 
@@ -672,58 +601,13 @@ export const PreMatchStudioView: React.FC = () => {
          </div>
       </div>
 
-      {/* KIT SELECTION MODAL */}
       {showKitModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-[1px] p-6 animate-fade-in" onClick={() => setShowKitModal(false)}>
-          <div className="max-w-6xl w-full bg-slate-900/30 border border-white/10 rounded-[50px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative" onClick={e => e.stopPropagation()}>
-            <div className="p-12 border-b border-white/5 bg-white/5 flex justify-between items-center">
-              <div>
-                <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter">Wybierz Koszulkę</h2>
-                <p className="text-[12px] font-black text-blue-500 uppercase tracking-[0.4em] mt-1">{userClub.name}</p>
-              </div>
-              <button onClick={() => setShowKitModal(false)} className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center hover:bg-red-500/20 hover:text-red-500 transition-all text-3xl font-light">&times;</button>
-            </div>
-            <div className="p-12">
-              <div className="grid grid-cols-4 gap-8">
-                {getClubKitVariantsForClub(userClub).map((variant, idx) => {
-                  const isSelected = matchKits
-                    ? (isUserHome ? matchKits.home.primary : matchKits.away.primary) === variant.hex
-                      && (isUserHome ? matchKits.home.pattern : matchKits.away.pattern) === variant.pattern
-                    : idx === 0;
-                  return (
-                    <button
-                      key={variant.id ?? `${variant.hex}-${variant.pattern ?? 'solid'}`}
-                      onClick={() => handleKitSelect(variant)}
-                      className={`flex flex-col items-center gap-5 p-8 rounded-3xl border-2 transition-all hover:scale-105 active:scale-95 ${
-                        isSelected
-                          ? 'border-white/60 bg-white/10 shadow-[0_0_40px_rgba(255,255,255,0.15)]'
-                          : 'border-white/10 bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.07]'
-                      }`}
-                    >
-                      <div className="flex h-64 w-44 items-center justify-center rounded-2xl bg-black/30">
-                        <KitPreview
-                          shirt={variant.hex}
-                          shirtSecondary={variant.shirtSecondaryHex}
-                          shorts={variant.secondaryHex ?? variant.hex}
-                          socks={variant.socksHex ?? variant.secondaryHex ?? variant.hex}
-                          pattern={variant.pattern}
-                          className="h-44 w-44"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full border border-white/20" style={{ backgroundColor: variant.hex }} />
-                        {isSelected && <span className="text-[11px] font-black text-white uppercase tracking-widest">✓</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="p-10 bg-black/30 border-t border-white/5 text-center">
-              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Koszulka przeciwnika zostanie dobrana automatycznie</p>
-            </div>
-          </div>
-        </div>
+        <MatchKitSelectionModal
+          club={userClub}
+          selectedKit={isUserHome ? matchKits.home : matchKits.away}
+          onClose={() => setShowKitModal(false)}
+          onSelect={handleKitSelect}
+        />
       )}
 
       {/* EXPERT COMMENTARY MODAL */}
