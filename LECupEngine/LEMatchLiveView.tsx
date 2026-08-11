@@ -1,4 +1,4 @@
-﻿// ⚠️ BACKUP — TEN PLIK NIE JEST UŻYWANY W GRZE (nie importowany w App.tsx)
+// ⚠️ BACKUP — TEN PLIK NIE JEST UŻYWANY W GRZE (nie importowany w App.tsx)
 // Jest to stara kopia silnika Champions League (CLEngine/CLMatchLiveView.tsx).
 // Aktywny silnik CL znajduje się w: CLEngine/CLMatchLiveView.tsx
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -69,6 +69,8 @@ import { TalkEffect, calculateOpponentCoachTalkEffect, getScoreContext } from '.
 import { PostMatchDebriefModal } from '../components/modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, DebriefMatchStage, getDebriefContext } from '../services/PostMatchDebriefService';
 import { PlayerPositionFitService } from '../services/PlayerPositionFitService';
+import { observeCommittedLiveGoal } from '../services/match/live/LiveMatchGoalCommit';
+import type { LiveGoalObservation } from '../services/match/live/LiveMatchGoalCommit';
 
 const CL_LEAGUE_IDS: CompetitionType[] = [
   CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
@@ -194,11 +196,8 @@ export const CLMatchLiveView = () => {
     phase: 'CHECKING' | 'VERDICT',
     verdict?: 'GOAL' | 'NO_GOAL'
   } | null>(null);
-  // VAR needs the exact scorer id and team label, not only the display surname.
-  // European matches can contain duplicate surnames and repeated goals in the same minute-like
-  // flow, so carrying this stable context prevents the review from losing who scored and which
-  // side the decision belongs to.
-  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
+  const goalObservationRef = useRef<LiveGoalObservation | null>(null);
+  const pendingVarGoalRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -255,6 +254,44 @@ export const CLMatchLiveView = () => {
     if (!ctx || !userTeamId) return 'HOME';
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
+
+  useEffect(() => {
+    if (!matchState || !ctx) {
+      goalObservationRef.current = null;
+      pendingVarGoalRef.current = null;
+      setIsCelebratingGoal(false);
+      return;
+    }
+
+    const result = observeCommittedLiveGoal(goalObservationRef.current, matchState);
+    goalObservationRef.current = result.observation;
+    if (!result.committedGoal) return;
+
+    const { side, goal } = result.committedGoal;
+    pendingVarGoalRef.current = goal.isPenalty
+      ? null
+      : {
+          side,
+          scorerName: goal.playerName,
+          scorerId: goal.scorerId ?? goal.ownGoalPlayerId,
+          teamName: side === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName,
+          minute: goal.minute,
+        };
+    setIsCelebratingGoal(true);
+  }, [matchState?.sessionSeed, matchState?.homeScore, matchState?.awayScore, matchState?.homeGoals, matchState?.awayGoals, ctx]);
+
+  useEffect(() => {
+    if (!isCelebratingGoal) return;
+    const timer = window.setTimeout(() => {
+      setIsCelebratingGoal(false);
+      const pendingVAR = pendingVarGoalRef.current;
+      if (pendingVAR && Math.random() < 0.2) {
+        setActiveVAR({ ...pendingVAR, phase: 'CHECKING' });
+      }
+      pendingVarGoalRef.current = null;
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [isCelebratingGoal]);
 
   const firstLegInfo = useMemo(() => {
     if (!ctx) return null;
@@ -484,10 +521,6 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           };
         });
 
-        if (isGoal) {
-          setIsCelebratingGoal(true);
-          setTimeout(() => setIsCelebratingGoal(false), 3000);
-        }
       }, 2500);
       return () => clearTimeout(t);
     }
@@ -1430,13 +1463,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (activeSide === 'HOME') nextLiveStats.home.offsides++;
             else nextLiveStats.away.offsides++;
           }
-          immediateEventType = type;
-          const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-          const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
-          const flavorActiveIds = flavorLineup.filter(id => id !== null);
-          const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, rngMinute, 777) * flavorActiveIds.length)];
-          const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
-          newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
+          if (!goalTriggered) {
+            immediateEventType = type;
+            const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+            const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+            const flavorActiveIds = flavorLineup.filter(id => id !== null);
+            const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, rngMinute, 777) * flavorActiveIds.length)];
+            const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
+            newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
+          }
         }
 
         const accidentalInjuryRoll = seededRng(currentSeed, rngMinute, 4500);
@@ -1490,24 +1525,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         nextHomeLineup.startingXI = autoRemoveInjured(nextHomeLineup.startingXI, nextHomeInjuries, 'HOME');
         nextAwayLineup.startingXI = autoRemoveInjured(nextAwayLineup.startingXI, nextAwayInjuries, 'AWAY');
         updatedLogs = [...carriedOffLogs, ...updatedLogs];
-
-        if (goalTriggered) {
-          const lastGoal = activeSide === 'HOME' ? newHomeGoals[newHomeGoals.length - 1] : newAwayGoals[newAwayGoals.length - 1];
-          const canTriggerVAR = !lastGoal?.isPenalty;
-          if (canTriggerVAR) {
-            const scoringTeamName = activeSide === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName;
-            varDataRef.current = { side: activeSide, scorerName: lastGoal?.playerName || '', scorerId: lastGoal?.scorerId, teamName: scoringTeamName, minute: nextMinute };
-          }
-          setIsCelebratingGoal(true);
-          setTimeout(() => {
-            setIsCelebratingGoal(false);
-            const vd = varDataRef.current;
-            if (vd && Math.random() < 0.2) {
-              setActiveVAR({ ...vd, phase: 'CHECKING' });
-            }
-            varDataRef.current = null;
-          }, 3500);
-        }
 
         // weather passed so precipitation/wind/heat affect per-minute momentum drift
         const momentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue, env?.weather);

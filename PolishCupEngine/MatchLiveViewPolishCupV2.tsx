@@ -795,6 +795,8 @@ import {
   resolveLiveMissedShotOutcome,
   shouldAttemptLiveOpenPlayShot,
 } from '../services/match/live/LiveMatchOutcome';
+import { observeCommittedLiveGoal } from '../services/match/live/LiveMatchGoalCommit';
+import type { LiveGoalObservation } from '../services/match/live/LiveMatchGoalCommit';
 import {
   calculateLiveFoulThreshold,
   calculateLivePenaltyIncidentChance,
@@ -1476,14 +1478,8 @@ export const MatchLiveViewPolishCupV2 = () => {
     playerName: string,
     minute: number
   } | null>(null);
-  /*
-   * The VAR prompt is triggered after the goal celebration timeout, so we keep a
-   * snapshot of the exact goal that may be reviewed. This avoids looking up "latest
-   * goal" later, when another state update could have changed arrays or when a
-   * surname-only lookup could become ambiguous. The snapshot mirrors activeVAR so
-   * the delayed check can restore the same scorer/team/minute context.
-   */
-  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
+  const goalObservationRef = useRef<LiveGoalObservation | null>(null);
+  const pendingVarGoalRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
   const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
   // PRZENIESIONE Z PUCHARU: isFinishing chroni przed podwójnym zakończeniem meczu (np. przy karnych/dogrywce,
@@ -1581,6 +1577,44 @@ export const MatchLiveViewPolishCupV2 = () => {
     if (!ctx || !userTeamId) return 'HOME';
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
+
+  useEffect(() => {
+    if (!matchState || !ctx) {
+      goalObservationRef.current = null;
+      pendingVarGoalRef.current = null;
+      setIsCelebratingGoal(false);
+      return;
+    }
+
+    const result = observeCommittedLiveGoal(goalObservationRef.current, matchState);
+    goalObservationRef.current = result.observation;
+    if (!result.committedGoal) return;
+
+    const { side, goal } = result.committedGoal;
+    pendingVarGoalRef.current = goal.isPenalty
+      ? null
+      : {
+          side,
+          scorerName: goal.playerName,
+          scorerId: goal.scorerId ?? goal.ownGoalPlayerId,
+          teamName: side === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName,
+          minute: goal.minute,
+        };
+    setIsCelebratingGoal(true);
+  }, [matchState?.sessionSeed, matchState?.homeScore, matchState?.awayScore, matchState?.homeGoals, matchState?.awayGoals, ctx]);
+
+  useEffect(() => {
+    if (!isCelebratingGoal) return;
+    const timer = window.setTimeout(() => {
+      setIsCelebratingGoal(false);
+      const pendingVAR = pendingVarGoalRef.current;
+      if (pendingVAR && Math.random() < 0.2) {
+        setActiveVAR({ ...pendingVAR, phase: 'CHECKING' });
+      }
+      pendingVarGoalRef.current = null;
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [isCelebratingGoal]);
 
   // PRZENIESIONE Z PUCHARU: raport zwiadowczy AI — generowany raz przed meczem na podstawie jakości całego sztabu AI.
   // Wpływa na decyzje taktyczne AI w pierwszych ~25 minutach meczu (AiMatchDecisionCupService).
@@ -2204,10 +2238,6 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           };
         });
 
-        if (isGoal) {
-          setIsCelebratingGoal(true);
-          setTimeout(() => setIsCelebratingGoal(false), 3000);
-        }
       }, 2500);
       return () => clearTimeout(t);
     }
@@ -5285,13 +5315,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (activeSide === 'HOME') nextLiveStats.home.offsides++;
             else nextLiveStats.away.offsides++;
           }
-          immediateEventType = type;
-          const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-          const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
-          const flavorActiveIds = flavorLineup.filter(id => id !== null);
-          const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, rngMinute, 777) * flavorActiveIds.length)];
-          const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
-          newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
+          if (!goalTriggered) {
+            immediateEventType = type;
+            const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+            const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+            const flavorActiveIds = flavorLineup.filter(id => id !== null);
+            const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, rngMinute, 777) * flavorActiveIds.length)];
+            const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
+            newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
+          }
         }
 
         const accidentalInjurySides: Array<{
@@ -5404,37 +5436,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         nextHomeLineup.startingXI = autoRemoveInjured(nextHomeLineup.startingXI, nextHomeInjuries, 'HOME');
         nextAwayLineup.startingXI = autoRemoveInjured(nextAwayLineup.startingXI, nextAwayInjuries, 'AWAY');
         updatedLogs = [...carriedOffLogs, ...updatedLogs];
-
-        if (goalTriggered) {
-          const lastGoal = activeSide === 'HOME' ? newHomeGoals[newHomeGoals.length - 1] : newAwayGoals[newAwayGoals.length - 1];
-          const canTriggerVAR = !lastGoal?.isPenalty;
-          if (canTriggerVAR) {
-            /*
-             * Capture the reviewed goal immediately after it is scored. This is the
-             * authoritative context shown during VAR: which side scored, which player
-             * scored, and which team name should be displayed. Without this snapshot,
-             * the delayed VAR modal can only say "VAR" generically, which was the
-             * regression seen after the earlier scoreboard safety fix.
-             */
-            const scoringTeam = activeSide === 'HOME' ? ctx.homeClub.shortName : ctx.awayClub.shortName;
-            varDataRef.current = {
-              side: activeSide,
-              scorerName: lastGoal?.playerName || 'strzelec',
-              scorerId: lastGoal?.scorerId ?? lastGoal?.ownGoalPlayerId,
-              teamName: scoringTeam,
-              minute: nextMinute
-            };
-          }
-          setIsCelebratingGoal(true);
-          setTimeout(() => {
-            setIsCelebratingGoal(false);
-            const vd = varDataRef.current;
-            if (vd && Math.random() < 0.2) {
-              setActiveVAR({ ...vd, phase: 'CHECKING' });
-            }
-            varDataRef.current = null;
-          }, 3500);
-        }
 
         const briefingMomentumImpulse =
           nextMinute === 1

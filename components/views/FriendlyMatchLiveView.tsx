@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useGame } from '../../context/GameContext';
 import { 
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType, 
@@ -75,6 +75,8 @@ import { BroadcastMomentumBar, MatchLiveBroadcastStyles, PitchBroadcastOverlay }
 import { TeamFormImpactService } from '../../services/TeamFormImpactService';
 import { LiveCoachCommandRuntimeService } from '../../services/LiveCoachCommandRuntimeService';
 import { LiveCoachCommandsOverlay } from '../match/LiveCoachCommandsOverlay';
+import { observeCommittedLiveGoal } from '../../services/match/live/LiveMatchGoalCommit';
+import type { LiveGoalObservation } from '../../services/match/live/LiveMatchGoalCommit';
 
 const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -195,7 +197,7 @@ export const FriendlyMatchLiveView = () => {
     phase: 'CHECKING' | 'VERDICT',
     verdict?: 'GOAL' | 'NO_GOAL'
   } | null>(null);
-  const varDataRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, minute: number } | null>(null);
+  const goalObservationRef = useRef<LiveGoalObservation | null>(null);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -247,6 +249,24 @@ export const FriendlyMatchLiveView = () => {
     if (!ctx || !userTeamId) return 'HOME';
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
+
+  useEffect(() => {
+    if (!matchState || !ctx) {
+      goalObservationRef.current = null;
+      setIsCelebratingGoal(false);
+      return;
+    }
+
+    const result = observeCommittedLiveGoal(goalObservationRef.current, matchState);
+    goalObservationRef.current = result.observation;
+    if (result.committedGoal) setIsCelebratingGoal(true);
+  }, [matchState?.sessionSeed, matchState?.homeScore, matchState?.awayScore, matchState?.homeGoals, matchState?.awayGoals, ctx]);
+
+  useEffect(() => {
+    if (!isCelebratingGoal) return;
+    const timer = window.setTimeout(() => setIsCelebratingGoal(false), 3500);
+    return () => window.clearTimeout(timer);
+  }, [isCelebratingGoal]);
 
   // Sparingi nie mają dwumeczu — firstLegInfo zawsze null
   const firstLegInfo = null;
@@ -538,10 +558,6 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
           };
         });
 
-        if (isGoal) {
-          setIsCelebratingGoal(true);
-          setTimeout(() => setIsCelebratingGoal(false), 3000);
-        }
       }, 2500);
       return () => clearTimeout(t);
     }
@@ -1916,13 +1932,15 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
             if (activeSide === 'HOME') nextLiveStats.home.offsides++;
             else nextLiveStats.away.offsides++;
           }
-          immediateEventType = type;
-          const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
-          const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
-          const flavorActiveIds = flavorLineup.filter(id => id !== null);
-          const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 777) * flavorActiveIds.length)];
-          const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
-          newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
+          if (!goalTriggered) {
+            immediateEventType = type;
+            const flavorTeam = activeSide === 'HOME' ? ctx.homePlayers : ctx.awayPlayers;
+            const flavorLineup = activeSide === 'HOME' ? nextHomeLineup.startingXI : nextAwayLineup.startingXI;
+            const flavorActiveIds = flavorLineup.filter(id => id !== null);
+            const flavorPlayerId = flavorActiveIds[Math.floor(seededRng(currentSeed, nextMinute, 777) * flavorActiveIds.length)];
+            const flavorPlayer = flavorTeam.find(p => p.id === flavorPlayerId);
+            newLog = { id: `FLAVOR_${nextMinute}`, minute: nextMinute, text: getCommentary(type, flavorPlayer?.lastName || ''), type: type, teamSide: activeSide };
+          }
         }
 
         const accidentalInjuryRoll = seededRng(currentSeed, nextMinute, 4500);
@@ -1974,18 +1992,6 @@ const applyHalftimeRegen = (fatigueMap: Record<string, number>, playersList: Pla
         nextHomeLineup.startingXI = autoRemoveInjured(nextHomeLineup.startingXI, nextHomeInjuries, 'HOME');
         nextAwayLineup.startingXI = autoRemoveInjured(nextAwayLineup.startingXI, nextAwayInjuries, 'AWAY');
         updatedLogs = [...carriedOffLogs, ...updatedLogs];
-
-        if (goalTriggered) {
-          const lastGoal = activeSide === 'HOME' ? newHomeGoals[newHomeGoals.length - 1] : newAwayGoals[newAwayGoals.length - 1];
-          const canTriggerVAR = !lastGoal?.isPenalty;
-          if (canTriggerVAR) {
-            varDataRef.current = { side: activeSide, scorerName: lastGoal?.playerName || '', minute: nextMinute };
-          }
-          setIsCelebratingGoal(true);
-          setTimeout(() => {
-            setIsCelebratingGoal(false);
-          }, 3500);
-        }
 
         // weather passed so precipitation/wind/heat affect per-minute momentum drift
         const rawMomentumUpdate = MomentumService.computeMomentum(ctx, { ...prev, minute: nextMinute, momentum: prev.momentum, homeLineup: nextHomeLineup, awayLineup: nextAwayLineup }, immediateEventType, activeSide, localHomeFatigue, localAwayFatigue, env?.weather);
