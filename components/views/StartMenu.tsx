@@ -7,6 +7,7 @@ import { importSaveFromFile } from '../../services/SaveGameService';
 import { useGameScaler } from '../GameScaler';
 import { SoccerBall } from '../ui/SoccerBall';
 import { useProcessing } from '../ui/ProcessingOverlay';
+import { AcknowledgementsModal } from '../modals/AcknowledgementsModal';
 
 const EDITOR_DATAPACK_IMPORTED_STORAGE_KEY = 'polish_league_editor_datapack_imported';
 
@@ -89,6 +90,7 @@ export const StartMenu: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [showResolutionNotice, setShowResolutionNotice] = useState(false);
+  const [showAcknowledgements, setShowAcknowledgements] = useState(false);
   const [isLoadingSave, setIsLoadingSave] = useState(false);
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -211,6 +213,17 @@ export const StartMenu: React.FC = () => {
 
   const handleNewGameClick = () => {
     startNewGame(2025);
+  };
+
+  /*
+   * Startup modal sequence:
+   * legal disclaimer -> screen requirements -> acknowledgements -> interactive menu.
+   * AcknowledgementsModal owns its exit timer, so StartMenu removes it only after
+   * the fade-out animation has completed.
+   */
+  const continueFromResolutionNotice = () => {
+    setShowResolutionNotice(false);
+    setShowAcknowledgements(true);
   };
 
   const menuItems = [
@@ -359,7 +372,7 @@ export const StartMenu: React.FC = () => {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="relative max-w-3xl w-full mx-6 bg-slate-900/40 border border-white/10 rounded-[24px] p-12">
             <button
-              onClick={() => setShowResolutionNotice(false)}
+              onClick={continueFromResolutionNotice}
               className="absolute top-4 right-4 text-4xl text-white/40 hover:text-white transition-colors leading-none"
             >
               ✕
@@ -377,6 +390,10 @@ export const StartMenu: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showAcknowledgements && (
+        <AcknowledgementsModal onClose={() => setShowAcknowledgements(false)} />
       )}
 
       {/* 1. CINEMATIC BACKGROUND LAYER */}
