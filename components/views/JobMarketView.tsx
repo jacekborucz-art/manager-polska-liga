@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useGame } from '../../context/GameContext';
 import {
   ViewState, PlayerPosition, Player,
@@ -53,6 +53,162 @@ const _persisted = {
   scrollTopTransfer: 0 as number,
 };
 
+type LoanMarketFiltersProps = {
+  initialFilters: typeof initialLoanFilters;
+  positionFilter: LoanPositionFilter;
+  onApplyFilters: (filters: typeof initialLoanFilters) => void;
+  onPositionFilterChange: (position: LoanPositionFilter) => void;
+};
+
+const LoanMarketFilters = React.memo<LoanMarketFiltersProps>(({
+  initialFilters,
+  positionFilter,
+  onApplyFilters,
+  onPositionFilterChange,
+}) => {
+  const [draftFilters, setDraftFilters] = useState<typeof initialLoanFilters>(() => ({
+    age: { ...initialFilters.age },
+    overall: { ...initialFilters.overall },
+  }));
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+
+    const filterDelay = window.setTimeout(() => onApplyFilters(draftFilters), 2000);
+    return () => window.clearTimeout(filterDelay);
+  }, [draftFilters, onApplyFilters]);
+
+  const updateFilter = (
+    key: keyof typeof draftFilters,
+    field: 'min' | 'max',
+    getValue: (currentValue: number) => number
+  ) => {
+    const limitMin = key === 'age' ? 16 : 1;
+    const limitMax = key === 'age' ? 43 : 99;
+    const fallback = field === 'min' ? limitMin : limitMax;
+
+    setDraftFilters(prev => {
+      const value = getValue(prev[key][field]);
+      const nextValue = Math.max(limitMin, Math.min(limitMax, Number.isNaN(value) ? fallback : value));
+      const next = { ...prev, [key]: { ...prev[key], [field]: nextValue } };
+      if (field === 'min' && next[key].min > next[key].max) next[key].max = next[key].min;
+      if (field === 'max' && next[key].max < next[key].min) next[key].min = next[key].max;
+      return next;
+    });
+  };
+
+  const handleWheel = (
+    key: keyof typeof draftFilters,
+    field: 'min' | 'max',
+    event: React.WheelEvent<HTMLInputElement>
+  ) => {
+    event.preventDefault();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    updateFilter(key, field, currentValue => currentValue + direction);
+  };
+
+  const resetFilters = () => {
+    setDraftFilters({
+      age: { ...initialLoanFilters.age },
+      overall: { ...initialLoanFilters.overall },
+    });
+    onPositionFilterChange('ALL');
+  };
+
+  return (
+    <div className="grid grid-cols-[1fr_1fr_1.45fr] gap-3 rounded-2xl border border-cyan-400/20 bg-slate-950/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-col gap-2">
+        <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-100">Wiek</span>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 rounded-xl border border-slate-600/70 bg-slate-900/95 p-1.5 shadow-inner">
+          <input
+            type="number"
+            min={16}
+            max={draftFilters.age.max}
+            value={draftFilters.age.min}
+            aria-label="Minimalny wiek"
+            onChange={(e) => updateFilter('age', 'min', () => parseInt(e.target.value, 10))}
+            onWheel={(e) => handleWheel('age', 'min', e)}
+            className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
+          />
+          <span className="px-1 text-[8px] font-black italic uppercase tracking-tighter text-slate-300">do</span>
+          <input
+            type="number"
+            min={draftFilters.age.min}
+            max={43}
+            value={draftFilters.age.max}
+            aria-label="Maksymalny wiek"
+            onChange={(e) => updateFilter('age', 'max', () => parseInt(e.target.value, 10))}
+            onWheel={(e) => handleWheel('age', 'max', e)}
+            className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-100">Overall</span>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 rounded-xl border border-slate-600/70 bg-slate-900/95 p-1.5 shadow-inner">
+          <input
+            type="number"
+            min={1}
+            max={draftFilters.overall.max}
+            value={draftFilters.overall.min}
+            aria-label="Minimalny overall"
+            onChange={(e) => updateFilter('overall', 'min', () => parseInt(e.target.value, 10))}
+            onWheel={(e) => handleWheel('overall', 'min', e)}
+            className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
+          />
+          <span className="px-1 text-[8px] font-black italic uppercase tracking-tighter text-slate-300">do</span>
+          <input
+            type="number"
+            min={draftFilters.overall.min}
+            max={99}
+            value={draftFilters.overall.max}
+            aria-label="Maksymalny overall"
+            onChange={(e) => updateFilter('overall', 'max', () => parseInt(e.target.value, 10))}
+            onWheel={(e) => handleWheel('overall', 'max', e)}
+            className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-100">Pozycja</span>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[8px] font-black italic uppercase tracking-tighter text-slate-300 transition-colors hover:bg-white/[0.1] hover:text-white"
+          >
+            Wyczyść
+          </button>
+        </div>
+        <div className="grid grid-cols-5 gap-1 rounded-xl border border-slate-600/70 bg-slate-900/95 p-1.5 shadow-inner">
+          {(['ALL', PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD] as LoanPositionFilter[]).map(position => (
+            <button
+              key={position}
+              type="button"
+              onClick={() => onPositionFilterChange(position)}
+              className={`rounded-lg px-1 py-1.5 text-[8px] font-black italic uppercase tracking-tighter transition-all ${
+                positionFilter === position
+                  ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.35)]'
+                  : 'bg-white/[0.06] text-slate-200 hover:bg-white/[0.12] hover:text-white'
+              }`}
+            >
+              {position === 'ALL' ? 'Wsz.' : position}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+LoanMarketFilters.displayName = 'LoanMarketFilters';
+
 const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScouting }) => {
   const {
     coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails,
@@ -73,7 +229,6 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
   const [priceStep, setPriceStep] = useState(100000);
   const [marketOriginFilter, setMarketOriginFilter] = useState<MarketOriginFilter>('ALL');
   const [marketPanelMode, setMarketPanelMode] = useState<MarketPanelMode>(_persisted.marketPanelMode);
-  const [loanFilters, setLoanFilters] = useState<typeof initialLoanFilters>(_persisted.loanFilters);
   const [appliedLoanFilters, setAppliedLoanFilters] = useState<typeof initialLoanFilters>(_persisted.loanFilters);
   const [loanPositionFilter, setLoanPositionFilter] = useState<LoanPositionFilter>(_persisted.loanPositionFilter);
 
@@ -210,16 +365,19 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
   useEffect(() => { _persisted.filters = filters; }, [filters]);
   useEffect(() => { _persisted.priceFilter = priceFilter; }, [priceFilter]);
   useEffect(() => { _persisted.marketPanelMode = marketPanelMode; }, [marketPanelMode]);
-  useEffect(() => { _persisted.loanFilters = loanFilters; }, [loanFilters]);
   useEffect(() => { _persisted.loanPositionFilter = loanPositionFilter; }, [loanPositionFilter]);
 
-  useEffect(() => {
-    const filterDelay = window.setTimeout(() => {
-      setAppliedLoanFilters(loanFilters);
-    }, 2000);
+  const applyLoanFilters = useCallback((nextFilters: typeof initialLoanFilters) => {
+    _persisted.loanFilters = {
+      age: { ...nextFilters.age },
+      overall: { ...nextFilters.overall },
+    };
+    setAppliedLoanFilters(nextFilters);
+  }, []);
 
-    return () => window.clearTimeout(filterDelay);
-  }, [loanFilters]);
+  const changeLoanPositionFilter = useCallback((position: LoanPositionFilter) => {
+    setLoanPositionFilter(position);
+  }, []);
 
   useEffect(() => {
     if (scrollRefPlayers.current) scrollRefPlayers.current.scrollTop = _persisted.scrollTopPlayers;
@@ -246,39 +404,6 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
       if (field === 'max' && newState[key].max < newState[key].min) newState[key].min = newState[key].max;
       return newState;
     });
-  };
-
-  const updateLoanFilter = (
-    key: keyof typeof loanFilters,
-    field: 'min' | 'max',
-    getValue: (currentValue: number) => number
-  ) => {
-    const limitMin = key === 'age' ? 16 : 1;
-    const limitMax = key === 'age' ? 43 : 99;
-    const fallback = field === 'min' ? limitMin : limitMax;
-
-    setLoanFilters(prev => {
-      const value = getValue(prev[key][field]);
-      const nextValue = Math.max(limitMin, Math.min(limitMax, Number.isNaN(value) ? fallback : value));
-      const next = { ...prev, [key]: { ...prev[key], [field]: nextValue } };
-      if (field === 'min' && next[key].min > next[key].max) next[key].max = next[key].min;
-      if (field === 'max' && next[key].max < next[key].min) next[key].min = next[key].max;
-      return next;
-    });
-  };
-
-  const handleLoanFilterChange = (key: keyof typeof loanFilters, field: 'min' | 'max', value: number) => {
-    updateLoanFilter(key, field, () => value);
-  };
-
-  const handleLoanFilterWheel = (
-    key: keyof typeof loanFilters,
-    field: 'min' | 'max',
-    event: React.WheelEvent<HTMLInputElement>
-  ) => {
-    event.preventDefault();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    updateLoanFilter(key, field, currentValue => currentValue + direction);
   };
 
   const filteredCoaches = useMemo(() => {
@@ -936,96 +1061,12 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
                   </div>
                 </div>
                 {marketPanelMode === 'LOAN' && (
-                  <div className="grid grid-cols-[1fr_1fr_1.45fr] gap-3 rounded-2xl border border-cyan-400/20 bg-slate-950/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_rgba(0,0,0,0.22)]">
-                    <div className="flex flex-col gap-2">
-                      <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-100">Wiek</span>
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 rounded-xl border border-slate-600/70 bg-slate-900/95 p-1.5 shadow-inner">
-                        <input
-                          type="number"
-                          min={16}
-                          max={loanFilters.age.max}
-                          value={loanFilters.age.min}
-                          aria-label="Minimalny wiek"
-                          onChange={(e) => handleLoanFilterChange('age', 'min', parseInt(e.target.value, 10))}
-                          onWheel={(e) => handleLoanFilterWheel('age', 'min', e)}
-                          className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
-                        />
-                        <span className="px-1 text-[8px] font-black italic uppercase tracking-tighter text-slate-300">do</span>
-                        <input
-                          type="number"
-                          min={loanFilters.age.min}
-                          max={43}
-                          value={loanFilters.age.max}
-                          aria-label="Maksymalny wiek"
-                          onChange={(e) => handleLoanFilterChange('age', 'max', parseInt(e.target.value, 10))}
-                          onWheel={(e) => handleLoanFilterWheel('age', 'max', e)}
-                          className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-100">Overall</span>
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 rounded-xl border border-slate-600/70 bg-slate-900/95 p-1.5 shadow-inner">
-                        <input
-                          type="number"
-                          min={1}
-                          max={loanFilters.overall.max}
-                          value={loanFilters.overall.min}
-                          aria-label="Minimalny overall"
-                          onChange={(e) => handleLoanFilterChange('overall', 'min', parseInt(e.target.value, 10))}
-                          onWheel={(e) => handleLoanFilterWheel('overall', 'min', e)}
-                          className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
-                        />
-                        <span className="px-1 text-[8px] font-black italic uppercase tracking-tighter text-slate-300">do</span>
-                        <input
-                          type="number"
-                          min={loanFilters.overall.min}
-                          max={99}
-                          value={loanFilters.overall.max}
-                          aria-label="Maksymalny overall"
-                          onChange={(e) => handleLoanFilterChange('overall', 'max', parseInt(e.target.value, 10))}
-                          onWheel={(e) => handleLoanFilterWheel('overall', 'max', e)}
-                          className="min-w-0 rounded-lg border border-transparent bg-white/[0.08] px-1 py-1 text-center text-[11px] font-black italic uppercase tracking-tighter text-white outline-none tabular-nums transition-all hover:bg-white/[0.12] focus:border-cyan-400/70 focus:bg-cyan-500/15 focus:text-cyan-100"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[9px] font-black italic uppercase tracking-tighter text-cyan-100">Pozycja</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLoanFilters({
-                              age: { ...initialLoanFilters.age },
-                              overall: { ...initialLoanFilters.overall },
-                            });
-                            setLoanPositionFilter('ALL');
-                          }}
-                          className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[8px] font-black italic uppercase tracking-tighter text-slate-300 transition-colors hover:bg-white/[0.1] hover:text-white"
-                        >
-                          Wyczyść
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-5 gap-1 rounded-xl border border-slate-600/70 bg-slate-900/95 p-1.5 shadow-inner">
-                        {(['ALL', PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD] as LoanPositionFilter[]).map(position => (
-                          <button
-                            key={position}
-                            type="button"
-                            onClick={() => setLoanPositionFilter(position)}
-                            className={`rounded-lg px-1 py-1.5 text-[8px] font-black italic uppercase tracking-tighter transition-all ${
-                              loanPositionFilter === position
-                                ? 'bg-cyan-400 text-slate-950 shadow-[0_0_14px_rgba(34,211,238,0.35)]'
-                                : 'bg-white/[0.06] text-slate-200 hover:bg-white/[0.12] hover:text-white'
-                            }`}
-                          >
-                            {position === 'ALL' ? 'Wsz.' : position}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  <LoanMarketFilters
+                    initialFilters={_persisted.loanFilters}
+                    positionFilter={loanPositionFilter}
+                    onApplyFilters={applyLoanFilters}
+                    onPositionFilterChange={changeLoanPositionFilter}
+                  />
                 )}
               </div>
             </div>
