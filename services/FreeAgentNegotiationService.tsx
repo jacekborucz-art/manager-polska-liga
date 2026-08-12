@@ -121,7 +121,97 @@ const getPositionGuaranteeMultiplier = (position: PlayerPosition): number => {
   return 1;
 };
 
-const getPreferredContractYears = (player: Player, club: Club, seedKey: string): number => {
+interface FreeAgentDemandRngProfile {
+  seedKey: string;
+  normalVolatility: number;
+  relocationIntensity: number;
+  salaryCenter: number;
+  toughChance: number;
+  veryHighChance: number;
+  extremeChance: number;
+}
+
+const normalizeCountryKey = (country: string | undefined): string =>
+  (country ?? '')
+    .trim()
+    .toLocaleLowerCase('pl-PL')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]/g, '');
+
+const playerCountryKey = (player: Player): string =>
+  normalizeCountryKey(player.nationalityCountry) || player.nationality.toLocaleLowerCase('pl-PL');
+
+const DISTANT_ORIGIN_REGIONS = new Set([
+  'SSA',
+  'NORTH_AMERICA',
+  'MEXICO',
+  'OCEANIA',
+  'JAPAN',
+  'KOREA',
+  'ARGENTINA',
+  'BRAZIL',
+  'ARABIA',
+  'SOUTH_AMERICAN',
+]);
+
+const getRelocationIntensity = (player: Player, club: Club): number => {
+  const playerCountry = normalizeCountryKey(player.nationalityCountry);
+  const clubCountry = normalizeCountryKey(club.country);
+
+  if (playerCountry && clubCountry && playerCountry === clubCountry) return 0;
+  if (!playerCountry || !clubCountry) return 0.025;
+  return DISTANT_ORIGIN_REGIONS.has(player.nationality) ? 0.09 : 0.05;
+};
+
+const getDemandRngProfile = (player: Player, club: Club, seedKey: string): FreeAgentDemandRngProfile => {
+  const relocationIntensity = getRelocationIntensity(player, club);
+  const ageVolatility = player.age <= 21
+    ? 0.075
+    : player.age <= 24
+      ? 0.045
+      : player.age <= 30
+        ? 0.02
+        : player.age <= 34
+          ? 0.045
+          : 0.075;
+  const overallVolatility = player.overallRating >= 82
+    ? 0.08
+    : player.overallRating >= 72
+      ? 0.055
+      : player.overallRating >= 62
+        ? 0.03
+        : 0.045;
+  const profileSeedKey = [
+    seedKey,
+    `wiek:${player.age}`,
+    `kraj:${playerCountryKey(player)}`,
+    `region:${player.nationality}`,
+    `ovr:${Math.round(player.overallRating)}`,
+  ].join('|');
+  const relocationSalaryPremium = relocationIntensity > 0
+    ? relocationIntensity * (0.45 + stableUnit(profileSeedKey, 'relocation-premium') * 0.75)
+    : (stableUnit(profileSeedKey, 'domestic-preference') - 0.5) * 0.02;
+  const eliteLeverage = clamp((player.overallRating - 68) / 140, 0, 0.13);
+  const ageLeverage = player.age <= 21 ? 0.008 : player.age >= 35 ? 0.004 : 0;
+
+  return {
+    seedKey: profileSeedKey,
+    normalVolatility: clamp(0.09 + ageVolatility + overallVolatility + relocationIntensity * 0.7, 0.14, 0.31),
+    relocationIntensity,
+    salaryCenter: 1 + relocationSalaryPremium,
+    toughChance: clamp(0.03 + eliteLeverage * 0.28 + relocationIntensity * 0.24 + ageLeverage, 0.03, 0.085),
+    veryHighChance: clamp(0.009 + eliteLeverage * 0.075 + relocationIntensity * 0.055, 0.009, 0.026),
+    extremeChance: clamp(0.001 + eliteLeverage * 0.012 + relocationIntensity * 0.01, 0.001, 0.0045),
+  };
+};
+
+const getPreferredContractYears = (
+  player: Player,
+  club: Club,
+  profile: FreeAgentDemandRngProfile,
+): number => {
+  const { seedKey } = profile;
   const roll = stableUnit(seedKey, 'contract-years');
   let years: number;
   if (player.age <= 18) years = roll < 0.65 ? 5 : 4;
@@ -134,16 +224,54 @@ const getPreferredContractYears = (player: Player, club: Club, seedKey: string):
 
   const playerReputation = player.reputacja ?? clamp(Math.round((player.overallRating - 38) / 3), 1, 20);
   if (player.age <= 30 && playerReputation - club.reputation >= 5) years = Math.max(1, years - 1);
+  if (
+    player.age <= 32 &&
+    profile.relocationIntensity >= 0.05 &&
+    stableUnit(seedKey, 'relocation-security') < 0.32
+  ) {
+    years = Math.min(5, years + 1);
+  }
   return years;
 };
 
-const getDemandRng = (seedKey: string): { band: FreeAgentDemandRngBand; multiplier: number } => {
+const getDemandRng = (profile: FreeAgentDemandRngProfile): { band: FreeAgentDemandRngBand; multiplier: number } => {
+  const { seedKey } = profile;
   const bandRoll = stableUnit(seedKey, 'demand-band');
   const valueRoll = stableUnit(seedKey, 'demand-value');
-  if (bandRoll < 0.96) return { band: 'NORMAL', multiplier: 0.85 + valueRoll * 0.35 };
-  if (bandRoll < 0.99) return { band: 'TOUGH', multiplier: 1.20 + valueRoll * 0.25 };
-  if (bandRoll < 0.999) return { band: 'VERY_HIGH', multiplier: 1.45 + valueRoll * 0.35 };
-  return { band: 'EXTREME', multiplier: 2 + valueRoll };
+  const extremeLimit = profile.extremeChance;
+  const veryHighLimit = extremeLimit + profile.veryHighChance;
+  const toughLimit = veryHighLimit + profile.toughChance;
+
+  if (bandRoll < extremeLimit) {
+    return { band: 'EXTREME', multiplier: 2 + valueRoll * (1 + profile.relocationIntensity) };
+  }
+  if (bandRoll < veryHighLimit) {
+    return { band: 'VERY_HIGH', multiplier: 1.45 + valueRoll * 0.38 + profile.relocationIntensity * 0.35 };
+  }
+  if (bandRoll < toughLimit) {
+    return { band: 'TOUGH', multiplier: 1.18 + valueRoll * 0.30 + profile.relocationIntensity * 0.25 };
+  }
+
+  const centeredVariation = (valueRoll - 0.5) * 2 * profile.normalVolatility;
+  return {
+    band: 'NORMAL',
+    multiplier: clamp(profile.salaryCenter + centeredVariation, 0.70, 1.42),
+  };
+};
+
+const getPerformanceBonusVariation = (
+  profile: FreeAgentDemandRngProfile,
+  player: Player,
+  bonusType: string,
+): number => {
+  const agePreference = player.age <= 23 ? 0.06 : player.age >= 34 ? -0.05 : 0;
+  const overallPreference = clamp((player.overallRating - 65) / 250, -0.04, 0.08);
+  const spread = clamp(0.18 + profile.normalVolatility * 0.45, 0.22, 0.32);
+  return clamp(
+    1 + agePreference + overallPreference + (stableUnit(profile.seedKey, `performance-${bonusType}`) - 0.5) * 2 * spread,
+    0.68,
+    1.38,
+  );
 };
 
 const getClubTier = (club: Club): number => {
@@ -367,7 +495,8 @@ export const FreeAgentNegotiationService = {
     const playerReputation = player.reputacja ?? clamp(Math.round((player.overallRating - 38) / 3), 1, 20);
     const reputationMultiplier = clamp(1 + (playerReputation - 10) * 0.025, 0.82, 1.30);
     const prestigeCompensation = clamp(1 + Math.max(0, playerReputation - club.reputation) * 0.025, 1, 1.30);
-    const demandRng = getDemandRng(seedKey);
+    const demandRngProfile = getDemandRngProfile(player, club, seedKey);
+    const demandRng = getDemandRng(demandRngProfile);
     const managerExpectationMultiplier = ManagerNegotiationInfluenceService.calculate(managerProfile).expectationMultiplier;
     const salaryBeforeRng =
       marketSalary *
@@ -381,9 +510,14 @@ export const FreeAgentNegotiationService = {
 
     const signingAgeRatio = player.age <= 22 ? 0.16 : player.age <= 29 ? 0.26 : player.age <= 33 ? 0.34 : 0.44;
     const signingReputationPremium = 1 + Math.max(0, playerReputation - 10) * 0.025;
-    const signingVariation = 0.88 + stableUnit(seedKey, 'signing-bonus') * 0.24;
-    const bonus = roundSigningMoney(salary * signingAgeRatio * signingReputationPremium * signingVariation);
-    const years = getPreferredContractYears(player, club, seedKey);
+    const signingVariation = 0.78 + stableUnit(demandRngProfile.seedKey, 'signing-bonus') * 0.44;
+    const relocationSigningPremium = 1 + demandRngProfile.relocationIntensity * (
+      0.4 + stableUnit(demandRngProfile.seedKey, 'signing-relocation') * 0.8
+    );
+    const bonus = roundSigningMoney(
+      salary * signingAgeRatio * signingReputationPremium * signingVariation * relocationSigningPremium
+    );
+    const years = getPreferredContractYears(player, club, demandRngProfile);
 
     const finishingQuality = (player.attributes.finishing + player.attributes.attacking) / 2;
     const creativeQuality = (player.attributes.passing + player.attributes.vision) / 2;
@@ -393,18 +527,43 @@ export const FreeAgentNegotiationService = {
 
     if (player.position === PlayerPosition.GK) {
       const goalkeeperQuality = (player.attributes.goalkeeping + player.attributes.positioning + player.attributes.technique) / 3;
-      cleanSheetBonus = roundPerformanceMoney(salary * 0.0032 * clamp(0.65 + goalkeeperQuality / 160, 0.75, 1.28));
+      cleanSheetBonus = roundPerformanceMoney(
+        salary *
+        0.0032 *
+        clamp(0.65 + goalkeeperQuality / 160, 0.75, 1.28) *
+        getPerformanceBonusVariation(demandRngProfile, player, 'clean-sheet')
+      );
     } else if (player.position === PlayerPosition.MID) {
       if (finishingQuality >= 62) {
-        goalBonus = roundPerformanceMoney(salary * 0.0038 * clamp(0.62 + finishingQuality / 170, 0.72, 1.24));
+        goalBonus = roundPerformanceMoney(
+          salary *
+          0.0038 *
+          clamp(0.62 + finishingQuality / 170, 0.72, 1.24) *
+          getPerformanceBonusVariation(demandRngProfile, player, 'goal')
+        );
       }
       if (creativeQuality >= 55) {
-        assistBonus = roundPerformanceMoney(salary * 0.0032 * clamp(0.65 + creativeQuality / 165, 0.74, 1.25));
+        assistBonus = roundPerformanceMoney(
+          salary *
+          0.0032 *
+          clamp(0.65 + creativeQuality / 165, 0.74, 1.25) *
+          getPerformanceBonusVariation(demandRngProfile, player, 'assist')
+        );
       }
     } else if (player.position === PlayerPosition.FWD) {
-      goalBonus = roundPerformanceMoney(salary * 0.0045 * clamp(0.65 + finishingQuality / 155, 0.78, 1.32));
+      goalBonus = roundPerformanceMoney(
+        salary *
+        0.0045 *
+        clamp(0.65 + finishingQuality / 155, 0.78, 1.32) *
+        getPerformanceBonusVariation(demandRngProfile, player, 'goal')
+      );
       if (creativeQuality >= 68) {
-        assistBonus = roundPerformanceMoney(salary * 0.0028 * clamp(0.65 + creativeQuality / 175, 0.74, 1.20));
+        assistBonus = roundPerformanceMoney(
+          salary *
+          0.0028 *
+          clamp(0.65 + creativeQuality / 175, 0.74, 1.20) *
+          getPerformanceBonusVariation(demandRngProfile, player, 'assist')
+        );
       }
     }
 

@@ -18567,7 +18567,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
     const { playerId, salary, years, bonus, goalBonus, assistBonus, cleanSheetBonus } = mail.metadata;
     if (mail.metadata.directorReviewPending && !bypassDirectorApproval) {
       showGameNotification({
-        title: 'Kontrakt oczekuje na decyzję',
+        title: 'Oczekiwanie na decyzję dyrektora sportowego',
         message: 'Najpierw zakończ rozmowę z dyrektorem sportowym w sprawie jego weta.',
         tone: 'warning',
       });
@@ -18583,7 +18583,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
     if (playerToSign.transferPendingClubId) {
       setMessages(prev => prev.filter(message => message.id !== mailId));
       return showGameNotification({
-        title: 'Transfer już uzgodniony',
+        title: 'Zawodnik wybrał inny klub',
         message: `${playerToSign.firstName} ${playerToSign.lastName} podpisał już umowę z innym klubem.`,
         tone: 'warning'
       });
@@ -18616,8 +18616,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
         id: `MAIL_FA_NO_FUNDS_${mail.id}`,
         sender: `Agent gracza ${resolvedPlayer.lastName}`,
         role: 'Agencja Menadzerska',
-        subject: `Rozmowy zerwane: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
-        body: `Po ponownej weryfikacji okazalo sie, ze klub ${userClub.name} nie ma srodkow na realizacje uzgodnionych warunkow. Moj klient potraktowal to jako brak powagi. Wracamy do rozmow najwczesniej po ${lockoutDate.toLocaleDateString('pl-PL')}.`,
+        subject: `Brak funduszy na zrealizowanie transferu: ${resolvedPlayer.firstName} ${resolvedPlayer.lastName}`,
+        body: `Po ponownej weryfikacji okazalo sie, że klub ${userClub.name} nie ma srodków na realizacje tego kontraktu. Jeśli będziecie dysponować środkami, możemy wrócić do rozmów po ${lockoutDate.toLocaleDateString('pl-PL')}.`,
         date: new Date(currentDate),
         isRead: false,
         type: MailType.SYSTEM,
@@ -18628,7 +18628,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
 
       return showGameNotification({
         title: 'Transfer anulowany',
-        message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} zerwal rozmowy z ${userClub.name} po wykryciu braku srodkow. Kolejna proba bedzie mozliwa dopiero za rok.`,
+        message: `${resolvedPlayer.firstName} ${resolvedPlayer.lastName} zerwal rozmowy z ${userClub.name} po wykryciu braku srodków.`,
         tone: 'error'
       });
     };

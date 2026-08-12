@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState } from '../../types';
+import { PlayerPosition, ViewState } from '../../types';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { FinanceService } from '@/services/FinanceService';
 import { BoardBudgetRequestService, BoardRequestResult } from '../../services/BoardBudgetRequestService';
@@ -20,6 +20,13 @@ const sanitizeAgentInterestMessage = (message: string): string => {
 };
 
 const OFFER_MONEY_STEP = 10_000;
+
+const POSITION_LABELS: Record<PlayerPosition, string> = {
+  [PlayerPosition.GK]: 'BRAMKARZ',
+  [PlayerPosition.DEF]: 'OBROŃCA',
+  [PlayerPosition.MID]: 'POMOCNIK',
+  [PlayerPosition.FWD]: 'NAPASTNIK',
+};
 
 const normalizeOfferMoney = (value: number): number =>
   Math.max(0, Math.round((Number.isFinite(value) ? value : 0) / OFFER_MONEY_STEP) * OFFER_MONEY_STEP);
@@ -282,8 +289,8 @@ export const FreeAgentNegotiationView: React.FC = () => {
             <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter mt-0.5">
               {player.firstName} {player.lastName}
             </h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-              {player.position} | {player.overallRating} OVR | Wolny Agent
+            <p className="text-[10px] font-black italic text-slate-500 uppercase tracking-tighter mt-1">
+              {POSITION_LABELS[player.position]} | {player.overallRating} OVR | {player.age} LAT | WOLNY AGENT
             </p>
           </div>
           <button

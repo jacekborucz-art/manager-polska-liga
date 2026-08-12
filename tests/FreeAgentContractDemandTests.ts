@@ -125,6 +125,59 @@ for (let index = 0; index < 100; index += 1) {
 const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 assert.ok(average(normalHighSalaries) > average(normalLowSalaries) * 2.5, 'Poziom ligi musi wyraźnie wpływać na żądania.');
 
+const getNormalSalaryProfile = (
+  label: string,
+  overallRating: number,
+  age: number,
+  nationality: Region,
+  nationalityCountry: string,
+) => {
+  const salaries: number[] = [];
+  for (let index = 0; index < 1_200; index += 1) {
+    const player = {
+      ...makePlayer(`${label}_${index}`, overallRating, 0, PlayerPosition.MID, age),
+      nationality,
+      nationalityCountry,
+    };
+    const demands = FreeAgentNegotiationService.calculateContractDemands(
+      player,
+      highClub,
+      [],
+      leaguePlayers,
+      currentDate,
+    );
+    if (demands.rngBand === 'NORMAL') salaries.push(demands.salary);
+  }
+
+  const mean = average(salaries);
+  return {
+    mean,
+    relativeRange: (Math.max(...salaries) - Math.min(...salaries)) / mean,
+  };
+};
+
+const primeDomesticProfile = getNormalSalaryProfile('PROFILE_PRIME_PL', 68, 27, Region.POLAND, 'Polska');
+const youngDomesticProfile = getNormalSalaryProfile('PROFILE_YOUNG_PL', 68, 19, Region.POLAND, 'Polska');
+const eliteDomesticProfile = getNormalSalaryProfile('PROFILE_ELITE_PL', 84, 27, Region.POLAND, 'Polska');
+const distantForeignProfile = getNormalSalaryProfile('PROFILE_FOREIGN_BR', 68, 27, Region.BRAZIL, 'Brazylia');
+
+assert.ok(
+  youngDomesticProfile.relativeRange > primeDomesticProfile.relativeRange * 1.20,
+  'Młodzi zawodnicy powinni mieć bardziej zróżnicowane oczekiwania niż gracze w wieku optymalnym.',
+);
+assert.ok(
+  eliteDomesticProfile.relativeRange > primeDomesticProfile.relativeRange * 1.15,
+  'Overall powinien wpływać na rozpiętość negocjacyjnego RNG.',
+);
+assert.ok(
+  distantForeignProfile.relativeRange > primeDomesticProfile.relativeRange * 1.25,
+  'Kraj pochodzenia powinien wpływać na rozpiętość negocjacyjnego RNG.',
+);
+assert.ok(
+  distantForeignProfile.mean > primeDomesticProfile.mean * 1.03,
+  'Daleki transfer zagraniczny powinien przeciętnie zawierać premię relokacyjną.',
+);
+
 const prime = getNormalDemand(lowClub, PlayerPosition.MID, 27);
 const veteranPlayer = { ...prime.player, age: 37 };
 const veteranDemands = FreeAgentNegotiationService.calculateContractDemands(veteranPlayer, lowClub, [], leaguePlayers, currentDate);
