@@ -29718,20 +29718,20 @@ function propagateWinners(matches, year) {
 }
 
 // services/WorldCupHistoryBackfillService.ts
-var HISTORICAL_WORLD_CUP_CHAMPIONS = {
-  2026: "Hiszpania"
+var HISTORICAL_WORLD_CUP_RESULTS = {
+  2026: {
+    champion: "Hiszpania",
+    runnerUp: "Argentyna",
+    thirdPlace: "Anglia",
+    fourthPlace: "Francja"
+  }
 };
 function applyHistoricalWorldCupOutcome(state) {
-  const historicalChampion = HISTORICAL_WORLD_CUP_CHAMPIONS[state.year];
-  const simulatedChampion = state.champion;
-  if (!historicalChampion || !simulatedChampion || historicalChampion === simulatedChampion) return state;
-  const replaceHistoricalChampionInPlacement = (team) => team === historicalChampion ? simulatedChampion : team;
+  const historicalResult = HISTORICAL_WORLD_CUP_RESULTS[state.year];
+  if (!historicalResult) return state;
   return {
     ...state,
-    champion: historicalChampion,
-    runnerUp: replaceHistoricalChampionInPlacement(state.runnerUp),
-    thirdPlace: replaceHistoricalChampionInPlacement(state.thirdPlace),
-    fourthPlace: replaceHistoricalChampionInPlacement(state.fourthPlace)
+    ...historicalResult
   };
 }
 function buildWorldCupMessage(state, careerStartDate) {
@@ -29821,6 +29821,9 @@ var season2026Start = WorldCupHistoryBackfillService.simulateSkippedWorldCups(20
 import_node_assert.strict.equal(season2026Start.worldCupStates.length, 1);
 import_node_assert.strict.equal(season2026Start.latestWorldCupState?.year, 2026);
 import_node_assert.strict.equal(season2026Start.latestWorldCupState?.champion, "Hiszpania");
+import_node_assert.strict.equal(season2026Start.latestWorldCupState?.runnerUp, "Argentyna");
+import_node_assert.strict.equal(season2026Start.latestWorldCupState?.thirdPlace, "Anglia");
+import_node_assert.strict.equal(season2026Start.latestWorldCupState?.fourthPlace, "Francja");
 import_node_assert.strict.equal(season2026Start.worldCupStates[0]?.champion, "Hiszpania");
 import_node_assert.strict.match(season2026Start.messages[0]?.subject ?? "", /Hiszpania/);
 import_node_assert.strict.match(season2026Start.messages[0]?.body ?? "", /Hiszpania/);

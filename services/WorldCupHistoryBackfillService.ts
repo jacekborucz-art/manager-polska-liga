@@ -7,24 +7,22 @@ export interface WorldCupHistoryBackfillResult {
   messages: MailMessage[];
 }
 
-const HISTORICAL_WORLD_CUP_CHAMPIONS: Partial<Record<number, string>> = {
-  2026: 'Hiszpania',
+const HISTORICAL_WORLD_CUP_RESULTS: Partial<Record<number, Pick<WCState, 'champion' | 'runnerUp' | 'thirdPlace' | 'fourthPlace'>>> = {
+  2026: {
+    champion: 'Hiszpania',
+    runnerUp: 'Argentyna',
+    thirdPlace: 'Anglia',
+    fourthPlace: 'Francja',
+  },
 };
 
 function applyHistoricalWorldCupOutcome(state: WCState): WCState {
-  const historicalChampion = HISTORICAL_WORLD_CUP_CHAMPIONS[state.year];
-  const simulatedChampion = state.champion;
-  if (!historicalChampion || !simulatedChampion || historicalChampion === simulatedChampion) return state;
-
-  const replaceHistoricalChampionInPlacement = (team?: string): string | undefined =>
-    team === historicalChampion ? simulatedChampion : team;
+  const historicalResult = HISTORICAL_WORLD_CUP_RESULTS[state.year];
+  if (!historicalResult) return state;
 
   return {
     ...state,
-    champion: historicalChampion,
-    runnerUp: replaceHistoricalChampionInPlacement(state.runnerUp),
-    thirdPlace: replaceHistoricalChampionInPlacement(state.thirdPlace),
-    fourthPlace: replaceHistoricalChampionInPlacement(state.fourthPlace),
+    ...historicalResult,
   };
 }
 

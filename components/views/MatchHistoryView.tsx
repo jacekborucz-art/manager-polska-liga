@@ -485,6 +485,11 @@ export const MatchHistoryView: React.FC = () => {
     );
     
     const winners: Record<string, any> = {};
+    championshipHistory
+      .filter(entry => entry.competition === 'SUPERPUCHAR_POLSKI')
+      .forEach(entry => {
+        winners[entry.season] = { ...entry };
+      });
     supercupMatches.forEach(match => {
       let winnerId: string | null = null;
       
@@ -517,7 +522,7 @@ export const MatchHistoryView: React.FC = () => {
     const result = Object.values(winners);
     console.log('⚡ Superpuchar winners:', result);
     return result;
-  }, [history, clubs]);
+  }, [championshipHistory, history, clubs]);
 
   // EKSTRAKLASA - Zwycięzca sezonu z localStorage
   const ekstraklasaWinner = useMemo(() => {
@@ -726,6 +731,11 @@ export const MatchHistoryView: React.FC = () => {
     );
 
     const winners: Record<string, any> = {};
+    championshipHistory
+      .filter(entry => entry.competition === 'SUPERPUCHAR_EUROPY')
+      .forEach(entry => {
+        winners[entry.season] = { ...entry };
+      });
     matches.forEach(match => {
       let winnerId: string | null = null;
       let loserId: string | null = null;
@@ -762,7 +772,7 @@ export const MatchHistoryView: React.FC = () => {
     });
 
     return Object.values(winners).sort((a, b) => b.year - a.year);
-  }, [history, clubs]);
+  }, [championshipHistory, history, clubs]);
 
   // Odśwież dane gdy komponent się montuje
   useEffect(() => {

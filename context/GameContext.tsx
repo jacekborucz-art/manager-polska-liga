@@ -2442,6 +2442,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     ChampionshipHistoryService.clear();
     ChampionshipHistoryService.seedCareerStartDomesticHistory(startYear);
     ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(startYear);
+    ChampionshipHistoryService.seedCareerStartInternationalHistory(startYear);
     setCurrentDate(careerStartDate);
     setLastRecoveryDate(careerStartDate);
     setSessionSeed(newSessionSeed);
@@ -4187,6 +4188,9 @@ if (userTeamId) {
     (data.matchHistory || []).forEach((e: any) => MatchHistoryService.logMatch(e));
     ChampionshipHistoryService.clear();
     ChampionshipHistoryService.restore(data.championshipHistory || []);
+    ChampionshipHistoryService.seedCareerStartDomesticHistory(loadedDate.getFullYear());
+    ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(loadedDate.getFullYear());
+    ChampionshipHistoryService.seedCareerStartInternationalHistory(loadedDate.getFullYear());
     setViewState(ViewState.DASHBOARD);
   };
 
@@ -4415,6 +4419,7 @@ if (userTeamId) {
     ChampionshipHistoryService.clear();
     ChampionshipHistoryService.seedCareerStartDomesticHistory(startYear);
     ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(startYear);
+    ChampionshipHistoryService.seedCareerStartInternationalHistory(startYear);
     sentMailIdsRef.current = new Set();
     lastProcessedLeagueDateRef.current = null;
     setCurrentDate(careerStartDate);

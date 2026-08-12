@@ -12,6 +12,9 @@ const season2026Start = WorldCupHistoryBackfillService.simulateSkippedWorldCups(
 assert.equal(season2026Start.worldCupStates.length, 1);
 assert.equal(season2026Start.latestWorldCupState?.year, 2026);
 assert.equal(season2026Start.latestWorldCupState?.champion, 'Hiszpania');
+assert.equal(season2026Start.latestWorldCupState?.runnerUp, 'Argentyna');
+assert.equal(season2026Start.latestWorldCupState?.thirdPlace, 'Anglia');
+assert.equal(season2026Start.latestWorldCupState?.fourthPlace, 'Francja');
 assert.equal(season2026Start.worldCupStates[0]?.champion, 'Hiszpania');
 assert.match(season2026Start.messages[0]?.subject ?? '', /Hiszpania/);
 assert.match(season2026Start.messages[0]?.body ?? '', /Hiszpania/);
