@@ -592,12 +592,18 @@ export const MatchHistoryView: React.FC = () => {
 
   // LIGA MISTRZÓW - Finał (ostatni mecz CL_FINAL)
   const clWinner = useMemo(() => {
-    const clMatches = history.filter(m => 
-      m.competition.includes('LIGA_MISTRZOW') || m.competition.includes('FINAL') &&
+    const clMatches = history.filter(m =>
+      m.competition === CompetitionType.CL_FINAL &&
       m.homeScore !== null
     );
-    
+
     const winners: Record<string, any> = {};
+    championshipHistory
+      .filter(entry => entry.competition === 'LIGA_MISTRZOW')
+      .forEach(entry => {
+        winners[entry.season] = { ...entry };
+      });
+
     clMatches.forEach(match => {
       let winnerId: string | null = null;
       let runnerId: string | null = null;
@@ -620,14 +626,14 @@ export const MatchHistoryView: React.FC = () => {
         if (winnerClub && runnerClub) {
           const date = new Date(match.date);
           const year = date.getFullYear();
-          const seasonStart = year;
-          const seasonKey = `${seasonStart}/${seasonStart + 1}`;
+          const seasonStart = year - 1;
+          const seasonKey = `${seasonStart}/${year}`;
           
           winners[seasonKey] = {
             season: seasonKey,
             winner: winnerClub.name,
             runnerUp: runnerClub.name,
-            year: seasonStart + 1
+            year
           };
         }
       }
@@ -636,7 +642,7 @@ export const MatchHistoryView: React.FC = () => {
     const result = Object.values(winners).sort((a, b) => b.year - a.year);
     console.log('⭐ Liga Mistrzów:', result);
     return result;
-  }, [history, clubs]);
+  }, [championshipHistory, history, clubs]);
 
   // LIGA EUROPY - Finał
   const elWinner = useMemo(() => {
@@ -645,6 +651,12 @@ export const MatchHistoryView: React.FC = () => {
       m.homeScore !== null
     );
     const winners: Record<string, any> = {};
+    championshipHistory
+      .filter(entry => entry.competition === 'LIGA_EUROPY')
+      .forEach(entry => {
+        winners[entry.season] = { ...entry };
+      });
+
     matches.forEach(match => {
       let winnerId: string | null = null;
       let runnerId: string | null = null;
@@ -661,13 +673,13 @@ export const MatchHistoryView: React.FC = () => {
         if (winnerClub && runnerClub) {
           const date = new Date(match.date);
           const year = date.getFullYear();
-          const seasonKey = `${year}/${year + 1}`;
-          winners[seasonKey] = { season: seasonKey, winner: winnerClub.name, runnerUp: runnerClub.name, year: year + 1 };
+          const seasonKey = `${year - 1}/${year}`;
+          winners[seasonKey] = { season: seasonKey, winner: winnerClub.name, runnerUp: runnerClub.name, year };
         }
       }
     });
     return Object.values(winners).sort((a, b) => b.year - a.year);
-  }, [history, clubs]);
+  }, [championshipHistory, history, clubs]);
 
   // LIGA KONFERENCJI - Finał
   const confWinner = useMemo(() => {
@@ -676,6 +688,12 @@ export const MatchHistoryView: React.FC = () => {
       m.homeScore !== null
     );
     const winners: Record<string, any> = {};
+    championshipHistory
+      .filter(entry => entry.competition === 'LIGA_KONFERENCJI')
+      .forEach(entry => {
+        winners[entry.season] = { ...entry };
+      });
+
     matches.forEach(match => {
       let winnerId: string | null = null;
       let runnerId: string | null = null;
@@ -692,13 +710,13 @@ export const MatchHistoryView: React.FC = () => {
         if (winnerClub && runnerClub) {
           const date = new Date(match.date);
           const year = date.getFullYear();
-          const seasonKey = `${year}/${year + 1}`;
-          winners[seasonKey] = { season: seasonKey, winner: winnerClub.name, runnerUp: runnerClub.name, year: year + 1 };
+          const seasonKey = `${year - 1}/${year}`;
+          winners[seasonKey] = { season: seasonKey, winner: winnerClub.name, runnerUp: runnerClub.name, year };
         }
       }
     });
     return Object.values(winners).sort((a, b) => b.year - a.year);
-  }, [history, clubs]);
+  }, [championshipHistory, history, clubs]);
 
   // SUPERPUCHAR EUROPY - zwycięzcy z historii meczów
   const uefaSupercupWinner = useMemo(() => {
@@ -1163,7 +1181,7 @@ export const MatchHistoryView: React.FC = () => {
                         <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
                           <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
-                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1243,7 +1261,7 @@ export const MatchHistoryView: React.FC = () => {
                         <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-6 py-3 text-sm font-black text-slate-300">{entry.season}</td>
                           <td className="px-6 py-3 text-sm font-black text-yellow-400">{entry.winner}</td>
-                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp}</td>
+                          <td className="px-6 py-3 text-sm font-black text-slate-400">{entry.runnerUp || '-'}</td>
                         </tr>
                       ))}
                       {uefaSupercupWinner.length === 0 && (

@@ -2440,6 +2440,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setDiscoveredTransferPlayerIds([]);
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
+    ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(startYear);
     setCurrentDate(careerStartDate);
     setLastRecoveryDate(careerStartDate);
     setSessionSeed(newSessionSeed);
@@ -4411,6 +4412,7 @@ if (userTeamId) {
     setManagerEmploymentStatus('EMPLOYED');
     MatchHistoryService.clear();
     ChampionshipHistoryService.clear();
+    ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(startYear);
     sentMailIdsRef.current = new Set();
     lastProcessedLeagueDateRef.current = null;
     setCurrentDate(careerStartDate);

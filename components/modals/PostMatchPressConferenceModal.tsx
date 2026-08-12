@@ -90,14 +90,21 @@ export const PostMatchPressConferenceModal: React.FC<Props> = ({ summary, onClos
           <div className="h-px rounded-full bg-gradient-to-r from-transparent via-yellow-300/55 to-transparent shadow-[0_0_14px_rgba(250,204,21,0.18)]" />
 
           <div className="grid gap-3">
-            {question.answers.map(answer => (
+            {question.answers.map((answer, answerIndex) => (
               <button
                 key={answer.id}
                 onClick={() => handleAnswer(answer)}
-                className="rounded-2xl border-t border-x border-b border-t-blue-300/25 border-x-blue-700 border-b-black/70 bg-[#07142f] px-5 py-4 text-left text-sm font-black italic uppercase tracking-tighter text-slate-200 transition-all duration-150 hover:-translate-y-[1px] hover:border-t-blue-300/50 hover:border-x-blue-500 hover:border-b-blue-950/80 hover:bg-[#0a1f46] hover:text-white active:translate-y-[2px]"
+                className={`group flex items-center gap-4 rounded-2xl border px-5 py-4 text-left text-sm font-black italic uppercase tracking-tighter text-cyan-50 transition-all duration-150 hover:-translate-y-[1px] hover:border-cyan-300/70 hover:bg-cyan-500/20 hover:text-white active:translate-y-[2px] ${
+                  answerIndex % 2 === 0
+                    ? 'border-blue-400/25 bg-[#0b1d3b]'
+                    : 'border-cyan-400/20 bg-[#122640]'
+                }`}
                 style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
               >
-                {answer.text}
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-400/10 text-[10px] font-black italic uppercase tracking-tighter text-cyan-300 group-hover:bg-cyan-400 group-hover:text-slate-950">
+                  {answerIndex + 1}
+                </span>
+                <span className="font-black italic uppercase tracking-tighter leading-snug">{answer.text}</span>
               </button>
             ))}
           </div>

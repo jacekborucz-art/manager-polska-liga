@@ -3,15 +3,19 @@ import { Club, Fixture, MatchStatus, CompetitionType } from '../types';
 export const UEFASuperCupService = {
   /**
    * Generuje fixture Superpucharu Europy.
-   * @param year Rok, w kt\u00f3rym rozgrywany jest mecz (23 Sierpnia)
-   * @param clubs Lista aktualnych klub\u00f3w
-   * @param clWinnerId ID zdobywcy Ligi Mistrz\u00f3w (opcjonalne \u2014 domy\u015blnie PSG dla lore 2025)
-   * @param elWinnerId ID zdobywcy Ligi Europy (opcjonalne \u2014 domy\u015blnie Tottenham dla lore 2025)
+   * @param year Rok, w którym rozgrywany jest mecz (23 sierpnia)
+   * @param clubs Lista aktualnych klubów
+   * @param clWinnerId ID zdobywcy Ligi Mistrzów; ma pierwszeństwo przed obsadą startową
+   * @param elWinnerId ID zdobywcy Ligi Europy; ma pierwszeństwo przed obsadą startową
    */
   generateFixture: (year: number, clubs: Club[], clWinnerId?: string, elWinnerId?: string): Fixture => {
-    // Sezon 1 lore (2025): PSG wygra\u0142 LM, Tottenham wygra\u0142 LE
+    // Obsada historyczna przy bezpośrednim rozpoczęciu kariery w danym sezonie.
+    // W kolejnych sezonach GameContext przekazuje rzeczywistych zwycięzców LM i LE.
+    const initialEuropaLeagueWinnerId = year === 2026
+      ? 'EU_EL_ASTON_VILLA'
+      : 'EU_CL_TOTTENHAM_HOTSPUR';
     const homeId = clWinnerId ?? 'EU_CL_PARIS_SAINT_GERMAIN';
-    let awayId = elWinnerId ?? 'EU_CL_TOTTENHAM_HOTSPUR';
+    let awayId = elWinnerId ?? initialEuropaLeagueWinnerId;
 
     // Obsługa dubletu: ta sama drużyna wygrała LM i LE
     if (homeId === awayId) {

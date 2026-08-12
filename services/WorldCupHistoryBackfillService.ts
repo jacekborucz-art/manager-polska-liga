@@ -7,6 +7,27 @@ export interface WorldCupHistoryBackfillResult {
   messages: MailMessage[];
 }
 
+const HISTORICAL_WORLD_CUP_CHAMPIONS: Partial<Record<number, string>> = {
+  2026: 'Hiszpania',
+};
+
+function applyHistoricalWorldCupOutcome(state: WCState): WCState {
+  const historicalChampion = HISTORICAL_WORLD_CUP_CHAMPIONS[state.year];
+  const simulatedChampion = state.champion;
+  if (!historicalChampion || !simulatedChampion || historicalChampion === simulatedChampion) return state;
+
+  const replaceHistoricalChampionInPlacement = (team?: string): string | undefined =>
+    team === historicalChampion ? simulatedChampion : team;
+
+  return {
+    ...state,
+    champion: historicalChampion,
+    runnerUp: replaceHistoricalChampionInPlacement(state.runnerUp),
+    thirdPlace: replaceHistoricalChampionInPlacement(state.thirdPlace),
+    fourthPlace: replaceHistoricalChampionInPlacement(state.fourthPlace),
+  };
+}
+
 function buildWorldCupMessage(state: WCState, careerStartDate: Date): MailMessage {
   const champion = state.champion ?? 'nieznany zwycięzca';
   const thirdPlace = state.thirdPlace ? ` Trzecie miejsce zajmuje ${state.thirdPlace}.` : '';
@@ -95,13 +116,13 @@ export const WorldCupHistoryBackfillService = {
       const initialState = WorldCupService.createInitialState(teams, groups, year);
       const simulation = WorldCupService.simulateFullTournament(initialState, wcSeed);
 
-      latestWorldCupState = {
+      latestWorldCupState = applyHistoricalWorldCupOutcome({
         ...simulation.state,
         drawComplete: true,
         playoffSlotsResolved: true,
         groupStageComplete: true,
         knockoutComplete: true,
-      };
+      });
       worldCupStates.push(latestWorldCupState);
       messages.push(buildWorldCupMessage(latestWorldCupState, careerStartDate));
     }

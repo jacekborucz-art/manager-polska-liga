@@ -46,27 +46,36 @@ export const PreMatchPressConferenceModal: React.FC<Props> = ({ fixture, userClu
           </div>
         </header>
 
-        <section className="space-y-5 px-8 py-7">
+        <section className="space-y-5 bg-gradient-to-b from-slate-950 via-[#071127] to-[#050b1b] px-8 py-7 shadow-[inset_0_1px_0_rgba(147,197,253,0.08)]">
           {questionIndex === 0 && conference.opponentStatement && (
             <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-amber-100">
               {conference.opponentStatement}
             </div>
           )}
-          <div>
-            <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
+          <div className="rounded-2xl border border-amber-300/35 bg-gradient-to-r from-amber-500/15 via-yellow-400/[0.08] to-transparent px-5 py-4 shadow-[inset_4px_0_0_rgba(251,191,36,0.75),0_8px_24px_rgba(0,0,0,0.18)]">
+            <div className="text-[10px] font-black italic uppercase tracking-tighter text-amber-300">
               Pytanie {questionIndex + 1} / {conference.questions.length} · {question.journalist}
             </div>
-            <p className="mt-3 text-xl font-black italic uppercase tracking-tighter text-white">{question.text}</p>
+            <p className="mt-3 text-xl font-black italic uppercase tracking-tighter leading-snug text-amber-50">{question.text}</p>
           </div>
 
+          <div className="h-px rounded-full bg-gradient-to-r from-transparent via-cyan-300/45 to-transparent" />
+
           <div className="grid gap-3">
-            {question.answers.map(answer => (
+            {question.answers.map((answer, answerIndex) => (
               <button
                 key={answer.id}
                 onClick={() => handleAnswer(answer)}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-left text-sm font-black italic uppercase tracking-tighter text-slate-200 transition-all hover:border-blue-400/60 hover:bg-blue-500/10 hover:text-white"
+                className={`group flex items-center gap-4 rounded-2xl border px-5 py-4 text-left text-sm font-black italic uppercase tracking-tighter text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.22)] transition-all duration-150 hover:-translate-y-[1px] hover:border-cyan-300/70 hover:bg-cyan-500/20 hover:text-white active:translate-y-[1px] ${
+                  answerIndex % 2 === 0
+                    ? 'border-blue-400/25 bg-[#0b1d3b]'
+                    : 'border-cyan-400/20 bg-[#122640]'
+                }`}
               >
-                {answer.text}
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-400/10 text-[10px] font-black italic uppercase tracking-tighter text-cyan-300 group-hover:bg-cyan-400 group-hover:text-slate-950">
+                  {answerIndex + 1}
+                </span>
+                <span className="font-black italic uppercase tracking-tighter leading-snug">{answer.text}</span>
               </button>
             ))}
           </div>

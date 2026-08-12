@@ -16,6 +16,7 @@ export type ChampionshipCompetition =
   | 'SUPERPUCHAR_POLSKI'
   | 'LIGA_MISTRZOW'
   | 'LIGA_EUROPY'
+  | 'LIGA_KONFERENCJI'
   | 'WORLD_CUP'
   | 'EURO_CHAMPIONSHIP';
 
@@ -165,6 +166,30 @@ export class ChampionshipHistoryService {
       runnerUp,
       year
     });
+  }
+
+  static addEuropeanClubChampion(
+    season: string,
+    competition: 'LIGA_MISTRZOW' | 'LIGA_EUROPY' | 'LIGA_KONFERENCJI',
+    winner: string,
+    year: number,
+    runnerUp?: string,
+  ): void {
+    this.addChampion({
+      season,
+      competition,
+      winner,
+      runnerUp,
+      year,
+    });
+  }
+
+  static seedCareerStartEuropeanClubHistory(startYear: number): void {
+    if (startYear < 2026) return;
+
+    this.addEuropeanClubChampion('2025/2026', 'LIGA_MISTRZOW', 'Paris Saint-Germain', 2026);
+    this.addEuropeanClubChampion('2025/2026', 'LIGA_EUROPY', 'Aston Villa', 2026);
+    this.addEuropeanClubChampion('2025/2026', 'LIGA_KONFERENCJI', 'Crystal Palace', 2026, 'Rayo Vallecano');
   }
 
   static addWorldCupResult(year: number, winner: string, runnerUp?: string, thirdPlace?: string, fourthPlace?: string): void {
