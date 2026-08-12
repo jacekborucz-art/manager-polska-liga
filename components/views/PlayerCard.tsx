@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanOfferDuration, LoanOfferSubmissionResult, LoanPlayingTimeRole, PlayerPosition, PlayerSeasonHistoryEntry, Region } from '../../types';
+import { ViewState, HealthStatus, PlayerAttributes, TransferOfferStatus, PlayerCareerStatsSnapshot, IndividualTalkType, LoanNegotiationTerms, LoanOfferDuration, LoanOfferSubmissionResult, LoanPlayingTimeRole, PlayerPosition, PlayerSeasonHistoryEntry, Region } from '../../types';
 import { REGION_NATIONALITY_LABEL } from '../../constants';     
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
@@ -303,6 +303,13 @@ export const PlayerCard: React.FC = () => {
     !hasUserTransferAgreement;
   const loanLockoutDate = userTeamId ? player.loanNegotiationLockouts?.[userTeamId] : undefined;
   const isLoanNegotiationLocked = !!loanLockoutDate && new Date(loanLockoutDate) > new Date(currentDate);
+  const isTerminalLoanFeedback = !!loanFeedback && [
+    'CLUB_NOT_INTERESTED',
+    'PLAYER_NOT_INTERESTED',
+    'CLUB_REJECTED',
+    'PLAYER_REFUSED',
+  ].includes(loanFeedback.status);
+  const isLoanCounterOffer = loanFeedback?.status === 'COUNTER_OFFER' && !!loanFeedback.counterOffer;
   const estimatedMonthlyLoanWageCost = Math.round((((player.annualSalary || 0) / 12) * loanWageCoverage) / 100);
   const estimatedLoanTotalCost = estimatedMonthlyLoanWageCost + loanOfferFee;
   const roundedEstimatedLoanTotalCost = Math.ceil(estimatedLoanTotalCost / 5000) * 5000;
@@ -431,35 +438,26 @@ export const PlayerCard: React.FC = () => {
       setTalkResult(result);
     }
   };
-  const handleSubmitLoanOffer = (acceptedUltimatum: boolean = false) => {
-    const promisedPlayingTime = acceptedUltimatum
-      ? loanFeedback?.ultimatum?.demandedRole ?? 'FIRST_TEAM'
-      : loanPlayingTime;
+  const handleSubmitLoanOffer = (counterTerms?: LoanNegotiationTerms) => {
+    const promisedPlayingTime = counterTerms?.promisedPlayingTime ?? loanPlayingTime;
     const result = submitLoanOffer(player.id, {
-      loanFee: loanOfferFee,
-      wageCoveragePercent: loanWageCoverage,
-      loanDuration,
+      loanFee: counterTerms?.loanFee ?? loanOfferFee,
+      wageCoveragePercent: counterTerms?.wageCoveragePercent ?? loanWageCoverage,
+      loanDuration: counterTerms?.loanDuration ?? loanDuration,
       promisedPlayingTime,
-      acceptedUltimatum,
     });
 
+    if (counterTerms) {
+      setLoanOfferFee(counterTerms.loanFee);
+      setLoanWageCoverage(counterTerms.wageCoveragePercent);
+      setLoanDuration(counterTerms.loanDuration);
+    }
     setLoanPlayingTime(promisedPlayingTime);
     setLoanFeedback(result);
 
     if (result.ok) {
       setShowLoanOfferPanel(false);
     }
-  };
-  const handleDeclineLoanUltimatum = () => {
-    const result = submitLoanOffer(player.id, {
-      loanFee: loanOfferFee,
-      wageCoveragePercent: loanWageCoverage,
-      loanDuration,
-      promisedPlayingTime: loanFeedback?.ultimatum?.demandedRole ?? 'FIRST_TEAM',
-      declinedUltimatum: true,
-    });
-    setShowLoanOfferPanel(false);
-    setLoanFeedback(result);
   };
   const careerRows = useMemo(() => {
     const baseHistory = [...(player.history || [])];
@@ -1430,16 +1428,16 @@ export const PlayerCard: React.FC = () => {
                 ) : !isResigned ? (
                   <div className="space-y-2">
                     <button
-                      disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer}
+                      disabled={!!isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer || !!player.pendingLoanArrival}
                       onClick={() => navigateWithoutHistory(ViewState.TRANSFER_OFFER)}
                       className={`w-full py-3 rounded-[20px] font-black italic uppercase tracking-widest text-xs transition-all active:translate-y-[2px] border-t border-x border-b border-b-black/60 ${
-                        (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer)
+                        (isTransferLocked || hasUserTransferAgreement || hasPendingTransfer || isLoanedPlayer || player.pendingLoanArrival)
                           ? 'bg-slate-800 border-t-slate-600 border-x-slate-700 text-slate-500 opacity-70 cursor-not-allowed'
                           : 'bg-blue-600 hover:bg-blue-500 text-white border-t-blue-300/60 border-x-blue-500/40 hover:scale-[1.02]'
                       }`}
                       style={button3DStyle}
                     >
-                      {isLoanedPlayer ? `WYPOŻYCZONY DO ${loanEndLabel}` : 'ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰'}
+                      {player.pendingLoanArrival ? 'WYPOŻYCZENIE UZGODNIONE — PRZYJAZD JUTRO' : isLoanedPlayer ? `WYPOŻYCZONY DO ${loanEndLabel}` : 'ZŁÓŻ OFERTĘ TRANSFEROWĄ 💰'}
                     </button>
 
                     {canSubmitLoanOffer && (
@@ -1455,8 +1453,8 @@ export const PlayerCard: React.FC = () => {
                             if (isLoanNegotiationLocked) {
                               setLoanFeedback({
                                 ok: false,
-                                status: 'CLUB_REJECTED',
-                                message: `${club.name} nie chce obecnie wracać do rozmów w sprawie tego zawodnika.`,
+                                status: 'CLUB_NOT_INTERESTED',
+                                message: `${club.name} nie jest obecnie zainteresowany takim wypożyczeniem.`,
                               });
                               return;
                             }
@@ -1596,9 +1594,6 @@ export const PlayerCard: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <p className="mt-3 text-[9px] font-black italic uppercase tracking-tighter text-amber-200/80">
-                  Klub macierzysty może co miesiąc kontrolować realizację tej obietnicy i odwołać zdrowego zawodnika, jeśli regularnie nie gra.
-                </p>
               </section>
 
               {/* POKRYCIE PENSJI
@@ -1676,7 +1671,7 @@ export const PlayerCard: React.FC = () => {
               </div>
 
               <button
-                onClick={() => handleSubmitLoanOffer(false)}
+                onClick={() => handleSubmitLoanOffer()}
                 className="min-h-[58px] rounded-[22px] bg-cyan-400 text-slate-950 border-t border-x border-b border-t-cyan-50 border-x-cyan-200 border-b-black/75 text-[14px] font-black italic uppercase tracking-tighter transition-all active:translate-y-[2px] hover:bg-cyan-200 shadow-[0_0_34px_rgba(34,211,238,0.32)]"
                 style={lightButton3DStyle}
               >
@@ -1691,7 +1686,7 @@ export const PlayerCard: React.FC = () => {
         <div
           className="fixed inset-0 z-[320] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4"
           onClick={() => {
-            if (loanFeedback.status !== 'ULTIMATUM') setLoanFeedback(null);
+            if (!isTerminalLoanFeedback) setLoanFeedback(null);
           }}
         >
           {/* POPUP ODPOWIEDZI NA OFERTĘ WYPOŻYCZENIA
@@ -1703,7 +1698,7 @@ export const PlayerCard: React.FC = () => {
             className={`relative w-[560px] max-w-[92vw] rounded-[28px] border p-6 shadow-[0_24px_70px_rgba(0,0,0,0.62),inset_0_1px_0_rgba(255,255,255,0.12)] ${
               loanFeedback.ok
                 ? 'border-emerald-300/38 bg-emerald-950/82'
-                : loanFeedback.status === 'ULTIMATUM'
+                : isLoanCounterOffer
                   ? 'border-amber-300/38 bg-amber-950/82'
                 : 'border-red-300/38 bg-red-950/82'
             }`}
@@ -1711,7 +1706,7 @@ export const PlayerCard: React.FC = () => {
               ...button3DStyle,
               backgroundImage: loanFeedback.ok
                 ? "linear-gradient(145deg, rgba(6,78,59,0.78), rgba(2,6,23,0.9)), url('../Graphic/themes/playercard.png')"
-                : loanFeedback.status === 'ULTIMATUM'
+                : isLoanCounterOffer
                   ? "linear-gradient(145deg, rgba(120,53,15,0.78), rgba(2,6,23,0.9)), url('../Graphic/themes/playercard.png')"
                 : "linear-gradient(145deg, rgba(127,29,29,0.78), rgba(2,6,23,0.9)), url('../Graphic/themes/playercard.png')",
               backgroundSize: 'cover',
@@ -1722,30 +1717,56 @@ export const PlayerCard: React.FC = () => {
             <div className="absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_34%)] pointer-events-none" />
             <div className="relative z-10">
               <p className={`mb-3 text-[12px] font-black italic uppercase tracking-tighter leading-none ${
-                loanFeedback.ok ? 'text-emerald-200' : loanFeedback.status === 'ULTIMATUM' ? 'text-amber-200' : 'text-red-200'
+                loanFeedback.ok ? 'text-emerald-200' : isLoanCounterOffer ? 'text-amber-200' : 'text-red-200'
               }`}>
-                {loanFeedback.ok ? 'Oferta wypożyczenia' : loanFeedback.status === 'ULTIMATUM' ? 'Ultimatum klubu' : 'Oferta zablokowana'}
+                {loanFeedback.ok ? 'Porozumienie osiągnięte' : isLoanCounterOffer ? 'Kontrpropozycja klubu' : isTerminalLoanFeedback ? 'Negocjacje zakończone' : 'Nie można wysłać oferty'}
               </p>
               <p className="text-[18px] font-black italic uppercase tracking-tighter text-white leading-snug drop-shadow">
                 {loanFeedback.message}
               </p>
-              {loanFeedback.status === 'ULTIMATUM' ? (
+              {isLoanCounterOffer && loanFeedback.counterOffer ? (
+                <>
+                  <div className="mt-5 grid grid-cols-2 gap-3 rounded-[20px] border border-amber-200/20 bg-black/25 p-4">
+                    {[
+                      { label: 'Opłata', value: `${loanFeedback.counterOffer.loanFee.toLocaleString('pl-PL')} PLN` },
+                      { label: 'Pokrycie pensji', value: `${loanFeedback.counterOffer.wageCoveragePercent}%` },
+                      { label: 'Długość', value: loanFeedback.counterOffer.loanDuration === 'SEASON' ? 'Do końca sezonu' : 'Do końca rundy' },
+                      { label: 'Rola', value: loanFeedback.counterOffer.promisedPlayingTime === 'FIRST_TEAM' ? 'Pierwszy skład' : 'Zmiennik / rotacja' },
+                    ].map(item => (
+                      <div key={item.label}>
+                        <p className="text-[9px] font-black italic uppercase tracking-tighter text-amber-300/70">{item.label}</p>
+                        <p className="mt-1 text-[12px] font-black italic uppercase tracking-tighter text-white">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
                 <div className="mt-6 grid grid-cols-2 gap-3">
                   <button
-                    onClick={handleDeclineLoanUltimatum}
+                    onClick={() => setLoanFeedback(null)}
                     className="min-h-[48px] rounded-[18px] border-t border-x border-b border-t-white/15 border-x-white/10 border-b-black/70 bg-white/5 text-[11px] font-black italic uppercase tracking-tighter text-slate-200 transition-all active:translate-y-[2px] hover:bg-white/10"
                     style={button3DStyle}
                   >
-                    Wycofaj ofertę
+                    Zmień własną ofertę
                   </button>
                   <button
-                    onClick={() => handleSubmitLoanOffer(true)}
+                    onClick={() => handleSubmitLoanOffer(loanFeedback.counterOffer)}
                     className="min-h-[48px] rounded-[18px] border-t border-x border-b border-t-amber-50 border-x-amber-200 border-b-black/70 bg-amber-300 text-[11px] font-black italic uppercase tracking-tighter text-amber-950 transition-all active:translate-y-[2px] hover:bg-amber-200"
                     style={lightButton3DStyle}
                   >
-                    Zaakceptuj warunek
+                    Przyjmij warunki klubu
                   </button>
                 </div>
+                </>
+              ) : isTerminalLoanFeedback ? (
+                <button
+                  onClick={() => {
+                    setLoanFeedback(null);
+                    setShowLoanOfferPanel(false);
+                  }}
+                  className="mt-6 min-h-[48px] w-full rounded-[18px] border-t border-x border-b border-t-red-50 border-x-red-200 border-b-black/70 bg-red-300 text-[12px] font-black italic uppercase tracking-tighter text-red-950 transition-all active:translate-y-[2px] hover:bg-red-200"
+                  style={lightButton3DStyle}
+                >
+                  Wyjdź z negocjacji
+                </button>
               ) : (
                 <button
                   onClick={() => setLoanFeedback(null)}

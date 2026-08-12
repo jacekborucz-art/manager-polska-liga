@@ -1,26 +1,25 @@
-import { Club, LoanPlayingTimeRole, Player, PlayerPosition } from '../types';
+import { Club, LoanNegotiationTerms, LoanPlayingTimeRole, Player, PlayerLoanNegotiationState, PlayerPosition } from '../types';
 
-export interface LoanNegotiationEvaluationInput {
+export interface LoanClubInterestInput {
   player: Player;
   buyerClub: Club;
   sellerClub: Club;
   buyerSquad: Player[];
   sellerSquad: Player[];
-  loanFee: number;
-  wageCoveragePercent: number;
-  financialValueForSeller: number;
-  expectedFinancialValue: number;
-  promisedPlayingTime: LoanPlayingTimeRole;
-  acceptedUltimatum?: boolean;
   seed: number;
 }
 
-export interface LoanNegotiationEvaluation {
-  outcome: 'ACCEPT' | 'ULTIMATUM' | 'REJECT';
+export interface LoanNegotiationRoundInput extends LoanClubInterestInput {
+  submittedTerms: LoanNegotiationTerms;
+  state: PlayerLoanNegotiationState;
+  expectedLoanFee: number;
+}
+
+export interface LoanNegotiationRoundResult {
+  outcome: 'COUNTER' | 'ACCEPT' | 'REJECT';
   message: string;
-  acceptanceChance: number;
-  roleCredibility: number;
-  demandedRole?: LoanPlayingTimeRole;
+  nextState?: PlayerLoanNegotiationState;
+  counterOffer?: LoanNegotiationTerms;
 }
 
 export interface LoanPromiseReviewInput {
@@ -79,98 +78,104 @@ const getRoleCredibility = (
 };
 
 export const LoanNegotiationService = {
-  evaluate(input: LoanNegotiationEvaluationInput): LoanNegotiationEvaluation {
-    const {
-      player,
-      buyerClub,
-      sellerClub,
-      buyerSquad,
-      sellerSquad,
-      financialValueForSeller,
-      expectedFinancialValue,
-      promisedPlayingTime,
-      acceptedUltimatum,
-      seed,
-    } = input;
+  getArrivalDate(agreementDate: Date | string): string {
+    const date = new Date(agreementDate);
+    date.setUTCDate(date.getUTCDate() + 1);
+    return date.toISOString().split('T')[0];
+  },
+
+  isClubInterested(input: LoanClubInterestInput): boolean {
+    const { player, buyerClub, sellerClub, buyerSquad, sellerSquad, seed } = input;
     const developmentPriority = getDevelopmentPriority(player);
-    const roleCredibility = getRoleCredibility(player, buyerSquad, promisedPlayingTime);
     const firstTeamCredibility = getRoleCredibility(player, buyerSquad, 'FIRST_TEAM');
     const sellerSamePosition = sellerSquad.filter(candidate => candidate.position === player.position && candidate.id !== player.id);
     const starterSlots = POSITION_STARTERS[player.position];
     const strongerAtSeller = sellerSamePosition.filter(candidate => candidate.overallRating >= player.overallRating).length;
     const isImportantAtSeller = sellerSamePosition.length <= starterSlots + 1 && strongerAtSeller < starterSlots;
     const isSurplusAtSeller = strongerAtSeller >= starterSlots || sellerSamePosition.length >= starterSlots + 3;
-    const financialRatio = expectedFinancialValue > 0
-      ? clamp(financialValueForSeller / expectedFinancialValue, 0, 2)
-      : financialValueForSeller > 0 ? 1 : 0;
     const reputationGap = buyerClub.reputation - sellerClub.reputation;
-    const reputationEffect = clamp(reputationGap * 0.025, -0.13, 0.08);
-    const developmentFirstPath =
-      promisedPlayingTime === 'FIRST_TEAM' &&
+    let chance = 0.74;
+    chance += developmentPriority * 0.10;
+    chance += isSurplusAtSeller ? 0.12 : 0;
+    chance -= isImportantAtSeller ? 0.34 : 0;
+    chance += firstTeamCredibility >= 0.62 ? 0.06 : -0.16;
+    chance += clamp(reputationGap * 0.018, -0.12, 0.06);
+    return unit(seed + 17_001) < clamp(chance, 0.18, 0.96);
+  },
+
+  createState(
+    currentDate: Date | string,
+    initialTerms: LoanNegotiationTerms,
+    seed: number
+  ): PlayerLoanNegotiationState {
+    return {
+      startedAt: new Date(currentDate).toISOString().split('T')[0],
+      approach: 0,
+      maxApproaches: (3 + Math.floor(unit(seed + 17_101) * 3)) as 3 | 4 | 5,
+      clubTerms: initialTerms,
+    };
+  },
+
+  negotiateRound(input: LoanNegotiationRoundInput): LoanNegotiationRoundResult {
+    const { player, buyerSquad, sellerClub, submittedTerms, state, expectedLoanFee, seed } = input;
+    const nextApproach = state.approach + 1;
+    const isFinalApproach = nextApproach >= state.maxApproaches;
+    const roleCredibility = getRoleCredibility(player, buyerSquad, submittedTerms.promisedPlayingTime);
+    const requestedFinancialScore =
+      Math.min(1.4, submittedTerms.wageCoveragePercent / 65) * 0.55 +
+      Math.min(1.4, expectedLoanFee > 0 ? submittedTerms.loanFee / expectedLoanFee : submittedTerms.loanFee > 0 ? 1 : 0) * 0.45;
+    const currentClubTerms = state.clubTerms;
+    const meetsClubTerms =
+      submittedTerms.loanFee >= currentClubTerms.loanFee &&
+      submittedTerms.wageCoveragePercent >= currentClubTerms.wageCoveragePercent &&
+      (currentClubTerms.promisedPlayingTime !== 'FIRST_TEAM' || submittedTerms.promisedPlayingTime === 'FIRST_TEAM');
+
+    if (isFinalApproach) {
+      let finalChance = 0.24 + requestedFinancialScore * 0.34 + roleCredibility * 0.25;
+      if (meetsClubTerms) finalChance += 0.20;
+      if (player.age <= 23 && submittedTerms.promisedPlayingTime === 'FIRST_TEAM') finalChance += 0.12;
+      finalChance += (unit(seed + nextApproach * 307) - 0.5) * 0.14;
+      if (unit(seed + nextApproach * 311) < clamp(finalChance, 0.12, 0.94)) {
+        return {
+          outcome: 'ACCEPT',
+          message: `${sellerClub.name} zaakceptował ostateczne warunki wypożyczenia. Zawodnik zamelduje się w nowym klubie następnego dnia.`,
+        };
+      }
+      return {
+        outcome: 'REJECT',
+        message: `${sellerClub.name} nie jest zainteresowany wypożyczeniem zawodnika do tego klubu na uzgodnionych warunkach.`,
+      };
+    }
+
+    const feeDirection = unit(seed + nextApproach * 401) < 0.62 ? 1 : -1;
+    const coverageDirection = unit(seed + nextApproach * 409) < 0.62 ? 1 : -1;
+    const feeStep = Math.max(5_000, Math.round(Math.max(expectedLoanFee, 20_000) * (0.15 + unit(seed + nextApproach * 419) * 0.30) / 5_000) * 5_000);
+    const coverageStep = 5 + Math.floor(unit(seed + nextApproach * 421) * 3) * 5;
+    const referenceFee = nextApproach === 1 ? submittedTerms.loanFee : currentClubTerms.loanFee;
+    const referenceCoverage = nextApproach === 1 ? submittedTerms.wageCoveragePercent : currentClubTerms.wageCoveragePercent;
+    const shouldDemandFirstTeam =
       player.age <= 23 &&
-      firstTeamCredibility >= 0.62 &&
-      !isImportantAtSeller;
-
-    const ultimatumChance = clamp(
-      0.06 + developmentPriority * 0.48 + (player.overallRating >= 68 ? 0.08 : 0) - (firstTeamCredibility < 0.62 ? 0.35 : 0),
-      0.03,
-      0.72
-    );
-    if (
-      promisedPlayingTime === 'ROTATION' &&
-      !acceptedUltimatum &&
-      unit(seed + 17_071) < ultimatumChance
-    ) {
-      return {
-        outcome: 'ULTIMATUM',
-        message: `${sellerClub.name} zgodzi się na wypożyczenie tylko po zagwarantowaniu zawodnikowi miejsca w pierwszym składzie. Klub będzie kontrolował realizację tej obietnicy.`,
-        acceptanceChance: 1,
-        roleCredibility: firstTeamCredibility,
-        demandedRole: 'FIRST_TEAM',
-      };
-    }
-
-    let acceptanceChance = 0.14;
-    acceptanceChance += Math.min(0.32, financialRatio * 0.22);
-    acceptanceChance += promisedPlayingTime === 'FIRST_TEAM'
-      ? roleCredibility * 0.28
-      : roleCredibility * 0.07;
-    acceptanceChance += developmentFirstPath ? 0.24 : developmentPriority * 0.05;
-    acceptanceChance += isSurplusAtSeller ? 0.12 : 0;
-    acceptanceChance -= isImportantAtSeller ? 0.25 : 0;
-    acceptanceChance += reputationEffect;
-    acceptanceChance += (unit(seed + 17_072) - 0.5) * 0.16;
-    acceptanceChance = clamp(acceptanceChance, 0.08, 0.92);
-
-    if (acceptedUltimatum && promisedPlayingTime === 'FIRST_TEAM' && roleCredibility >= 0.62) {
-      return {
-        outcome: 'ACCEPT',
-        message: `${sellerClub.name} zaakceptował ofertę po przyjęciu ultimatum dotyczącego pierwszego składu.`,
-        acceptanceChance,
-        roleCredibility,
-      };
-    }
-
-    if (unit(seed + 17_073) < acceptanceChance) {
-      const developmentMessage = developmentFirstPath && financialRatio < 0.5
-        ? ' Klub uznał, że regularna gra jest ważniejsza od wpływów finansowych.'
-        : '';
-      return {
-        outcome: 'ACCEPT',
-        message: `${sellerClub.name} zaakceptował przedstawione warunki.${developmentMessage}`,
-        acceptanceChance,
-        roleCredibility,
-      };
-    }
-
-    const message = roleCredibility < 0.45
-      ? `${sellerClub.name} nie wierzy, że deklarowana rola przełoży się na realne minuty zawodnika.`
-      : isImportantAtSeller
-        ? `${sellerClub.name} nie chce obecnie osłabiać swojej kadry na tej pozycji.`
-        : financialRatio < 0.45 && promisedPlayingTime === 'ROTATION'
-          ? `${sellerClub.name} oczekuje większego udziału w pensji, opłaty albo mocniejszej gwarancji gry.`
-          : `${sellerClub.name} po analizie sportowej i finansowej odrzucił ofertę.`;
-    return { outcome: 'REJECT', message, acceptanceChance, roleCredibility };
+      getRoleCredibility(player, buyerSquad, 'FIRST_TEAM') >= 0.62 &&
+      unit(seed + nextApproach * 431) < 0.48;
+    const counterOffer: LoanNegotiationTerms = {
+      loanFee: Math.max(0, Math.round((referenceFee + feeDirection * feeStep) / 5_000) * 5_000),
+      wageCoveragePercent: clamp(Math.round((referenceCoverage + coverageDirection * coverageStep) / 5) * 5, 0, 100),
+      loanDuration: unit(seed + nextApproach * 433) < 0.22
+        ? submittedTerms.loanDuration === 'SEASON' ? 'ROUND' : 'SEASON'
+        : submittedTerms.loanDuration,
+      promisedPlayingTime: shouldDemandFirstTeam ? 'FIRST_TEAM' : submittedTerms.promisedPlayingTime,
+    };
+    const nextState: PlayerLoanNegotiationState = {
+      ...state,
+      approach: nextApproach,
+      clubTerms: counterOffer,
+    };
+    return {
+      outcome: 'COUNTER',
+      message: `${sellerClub.name} chce kontynuować rozmowy i przedstawia własne warunki wypożyczenia.`,
+      nextState,
+      counterOffer,
+    };
   },
 
   getLockoutUntil(currentDate: Date | string, seed: number): string {

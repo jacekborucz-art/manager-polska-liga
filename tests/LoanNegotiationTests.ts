@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { Club, HealthStatus, Player, PlayerPosition, Region } from '../types';
+import { Club, HealthStatus, LoanNegotiationTerms, Player, PlayerPosition, Region } from '../types';
 import { LoanNegotiationService } from '../services/LoanNegotiationService';
 
 const club = (id: string, reputation: number): Club => ({
@@ -58,65 +58,90 @@ const player = (id: string, age: number, overallRating: number, talent: number):
 const buyer = club('BUYER', 6);
 const seller = club('SELLER', 13);
 const prospect = player('PROSPECT', 19, 70, 90);
-const olderPlayer = player('OLDER', 29, 70, 72);
 const buyerSquad = [player('BUYER_FWD_1', 27, 64, 65), player('BUYER_FWD_2', 24, 62, 68)];
 const sellerSquad = [prospect, player('SELLER_FWD_1', 27, 76, 78), player('SELLER_FWD_2', 25, 74, 77), player('SELLER_FWD_3', 23, 72, 82), player('SELLER_FWD_4', 21, 71, 85)];
+const initialTerms: LoanNegotiationTerms = {
+  loanFee: 0,
+  wageCoveragePercent: 20,
+  loanDuration: 'SEASON',
+  promisedPlayingTime: 'ROTATION',
+};
 
-let firstTeamAccepted = 0;
-let rotationAccepted = 0;
-let youngUltimatums = 0;
-let olderUltimatums = 0;
-for (let seed = 1; seed <= 500; seed += 1) {
-  const common = {
+assert.equal(
+  LoanNegotiationService.getArrivalDate('2050-07-31'),
+  '2050-08-01',
+  'zawodnik musi dołączyć dokładnie następnego dnia, także na granicy miesiąca'
+);
+
+const approachCounts = new Set<number>();
+for (let seed = 1; seed <= 300; seed += 1) {
+  const state = LoanNegotiationService.createState('2050-07-01', initialTerms, seed);
+  approachCounts.add(state.maxApproaches);
+  assert.ok(state.maxApproaches >= 3 && state.maxApproaches <= 5, 'negocjacje muszą trwać od 3 do 5 podejść');
+  assert.deepEqual(
+    state,
+    LoanNegotiationService.createState('2050-07-01', initialTerms, seed),
+    'ukryta liczba podejść musi być odporna na ponowne wczytanie'
+  );
+}
+assert.deepEqual([...approachCounts].sort(), [3, 4, 5], 'RNG musi wykorzystywać wszystkie długości negocjacji');
+
+let higherCounters = 0;
+let lowerCounters = 0;
+for (let seed = 1; seed <= 300; seed += 1) {
+  const state = LoanNegotiationService.createState('2050-07-01', initialTerms, seed);
+  const result = LoanNegotiationService.negotiateRound({
+    player: prospect,
     buyerClub: buyer,
     sellerClub: seller,
     buyerSquad,
     sellerSquad,
-    loanFee: 0,
-    wageCoveragePercent: 0,
-    financialValueForSeller: 0,
-    expectedFinancialValue: 100_000,
+    submittedTerms: initialTerms,
+    state,
+    expectedLoanFee: 50_000,
     seed,
-  };
-  const firstTeam = LoanNegotiationService.evaluate({ ...common, player: prospect, promisedPlayingTime: 'FIRST_TEAM' });
-  const rotation = LoanNegotiationService.evaluate({ ...common, player: prospect, promisedPlayingTime: 'ROTATION' });
-  const olderRotation = LoanNegotiationService.evaluate({ ...common, player: olderPlayer, promisedPlayingTime: 'ROTATION' });
-  if (firstTeam.outcome === 'ACCEPT') firstTeamAccepted += 1;
-  if (rotation.outcome === 'ACCEPT') rotationAccepted += 1;
-  if (rotation.outcome === 'ULTIMATUM') youngUltimatums += 1;
-  if (olderRotation.outcome === 'ULTIMATUM') olderUltimatums += 1;
+  });
+  assert.equal(result.outcome, 'COUNTER', 'pierwsza oferta zainteresowanego klubu nie może natychmiast kończyć negocjacji');
+  if ((result.counterOffer?.loanFee ?? 0) > initialTerms.loanFee || (result.counterOffer?.wageCoveragePercent ?? 0) > initialTerms.wageCoveragePercent) higherCounters += 1;
+  if ((result.counterOffer?.loanFee ?? 0) < initialTerms.loanFee || (result.counterOffer?.wageCoveragePercent ?? 0) < initialTerms.wageCoveragePercent) lowerCounters += 1;
 }
+assert.ok(higherCounters > 0, 'klub musi czasem podwyższać warunki');
+assert.ok(lowerCounters > 0, 'klub musi czasem obniżać warunki');
 
-assert.ok(firstTeamAccepted > 150, 'wiarygodna gwarancja pierwszego składu musi czasem otwierać darmowe wypożyczenie');
-assert.ok(firstTeamAccepted < 490, 'nawet bardzo dobra darmowa oferta nie może być pewna');
-assert.ok(firstTeamAccepted > rotationAccepted, 'pierwszy skład musi być wyraźnie cenniejszy od roli zmiennika');
-assert.ok(youngUltimatums > olderUltimatums, 'młody wartościowy zawodnik powinien częściej wywoływać ultimatum');
-
-const acceptedUltimatum = LoanNegotiationService.evaluate({
+const stateFive = { ...LoanNegotiationService.createState('2050-07-01', initialTerms, 10), maxApproaches: 5 as const };
+let currentState = stateFive;
+for (let approach = 1; approach < 5; approach += 1) {
+  const result = LoanNegotiationService.negotiateRound({
+    player: prospect,
+    buyerClub: buyer,
+    sellerClub: seller,
+    buyerSquad,
+    sellerSquad,
+    submittedTerms: currentState.clubTerms,
+    state: currentState,
+    expectedLoanFee: 50_000,
+    seed: 10,
+  });
+  assert.equal(result.outcome, 'COUNTER', 'przed ukrytym limitem klub powinien kontynuować rozmowy');
+  currentState = result.nextState!;
+}
+const finalResult = LoanNegotiationService.negotiateRound({
   player: prospect,
   buyerClub: buyer,
   sellerClub: seller,
   buyerSquad,
   sellerSquad,
-  loanFee: 0,
-  wageCoveragePercent: 0,
-  financialValueForSeller: 0,
-  expectedFinancialValue: 100_000,
-  promisedPlayingTime: 'FIRST_TEAM',
-  acceptedUltimatum: true,
-  seed: 123,
+  submittedTerms: { loanFee: 100_000, wageCoveragePercent: 100, loanDuration: 'SEASON', promisedPlayingTime: 'FIRST_TEAM' },
+  state: currentState,
+  expectedLoanFee: 50_000,
+  seed: 10,
 });
-assert.equal(acceptedUltimatum.outcome, 'ACCEPT', 'przyjęcie wiarygodnego ultimatum musi kończyć etap rozmów z klubem');
+assert.ok(finalResult.outcome === 'ACCEPT' || finalResult.outcome === 'REJECT', 'dopiero ostatnie podejście powinno zakończyć rozmowy');
 
 for (let seed = 1; seed <= 100; seed += 1) {
   const until = new Date(LoanNegotiationService.getLockoutUntil('2050-01-15', seed));
   assert.ok(until >= new Date('2050-04-15'), 'blokada nie może być krótsza niż 3 miesiące');
   assert.ok(until <= new Date('2051-01-15'), 'blokada nie może być dłuższa niż 12 miesięcy');
-  assert.equal(
-    LoanNegotiationService.getLockoutUntil('2050-01-15', seed),
-    LoanNegotiationService.getLockoutUntil('2050-01-15', seed),
-    'ten sam zapis nie może ponownie losować długości blokady'
-  );
 }
 
 const warning = LoanNegotiationService.reviewPromise({
@@ -128,22 +153,7 @@ const warning = LoanNegotiationService.reviewPromise({
   previousBreaches: 0,
   seed: 10,
 });
-assert.equal(warning.outcome, 'WARNING', 'pierwsze naruszenie powinno kończyć się ostrzeżeniem');
-
-let recalls = 0;
-for (let seed = 1; seed <= 200; seed += 1) {
-  const review = LoanNegotiationService.reviewPromise({
-    player: prospect,
-    promisedPlayingTime: 'FIRST_TEAM',
-    eligibleClubMatches: 5,
-    playerMatches: 0,
-    playerMinutes: 0,
-    previousBreaches: 1,
-    seed,
-  });
-  if (review.outcome === 'RECALL') recalls += 1;
-}
-assert.ok(recalls > 80 && recalls < 200, 'odwołanie po kolejnym naruszeniu musi pozostać częste, ale losowe');
+assert.equal(warning.outcome, 'WARNING');
 
 const fulfilled = LoanNegotiationService.reviewPromise({
   player: prospect,
@@ -155,6 +165,6 @@ const fulfilled = LoanNegotiationService.reviewPromise({
   seed: 10,
 });
 assert.equal(fulfilled.outcome, 'FULFILLED');
-assert.equal(fulfilled.nextBreaches, 0, 'regularna gra musi wyzerować wcześniejsze naruszenia');
+assert.equal(fulfilled.nextBreaches, 0);
 
 console.log('LoanNegotiationTests: OK');

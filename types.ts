@@ -1300,6 +1300,20 @@ export interface LoanUltimatum {
   message: string;
 }
 
+export interface LoanNegotiationTerms {
+  loanFee: number;
+  wageCoveragePercent: number;
+  loanDuration: LoanOfferDuration;
+  promisedPlayingTime: LoanPlayingTimeRole;
+}
+
+export interface PlayerLoanNegotiationState {
+  startedAt: string;
+  approach: number;
+  maxApproaches: 3 | 4 | 5;
+  clubTerms: LoanNegotiationTerms;
+}
+
 export interface IncomingTransferOffer {
   id: string;
   kind?: IncomingOfferKind;
@@ -1380,16 +1394,15 @@ export interface LoanOfferSubmissionInput {
   wageCoveragePercent: number;
   loanDuration: LoanOfferDuration;
   promisedPlayingTime: LoanPlayingTimeRole;
-  acceptedUltimatum?: boolean;
-  declinedUltimatum?: boolean;
 }
 
 export interface LoanOfferSubmissionResult {
   ok: boolean;
-  status: 'ACCEPTED' | 'ULTIMATUM' | 'PLAYER_REFUSED' | 'CLUB_REJECTED' | 'VALIDATION_ERROR';
+  status: 'ACCEPTED' | 'COUNTER_OFFER' | 'ULTIMATUM' | 'PLAYER_NOT_INTERESTED' | 'CLUB_NOT_INTERESTED' | 'PLAYER_REFUSED' | 'CLUB_REJECTED' | 'VALIDATION_ERROR';
   message: string;
   loan?: PlayerLoanInfo;
   ultimatum?: LoanUltimatum;
+  counterOffer?: LoanNegotiationTerms;
 }
 
 export interface PlayerLoanMonthlyReport {
@@ -1439,6 +1452,12 @@ export interface PlayerLoanInfo {
   lastReportAssists?: number;
   lastReportRatingCount?: number;
   monthlyReports?: PlayerLoanMonthlyReport[];
+}
+
+export interface PendingLoanArrival {
+  agreedAt: string;
+  arrivalDate: string;
+  loan: PlayerLoanInfo;
 }
 
 // ─── Transfer Request Dialog — nowe interfejsy ────────────────────────────────
@@ -1521,6 +1540,9 @@ export interface Player {
   loan?: PlayerLoanInfo | null;
   /** Ukryte przed graczem daty ponownego otwarcia negocjacji, zapisane osobno dla każdego klubu zainteresowanego. */
   loanNegotiationLockouts?: Record<string, string>;
+  /** Aktywne, ukryte rundy rozmów osobno dla każdego zainteresowanego klubu. */
+  loanNegotiations?: Record<string, PlayerLoanNegotiationState>;
+  pendingLoanArrival?: PendingLoanArrival | null;
   purchaseFee?: number;          // Kwota zapłacona przez klub przy zakupie zawodnika
    history: PlayerHistoryEntry[];
   seasonHistory?: PlayerSeasonHistoryEntry[];

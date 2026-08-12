@@ -16546,6 +16546,138 @@ const finalResult: SimulationOutput = {
     });
   }, [currentDate, players, allFixtures, userTeamId, clubs, sessionSeed]);
 
+  useEffect(() => {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const dueArrivals = Object.entries(players).flatMap(([parentClubId, squad]) =>
+      squad
+        .filter(player => player.pendingLoanArrival?.arrivalDate && player.pendingLoanArrival.arrivalDate <= dateStr)
+        .map(player => ({ parentClubId, player, pending: player.pendingLoanArrival! }))
+    );
+    if (dueArrivals.length === 0) return;
+    const arrivalKey = `PENDING_LOAN_ARRIVALS_${dateStr}`;
+    if (sentMailIdsRef.current.has(arrivalKey)) return;
+    sentMailIdsRef.current.add(arrivalKey);
+
+    const preparedArrivals = dueArrivals.flatMap(({ parentClubId, player, pending }) => {
+      const parentClub = clubs.find(club => club.id === parentClubId);
+      const destinationClub = clubs.find(club => club.id === pending.loan.destinationClubId);
+      if (!parentClub || !destinationClub) return [];
+      const arrivalDate = new Date(pending.arrivalDate);
+      const arrivalYear = Number.isNaN(arrivalDate.getTime()) ? currentDate.getFullYear() : arrivalDate.getFullYear();
+      const arrivalMonth = Number.isNaN(arrivalDate.getTime()) ? currentDate.getMonth() + 1 : arrivalDate.getMonth() + 1;
+      const baseHistory = player.history && player.history.length > 0
+        ? player.history
+        : [{
+            clubName: parentClub.name,
+            clubId: parentClub.id,
+            fromYear: arrivalYear - 1,
+            fromMonth: 7,
+            toYear: null,
+            toMonth: null,
+          }];
+      const loanedPlayerBase: Player = {
+        ...player,
+        clubId: destinationClub.id,
+        loan: pending.loan,
+        pendingLoanArrival: null,
+        loanNegotiations: {},
+        history: PlayerCareerService.startLoanEntry(
+          baseHistory,
+          pending.loan,
+          arrivalYear,
+          arrivalMonth,
+          pending.loan.loanFee ?? 0
+        ),
+        isAvailableForLoan: false,
+        isOnTransferList: false,
+        transferListPrice: undefined,
+        squadRole: null,
+        isUntouchable: false,
+        interestedClubs: [],
+      };
+      const loanedPlayer = PlayerClubAdaptationService.beginForClub(
+        loanedPlayerBase,
+        destinationClub.id,
+        pending.arrivalDate
+      );
+      return [{ parentClub, destinationClub, player, loanedPlayer, loanFee: pending.loan.loanFee ?? 0 }];
+    });
+    if (preparedArrivals.length === 0) return;
+
+    setPlayers(previous => {
+      const next = { ...previous };
+      preparedArrivals.forEach(({ parentClub, destinationClub, player, loanedPlayer }) => {
+        next[parentClub.id] = (next[parentClub.id] || []).filter(candidate => candidate.id !== player.id);
+        next[destinationClub.id] = [
+          ...(next[destinationClub.id] || []).filter(candidate => candidate.id !== player.id),
+          loanedPlayer,
+        ];
+      });
+      return next;
+    });
+
+    setClubs(previous => previous.map(club => {
+      const outgoing = preparedArrivals.filter(arrival => arrival.parentClub.id === club.id);
+      const incoming = preparedArrivals.filter(arrival => arrival.destinationClub.id === club.id);
+      if (outgoing.length === 0 && incoming.length === 0) return club;
+      const removedIds = new Set(outgoing.map(arrival => arrival.player.id));
+      const addedIds = incoming.map(arrival => arrival.player.id);
+      return {
+        ...club,
+        rosterIds: [...club.rosterIds.filter(id => !removedIds.has(id) && !addedIds.includes(id)), ...addedIds],
+      };
+    }));
+
+    setLineups(previous => {
+      const next = { ...previous };
+      const simulatedSquads: Record<string, Player[]> = { ...players };
+      preparedArrivals.forEach(({ parentClub, destinationClub, player, loanedPlayer }) => {
+        simulatedSquads[parentClub.id] = (simulatedSquads[parentClub.id] || []).filter(candidate => candidate.id !== player.id);
+        simulatedSquads[destinationClub.id] = [
+          ...(simulatedSquads[destinationClub.id] || []).filter(candidate => candidate.id !== player.id),
+          loanedPlayer,
+        ];
+      });
+      const affectedClubIds = new Set(preparedArrivals.flatMap(arrival => [arrival.parentClub.id, arrival.destinationClub.id]));
+      affectedClubIds.forEach(clubId => {
+        const squad = simulatedSquads[clubId] || [];
+        if (next[clubId]) {
+          next[clubId] = LineupService.repairLineup(next[clubId], squad);
+          return;
+        }
+        const club = clubs.find(candidate => candidate.id === clubId);
+        const coach = club?.coachId ? coaches[club.coachId] ?? null : null;
+        next[clubId] = LineupService.autoPickLineup(clubId, squad, '4-4-2', coach);
+      });
+      return next;
+    });
+
+    const userArrivals = preparedArrivals.filter(arrival => arrival.destinationClub.id === userTeamId);
+    if (userArrivals.length > 0) {
+      setMessages(previous => [
+        ...userArrivals.map(({ player, parentClub, destinationClub }) => ({
+          id: `LOAN_PLAYER_ARRIVED_${player.id}_${dateStr}`,
+          sender: 'Centrum wypożyczeń',
+          role: 'System rejestracji wypożyczeń',
+          subject: `Zawodnik zameldował się w klubie: ${player.firstName} ${player.lastName}`,
+          body: `${player.firstName} ${player.lastName} zakończył formalności i dołączył dziś do ${destinationClub.name} na zasadzie wypożyczenia z ${parentClub.name}.`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 94,
+        } as MailMessage)),
+        ...previous,
+      ]);
+      userArrivals.forEach(({ player }) => {
+        showGameNotification({
+          title: 'Zawodnik zameldował się w klubie',
+          message: `${player.firstName} ${player.lastName} jest już dostępny w kadrze.`,
+          tone: 'success',
+        });
+      });
+    }
+  }, [currentDate, players, clubs, coaches, userTeamId]);
+
   const toggleUntouchable = (playerId: string) => {
     if (!userTeamId) return;
     const squad = players[userTeamId] || [];
@@ -17996,8 +18128,8 @@ const finalResult: SimulationOutput = {
     if (LoanNegotiationService.isLocked(targetPlayer, buyerClub.id, currentDate)) {
       return {
         ok: false,
-        status: 'CLUB_REJECTED',
-        message: `${sellerClub.name} nie chce obecnie wracać do rozmów w sprawie tego zawodnika.`,
+        status: 'CLUB_NOT_INTERESTED',
+        message: `${sellerClub.name} nie jest obecnie zainteresowany wypożyczeniem tego zawodnika do ${buyerClub.name}.`,
       };
     }
 
@@ -18013,25 +18145,14 @@ const finalResult: SimulationOutput = {
                   ...(candidate.loanNegotiationLockouts || {}),
                   [buyerClub.id]: lockoutUntil,
                 },
+                loanNegotiations: Object.fromEntries(
+                  Object.entries(candidate.loanNegotiations || {}).filter(([clubId]) => clubId !== buyerClub.id)
+                ),
               }
             : candidate
         ),
       }));
     };
-
-    if (offerInput.declinedUltimatum) {
-      const withdrawalSeed = IncomingTransferService.buildOfferSeed(
-        currentDate,
-        buyerClub.id,
-        `${targetPlayer.id}_USER_LOAN_WITHDRAWAL_${sessionSeed}`
-      );
-      registerLoanNegotiationFailure(withdrawalSeed);
-      return {
-        ok: false,
-        status: 'CLUB_REJECTED',
-        message: 'Rozmowy zostały zakończone po odrzuceniu ultimatum. Klub nie chce obecnie wracać do negocjacji.',
-      };
-    }
 
     // Loans move the player and money immediately, so the ownership relationship
     // must be validated before squad-need, wage and fee calculations are run.
@@ -18048,7 +18169,7 @@ const finalResult: SimulationOutput = {
       return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest dostępny do wypożyczenia.` };
     }
 
-    if (targetPlayer.loan) {
+    if (targetPlayer.loan || targetPlayer.pendingLoanArrival) {
       return { ok: false, status: 'VALIDATION_ERROR', message: `${targetPlayer.firstName} ${targetPlayer.lastName} jest już wypożyczony.` };
     }
 
@@ -18069,10 +18190,16 @@ const finalResult: SimulationOutput = {
       sellerClub
     );
     if (lowerLeagueLoanSource === 'INELIGIBLE') {
+      const policySeed = IncomingTransferService.buildOfferSeed(
+        currentDate,
+        buyerClub.id,
+        `${targetPlayer.id}_USER_LOAN_POLICY_${sessionSeed}`
+      );
+      registerLoanNegotiationFailure(policySeed);
       return {
         ok: false,
-        status: 'CLUB_REJECTED',
-        message: 'Polityka wypożyczeń klubu dopuszcza zawodników z wyższych lig polskich albo z zagranicznych klubów europejskich o reputacji nie większej niż 10.',
+        status: 'CLUB_NOT_INTERESTED',
+        message: `${sellerClub.name} nie jest zainteresowany wypożyczeniem tego zawodnika do ${buyerClub.name}.`,
       };
     }
 
@@ -18085,8 +18212,8 @@ const finalResult: SimulationOutput = {
       registerLoanNegotiationFailure(realismGateSeed + 401);
       return {
         ok: false,
-        status: 'PLAYER_REFUSED',
-        message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie uważa wypożyczenia do ${buyerClub.name} za realistyczny krok w rozwoju kariery.`,
+        status: 'PLAYER_NOT_INTERESTED',
+        message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest zainteresowany grą w ${buyerClub.name}.`,
       };
     }
 
@@ -18146,81 +18273,114 @@ const finalResult: SimulationOutput = {
       sellerClub.country
     );
     const expectedLoanFee = Math.round(marketValue * 0.003 / 1000) * 1000;
-    const loanOfferStart = new Date(dateStr);
-    const loanOfferEnd = new Date(loanEndDate);
-    const loanDays = Math.max(30, Math.ceil((loanOfferEnd.getTime() - loanOfferStart.getTime()) / 86_400_000));
-    const sellerWageSaving = Math.round((targetPlayer.annualSalary || 0) * (wageCoveragePercent / 100) * (loanDays / 365));
-    const financialValueForSeller = loanFee + sellerWageSaving;
-    const expectedFinancialValue = expectedLoanFee + Math.round((targetPlayer.annualSalary || 0) * 0.5 * (loanDays / 365));
-
+    const submittedTerms = {
+      loanFee,
+      wageCoveragePercent,
+      loanDuration,
+      promisedPlayingTime: offerInput.promisedPlayingTime,
+    };
+    const activeNegotiation = targetPlayer.loanNegotiations?.[buyerClub.id];
     const negotiationSeed = IncomingTransferService.buildOfferSeed(
-      currentDate,
+      activeNegotiation?.startedAt ?? currentDate,
       buyerClub.id,
       `${targetPlayer.id}_USER_LOAN_NEGOTIATION_${sessionSeed}`
     );
-    const negotiationDecision = LoanNegotiationService.evaluate({
+    if (!activeNegotiation) {
+      const clubInterested = LoanNegotiationService.isClubInterested({
+        player: targetPlayer,
+        buyerClub,
+        sellerClub,
+        buyerSquad,
+        sellerSquad,
+        seed: negotiationSeed,
+      });
+      if (!clubInterested) {
+        registerLoanNegotiationFailure(negotiationSeed + 402);
+        return {
+          ok: false,
+          status: 'CLUB_NOT_INTERESTED',
+          message: `${sellerClub.name} nie jest zainteresowany wypożyczeniem tego zawodnika do ${buyerClub.name}.`,
+        };
+      }
+
+      const playerDecisionSeed = IncomingTransferService.buildOfferSeed(currentDate, buyerClub.id, `${targetPlayer.id}_USER_LOAN_DECISION_${sessionSeed}`);
+      const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
+        targetPlayer,
+        buyerClub,
+        sellerClub,
+        buyerSquad,
+        playerDecisionSeed
+      );
+      if (playerDecision === 'refused') {
+        registerLoanNegotiationFailure(playerDecisionSeed + 403);
+        return {
+          ok: false,
+          status: 'PLAYER_NOT_INTERESTED',
+          message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest zainteresowany grą w ${buyerClub.name}.`,
+        };
+      }
+    }
+
+    const negotiationState = activeNegotiation ?? LoanNegotiationService.createState(currentDate, submittedTerms, negotiationSeed);
+    const negotiationDecision = LoanNegotiationService.negotiateRound({
       player: targetPlayer,
       buyerClub,
       sellerClub,
       buyerSquad,
       sellerSquad,
-      loanFee,
-      wageCoveragePercent,
-      financialValueForSeller,
-      expectedFinancialValue,
-      promisedPlayingTime: offerInput.promisedPlayingTime,
-      acceptedUltimatum: offerInput.acceptedUltimatum,
+      submittedTerms,
+      state: negotiationState,
+      expectedLoanFee,
       seed: negotiationSeed,
     });
 
-    if (negotiationDecision.outcome === 'ULTIMATUM') {
+    if (negotiationDecision.outcome === 'COUNTER' && negotiationDecision.nextState && negotiationDecision.counterOffer) {
+      setPlayers(previous => ({
+        ...previous,
+        [sellerClub.id]: (previous[sellerClub.id] || []).map(candidate =>
+          candidate.id === targetPlayer!.id
+            ? {
+                ...candidate,
+                loanNegotiations: {
+                  ...(candidate.loanNegotiations || {}),
+                  [buyerClub.id]: negotiationDecision.nextState!,
+                },
+              }
+            : candidate
+        ),
+      }));
       return {
         ok: false,
-        status: 'ULTIMATUM',
+        status: 'COUNTER_OFFER',
         message: negotiationDecision.message,
-        ultimatum: {
-          demandedRole: negotiationDecision.demandedRole ?? 'FIRST_TEAM',
-          message: negotiationDecision.message,
-        },
+        counterOffer: negotiationDecision.counterOffer,
       };
     }
 
     if (negotiationDecision.outcome === 'REJECT') {
-      registerLoanNegotiationFailure(negotiationSeed + 402);
-      return { ok: false, status: 'CLUB_REJECTED', message: negotiationDecision.message };
-    }
-
-    const playerDecisionSeed = IncomingTransferService.buildOfferSeed(currentDate, buyerClub.id, `${targetPlayer.id}_USER_LOAN_DECISION_${sessionSeed}`);
-    const playerDecision = IncomingTransferService.simulateLoanPlayerDecision(
-      targetPlayer,
-      buyerClub,
-      sellerClub,
-      buyerSquad,
-      playerDecisionSeed
-    );
-
-    if (playerDecision === 'refused') {
-      registerLoanNegotiationFailure(playerDecisionSeed + 403);
+      registerLoanNegotiationFailure(negotiationSeed + negotiationState.approach * 13 + 404);
       return {
         ok: false,
-        status: 'PLAYER_REFUSED',
-        message: `${targetPlayer.firstName} ${targetPlayer.lastName} nie jest przekonany do wypożyczenia do ${buyerClub.name}.`,
+        status: 'CLUB_NOT_INTERESTED',
+        message: negotiationDecision.message,
       };
     }
 
     const baselineRatingCount = targetPlayer.stats.ratingHistory?.length ?? 0;
+    const arrivalDate = LoanNegotiationService.getArrivalDate(currentDate);
+    const confirmedLoanEndDate = IncomingTransferService.resolveLoanEndDate(arrivalDate, loanDuration);
     const loanInfo: PlayerLoanInfo = {
       parentClubId: sellerClub.id,
       parentClubName: sellerClub.name,
       destinationClubId: buyerClub.id,
       destinationClubName: buyerClub.name,
-      startDate: dateStr,
-      endDate: loanEndDate,
+      startDate: arrivalDate,
+      endDate: confirmedLoanEndDate,
       wageCoveragePercent,
       loanFee,
       forcedByClub: false,
       promisedPlayingTime: offerInput.promisedPlayingTime,
-      promiseLastReviewDate: dateStr,
+      promiseLastReviewDate: arrivalDate,
       promiseBaselineMatches: targetPlayer.stats.matchesPlayed ?? 0,
       promiseBaselineMinutes: targetPlayer.stats.minutesPlayed ?? 0,
       promiseConsecutiveBreaches: 0,
@@ -18231,7 +18391,7 @@ const finalResult: SimulationOutput = {
       reportBaselineYellowCards: targetPlayer.stats.yellowCards ?? 0,
       reportBaselineRedCards: targetPlayer.stats.redCards ?? 0,
       reportBaselineRatingCount: baselineRatingCount,
-      lastReportDate: dateStr,
+      lastReportDate: arrivalDate,
       lastReportMatches: targetPlayer.stats.matchesPlayed ?? 0,
       lastReportMinutes: targetPlayer.stats.minutesPlayed ?? 0,
       lastReportGoals: targetPlayer.stats.goals ?? 0,
@@ -18240,91 +18400,56 @@ const finalResult: SimulationOutput = {
       monthlyReports: [],
     };
 
-    const loanStart = new Date(loanInfo.startDate);
-    const loanStartYear = Number.isNaN(loanStart.getTime()) ? currentDate.getFullYear() : loanStart.getFullYear();
-    const loanStartMonth = Number.isNaN(loanStart.getTime()) ? currentDate.getMonth() + 1 : loanStart.getMonth() + 1;
-    const baseHistory = targetPlayer.history && targetPlayer.history.length > 0
-      ? targetPlayer.history
-      : [{
-          clubName: sellerClub.name,
-          clubId: sellerClub.id,
-          fromYear: loanStartYear - 1,
-          fromMonth: 7,
-          toYear: null,
-          toMonth: null,
-        }];
-    const loanedPlayerBase: Player = {
-      ...targetPlayer,
-      clubId: buyerClub.id,
-      loan: loanInfo,
-      history: PlayerCareerService.startLoanEntry(baseHistory, loanInfo, loanStartYear, loanStartMonth, loanFee),
-      isAvailableForLoan: false,
-      isOnTransferList: false,
-      transferListPrice: undefined,
-      squadRole: null,
-      isUntouchable: false,
-      interestedClubs: [],
-    };
-    const loanedPlayer = PlayerClubAdaptationService.beginForClub(loanedPlayerBase, buyerClub.id, loanInfo.startDate);
-
-    setPlayers(prev => ({
-      ...prev,
-      [sellerClub.id]: (prev[sellerClub.id] || []).filter(player => player.id !== targetPlayer!.id),
-      [buyerClub.id]: [
-        ...(prev[buyerClub.id] || []).filter(player => player.id !== targetPlayer!.id),
-        loanedPlayer,
-      ],
+    setPlayers(previous => ({
+      ...previous,
+      [sellerClub.id]: (previous[sellerClub.id] || []).map(candidate =>
+        candidate.id === targetPlayer!.id
+          ? {
+              ...candidate,
+              isAvailableForLoan: false,
+              isOnTransferList: false,
+              transferListPrice: undefined,
+              loanNegotiations: Object.fromEntries(
+                Object.entries(candidate.loanNegotiations || {}).filter(([clubId]) => clubId !== buyerClub.id)
+              ),
+              pendingLoanArrival: {
+                agreedAt: dateStr,
+                arrivalDate,
+                loan: loanInfo,
+              },
+            }
+          : candidate
+      ),
     }));
 
-    setClubs(prev => prev.map(club => {
-      if (club.id === sellerClub.id) {
-        return {
-          ...club,
-          budget: club.budget + loanFee,
-          transferBudget: club.transferBudget + loanFee,
-          rosterIds: club.rosterIds.filter(id => id !== targetPlayer!.id),
-        };
-      }
-      if (club.id === buyerClub.id) {
-        return {
-          ...club,
-          budget: Math.max(0, club.budget - loanFee),
-          transferBudget: Math.max(0, club.transferBudget - loanFee),
-          rosterIds: [...club.rosterIds.filter(id => id !== targetPlayer!.id), targetPlayer!.id],
-        };
-      }
-      return club;
+    // Opłata za wypożyczenie jest rozliczana natychmiast po zawarciu porozumienia.
+    // Dzień później wykonywany jest już wyłącznie ruch kadrowy, dzięki czemu koszt
+    // nie znika z budżetu z opóźnieniem i nie może zostać naliczony drugi raz.
+    setClubs(previous => previous.map(club => {
+      if (club.id !== buyerClub.id && club.id !== sellerClub.id) return club;
+      const isBuyer = club.id === buyerClub.id;
+      const amount = isBuyer ? -loanFee : loanFee;
+      const financeLog: FinanceLog | null = loanFee > 0
+        ? {
+            id: `USER_LOAN_FEE_${targetPlayer!.id}_${buyerClub.id}_${dateStr}_${isBuyer ? 'EXPENSE' : 'INCOME'}`,
+            date: dateStr,
+            amount,
+            type: isBuyer ? 'EXPENSE' : 'INCOME',
+            description: isBuyer
+              ? `Opłata za wypożyczenie: ${targetPlayer!.firstName} ${targetPlayer!.lastName}`
+              : `Wpływ z wypożyczenia: ${targetPlayer!.firstName} ${targetPlayer!.lastName}`,
+            previousBalance: club.budget,
+          }
+        : null;
+      return {
+        ...club,
+        budget: Math.max(0, club.budget + amount),
+        transferBudget: Math.max(0, club.transferBudget + amount),
+        financeHistory: financeLog
+          ? [financeLog, ...(club.financeHistory || [])].slice(0, 50)
+          : club.financeHistory,
+      };
     }));
-
-    setLineups(prev => {
-      const next = { ...prev };
-      const nextSellerSquad = sellerSquad.filter(player => player.id !== targetPlayer!.id);
-      const nextBuyerSquad = [...buyerSquad.filter(player => player.id !== targetPlayer!.id), loanedPlayer];
-
-      if (next[sellerClub.id]) {
-        next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], nextSellerSquad);
-      }
-
-      if (next[buyerClub.id]) {
-        const buyerLineup = next[buyerClub.id];
-        const knownIds = new Set([
-          ...buyerLineup.bench,
-          ...buyerLineup.reserves,
-          ...(buyerLineup.startingXI.filter(Boolean) as string[]),
-        ]);
-        next[buyerClub.id] = knownIds.has(loanedPlayer.id)
-          ? buyerLineup
-          : {
-              ...buyerLineup,
-              reserves: [...buyerLineup.reserves, loanedPlayer.id],
-            };
-      } else {
-        const coach = buyerClub.coachId ? coaches[buyerClub.coachId] ?? null : null;
-        next[buyerClub.id] = LineupService.autoPickLineup(buyerClub.id, nextBuyerSquad, '4-4-2', coach);
-      }
-
-      return next;
-    });
 
     setTransferOffers(prev => prev.map(transferOffer => {
       // KONFLIKT INTERESÓW: po zaakceptowanym wypożyczeniu zamykamy aktywne
@@ -18353,13 +18478,14 @@ const finalResult: SimulationOutput = {
       id: `MAIL_USER_LOAN_DONE_${targetPlayer!.id}_${Date.now()}`,
       sender: 'Centrum wypożyczeń',
       role: 'System rejestracji wypożyczeń',
-      subject: `Wypożyczenie potwierdzone: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
+      subject: `Uzgodniono wypożyczenie: ${targetPlayer.firstName} ${targetPlayer.lastName}`,
       body: [
-        `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name} na zasadzie wypożyczenia z klubu ${sellerClub.name}.`,
+        `${targetPlayer.firstName} ${targetPlayer.lastName} zostanie wypożyczony z klubu ${sellerClub.name} do ${buyerClub.name}. Zawodnik zamelduje się w klubie następnego dnia.`,
         '',
-        `Okres: ${new Date(dateStr).toLocaleDateString('pl-PL')} - ${new Date(loanEndDate).toLocaleDateString('pl-PL')}`,
+        `Okres: ${new Date(arrivalDate).toLocaleDateString('pl-PL')} - ${new Date(confirmedLoanEndDate).toLocaleDateString('pl-PL')}`,
         `Pokrycie pensji: ${wageCoveragePercent}%`,
         `Opłata za wypożyczenie: ${loanFee.toLocaleString('pl-PL')} PLN`,
+        `Pozostały budżet transferowy: ${Math.max(0, buyerClub.transferBudget - loanFee).toLocaleString('pl-PL')} PLN`,
         `Obiecana rola: ${offerInput.promisedPlayingTime === 'FIRST_TEAM' ? 'pierwszy skład' : 'zmiennik / rotacja'}`,
       ].join('\n'),
       date: new Date(currentDate),
@@ -18370,14 +18496,14 @@ const finalResult: SimulationOutput = {
 
     showGameNotification({
       title: 'Wypożyczenie zaakceptowane',
-      message: `${targetPlayer.firstName} ${targetPlayer.lastName} dołącza do ${buyerClub.name} do ${new Date(loanEndDate).toLocaleDateString('pl-PL')}.`,
+      message: `${targetPlayer.firstName} ${targetPlayer.lastName} zamelduje się w ${buyerClub.name} następnego dnia.`,
       tone: 'success',
     });
 
     return {
       ok: true,
       status: 'ACCEPTED',
-      message: `${targetPlayer.firstName} ${targetPlayer.lastName} został wypożyczony do ${buyerClub.name}.`,
+      message: `Warunki zostały uzgodnione. ${targetPlayer.firstName} ${targetPlayer.lastName} zamelduje się w ${buyerClub.name} następnego dnia.`,
       loan: loanInfo,
     };
   }, [userTeamId, clubs, players, currentDate, transferOffers, incomingOffers, lineups, coaches, sessionSeed]);
