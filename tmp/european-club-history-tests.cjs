@@ -141,6 +141,11 @@ var ChampionshipHistoryService = class {
       year
     });
   }
+  static seedCareerStartDomesticHistory(startYear) {
+    if (startYear < 2026) return;
+    this.addEkstraklasaChampion("2025/2026", "Lech Pozna\u0144", "G\xF3rnik Zabrze", 2026);
+    this.addCupChampion("2025/2026", "PUCHAR_POLSKI", "G\xF3rnik Zabrze", 2026);
+  }
   static seedCareerStartEuropeanClubHistory(startYear) {
     if (startYear < 2026) return;
     this.addEuropeanClubChampion("2025/2026", "LIGA_MISTRZOW", "Paris Saint-Germain", 2026);
@@ -194,16 +199,22 @@ Object.assign(globalThis, {
   }
 });
 ChampionshipHistoryService.clear();
+ChampionshipHistoryService.seedCareerStartDomesticHistory(2025);
 ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(2025);
 import_node_assert.strict.equal(
   ChampionshipHistoryService.getAll().some((entry) => entry.year === 2026 && entry.competition === "LIGA_MISTRZOW"),
   false
 );
 ChampionshipHistoryService.clear();
+ChampionshipHistoryService.seedCareerStartDomesticHistory(2026);
 ChampionshipHistoryService.seedCareerStartEuropeanClubHistory(2026);
 var history2026 = ChampionshipHistoryService.getAll().filter((entry) => entry.season === "2025/2026");
+var ekstraklasa2026 = history2026.find((entry) => entry.competition === "EKSTRAKLASA");
+import_node_assert.strict.equal(ekstraklasa2026?.winner, "Lech Pozna\u0144");
+import_node_assert.strict.equal(ekstraklasa2026?.runnerUp, "G\xF3rnik Zabrze");
+import_node_assert.strict.equal(history2026.find((entry) => entry.competition === "PUCHAR_POLSKI")?.winner, "G\xF3rnik Zabrze");
 import_node_assert.strict.equal(history2026.find((entry) => entry.competition === "LIGA_MISTRZOW")?.winner, "Paris Saint-Germain");
 import_node_assert.strict.equal(history2026.find((entry) => entry.competition === "LIGA_EUROPY")?.winner, "Aston Villa");
 import_node_assert.strict.equal(history2026.find((entry) => entry.competition === "LIGA_KONFERENCJI")?.winner, "Crystal Palace");
 import_node_assert.strict.equal(history2026.find((entry) => entry.competition === "LIGA_KONFERENCJI")?.runnerUp, "Rayo Vallecano");
-console.log("European club history tests passed.");
+console.log("Career start history tests passed.");

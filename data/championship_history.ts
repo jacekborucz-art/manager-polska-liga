@@ -184,6 +184,13 @@ export class ChampionshipHistoryService {
     });
   }
 
+  static seedCareerStartDomesticHistory(startYear: number): void {
+    if (startYear < 2026) return;
+
+    this.addEkstraklasaChampion('2025/2026', 'Lech Poznań', 'Górnik Zabrze', 2026);
+    this.addCupChampion('2025/2026', 'PUCHAR_POLSKI', 'Górnik Zabrze', 2026);
+  }
+
   static seedCareerStartEuropeanClubHistory(startYear: number): void {
     if (startYear < 2026) return;
 
