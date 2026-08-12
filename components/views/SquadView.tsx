@@ -3924,6 +3924,18 @@ export const SquadView: React.FC = () => {
                           <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Opłata</span>
                           <span className="text-[16px] font-black italic uppercase tracking-tighter text-emerald-200 whitespace-nowrap">{(loan.loanFee ?? 0).toLocaleString('pl-PL')} PLN</span>
                         </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Obiecana rola</span>
+                          <span className="text-[13px] font-black italic uppercase tracking-tighter text-cyan-200 whitespace-nowrap">
+                            {loan.promisedPlayingTime === 'FIRST_TEAM' ? 'Pierwszy skład' : loan.promisedPlayingTime === 'ROTATION' ? 'Zmiennik / rotacja' : 'Brak zapisu'}
+                          </span>
+                        </div>
+                        {(loan.promiseConsecutiveBreaches ?? 0) > 0 && (
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-[11px] font-black italic uppercase tracking-tighter text-slate-400 whitespace-nowrap">Kontrola minut</span>
+                            <span className="text-[13px] font-black italic uppercase tracking-tighter text-orange-300 whitespace-nowrap">Ostrzeżenie klubu</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

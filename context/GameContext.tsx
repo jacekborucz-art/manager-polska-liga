@@ -166,6 +166,7 @@ import { WorldCupHistoryBackfillService } from '../services/WorldCupHistoryBackf
 import { PlayerCareerService } from '../services/PlayerCareerService';
 import { ClubAdaptationCompetition, PlayerClubAdaptationService } from '../services/PlayerClubAdaptationService';
 import { LoanDevelopmentService, LoanDevelopmentResult } from '../services/LoanDevelopmentService';
+import { LoanNegotiationService } from '../services/LoanNegotiationService';
 import { PlayerContractMindflowService } from '../services/PlayerContractMindflowService';
 import { PlayerMarketVisibilityService } from '../services/PlayerMarketVisibilityService';
 import { MysteryAgentService } from '../services/MysteryAgentService';
@@ -424,6 +425,14 @@ const sanitizeImportedLoan = (
     wageCoveragePercent: typeof loan.wageCoveragePercent === 'number' ? loan.wageCoveragePercent : undefined,
     loanFee: typeof loan.loanFee === 'number' ? loan.loanFee : undefined,
     forcedByClub: typeof loan.forcedByClub === 'boolean' ? loan.forcedByClub : undefined,
+    promisedPlayingTime: loan.promisedPlayingTime === 'FIRST_TEAM' || loan.promisedPlayingTime === 'ROTATION'
+      ? loan.promisedPlayingTime
+      : undefined,
+    promiseLastReviewDate: typeof loan.promiseLastReviewDate === 'string' ? loan.promiseLastReviewDate : undefined,
+    promiseBaselineMatches: typeof loan.promiseBaselineMatches === 'number' ? loan.promiseBaselineMatches : undefined,
+    promiseBaselineMinutes: typeof loan.promiseBaselineMinutes === 'number' ? loan.promiseBaselineMinutes : undefined,
+    promiseConsecutiveBreaches: typeof loan.promiseConsecutiveBreaches === 'number' ? loan.promiseConsecutiveBreaches : undefined,
+    promiseWarningDate: typeof loan.promiseWarningDate === 'string' ? loan.promiseWarningDate : undefined,
     reportBaselineMatches: typeof loan.reportBaselineMatches === 'number' ? loan.reportBaselineMatches : undefined,
     reportBaselineMinutes: typeof loan.reportBaselineMinutes === 'number' ? loan.reportBaselineMinutes : undefined,
     reportBaselineGoals: typeof loan.reportBaselineGoals === 'number' ? loan.reportBaselineGoals : undefined,
@@ -798,6 +807,7 @@ const processAiToAiLoanMoves = (
               loanFee,
               loanTotalCost: loanTerms.loanTotalCost,
               loanPlayerCanBeForced: loanTerms.loanPlayerCanBeForced,
+              promisedPlayingTime: loanTerms.promisedPlayingTime,
             },
           });
         });
@@ -846,6 +856,11 @@ const processAiToAiLoanMoves = (
       wageCoveragePercent: offer.wageCoveragePercent,
       loanFee,
       forcedByClub: false,
+      promisedPlayingTime: offer.promisedPlayingTime ?? 'ROTATION',
+      promiseLastReviewDate: offer.loanStartDate || dateStr,
+      promiseBaselineMatches: currentPlayer.stats.matchesPlayed ?? 0,
+      promiseBaselineMinutes: currentPlayer.stats.minutesPlayed ?? 0,
+      promiseConsecutiveBreaches: 0,
       reportBaselineMatches: currentPlayer.stats.matchesPlayed ?? 0,
       reportBaselineMinutes: currentPlayer.stats.minutesPlayed ?? 0,
       reportBaselineGoals: currentPlayer.stats.goals ?? 0,
@@ -13249,6 +13264,7 @@ const finalResult: SimulationOutput = {
               loanFee: loanTerms.loanFee,
               loanTotalCost: loanTerms.loanTotalCost,
               loanPlayerCanBeForced: loanTerms.loanPlayerCanBeForced,
+              promisedPlayingTime: loanTerms.promisedPlayingTime,
             };
 
             newOffersToAdd.push(newOffer);
@@ -16312,8 +16328,8 @@ const finalResult: SimulationOutput = {
     });
   };
 
-  const terminateLoanEarly = (playerId: string) => {
-    if (!userTeamId) return;
+  const terminateLoanEarly = (playerId: string, automaticReason?: string) => {
+    if (!userTeamId && !automaticReason) return;
 
     let loanedPlayer: Player | undefined;
     let currentClubId: string | undefined;
@@ -16327,7 +16343,7 @@ const finalResult: SimulationOutput = {
       return false;
     });
 
-    if (!loanedPlayer?.loan || loanedPlayer.loan.parentClubId !== userTeamId || !currentClubId) {
+    if (!loanedPlayer?.loan || (!automaticReason && loanedPlayer.loan.parentClubId !== userTeamId) || !currentClubId) {
       showGameNotification({
         title: 'Nie można skrócić wypożyczenia',
         message: 'Nie znaleziono aktywnego wypożyczenia tego zawodnika do Twojego klubu.',
@@ -16403,12 +16419,132 @@ const finalResult: SimulationOutput = {
       return next;
     });
 
-    showGameNotification({
-      title: 'Wypożyczenie skrócone',
-      message: `${loanedPlayer.firstName} ${loanedPlayer.lastName} wrócił z ${sourceClub?.name ?? loanedPlayer.loan.destinationClubName} do ${parentClub.name}.`,
-      tone: 'success',
-    });
+    const returnMessage = `${loanedPlayer.firstName} ${loanedPlayer.lastName} wrócił z ${sourceClub?.name ?? loanedPlayer.loan.destinationClubName} do ${parentClub.name}.`;
+    const concernsUserClub = parentClub.id === userTeamId || currentClubId === userTeamId;
+    if (automaticReason && concernsUserClub) {
+      setMessages(previous => [{
+        id: `LOAN_RECALL_${playerId}_${new Date(currentDate).toISOString().split('T')[0]}`,
+        sender: parentClub.name,
+        role: 'Klub macierzysty',
+        subject: `Odwołanie z wypożyczenia: ${loanedPlayer!.firstName} ${loanedPlayer!.lastName}`,
+        body: [
+          'Trenerze,',
+          '',
+          automaticReason,
+          '',
+          'Wcześniejsze ostrzeżenie nie przyniosło wystarczającej poprawy. Zawodnik wraca do klubu macierzystego ze skutkiem natychmiastowym.',
+        ].join('\n'),
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.SYSTEM,
+        priority: 96,
+      }, ...previous]);
+    }
+    if (!automaticReason || concernsUserClub) {
+      showGameNotification({
+        title: automaticReason ? 'Zawodnik odwołany' : 'Wypożyczenie skrócone',
+        message: automaticReason ? `${automaticReason} ${returnMessage}` : returnMessage,
+        tone: automaticReason ? 'warning' : 'success',
+      });
+    }
   };
+
+  useEffect(() => {
+    if (currentDate.getDate() !== 1) return;
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const reviewKey = `LOAN_PROMISE_AI_REVIEW_${dateStr}`;
+    const reviewPlayers = Object.values(players).flat().filter(player =>
+      !!player.loan?.promisedPlayingTime && player.loan.parentClubId !== userTeamId
+    );
+    if (reviewPlayers.length === 0) return;
+    if (sentMailIdsRef.current.has(reviewKey)) return;
+    sentMailIdsRef.current.add(reviewKey);
+
+    reviewPlayers.forEach(player => {
+      const loan = player.loan;
+      if (!loan?.promisedPlayingTime) return;
+      if (player.health.status !== HealthStatus.HEALTHY || player.suspensionMatches > 0) return;
+
+      const lastReviewDate = new Date(loan.promiseLastReviewDate || loan.startDate);
+      if (Number.isNaN(lastReviewDate.getTime())) return;
+      const elapsedDays = Math.floor((currentDate.getTime() - lastReviewDate.getTime()) / 86_400_000);
+      if (elapsedDays < 25) return;
+
+      const eligibleClubMatches = allFixtures.filter(fixture => {
+        if (fixture.status !== MatchStatus.FINISHED) return false;
+        if (fixture.homeTeamId !== loan.destinationClubId && fixture.awayTeamId !== loan.destinationClubId) return false;
+        const fixtureDate = fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
+        return !Number.isNaN(fixtureDate.getTime()) && fixtureDate > lastReviewDate && fixtureDate <= currentDate;
+      }).length;
+      const playerMatches = Math.max(0, (player.stats.matchesPlayed ?? 0) - (loan.promiseBaselineMatches ?? player.stats.matchesPlayed ?? 0));
+      const playerMinutes = Math.max(0, (player.stats.minutesPlayed ?? 0) - (loan.promiseBaselineMinutes ?? player.stats.minutesPlayed ?? 0));
+      const reviewSeed = IncomingTransferService.buildOfferSeed(
+        currentDate,
+        loan.parentClubId,
+        `${player.id}_LOAN_PROMISE_${sessionSeed}`
+      );
+      const review = LoanNegotiationService.reviewPromise({
+        player,
+        promisedPlayingTime: loan.promisedPlayingTime,
+        eligibleClubMatches,
+        playerMatches,
+        playerMinutes,
+        previousBreaches: loan.promiseConsecutiveBreaches ?? 0,
+        seed: reviewSeed,
+      });
+      if (review.outcome === 'NOT_ENOUGH_DATA') return;
+
+      if (review.outcome === 'RECALL') {
+        terminateLoanEarly(player.id, review.message);
+        return;
+      }
+
+      setPlayers(previous => ({
+        ...previous,
+        [loan.destinationClubId]: (previous[loan.destinationClubId] || []).map(candidate =>
+          candidate.id === player.id && candidate.loan
+            ? {
+                ...candidate,
+                loan: {
+                  ...candidate.loan,
+                  promiseLastReviewDate: dateStr,
+                  promiseBaselineMatches: candidate.stats.matchesPlayed ?? 0,
+                  promiseBaselineMinutes: candidate.stats.minutesPlayed ?? 0,
+                  promiseConsecutiveBreaches: review.nextBreaches,
+                  promiseWarningDate: review.outcome === 'WARNING' || review.outcome === 'CONTINUE'
+                    ? dateStr
+                    : undefined,
+                },
+              }
+            : candidate
+        ),
+      }));
+
+      if ((review.outcome === 'WARNING' || review.outcome === 'CONTINUE') && loan.destinationClubId === userTeamId) {
+        const parentClub = clubs.find(club => club.id === loan.parentClubId);
+        setMessages(previous => [{
+          id: `LOAN_PROMISE_WARNING_${player.id}_${dateStr}`,
+          sender: parentClub?.name ?? loan.parentClubName,
+          role: 'Klub macierzysty',
+          subject: `Ultimatum dotyczące minut: ${player.firstName} ${player.lastName}`,
+          body: [
+            'Trenerze,',
+            '',
+            review.message,
+            '',
+            `W ostatnim okresie zawodnik rozegrał ${playerMatches} z ${eligibleClubMatches} możliwych spotkań i zebrał ${playerMinutes} minut.`,
+            `Uzgodniona rola: ${loan.promisedPlayingTime === 'FIRST_TEAM' ? 'pierwszy skład' : 'zmiennik / rotacja'}.`,
+            '',
+            'Jeśli sytuacja nie poprawi się w następnym okresie, zawodnik może zostać odwołany bez dodatkowych negocjacji.',
+          ].join('\n'),
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.SYSTEM,
+          priority: 88,
+        }, ...previous]);
+      }
+    });
+  }, [currentDate, players, allFixtures, userTeamId, clubs, sessionSeed]);
 
   const toggleUntouchable = (playerId: string) => {
     if (!userTeamId) return;
@@ -16575,6 +16711,11 @@ const finalResult: SimulationOutput = {
       wageCoveragePercent: offer.wageCoveragePercent,
       loanFee,
       forcedByClub: forced,
+      promisedPlayingTime: offer.promisedPlayingTime ?? 'ROTATION',
+      promiseLastReviewDate: offer.loanStartDate || dateStr,
+      promiseBaselineMatches: player.stats.matchesPlayed ?? 0,
+      promiseBaselineMinutes: player.stats.minutesPlayed ?? 0,
+      promiseConsecutiveBreaches: 0,
       reportBaselineMatches: player.stats.matchesPlayed ?? 0,
       reportBaselineMinutes: player.stats.minutesPlayed ?? 0,
       reportBaselineGoals: player.stats.goals ?? 0,
@@ -17852,6 +17993,46 @@ const finalResult: SimulationOutput = {
       return { ok: false, status: 'VALIDATION_ERROR', message: 'Nie znaleziono klubu macierzystego zawodnika.' };
     }
 
+    if (LoanNegotiationService.isLocked(targetPlayer, buyerClub.id, currentDate)) {
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: `${sellerClub.name} nie chce obecnie wracać do rozmów w sprawie tego zawodnika.`,
+      };
+    }
+
+    const registerLoanNegotiationFailure = (failureSeed: number): void => {
+      const lockoutUntil = LoanNegotiationService.getLockoutUntil(currentDate, failureSeed);
+      setPlayers(previous => ({
+        ...previous,
+        [sellerClub.id]: (previous[sellerClub.id] || []).map(candidate =>
+          candidate.id === targetPlayer!.id
+            ? {
+                ...candidate,
+                loanNegotiationLockouts: {
+                  ...(candidate.loanNegotiationLockouts || {}),
+                  [buyerClub.id]: lockoutUntil,
+                },
+              }
+            : candidate
+        ),
+      }));
+    };
+
+    if (offerInput.declinedUltimatum) {
+      const withdrawalSeed = IncomingTransferService.buildOfferSeed(
+        currentDate,
+        buyerClub.id,
+        `${targetPlayer.id}_USER_LOAN_WITHDRAWAL_${sessionSeed}`
+      );
+      registerLoanNegotiationFailure(withdrawalSeed);
+      return {
+        ok: false,
+        status: 'CLUB_REJECTED',
+        message: 'Rozmowy zostały zakończone po odrzuceniu ultimatum. Klub nie chce obecnie wracać do negocjacji.',
+      };
+    }
+
     // Loans move the player and money immediately, so the ownership relationship
     // must be validated before squad-need, wage and fee calculations are run.
     // Internal movement from reserves will be handled by a dedicated system.
@@ -17901,6 +18082,7 @@ const finalResult: SimulationOutput = {
       `${targetPlayer.id}_USER_LOAN_REALISM_${sessionSeed}`
     );
     if (!IncomingTransferService.passesLoanRealismGate(buyerClub, sellerClub, realismGateSeed)) {
+      registerLoanNegotiationFailure(realismGateSeed + 401);
       return {
         ok: false,
         status: 'PLAYER_REFUSED',
@@ -17964,8 +18146,6 @@ const finalResult: SimulationOutput = {
       sellerClub.country
     );
     const expectedLoanFee = Math.round(marketValue * 0.003 / 1000) * 1000;
-    const repDelta = buyerClub.reputation - sellerClub.reputation;
-    const requiredCoverage = repDelta >= 1 ? 40 : repDelta === 0 ? 50 : 65;
     const loanOfferStart = new Date(dateStr);
     const loanOfferEnd = new Date(loanEndDate);
     const loanDays = Math.max(30, Math.ceil((loanOfferEnd.getTime() - loanOfferStart.getTime()) / 86_400_000));
@@ -17973,37 +18153,41 @@ const finalResult: SimulationOutput = {
     const financialValueForSeller = loanFee + sellerWageSaving;
     const expectedFinancialValue = expectedLoanFee + Math.round((targetPlayer.annualSalary || 0) * 0.5 * (loanDays / 365));
 
-    // FINANCIAL ESCAPE: klub wystawiający nie patrzy już tylko na minuty.
-    // Jeśli sportowo wypożyczenie jest słabsze, ale oferta daje realny zarobek
-    // albo znacząco amortyzuje pensję zawodnika, zarząd AI może mimo wszystko
-    // uznać ruch za opłacalny.
-    const isStrongFinancialLoan =
-      financialValueForSeller >= expectedFinancialValue * 1.25 ||
-      (wageCoveragePercent >= 85 && loanFee >= expectedLoanFee * 0.75) ||
-      (wageCoveragePercent === 100 && loanFee > 0);
+    const negotiationSeed = IncomingTransferService.buildOfferSeed(
+      currentDate,
+      buyerClub.id,
+      `${targetPlayer.id}_USER_LOAN_NEGOTIATION_${sessionSeed}`
+    );
+    const negotiationDecision = LoanNegotiationService.evaluate({
+      player: targetPlayer,
+      buyerClub,
+      sellerClub,
+      buyerSquad,
+      sellerSquad,
+      loanFee,
+      wageCoveragePercent,
+      financialValueForSeller,
+      expectedFinancialValue,
+      promisedPlayingTime: offerInput.promisedPlayingTime,
+      acceptedUltimatum: offerInput.acceptedUltimatum,
+      seed: negotiationSeed,
+    });
 
-    if (!need.fits && !isStrongFinancialLoan) {
+    if (negotiationDecision.outcome === 'ULTIMATUM') {
       return {
         ok: false,
-        status: 'CLUB_REJECTED',
-        message: `${sellerClub.name} odrzuca propozycję. Klub nie widzi wystarczającej gwarancji minut i sportowego sensu wypożyczenia.`,
+        status: 'ULTIMATUM',
+        message: negotiationDecision.message,
+        ultimatum: {
+          demandedRole: negotiationDecision.demandedRole ?? 'FIRST_TEAM',
+          message: negotiationDecision.message,
+        },
       };
     }
 
-    const sportNeedScore = Math.max(0, need.needScore);
-    const sellerScore =
-      sportNeedScore * 7 +
-      Math.min(35, wageCoveragePercent * 0.35) +
-      Math.min(25, expectedLoanFee > 0 ? (loanFee / expectedLoanFee) * 18 : loanFee > 0 ? 18 : 8) +
-      Math.min(18, expectedFinancialValue > 0 ? (financialValueForSeller / expectedFinancialValue) * 12 : 0) +
-      (repDelta >= 1 ? 10 : repDelta === 0 ? 4 : -8);
-
-    if ((wageCoveragePercent < requiredCoverage && !isStrongFinancialLoan) || sellerScore < 58) {
-      return {
-        ok: false,
-        status: 'CLUB_REJECTED',
-        message: `${sellerClub.name} odrzuca ofertę. Oczekują mocniejszej gwarancji gry, wyższego pokrycia pensji albo lepszej opłaty za wypożyczenie.`,
-      };
+    if (negotiationDecision.outcome === 'REJECT') {
+      registerLoanNegotiationFailure(negotiationSeed + 402);
+      return { ok: false, status: 'CLUB_REJECTED', message: negotiationDecision.message };
     }
 
     const playerDecisionSeed = IncomingTransferService.buildOfferSeed(currentDate, buyerClub.id, `${targetPlayer.id}_USER_LOAN_DECISION_${sessionSeed}`);
@@ -18016,6 +18200,7 @@ const finalResult: SimulationOutput = {
     );
 
     if (playerDecision === 'refused') {
+      registerLoanNegotiationFailure(playerDecisionSeed + 403);
       return {
         ok: false,
         status: 'PLAYER_REFUSED',
@@ -18034,6 +18219,11 @@ const finalResult: SimulationOutput = {
       wageCoveragePercent,
       loanFee,
       forcedByClub: false,
+      promisedPlayingTime: offerInput.promisedPlayingTime,
+      promiseLastReviewDate: dateStr,
+      promiseBaselineMatches: targetPlayer.stats.matchesPlayed ?? 0,
+      promiseBaselineMinutes: targetPlayer.stats.minutesPlayed ?? 0,
+      promiseConsecutiveBreaches: 0,
       reportBaselineMatches: targetPlayer.stats.matchesPlayed ?? 0,
       reportBaselineMinutes: targetPlayer.stats.minutesPlayed ?? 0,
       reportBaselineGoals: targetPlayer.stats.goals ?? 0,
@@ -18170,6 +18360,7 @@ const finalResult: SimulationOutput = {
         `Okres: ${new Date(dateStr).toLocaleDateString('pl-PL')} - ${new Date(loanEndDate).toLocaleDateString('pl-PL')}`,
         `Pokrycie pensji: ${wageCoveragePercent}%`,
         `Opłata za wypożyczenie: ${loanFee.toLocaleString('pl-PL')} PLN`,
+        `Obiecana rola: ${offerInput.promisedPlayingTime === 'FIRST_TEAM' ? 'pierwszy skład' : 'zmiennik / rotacja'}`,
       ].join('\n'),
       date: new Date(currentDate),
       isRead: false,

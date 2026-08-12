@@ -924,7 +924,7 @@ export const TransferNewsView: React.FC = () => {
                       </p>
                       <p className="text-[10px] text-slate-400 mt-0.5 truncate">
                         {buyerClub.name} {isLoanOffer ? 'chce wypożyczyć' : 'oferuje'} <span className="text-amber-300 font-black">{displayedFee.toLocaleString('pl-PL')} PLN</span>
-                        {isLoanOffer && <span className="ml-2 text-cyan-300 font-black">· {offer.wageCoveragePercent ?? 0}% pensji · {offer.loanEndDate ? new Date(offer.loanEndDate).toLocaleDateString('pl-PL') : 'koniec okresu'}</span>}
+                        {isLoanOffer && <span className="ml-2 text-cyan-300 font-black italic uppercase tracking-tighter">· {offer.wageCoveragePercent ?? 0}% pensji · {offer.promisedPlayingTime === 'FIRST_TEAM' ? 'pierwszy skład' : 'zmiennik / rotacja'} · {offer.loanEndDate ? new Date(offer.loanEndDate).toLocaleDateString('pl-PL') : 'koniec okresu'}</span>}
                         {player.loan && <span className="ml-2 text-cyan-300 font-black">· wypożyczony do {player.loan.destinationClubName}</span>}
                         {offer.boardPressure && <span className="ml-2 text-red-400 font-black">· zarząd naciska</span>}
                       </p>

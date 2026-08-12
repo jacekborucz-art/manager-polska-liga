@@ -409,7 +409,7 @@ export const IncomingTransferService = {
     sellerClub: Club,
     currentDate: Date | string,
     seed: number
-  ): Pick<IncomingTransferOffer, 'fee' | 'aiMaxFee' | 'aiUrgency' | 'timing' | 'loanDuration' | 'loanStartDate' | 'loanEndDate' | 'wageCoveragePercent' | 'loanFee' | 'loanTotalCost' | 'loanPlayerCanBeForced'> | null {
+  ): Pick<IncomingTransferOffer, 'fee' | 'aiMaxFee' | 'aiUrgency' | 'timing' | 'loanDuration' | 'loanStartDate' | 'loanEndDate' | 'wageCoveragePercent' | 'loanFee' | 'loanTotalCost' | 'loanPlayerCanBeForced' | 'promisedPlayingTime'> | null {
     const rng1 = IncomingTransferService.seededRandom(seed + 3001);
     const rng2 = IncomingTransferService.seededRandom(seed + 3002);
     const rng3 = IncomingTransferService.seededRandom(seed + 3003);
@@ -455,6 +455,7 @@ export const IncomingTransferService = {
       loanFee,
       loanTotalCost: totalCost,
       loanPlayerCanBeForced: true,
+      promisedPlayingTime: player.age <= 23 && rng1 < 0.68 ? 'FIRST_TEAM' : rng2 < 0.48 ? 'FIRST_TEAM' : 'ROTATION',
     };
   },
 

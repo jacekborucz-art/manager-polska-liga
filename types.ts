@@ -1293,6 +1293,12 @@ export enum IncomingOfferStatus {
 
 export type IncomingOfferKind = 'TRANSFER' | 'LOAN';
 export type LoanOfferDuration = 'ROUND' | 'SEASON';
+export type LoanPlayingTimeRole = 'ROTATION' | 'FIRST_TEAM';
+
+export interface LoanUltimatum {
+  demandedRole: LoanPlayingTimeRole;
+  message: string;
+}
 
 export interface IncomingTransferOffer {
   id: string;
@@ -1321,6 +1327,7 @@ export interface IncomingTransferOffer {
   loanFee?: number;
   loanTotalCost?: number;
   loanPlayerCanBeForced?: boolean;
+  promisedPlayingTime?: LoanPlayingTimeRole;
   loanNegotiationNote?: string;
   loanNegotiationResult?: 'AI_ACCEPTED_COUNTER' | 'AI_COUNTERED' | 'AI_REJECTED_COUNTER';
 }
@@ -1372,13 +1379,17 @@ export interface LoanOfferSubmissionInput {
   loanFee: number;
   wageCoveragePercent: number;
   loanDuration: LoanOfferDuration;
+  promisedPlayingTime: LoanPlayingTimeRole;
+  acceptedUltimatum?: boolean;
+  declinedUltimatum?: boolean;
 }
 
 export interface LoanOfferSubmissionResult {
   ok: boolean;
-  status: 'ACCEPTED' | 'PLAYER_REFUSED' | 'CLUB_REJECTED' | 'VALIDATION_ERROR';
+  status: 'ACCEPTED' | 'ULTIMATUM' | 'PLAYER_REFUSED' | 'CLUB_REJECTED' | 'VALIDATION_ERROR';
   message: string;
   loan?: PlayerLoanInfo;
+  ultimatum?: LoanUltimatum;
 }
 
 export interface PlayerLoanMonthlyReport {
@@ -1408,6 +1419,12 @@ export interface PlayerLoanInfo {
   wageCoveragePercent?: number;
   loanFee?: number;
   forcedByClub?: boolean;
+  promisedPlayingTime?: LoanPlayingTimeRole;
+  promiseLastReviewDate?: string;
+  promiseBaselineMatches?: number;
+  promiseBaselineMinutes?: number;
+  promiseConsecutiveBreaches?: number;
+  promiseWarningDate?: string;
   reportBaselineMatches?: number;
   reportBaselineMinutes?: number;
   reportBaselineGoals?: number;
@@ -1502,6 +1519,8 @@ export interface Player {
   isAvailableForLoan?: boolean;
   marketValue?: number;
   loan?: PlayerLoanInfo | null;
+  /** Ukryte przed graczem daty ponownego otwarcia negocjacji, zapisane osobno dla każdego klubu zainteresowanego. */
+  loanNegotiationLockouts?: Record<string, string>;
   purchaseFee?: number;          // Kwota zapłacona przez klub przy zakupie zawodnika
    history: PlayerHistoryEntry[];
   seasonHistory?: PlayerSeasonHistoryEntry[];
