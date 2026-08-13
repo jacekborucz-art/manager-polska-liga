@@ -9,6 +9,7 @@ import { PlayerMindflowConversationModal } from './PlayerMindflowConversationMod
 
 interface PlayerTransferMindflowModalProps {
   player: Player;
+  clubKitColors: string[];
   currentDate: Date;
   sessionSeed: number;
   onResolve: (result: PlayerTransferConversationResult) => void;
@@ -17,6 +18,7 @@ interface PlayerTransferMindflowModalProps {
 
 export const PlayerTransferMindflowModal: React.FC<PlayerTransferMindflowModalProps> = ({
   player,
+  clubKitColors,
   currentDate,
   sessionSeed,
   onResolve,
@@ -57,8 +59,12 @@ export const PlayerTransferMindflowModal: React.FC<PlayerTransferMindflowModalPr
       theme="TRANSFER"
       playerName={`${player.firstName} ${player.lastName}`}
       playerLastName={player.lastName}
-      title="O PRZYSZŁOŚCI"
-      subtitle="PLAYER TRANSFER MINDFLOW"
+      overall={player.overallRating}
+      playerPosition={player.position}
+      playerAge={player.age}
+      clubKitColors={clubKitColors}
+      title="Porozmawiaj o przyszłości zawodnika"
+      subtitle="Rozmowa o planach transferowych"
       moodLabel={PlayerTransferMindflowService.getMoodLabel(session.mood)}
       currentStep={Math.min(session.currentQuestionIndex + 1, session.questions.length)}
       totalSteps={session.questions.length}

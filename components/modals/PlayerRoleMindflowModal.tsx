@@ -9,6 +9,7 @@ import { PlayerMindflowConversationModal } from './PlayerMindflowConversationMod
 
 interface PlayerRoleMindflowModalProps {
   player: Player;
+  clubKitColors: string[];
   currentDate: Date;
   sessionSeed: number;
   onResolve: (result: PlayerRoleConversationResult) => void;
@@ -17,6 +18,7 @@ interface PlayerRoleMindflowModalProps {
 
 export const PlayerRoleMindflowModal: React.FC<PlayerRoleMindflowModalProps> = ({
   player,
+  clubKitColors,
   currentDate,
   sessionSeed,
   onResolve,
@@ -57,8 +59,12 @@ export const PlayerRoleMindflowModal: React.FC<PlayerRoleMindflowModalProps> = (
       theme="ROLE"
       playerName={`${player.firstName} ${player.lastName}`}
       playerLastName={player.lastName}
-      title="O STATUSIE W DRUŻYNIE"
-      subtitle="PLAYER MINDFLOW"
+      overall={player.overallRating}
+      playerPosition={player.position}
+      playerAge={player.age}
+      clubKitColors={clubKitColors}
+      title="Porozmawiaj o statusie w drużynie"
+      subtitle="Rozmowa o roli zawodnika"
       moodLabel={PlayerRoleMindflowService.getMoodLabel(session.mood)}
       currentStep={Math.min(session.currentQuestionIndex + 1, session.questions.length)}
       totalSteps={session.questions.length}

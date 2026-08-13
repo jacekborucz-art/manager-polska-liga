@@ -1,5 +1,8 @@
 import React from 'react';
+import { PlayerPosition } from '../../types';
 import { useModalClose } from '../ui/useModalClose';
+import { PlayerConversationScene } from './IndividualPlayerTalkModal';
+import { PlayerConversationIdentity } from './PlayerConversationIdentity';
 
 export type PlayerMindflowTheme = 'ROLE' | 'TRANSFER';
 
@@ -12,6 +15,10 @@ interface PlayerMindflowConversationModalProps {
   theme: PlayerMindflowTheme;
   playerName: string;
   playerLastName: string;
+  overall: number;
+  playerPosition: PlayerPosition;
+  playerAge: number;
+  clubKitColors: string[];
   title: string;
   subtitle: string;
   moodLabel: string;
@@ -37,35 +44,38 @@ interface PlayerMindflowConversationModalProps {
 }
 
 const THEMES: Record<PlayerMindflowTheme, {
+  label: string;
   accentText: string;
-  gradient: string;
-  glow: string;
-  questionBox: string;
+  accentMuted: string;
+  accentDot: string;
+  accentLine: string;
   answerHover: string;
-  progressBar: string;
 }> = {
   ROLE: {
-    accentText: 'text-violet-400',
-    gradient: 'via-violet-500',
-    glow: 'rgba(139,92,246,0.08)',
-    questionBox: 'border-violet-500/25 bg-violet-500/10',
-    answerHover: 'hover:bg-violet-500/15 hover:border-t-violet-400/50 hover:border-x-violet-400/30 hover:border-b-violet-900/60',
-    progressBar: 'bg-violet-500',
+    label: 'Rozmowa o roli w drużynie',
+    accentText: 'text-violet-300',
+    accentMuted: 'text-violet-200/60',
+    accentDot: 'bg-violet-300 shadow-[0_0_12px_rgba(196,181,253,0.75)]',
+    accentLine: 'bg-violet-300',
+    answerHover: 'hover:border-violet-300/40',
   },
   TRANSFER: {
-    accentText: 'text-amber-400',
-    gradient: 'via-amber-500',
-    glow: 'rgba(245,158,11,0.08)',
-    questionBox: 'border-amber-500/25 bg-amber-500/10',
-    answerHover: 'hover:bg-amber-500/15 hover:border-t-amber-400/50 hover:border-x-amber-400/30 hover:border-b-amber-900/60',
-    progressBar: 'bg-amber-500',
+    label: 'Rozmowa o przyszłości',
+    accentText: 'text-amber-300',
+    accentMuted: 'text-amber-200/60',
+    accentDot: 'bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.72)]',
+    accentLine: 'bg-amber-300',
+    answerHover: 'hover:border-amber-300/40',
   },
 };
-
 export const PlayerMindflowConversationModal: React.FC<PlayerMindflowConversationModalProps> = ({
   theme,
   playerName,
   playerLastName,
+  overall,
+  playerPosition,
+  playerAge,
+  clubKitColors,
   title,
   subtitle,
   moodLabel,
@@ -85,124 +95,166 @@ export const PlayerMindflowConversationModal: React.FC<PlayerMindflowConversatio
   const accent = THEMES[theme];
 
   return (
-    <div className={`fixed inset-0 z-[1200] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md ${exitClass}`}>
-      <div className="relative flex max-h-[92vh] w-full max-w-[900px] flex-col overflow-hidden rounded-[40px] border border-white/10 bg-slate-900/70 shadow-[0_50px_100px_rgba(0,0,0,0.9)]">
-        <div className={`absolute left-0 top-0 h-[2px] w-full bg-gradient-to-r from-transparent ${accent.gradient} to-transparent`} />
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: `radial-gradient(ellipse at 50% 0%, ${accent.glow} 0%, transparent 60%)` }}
-        />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
-          <span className={`select-none whitespace-nowrap text-[110px] font-black italic uppercase tracking-tighter opacity-[0.035] ${accent.accentText}`}>
-            {playerLastName}
-          </span>
-        </div>
+    <div className={`fixed inset-0 z-[1200] flex items-center justify-center overflow-hidden bg-[#010307]/90 p-7 backdrop-blur-xl ${exitClass}`}>
+      <div className="relative h-[min(920px,calc(100vh-56px))] w-[min(1660px,calc(100vw-64px))] overflow-hidden rounded-[48px]">
+        <PlayerConversationScene />
 
-        <header className="relative border-b border-white/5 px-8 pb-5 pt-8">
-          <div className="flex justify-center">
-            <span className={`text-[9px] font-black italic uppercase tracking-[0.25em] ${accent.accentText}`}>
-              {subtitle}
-            </span>
-          </div>
-          <h1 className="mt-2 text-center text-3xl font-black italic uppercase tracking-tighter text-white">
-            ROZMOWA<br />
-            <span className={accent.accentText}>{title}</span>
-          </h1>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
-              ZAWODNIK: <span className="text-white">{playerName}</span>
-            </span>
-            <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
-              NASTRÓJ: <span className={accent.accentText}>{moodLabel}</span>
-            </span>
-          </div>
-          {!result && (
-            <>
-              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/5">
-                <div className={`h-full rounded-full transition-all duration-500 ${accent.progressBar}`} style={{ width: `${progress}%` }} />
+        <div className="relative z-10 grid h-full grid-cols-[500px_minmax(0,1fr)]">
+          <aside className="flex min-h-0 flex-col justify-between px-14 pb-12 pt-11">
+            <div>
+              <div className="flex items-center gap-3 text-[15px] font-semibold tracking-normal text-emerald-100">
+                <span className={`h-2 w-2 rounded-full ${accent.accentDot}`} />
+                Rozmowa z zawodnikiem
               </div>
-              <div className="mt-2 flex justify-between text-[9px] font-black italic uppercase tracking-tighter text-slate-500">
-                <span>ETAP {currentStep} / {totalSteps}</span>
-                <span>PRZEBIEG ROZMOWY: {score} PKT</span>
-              </div>
-            </>
-          )}
-        </header>
-
-        <div className="custom-scrollbar relative overflow-y-auto">
-          {result ? (
-            <div className="flex flex-col items-center gap-6 px-8 py-10 text-center">
-              <div>
-                <span className={`text-[9px] font-black italic uppercase tracking-[0.25em] ${result.isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                  WYNIK ROZMOWY
-                </span>
-                <h2 className="mt-3 text-3xl font-black italic uppercase tracking-tighter text-white">{result.title}</h2>
-                <p className="mt-4 text-base font-black italic uppercase tracking-tighter leading-relaxed text-slate-200">{result.summary}</p>
-                {!result.hideMeta && (
-                  <p className="mt-5 text-xs font-black italic uppercase tracking-tighter text-slate-500">
-                    WYNIK: {result.score} / {result.targetScore} PKT · ZMIANA MORALE: {result.moraleDelta > 0 ? '+' : ''}{result.moraleDelta}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={closeModal}
-                className={`w-full rounded-2xl border-x border-b border-t px-6 py-4 text-sm font-black italic uppercase tracking-tighter text-white transition-all duration-200 active:translate-y-[2px] ${
-                  result.isPositive
-                    ? 'border-x-emerald-500/30 border-b-black/60 border-t-emerald-400/60 bg-emerald-600/80 hover:bg-emerald-500'
-                    : 'border-x-red-500/30 border-b-black/60 border-t-red-400/60 bg-red-600/80 hover:bg-red-500'
-                }`}
-                style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
-              >
-                ZAMKNIJ ROZMOWĘ
-              </button>
+              <p className={`mt-2 text-sm font-normal tracking-normal ${accent.accentMuted}`}>{accent.label}</p>
             </div>
-          ) : (
-            <div className="px-8 py-6">
-              {lastReaction && (
-                <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-center">
-                  <span className="text-[9px] font-black italic uppercase tracking-[0.2em] text-slate-500">REAKCJA ZAWODNIKA</span>
-                  <p className="mt-2 text-sm font-black italic uppercase tracking-tighter leading-relaxed text-white">{lastReaction}</p>
-                </div>
-              )}
-              {question && (
+
+            <div className="mb-2 max-w-[335px]">
+              <PlayerConversationIdentity
+                playerName={playerName}
+                overall={overall}
+                position={playerPosition}
+                age={playerAge}
+                kitColors={clubKitColors}
+              />
+
+              {!result && (
                 <>
-                  <div className={`rounded-2xl border p-5 text-center ${accent.questionBox}`}>
-                    <span className={`text-[9px] font-black italic uppercase tracking-[0.2em] ${accent.accentText}`}>{playerLastName}</span>
-                    <p className="mt-3 text-lg font-black italic uppercase tracking-tighter leading-relaxed text-white">{question}</p>
+                  <div className="flex items-end gap-3">
+                    <span className="text-6xl font-light leading-none tracking-normal text-white">
+                      {String(currentStep).padStart(2, '0')}
+                    </span>
+                    <span className="pb-1 text-xl font-normal tracking-normal text-cyan-100/40">
+                      / {String(totalSteps).padStart(2, '0')}
+                    </span>
                   </div>
-                  <div className="mt-5 grid gap-3">
-                    {answers.map(answer => (
-                      <button
-                        key={answer.id}
-                        onClick={() => onAnswer(answer.id)}
-                        className={`w-full rounded-2xl border-x border-b border-t border-x-white/10 border-b-black/60 border-t-white/20 bg-white/[0.03] px-5 py-3.5 text-left transition-all duration-150 active:translate-y-[2px] ${accent.answerHover}`}
-                        style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-                      >
-                        <span className="text-sm font-normal italic uppercase tracking-tighter leading-snug text-white">{answer.text}</span>
-                      </button>
-                    ))}
+                  <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-500 ${accent.accentLine}`}
+                      style={{ width: `${progress}%` }}
+                    />
                   </div>
                 </>
               )}
-              <div className="mt-6 border-t border-white/5 pt-4">
-                <button
-                  onClick={onEndConversation}
-                  className="mx-auto block w-full max-w-[420px] rounded-2xl border-x border-b border-t border-x-white/10 border-b-black/60 border-t-white/20 bg-transparent py-3 text-xs font-black italic uppercase tracking-tighter text-slate-500 transition-all duration-150 hover:bg-red-500/10 hover:text-red-300 active:translate-y-[2px]"
-                  style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-                >
-                  ZAKOŃCZ ROZMOWĘ
-                </button>
+
+              <div className="mt-6 space-y-2 border-t border-white/10 pt-5 text-sm font-normal text-slate-300/65">
+                <div className="flex justify-between gap-4">
+                  <span>Nastrój</span>
+                  <span className={accent.accentText}>{moodLabel}</span>
+                </div>
+                {!result && (
+                  <div className="flex justify-between gap-4">
+                    <span>Przebieg rozmowy</span>
+                    <span className="text-slate-100">{score} pkt</span>
+                  </div>
+                )}
               </div>
+
+              <p className="mt-5 text-sm font-normal leading-relaxed tracking-normal text-slate-300/55">
+                Odpowiedzi wpływają na nastawienie zawodnika, jego zaufanie i końcowy wynik rozmowy.
+              </p>
             </div>
-          )}
+          </aside>
+
+          <main className="flex min-h-0 flex-col pb-11 pl-14 pr-16 pt-12">
+            <header className="shrink-0 pr-8">
+              <p className={`text-sm font-medium tracking-normal ${accent.accentText}`}>{subtitle}</p>
+              <h1 className="mt-2 max-w-[980px] text-[42px] font-semibold leading-[1.12] tracking-[-0.025em] text-white">
+                {result ? 'Podsumowanie rozmowy' : title}
+              </h1>
+            </header>
+
+            {result ? (
+              <section className="flex min-h-0 flex-1 flex-col justify-center pb-8">
+                <div className="max-w-[980px]">
+                  <div className={`flex items-center gap-3 text-[13px] font-medium ${result.isPositive ? 'text-emerald-300' : 'text-rose-300'}`}>
+                    <span className={`h-2 w-2 rounded-full ${result.isPositive ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]' : 'bg-rose-300 shadow-[0_0_12px_rgba(253,164,175,0.72)]'}`} />
+                    Wynik rozmowy
+                  </div>
+                  <h2 className="mt-5 text-[38px] font-semibold leading-tight tracking-[-0.02em] text-white">{result.title}</h2>
+                  <p className="mt-6 max-w-[980px] text-[23px] font-normal leading-[1.5] tracking-[-0.01em] text-slate-200">
+                    {result.summary}
+                  </p>
+                  {!result.hideMeta && (
+                    <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-5 text-sm font-normal text-slate-300/65">
+                      <span>
+                        Wynik <strong className="ml-2 font-semibold text-slate-100">{result.score} / {result.targetScore} pkt</strong>
+                      </span>
+                      <span>
+                        Zmiana morale{' '}
+                        <strong className={`ml-2 font-semibold ${result.moraleDelta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          {result.moraleDelta > 0 ? '+' : ''}{result.moraleDelta}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="group ml-auto mt-14 flex min-w-[310px] items-center justify-between border-b border-emerald-300/35 py-4 text-left text-[17px] font-medium text-slate-100 transition-colors hover:border-emerald-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+                >
+                  Zamknij rozmowę
+                  <span className="text-xl font-light text-emerald-300/75 transition-transform group-hover:translate-x-1">→</span>
+                </button>
+              </section>
+            ) : (
+              <section className="mt-7 flex min-h-0 flex-1 flex-col">
+                {lastReaction && (
+                  <blockquote className="mb-5 max-w-[1020px] border-l-2 border-cyan-300/55 py-1 pl-5">
+                    <p className="text-[13px] font-medium tracking-normal text-cyan-200/65">Ostatnia reakcja zawodnika</p>
+                    <p className="mt-2 text-[16px] font-normal leading-relaxed tracking-normal text-slate-200/85">„{lastReaction}”</p>
+                  </blockquote>
+                )}
+
+                {question && (
+                  <>
+                    <div className="shrink-0">
+                      <div className={`flex items-center gap-3 text-[13px] font-medium tracking-normal ${accent.accentText}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${accent.accentDot}`} />
+                        {playerLastName}
+                      </div>
+                      <p className="mt-3 max-w-[1030px] text-[27px] font-semibold leading-[1.32] tracking-[-0.015em] text-slate-50">
+                        {question}
+                      </p>
+                    </div>
+
+                    <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-3 custom-scrollbar">
+                      {answers.map((answer, answerIndex) => (
+                        <button
+                          key={answer.id}
+                          type="button"
+                          onClick={() => onAnswer(answer.id)}
+                          className={`group relative flex min-h-[82px] w-full items-center border-b border-white/10 py-4 text-left transition-colors duration-200 first:border-t focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60 ${accent.answerHover}`}
+                        >
+                          <span className="absolute inset-y-2 left-0 w-0 rounded-r-full bg-gradient-to-r from-cyan-400/10 to-transparent transition-[width] duration-300 group-hover:w-full" />
+                          <span className={`relative w-14 shrink-0 text-[14px] font-medium tracking-normal ${accent.accentMuted}`}>
+                            {String(answerIndex + 1).padStart(2, '0')}
+                          </span>
+                          <span className="relative pr-12 text-[17px] font-medium leading-[1.45] tracking-normal text-slate-200 transition-colors group-hover:text-white">
+                            {answer.text}
+                          </span>
+                          <span className={`relative ml-auto mr-2 text-xl font-light opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-80 ${accent.accentText}`}>→</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={onEndConversation}
+                  className="group ml-auto mt-4 flex min-w-[280px] shrink-0 items-center justify-between border-b border-rose-300/25 py-3 text-left text-[15px] font-medium text-slate-300/65 transition-colors hover:border-rose-300/60 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/50"
+                >
+                  Zakończ rozmowę
+                  <span className="text-lg font-light text-rose-300/60 transition-transform group-hover:translate-x-1">→</span>
+                </button>
+              </section>
+            )}
+          </main>
         </div>
       </div>
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
-      `}</style>
     </div>
   );
 };

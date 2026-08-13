@@ -5,8 +5,9 @@ import { REGION_NATIONALITY_LABEL } from '../../constants';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { PlayerCareerService } from '../../services/PlayerCareerService';
-import { INDIVIDUAL_TALK_OPTIONS, IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
+import { IndividualTalkResult, PlayerMoraleService } from '../../services/PlayerMoraleService';
 import { PlayerFormLevel, PlayerFormService } from '../../services/PlayerFormService';
+import { IndividualPlayerTalkModal } from '../modals/IndividualPlayerTalkModal';
 import { PlayerRoleMindflowModal } from '../modals/PlayerRoleMindflowModal';
 import { PlayerTransferMindflowModal } from '../modals/PlayerTransferMindflowModal';
 // ── Transfer Request Dialog ──────────────────────────────────────────────────
@@ -322,6 +323,9 @@ export const PlayerCard: React.FC = () => {
   const clubLogoUrl = club.logoFile
     ? new URL(`../../Graphic/logo/${club.logoFile}`, import.meta.url).href
     : null;
+  const conversationKitColors = [
+    club.colorsHex[0] ?? '#F59E0B',
+  ];
   const blockedReturnViews = new Set<ViewState>([
     ViewState.PLAYER_CARD,
     ViewState.TRANSFER_OFFER,
@@ -1786,61 +1790,25 @@ export const PlayerCard: React.FC = () => {
       )}
 
       {isTalkPanelOpen && (
-        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/75 backdrop-blur-sm p-6" onClick={() => setIsTalkPanelOpen(false)}>
-          <div className="w-[980px] max-w-[94vw] max-h-[88vh] overflow-y-auto custom-scrollbar bg-slate-950/95 border border-white/10 rounded-[34px] shadow-2xl p-8" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-6 mb-7">
-              <div>
-                <div className="text-sm font-black italic uppercase tracking-tighter text-emerald-400">Indywidualna rozmowa</div>
-                <h3 className="text-4xl font-black italic uppercase tracking-tighter text-white leading-none mt-1">
-                  {player.firstName} {player.lastName}
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsTalkPanelOpen(false)}
-                className="w-12 h-12 rounded-2xl bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 text-2xl font-black border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 transition-all active:translate-y-[2px]"
-                style={button3DStyle}
-              >
-                ×
-              </button>
-            </div>
-
-            {!canTalk && (
-              <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-base font-black italic uppercase tracking-tighter mb-6 leading-snug">
-                Kolejna rozmowa będzie możliwa {nextTalkDate ? nextTalkDate.toLocaleDateString('pl-PL') : 'za kilka dni'}.
-              </div>
-            )}
-
-            {talkResult && (
-              <div className={`p-6 rounded-3xl border mb-6 ${talkResult.isPositive ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-red-500/10 border-red-500/30 text-red-200'}`}>
-                <div className="text-sm font-black italic uppercase tracking-tighter mb-2">Odpowiedź zawodnika</div>
-                <p className="text-lg font-black italic uppercase tracking-tighter leading-relaxed">{talkResult.reactionText}</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              {INDIVIDUAL_TALK_OPTIONS.map(option => (
-                <button
-                  key={option.type}
-                  disabled={!canTalk || !!talkResult}
-                  onClick={() => handleIndividualTalk(option.type)}
-                  className={`text-left min-h-[132px] p-6 rounded-3xl border-t border-x border-b border-b-black/60 transition-all active:translate-y-[2px]
-                    ${!canTalk || !!talkResult
-                      ? 'bg-slate-900 border-t-slate-700 border-x-slate-800 opacity-50 cursor-not-allowed'
-                      : 'bg-white/[0.03] border-t-white/20 border-x-white/10 hover:bg-white/[0.06] hover:border-t-emerald-400/40 hover:border-x-emerald-500/20'}`}
-                  style={button3DStyle}
-                >
-                  <span className="block text-lg font-black italic uppercase tracking-tighter text-white mb-3 leading-tight">{option.title}</span>
-                  <span className="block text-sm font-bold text-slate-400 leading-snug">{option.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <IndividualPlayerTalkModal
+          playerName={`${player.firstName} ${player.lastName}`}
+          clubName={club.name}
+          clubLogoUrl={clubLogoUrl}
+          positionLabel={playerPositionLabel[player.position]}
+          overall={player.overallRating}
+          moraleLabel={moraleInfo.label}
+          canTalk={canTalk}
+          nextTalkLabel={nextTalkDate ? nextTalkDate.toLocaleDateString('pl-PL') : 'za kilka dni'}
+          result={talkResult}
+          onSelect={handleIndividualTalk}
+          onClose={() => setIsTalkPanelOpen(false)}
+        />
       )}
 
       {isRoleMindflowOpen && (
         <PlayerRoleMindflowModal
           player={playerMorale}
+          clubKitColors={conversationKitColors}
           currentDate={currentDate}
           sessionSeed={sessionSeed}
           onResolve={result => resolvePlayerRoleConversation(player.id, result)}
@@ -1851,6 +1819,7 @@ export const PlayerCard: React.FC = () => {
       {isTransferMindflowOpen && (
         <PlayerTransferMindflowModal
           player={playerMorale}
+          clubKitColors={conversationKitColors}
           currentDate={currentDate}
           sessionSeed={sessionSeed}
           onResolve={result => resolvePlayerTransferConversation(player.id, result)}
@@ -1865,6 +1834,7 @@ export const PlayerCard: React.FC = () => {
         // Serwis: PlayerTransferRequestDialogService
         <PlayerTransferRequestModal
           player={playerMorale}
+          clubKitColors={conversationKitColors}
           currentDate={currentDate}
           sessionSeed={sessionSeed}
           onResolve={(result: TransferRequestDialogResult) => resolvePlayerTransferRequestDialog(player.id, result)}

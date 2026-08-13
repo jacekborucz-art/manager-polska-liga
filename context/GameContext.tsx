@@ -2219,6 +2219,51 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     };
   }, []);
 
+  const buildFriendlyPlanningReminder = useCallback((
+    club: Club,
+    date: Date,
+    fixturesToCheck: Fixture[]
+  ): MailMessage | null => {
+    const month = date.getMonth();
+    const isSummerReminder = month === 6 && date.getDate() === 1;
+    const isWinterReminder = month === 0 && date.getDate() === 1;
+    if (!isSummerReminder && !isWinterReminder) return null;
+
+    const assistant = (club.staffIds ?? [])
+      .map(id => staffMembers[id])
+      .find((member): member is StaffMember => member?.role === StaffRole.ASSISTANT_COACH);
+    if (!assistant) return null;
+
+    const reminderDate = new Date(date);
+    reminderDate.setHours(0, 0, 0, 0);
+    const preparationWindowEnd = isSummerReminder
+      ? new Date(date.getFullYear(), 6, 31, 23, 59, 59, 999)
+      : new Date(date.getFullYear(), 0, 31, 23, 59, 59, 999);
+    const hasScheduledFriendly = fixturesToCheck.some(fixture => {
+      if (fixture.leagueId !== CompetitionType.FRIENDLY || fixture.status !== MatchStatus.SCHEDULED) return false;
+      if (fixture.homeTeamId !== club.id && fixture.awayTeamId !== club.id) return false;
+      const fixtureDate = fixture.date instanceof Date ? new Date(fixture.date) : new Date(fixture.date);
+      return !Number.isNaN(fixtureDate.getTime()) && fixtureDate >= reminderDate && fixtureDate <= preparationWindowEnd;
+    });
+    if (hasScheduledFriendly) return null;
+
+    const periodKey = isSummerReminder ? 'SUMMER' : 'WINTER';
+    const preparationLabel = isSummerReminder ? 'przed rozpoczęciem sezonu' : 'przed rundą wiosenną';
+    const assistantName = `${assistant.firstName} ${assistant.lastName}`;
+
+    return {
+      id: `ASSISTANT_FRIENDLY_REMINDER_${club.id}_${date.getFullYear()}_${periodKey}`,
+      sender: assistantName,
+      role: 'Asystent trenera',
+      subject: 'Przypomnienie: warto zaplanować sparingi',
+      body: `Trenerze,\n\nnie mamy obecnie zaplanowanego żadnego sparingu ${preparationLabel}. Warto zorganizować mecze kontrolne, aby drużyna złapała rytm, a zawodnicy ograli się przed najbliższymi spotkaniami.\n\nPozdrawiam,\n${assistantName}\nAsystent trenera`,
+      date: new Date(date),
+      isRead: false,
+      type: MailType.STAFF,
+      priority: 45,
+    };
+  }, [staffMembers]);
+
   // Memoized allFixtures
   const allFixtures = useMemo(() => {
     const allLeagueFixtures = Object.values(leagueSchedules).flatMap(s => s.matchdays.flatMap(m => m.fixtures));
@@ -4641,6 +4686,11 @@ const selectUserTeam = (clubId: string) => {
 
    const welcomeMail = MailService.generateWelcomeMail(selectedClub, squad, currentDate);
 const fanMail = MailService.generateFanWelcomeMail(selectedClub, squad, currentDate); // Tę funkcję zaraz dopiszemy
+const friendlyPlanningReminder = buildFriendlyPlanningReminder(selectedClub, currentDate, allFixtures);
+const shouldSendFriendlyPlanningReminder = !!friendlyPlanningReminder && !sentMailIdsRef.current.has(friendlyPlanningReminder.id);
+if (shouldSendFriendlyPlanningReminder && friendlyPlanningReminder) {
+  sentMailIdsRef.current.add(friendlyPlanningReminder.id);
+}
 const isNewJobAfterGameStart = seasonNumber > 1 || isResigned || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
 const takingOverInterviewMail = isNewJobAfterGameStart
   ? MediaInterviewService.generateTakingOverInterviewMail(
@@ -4650,7 +4700,13 @@ const takingOverInterviewMail = isNewJobAfterGameStart
       currentDate
     )
   : null;
-setMessages(prev => takingOverInterviewMail ? [takingOverInterviewMail, welcomeMail, fanMail, ...prev] : [welcomeMail, fanMail, ...prev]);
+setMessages(prev => [
+  ...(shouldSendFriendlyPlanningReminder && friendlyPlanningReminder && !prev.some(message => message.id === friendlyPlanningReminder.id) ? [friendlyPlanningReminder] : []),
+  ...(takingOverInterviewMail ? [takingOverInterviewMail] : []),
+  welcomeMail,
+  fanMail,
+  ...prev,
+]);
 
     navigateTo(ViewState.SQUAD_IMPORT);
   };
@@ -11871,6 +11927,17 @@ const finalResult: SimulationOutput = {
     nextDay.setDate(nextDay.getDate() + 1);
     const nextDayIso = nextDay.toISOString().split('T')[0];
 
+    if (userTeamId && !isResigned) {
+      const userClub = clubs.find(club => club.id === userTeamId);
+      const friendlyPlanningReminder = userClub
+        ? buildFriendlyPlanningReminder(userClub, nextDay, allFixtures)
+        : null;
+      if (friendlyPlanningReminder && !sentMailIdsRef.current.has(friendlyPlanningReminder.id)) {
+        sentMailIdsRef.current.add(friendlyPlanningReminder.id);
+        prependUniqueMessages([friendlyPlanningReminder]);
+      }
+    }
+
     if (userTeamId && !isResigned && !managedReserveClubId) {
       const reserveOverflow = reserves.length - RESERVE_SQUAD_LIMIT;
       if (reserveOverflow <= 0) {
@@ -14496,7 +14563,7 @@ const finalResult: SimulationOutput = {
     DebugLoggerService.checkpoint('DAY_PHASE', `DAY_END ${dateToProcess.toDateString()}`);
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, buildFriendlyPlanningReminder, prependUniqueMessages, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();

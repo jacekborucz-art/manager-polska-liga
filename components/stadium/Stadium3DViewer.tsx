@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Sky, Environment, ContactShadows, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, Environment, ContactShadows, PerspectiveCamera } from '@react-three/drei';
 import { Suspense } from 'react';
 import { Pitch } from './3d/Pitch';
 import { Lighting } from './3d/Lighting';
@@ -37,26 +37,29 @@ export function Stadium3DViewer({ capacity, primaryColor, seatColors }: Stadium3
   const seatColor: string | string[] = seatColors && seatColors.length > 0 ? seatColors : (primaryColor ?? '#1a3a6a');
 
   return (
-    <Canvas shadows gl={{ antialias: true, stencil: false, depth: true }} style={{ width: '100%', height: '100%' }}>
-      <PerspectiveCamera makeDefault position={[-50, 30, 80]} fov={40} />
+    <Canvas
+      shadows
+      dpr={[1, 1.6]}
+      gl={{ antialias: true, stencil: false, depth: true, alpha: true }}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(180deg, #4598cc 0%, #72b7df 52%, #b6dff2 100%)',
+      }}
+    >
+      <PerspectiveCamera makeDefault position={[118, 92, 132]} fov={46} near={0.1} far={700} />
       <OrbitControls
         enableDamping
         dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2.1}
-        minDistance={30}
-        maxDistance={180}
+        enablePan={false}
+        target={[0, -2, 0]}
+        minPolarAngle={Math.PI / 8}
+        maxPolarAngle={Math.PI / 2.18}
+        minDistance={72}
+        maxDistance={250}
         makeDefault
       />
-      <color attach="background" args={['#5aa0d8']} />
       <Suspense fallback={null}>
-        <Sky
-          distance={450000}
-          sunPosition={[10, 20, 10]}
-          turbidity={3}
-          rayleigh={4}
-          mieCoefficient={0.005}
-          mieDirectionalG={0.8}
-        />
         <Environment preset="city" />
         <group position={[0, -5, 0]}>
           <Pitch />

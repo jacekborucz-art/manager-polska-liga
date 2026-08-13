@@ -5,7 +5,7 @@ import { Club, BoardAttributeLevel, ClubBoard, ClubOwner, ClubCEO, ClubCFO, Club
 import { ManagementMemberModal, MemberEntry } from './ManagementMemberModal';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
-import { BoardRequestModal } from './BoardRequestModal';
+import { BoardRequestModal, BoardRequestScene } from './BoardRequestModal';
 import { StadiumModal } from './StadiumModal';
 import { StadiumExpansionRequestModal } from './StadiumExpansionRequestModal';
 import { Stadium3DViewer } from '../stadium/Stadium3DViewer';
@@ -19,20 +19,20 @@ interface BoardModalProps {
 }
 
 const ATTR_NAME: Record<keyof ClubBoard, string> = {
-  hojnosc:     'HOJNOŚĆ',
-  ambicja:     'AMBICJA',
-  cierpliwosc: 'CIERPLIWOŚĆ',
-  chciwosc:    'CHCIWOŚĆ',
-  oczekiwania: 'OCZEKIWANIA',
-  kompetencja: 'KOMPETENCJA',
+  hojnosc:     'Hojność',
+  ambicja:     'Ambicja',
+  cierpliwosc: 'Cierpliwość',
+  chciwosc:    'Chciwość',
+  oczekiwania: 'Oczekiwania',
+  kompetencja: 'Kompetencja',
 };
 
 const LEVEL_LABEL: Record<BoardAttributeLevel, string> = {
-  bardzo_niska: 'BARDZO NISKA',
-  niska:        'NISKA',
-  przecietna:   'PRZECIĘTNA',
-  wysoka:       'WYSOKA',
-  bardzo_wysoka:'BARDZO WYSOKA',
+  bardzo_niska: 'Bardzo niska',
+  niska:        'Niska',
+  przecietna:   'Przeciętna',
+  wysoka:       'Wysoka',
+  bardzo_wysoka:'Bardzo wysoka',
 };
 
 
@@ -50,6 +50,11 @@ const LEVEL_BAR_WIDTH: Record<BoardAttributeLevel, string> = {
   przecietna:   '60%',
   wysoka:       '80%',
   bardzo_wysoka:'100%',
+};
+
+const capitalizeFirstLetter = (value: string): string => {
+  if (!value) return value;
+  return `${value.charAt(0).toLocaleUpperCase('pl-PL')}${value.slice(1)}`;
 };
 
 const HOJNOSC_TEXT: Record<BoardAttributeLevel, string> = {
@@ -722,65 +727,54 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
   const confidenceTextColor = confidence > 70 ? 'text-emerald-400' : confidence > 40 ? 'text-amber-400' : 'text-red-500';
 
   return (
-    <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 ${exitClass}`} onClick={closeModal}>
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+    <div className={`fixed inset-0 z-[300] flex items-center justify-center overflow-hidden bg-[#010307]/90 p-7 backdrop-blur-xl ${exitClass}`} onClick={closeModal}>
 
       <div
-        className="relative h-[92vh] w-full max-w-[1560px] overflow-hidden rounded-[40px] border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)]"
+        className="relative h-[min(920px,calc(100vh-56px))] w-[min(1660px,calc(100vw-64px))] overflow-hidden rounded-[48px]"
         onClick={e => e.stopPropagation()}
       >
-        {/* Tło */}
-        <div className="absolute inset-0 z-0">
-          <div
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(135deg, ${club.colorsHex[0]}cc 0%, ${club.colorsHex[1] || club.colorsHex[0]}99 50%, #0f172a 100%)`
-            }}
-          />
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-[40px]" />
-          <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)',
-              backgroundSize: '52px 52px'
-            }}
-          />
-        </div>
+        <BoardRequestScene />
 
         {/* Przycisk zamknięcia */}
         <button
-          onClick={onClose}
-          className="absolute top-5 right-5 z-20 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all text-sm font-black"
+          type="button"
+          onClick={closeModal}
+          aria-label="Zamknij okno zarządu"
+          className="absolute right-9 top-8 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-[#071321]/85 text-lg font-semibold text-slate-300 shadow-[0_8px_22px_rgba(0,0,0,0.35)] transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
         >
           ✕
         </button>
 
         {/* Zawartość */}
-        <div className="relative z-10 grid h-full min-h-0 items-stretch gap-6 p-6 xl:grid-cols-[380px_minmax(0,1fr)_500px] xl:p-8">
-          <aside className="min-h-0 overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
-            <div className="mb-5 text-center">
-              <h2 className="mt-1 text-2xl font-black italic uppercase tracking-tighter text-white">Członkowie Zarządu</h2>
+        <div className="relative z-10 grid h-full min-h-0 grid-cols-[500px_minmax(0,1fr)_430px]">
+          <aside className="relative min-h-0 overflow-y-auto border-r border-white/10 bg-gradient-to-b from-[#061522]/95 via-[#071725]/91 to-[#06121f]/84 px-14 pb-10 pt-10 shadow-[18px_0_40px_rgba(1,8,17,0.2)] backdrop-blur-[3px] custom-scrollbar">
+            <div className="mb-5">
+              <div className="flex items-center gap-3 text-[15px] font-semibold tracking-normal text-amber-100">
+                <span className="h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.72)]" />
+                Biuro zarządu
+              </div>
+              <h2 className="mt-2 text-[28px] font-semibold leading-tight tracking-[-0.02em] text-white drop-shadow-[0_3px_8px_rgba(0,0,0,0.9)]">Zespół zarządzający</h2>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               {club.management && (
                 <>
                   <button
                     type="button"
                     onClick={() => setSelectedMember({ role: 'Właściciel', data: club.management!.owner })}
-                    className="w-full rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-left transition-colors hover:border-violet-400/35 hover:bg-violet-500/15"
+                    className="group relative w-full rounded-[14px] border border-violet-300/25 bg-violet-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(196,181,253,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-violet-200/45 hover:bg-violet-500/20"
                   >
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-violet-400">Właściciel</p>
-                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.owner.firstName} {club.management.owner.lastName}</p>
+                    <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-violet-200"><span className="h-1.5 w-1.5 rounded-full bg-violet-300 shadow-[0_0_10px_rgba(196,181,253,0.85)]" />Właściciel</p>
+                    <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{club.management.owner.firstName} {club.management.owner.lastName}</p>
                   </button>
                   {club.management.ceo && (
                     <button
                       type="button"
                       onClick={() => setSelectedMember({ role: 'Prezes', data: club.management!.ceo! })}
-                      className="w-full rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left transition-colors hover:border-amber-400/35 hover:bg-amber-500/15"
+                      className="group relative w-full rounded-[14px] border border-amber-300/25 bg-amber-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(252,211,77,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-amber-200/45 hover:bg-amber-500/20"
                     >
-                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-amber-400">Prezes</p>
-                      <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.ceo.firstName} {club.management.ceo.lastName}</p>
+                      <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-amber-200"><span className="h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.85)]" />Prezes</p>
+                      <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{club.management.ceo.firstName} {club.management.ceo.lastName}</p>
                     </button>
                   )}
                 </>
@@ -790,10 +784,10 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                 <button
                   type="button"
                   onClick={() => setIsDirectorModalOpen(true)}
-                  className="w-full rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-left transition-colors hover:border-sky-400/35 hover:bg-sky-500/15"
+                  className="group relative w-full rounded-[14px] border border-sky-300/25 bg-sky-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(125,211,252,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-sky-200/45 hover:bg-sky-500/20"
                 >
-                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-sky-400">Dyrektor sportowy</p>
-                  <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{sportingDirector.firstName} {sportingDirector.lastName}</p>
+                  <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-sky-200"><span className="h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_10px_rgba(125,211,252,0.85)]" />Dyrektor sportowy</p>
+                  <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{sportingDirector.firstName} {sportingDirector.lastName}</p>
                 </button>
               ) : (
                 <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-2 text-[10px] italic text-slate-500">
@@ -806,48 +800,45 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                   <button
                     type="button"
                     onClick={() => setSelectedMember({ role: 'Dyrektor finansowy', data: club.management!.cfo })}
-                    className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-left transition-colors hover:border-emerald-400/35 hover:bg-emerald-500/15"
+                    className="group relative w-full rounded-[14px] border border-emerald-300/25 bg-emerald-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(110,231,183,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-emerald-200/45 hover:bg-emerald-500/20"
                   >
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-emerald-400">Dyrektor finansowy</p>
-                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.cfo.firstName} {club.management.cfo.lastName}</p>
+                    <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-emerald-200"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.85)]" />Dyrektor finansowy</p>
+                    <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{club.management.cfo.firstName} {club.management.cfo.lastName}</p>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedMember({ role: 'Dyrektor operacyjny', data: club.management!.coo })}
-                    className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-left transition-colors hover:border-blue-400/35 hover:bg-blue-500/15"
+                    className="group relative w-full rounded-[14px] border border-blue-300/25 bg-blue-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(147,197,253,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-blue-200/45 hover:bg-blue-500/20"
                   >
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-blue-400">Dyrektor operacyjny</p>
-                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.coo.firstName} {club.management.coo.lastName}</p>
+                    <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-blue-200"><span className="h-1.5 w-1.5 rounded-full bg-blue-300 shadow-[0_0_10px_rgba(147,197,253,0.85)]" />Dyrektor operacyjny</p>
+                    <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{club.management.coo.firstName} {club.management.coo.lastName}</p>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedMember({ role: 'Dyrektor marketingu', data: club.management!.marketingDirector })}
-                    className="w-full rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-left transition-colors hover:border-rose-400/35 hover:bg-rose-500/15"
+                    className="group relative w-full rounded-[14px] border border-rose-300/25 bg-rose-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(253,164,175,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-rose-200/45 hover:bg-rose-500/20"
                   >
-                    <p className="text-[8px] font-black italic uppercase tracking-tighter text-rose-400">Dyrektor marketingu</p>
-                    <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.marketingDirector.firstName} {club.management.marketingDirector.lastName}</p>
+                    <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-rose-200"><span className="h-1.5 w-1.5 rounded-full bg-rose-300 shadow-[0_0_10px_rgba(253,164,175,0.85)]" />Dyrektor marketingu</p>
+                    <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{club.management.marketingDirector.firstName} {club.management.marketingDirector.lastName}</p>
                   </button>
                   {club.management.academyDirector && (
                     <button
                       type="button"
                       onClick={() => setSelectedMember({ role: 'Dyrektor akademii', data: club.management!.academyDirector! })}
-                      className="w-full rounded-xl border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-left transition-colors hover:border-orange-400/35 hover:bg-orange-500/15"
+                      className="group relative w-full rounded-[14px] border border-orange-300/25 bg-orange-500/15 px-4 py-3 text-left shadow-[inset_2px_0_0_rgba(253,186,116,0.65),0_5px_14px_rgba(0,0,0,0.18)] backdrop-blur-[3px] transition-all duration-200 hover:border-orange-200/45 hover:bg-orange-500/20"
                     >
-                      <p className="text-[8px] font-black italic uppercase tracking-tighter text-orange-400">Dyrektor akademii</p>
-                      <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">{club.management.academyDirector.firstName} {club.management.academyDirector.lastName}</p>
+                      <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-orange-200"><span className="h-1.5 w-1.5 rounded-full bg-orange-300 shadow-[0_0_10px_rgba(253,186,116,0.85)]" />Dyrektor akademii</p>
+                      <p className="relative z-10 mt-1 text-[15px] font-semibold tracking-normal text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">{club.management.academyDirector.firstName} {club.management.academyDirector.lastName}</p>
                     </button>
                   )}
                 </>
               )}
             </div>
 
-            <div className="mt-4 border-t border-white/10" />
-
             {sportingDirector && (
-              <div className="mt-4 rounded-[20px] border border-white/5 bg-black/25 p-4">
-                <div className="relative group rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
-                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Relacja z zarządem</p>
-                  <p className={`mt-1 text-sm font-black italic uppercase tracking-tighter ${directorBoardInfluence >= 4 ? 'text-emerald-400' : directorBoardInfluence <= -4 ? 'text-red-400' : 'text-slate-300'}`}>
+              <div className="relative group mt-5 rounded-[16px] border border-cyan-300/15 bg-[#06111e]/92 px-4 py-4 shadow-[0_10px_24px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+                  <p className="flex items-center gap-2 text-[11px] font-medium tracking-normal text-cyan-100/65"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300/80 shadow-[0_0_9px_rgba(103,232,249,0.7)]" />Relacja z zarządem</p>
+                  <p className={`mt-1.5 text-[15px] font-semibold tracking-normal ${directorBoardInfluence >= 4 ? 'text-emerald-300' : directorBoardInfluence <= -4 ? 'text-red-300' : 'text-slate-100'}`}>
                     {getDirectorBoardInfluenceLabel(directorBoardInfluence)}
                   </p>
                   <div className="absolute bottom-full left-0 mb-2 w-64 rounded-[14px] border border-white/10 bg-slate-900/95 p-3 shadow-xl backdrop-blur-md invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
@@ -856,66 +847,66 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                       Dyrektor ocenia wyniki co miesiąc i może blokować ryzykowne ruchy transferowe, gdy uzna je za sprzeczne z interesem klubu.
                     </p>
                   </div>
-                </div>
               </div>
             )}
 
-            <div className="mt-4 border-t border-white/10" />
-
-            <div className="mt-4">
+            <div className="mt-5">
               <button
                 type="button"
                 onClick={() => setIsBoardRequestOpen(true)}
-                className="w-full rounded-[20px] border border-amber-400/20 bg-amber-500/[0.08] p-4 text-left transition-all hover:border-amber-400/35 hover:bg-amber-500/[0.12] group"
+                className="group relative isolate w-full overflow-hidden rounded-[18px] border border-amber-300/25 bg-gradient-to-r from-amber-500/20 via-[#141724]/95 to-[#06111e]/95 px-4 py-4 text-left shadow-[inset_3px_0_0_rgba(252,211,77,0.78),0_10px_24px_rgba(0,0,0,0.3)] transition-all duration-300 after:absolute after:inset-y-0 after:-left-1/3 after:w-1/3 after:-skew-x-12 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:transition-transform after:duration-700 hover:-translate-y-0.5 hover:border-amber-200/55 hover:after:translate-x-[430%]"
               >
-                <p className="text-[8px] font-black italic uppercase tracking-tighter text-amber-300/70">Komunikacja</p>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <p className="text-sm font-black italic uppercase tracking-tighter text-white">PROŚBA DO ZARZĄDU</p>
+                <p className="relative z-10 flex items-center gap-2 text-[11px] font-medium tracking-normal text-amber-200"><span className="h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.85)]" />Komunikacja</p>
+                <div className="relative z-10 mt-1 flex items-center justify-between gap-2">
+                  <p className="text-[16px] font-semibold tracking-normal text-white">Prośba do zarządu</p>
                   <span className="text-amber-400/50 group-hover:text-amber-400 transition-colors">→</span>
                 </div>
-                <p className="mt-1 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">
+                <p className="relative z-10 mt-1 text-[12px] font-normal leading-relaxed tracking-normal text-slate-300/70">
                   Złóż oficjalną prośbę do zarządu klubu
                 </p>
               </button>
             </div>
           </aside>
 
-          <div className="flex min-h-0 min-w-0 flex-col gap-6 overflow-y-auto rounded-[28px] bg-black/10 p-1">
+          <div className="flex min-h-0 min-w-0 flex-col gap-5 overflow-y-auto pb-10 pl-14 pr-8 pt-10 custom-scrollbar">
 
           {/* Nagłówek */}
-          <div className="text-center">
-            <p className="text-[10px] font-black italic text-blue-500 uppercase tracking-tighter mb-1">BIURO</p>
-            <h1 className="text-5xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-              ZARZĄD KLUBU
+          <div>
+            <p className="mb-1 text-sm font-medium tracking-normal text-amber-300/85">Centrum decyzyjne</p>
+            <h1 className="text-[42px] font-semibold leading-[1.12] tracking-[-0.025em] text-white">
+              Zarząd klubu
             </h1>
           </div>
 
           {/* Logo i nazwa */}
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-4 border-b border-white/10 pb-5">
             {logo ? (
-              <div className="w-24 h-24 flex items-center justify-center">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center">
                 <img
                   src={logo}
                   alt={club.name}
-                  className="w-full h-full object-contain -rotate-[6deg] drop-shadow-[0_10px_25px_rgba(0,0,0,0.6)]"
+                  className="h-full w-full object-contain drop-shadow-[0_10px_25px_rgba(0,0,0,0.6)]"
                 />
               </div>
             ) : (
-              <div className="w-20 h-20 rounded-[20px] overflow-hidden border-2 border-white/10 shadow-xl">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 shadow-xl">
                 <div style={{ backgroundColor: club.colorsHex[0] }} className="h-1/2 w-full" />
                 <div style={{ backgroundColor: club.colorsHex[1] || club.colorsHex[0] }} className="h-1/2 w-full" />
               </div>
             )}
-            <span className="text-3xl font-black italic uppercase tracking-tighter text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-              {club.name}
-            </span>
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium tracking-normal text-cyan-100/50">Klub</p>
+              <span className="mt-1 block text-[28px] font-semibold leading-tight tracking-[-0.02em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                {club.name}
+              </span>
+            </div>
           </div>
 
           {/* Pasek zaufania */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black italic text-slate-500 uppercase tracking-tighter">ZAUFANIE ZARZĄDU</span>
-              <span className={`text-base font-black italic uppercase tracking-tighter ${confidenceTextColor}`}>{confidence}%</span>
+              <span className="text-[12px] font-medium tracking-normal text-cyan-100/55">Zaufanie zarządu</span>
+              <span className={`text-base font-semibold tracking-normal ${confidenceTextColor}`}>{confidence}%</span>
             </div>
             <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden">
               <div
@@ -927,19 +918,31 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
 
           {/* Atrybuty zarządu — siatka 2×3 */}
           {board && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="relative grid grid-cols-2 gap-x-7 gap-y-1 overflow-hidden rounded-[22px] border border-cyan-100/10 bg-[#061522]/72 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.045),0_14px_32px_rgba(0,0,0,0.18)] backdrop-blur-[4px]">
+              <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/20 to-transparent" />
               {ATTR_ROWS.flat().map(key => {
                 const level = board[key] as BoardAttributeLevel;
                 return (
-                  <div key={key} className="bg-black/30 rounded-[14px] border border-white/5 p-3 flex flex-col gap-1.5">
-                    <span className="text-base font-black italic uppercase tracking-tighter text-white">{ATTR_NAME[key]}</span>
-                    <div className="h-px w-full bg-gradient-to-r from-yellow-500/40 via-yellow-400/20 to-transparent" />
-                    <span className="text-xs font-black italic uppercase tracking-tighter text-white">{LEVEL_LABEL[level]}</span>
-                    <div className="h-[2px] w-full bg-black/50 rounded-full overflow-hidden mt-0.5">
+                  <div key={key} className="relative flex flex-col gap-2.5 border-b border-white/[0.065] px-1 py-3.5 last:border-b-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[14px] font-semibold tracking-normal text-slate-100">{ATTR_NAME[key]}</span>
+                      <span className="text-[11px] font-medium tracking-normal text-slate-300/65">{LEVEL_LABEL[level]}</span>
+                    </div>
+                    <div className="relative h-[7px] w-full overflow-hidden rounded-full border border-white/[0.055] bg-[#020812]/75 shadow-[inset_0_2px_4px_rgba(0,0,0,0.65)]">
                       <div
-                        className="h-full rounded-full"
-                        style={{ width: LEVEL_BAR_WIDTH[level], backgroundColor: LEVEL_BAR_COLOR[level] }}
-                      />
+                        className="relative h-full overflow-hidden rounded-full transition-[width] duration-700 ease-out"
+                        style={{
+                          width: LEVEL_BAR_WIDTH[level],
+                          background: `linear-gradient(90deg, ${LEVEL_BAR_COLOR[level]}b8 0%, ${LEVEL_BAR_COLOR[level]} 72%, #ffffff 170%)`,
+                          boxShadow: `0 0 12px ${LEVEL_BAR_COLOR[level]}73`,
+                        }}
+                      >
+                        <span className="absolute inset-x-1 top-px h-px rounded-full bg-white/45" />
+                        <span
+                          className="absolute right-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full blur-[3px]"
+                          style={{ backgroundColor: LEVEL_BAR_COLOR[level] }}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
@@ -948,23 +951,22 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
           )}
 
           {/* Wiadomość zarządu */}
-          <div className="bg-black/25 rounded-[20px] border border-white/5 p-5 flex flex-col gap-3">
-
-            <p className="text-base text-slate-300 font-normal italic uppercase tracking-tighter leading-relaxed">
+          <div className="-mx-3 flex flex-col gap-3 bg-[#020914]/88 px-3 py-3 backdrop-blur-[5px]">
+            <p className="text-[17px] font-medium leading-relaxed tracking-normal text-slate-100">
               Witamy serdecznie w naszym biurze.
             </p>
-            <p className="text-base text-slate-300 font-normal italic uppercase tracking-tighter leading-relaxed">
+            <p className="text-[14px] font-normal leading-[1.65] tracking-normal text-slate-300/70">
               Jako zarząd klubu, chcielibyśmy podzielić się z Panem naszymi oczekiwaniami i refleksjami na temat obecnej sytuacji drużyny. Naszym celem jest wspólna praca nad rozwojem klubu i osiągnięciem jak najlepszych wyników sportowych, a także budowanie silnej i stabilnej organizacji. Poniżej znajdzie Pan nasze spostrzeżenia oraz wskazówki, które mamy nadzieję, pomogą nam wszystkim w realizacji tych celów.
             </p>
 
             {board && (
-              <p className={`text-base font-normal italic uppercase tracking-tighter leading-relaxed ${infoColor}`}>
+              <p className={`text-[14px] font-normal leading-[1.6] tracking-normal ${infoColor}`}>
                 {getExpectationsText(board.oczekiwania, club.reputation, board.ambicja, club.leagueId, seed)} {HOJNOSC_TEXT[board.hojnosc]}
               </p>
             )}
 
             <div className="border-t border-white/5 pt-3">
-              <p className="text-base font-normal italic uppercase tracking-tighter leading-relaxed text-yellow-400">
+              <p className="text-[15px] font-medium leading-relaxed tracking-normal text-amber-300">
                 „{situationComment}"
               </p>
             </div>
@@ -972,35 +974,36 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
 
           </div>
 
-          <aside className="min-h-0 overflow-y-auto rounded-[28px] border border-white/10 bg-slate-950/55 p-5 shadow-2xl backdrop-blur-md">
+          <aside className="min-h-0 overflow-y-auto pb-10 pl-4 pr-12 pt-24 custom-scrollbar">
 
             {/* ── STADION ── */}
             <button
               type="button"
               onClick={() => setIsStadiumModalOpen(true)}
-              className="w-full rounded-[22px] border border-white/5 bg-black/30 overflow-hidden mb-5 hover:border-white/10 transition-all group"
+              className="group mb-6 w-full overflow-hidden border-y border-white/10 py-3 text-left transition-colors hover:border-cyan-300/30"
             >
-              <div className="w-full" style={{ aspectRatio: '16/9' }}>
+              <div className="w-full overflow-hidden rounded-[18px]" style={{ aspectRatio: '16/9' }}>
                 <Stadium3DViewer capacity={club.stadiumCapacity} primaryColor={club.colorsHex?.[0]} seatColors={club.stadiumSeatColors} />
               </div>
-              <div className="px-4 py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 px-1 pt-3">
                 <div className="text-left min-w-0">
-                  <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500 truncate">{club.stadiumName}</p>
-                  <p className="mt-0.5 text-sm font-black italic uppercase tracking-tighter text-white">
+                  <p className="truncate text-[11px] font-medium tracking-normal text-cyan-100/50">{club.stadiumName}</p>
+                  <p className="mt-1 text-[15px] font-semibold tracking-normal text-white">
                     {club.stadiumCapacity.toLocaleString('pl-PL')} miejsc
                   </p>
                 </div>
-                <span className="shrink-0 text-[9px] font-black italic uppercase tracking-tighter text-amber-300/60 group-hover:text-amber-300 transition-colors">
-                  SZCZEGÓŁY →
+                <span className="shrink-0 text-[12px] font-medium tracking-normal text-amber-300/60 transition-colors group-hover:text-amber-300">
+                  Szczegóły →
                 </span>
               </div>
             </button>
 
             {sportingDirector ? (
-                <div className="rounded-[20px] border border-white/5 bg-black/25 p-4">
+                <div className="border-y border-white/10 py-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="mt-1 text-lg font-black italic uppercase tracking-tighter text-white">Zadania</h3>
+                      <p className="text-[11px] font-medium tracking-normal text-cyan-100/50">Dyrektor sportowy</p>
+                      <h3 className="mt-1 text-[24px] font-semibold tracking-[-0.015em] text-white">Bieżące zadanie</h3>
                     </div>
                     {directorObjective && objectivePanelData?.resolvedMark && (
                       <div className={`flex h-9 w-9 items-center justify-center rounded-full border text-base font-black italic uppercase tracking-tighter ${
@@ -1015,32 +1018,32 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
 
                   {directorObjective && objectivePanelData ? (
                     <div className="mt-4 space-y-3">
-                      <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                      <div className="border-t border-white/10 pt-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-[11px] font-black italic uppercase tracking-tighter text-white">
-                            {directorObjective.title.replace('Cel dyrektora: ', '')}
+                          <p className="text-[14px] font-semibold leading-snug tracking-normal text-white">
+                            {capitalizeFirstLetter(directorObjective.title.replace('Cel dyrektora: ', ''))}
                           </p>
                           <span className={`shrink-0 rounded-full border px-2 py-1 text-[8px] font-black italic uppercase tracking-tighter ${getObjectiveStatusClasses(directorObjective.status)}`}>
                             {getObjectiveStatusLabel(directorObjective.status)}
                           </span>
                         </div>
 
-                        <p className="mt-2 text-[10px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
+                        <p className="mt-2 text-[12px] font-normal leading-relaxed tracking-normal text-slate-300/65">
                           {directorObjective.description}
                         </p>
 
                         <div className="mt-3 grid grid-cols-2 gap-2">
-                          <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
-                            <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">
+                          <div className="border-l border-cyan-300/20 px-3 py-1">
+                            <p className="text-[10px] font-medium tracking-normal text-slate-400/65">
                               {objectivePanelData.summaryLabel}
                             </p>
-                            <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-white">
+                            <p className="mt-1 text-[12px] font-semibold tracking-normal text-white">
                               {objectivePanelData.summaryValue}
                             </p>
                           </div>
-                          <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
-                            <p className="text-[8px] font-black italic uppercase tracking-tighter text-slate-500">Termin</p>
-                            <p className="mt-1 text-[10px] font-black italic uppercase tracking-tighter text-white">
+                          <div className="border-l border-amber-300/20 px-3 py-1">
+                            <p className="text-[10px] font-medium tracking-normal text-slate-400/65">Termin</p>
+                            <p className="mt-1 text-[12px] font-semibold tracking-normal text-white">
                               {new Date(directorObjective.dueAt).toLocaleDateString('pl-PL')}
                             </p>
                           </div>
@@ -1076,7 +1079,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                     </div>
                   ) : (
                     <p className="mt-3 text-[11px] font-black italic uppercase tracking-tighter leading-relaxed text-slate-400">
-                      Brak aktywnego zadania dyrektora. Gdy pojawi się nowy cel, jego postęp będzie widoczny właśnie tutaj.
+                      Brak aktywnego zadania dyrektora. Gdy pojawi się nowy cel, jego postęp będzie widoczny tutaj.
                     </p>
                   )}
                 </div>
@@ -1235,7 +1238,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
                   {directorObjective ? (
                     <div className="mt-3 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-black italic uppercase tracking-tighter text-white">{directorObjective.title.replace('Cel dyrektora: ', '')}</p>
+                        <p className="text-xs font-black italic uppercase tracking-tighter text-white">{capitalizeFirstLetter(directorObjective.title.replace('Cel dyrektora: ', ''))}</p>
                         <span className={`shrink-0 rounded-full border px-2 py-1 text-[8px] font-black italic uppercase tracking-tighter ${getObjectiveStatusClasses(directorObjective.status)}`}>
                           {getObjectiveStatusLabel(directorObjective.status)}
                         </span>

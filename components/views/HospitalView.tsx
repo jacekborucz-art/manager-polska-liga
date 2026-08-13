@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, HealthStatus, InjurySeverity, Player, StaffMember, StaffRole } from '../../types';
-import szpitalBg from '../../Graphic/themes/szpital.png';
 
 type TreatmentStatus = {
   label: string;
@@ -15,6 +14,91 @@ type PhysioReportModal = {
   playerName: string;
   report: string;
 };
+
+const HospitalScene: React.FC<{ primaryColor: string; secondaryColor: string }> = ({ primaryColor, secondaryColor }) => (
+  <svg
+    className="absolute inset-0 h-full w-full"
+    viewBox="0 0 1920 1080"
+    preserveAspectRatio="xMidYMid slice"
+    aria-hidden="true"
+  >
+    <defs>
+      <linearGradient id="hospital-base" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#061321" />
+        <stop offset="0.5" stopColor="#07101d" />
+        <stop offset="1" stopColor="#020711" />
+      </linearGradient>
+      <linearGradient id="hospital-club-wash" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor={primaryColor} stopOpacity="0.25" />
+        <stop offset="0.42" stopColor={secondaryColor} stopOpacity="0.08" />
+        <stop offset="1" stopColor="#020711" stopOpacity="0" />
+      </linearGradient>
+      <radialGradient id="hospital-red-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stopColor="#ef4444" stopOpacity="0.18" />
+        <stop offset="1" stopColor="#ef4444" stopOpacity="0" />
+      </radialGradient>
+      <pattern id="hospital-dot-grid" width="28" height="28" patternUnits="userSpaceOnUse">
+        <circle cx="1.5" cy="1.5" r="1.2" fill="#ffffff" fillOpacity="0.075" />
+      </pattern>
+      <pattern id="hospital-diagonal" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+        <line x1="0" y1="0" x2="0" y2="14" stroke="#ffffff" strokeOpacity="0.035" strokeWidth="3" />
+      </pattern>
+      <filter id="hospital-soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="14" />
+      </filter>
+    </defs>
+
+    <rect width="1920" height="1080" fill="url(#hospital-base)" />
+    <rect width="1920" height="1080" fill="url(#hospital-club-wash)" />
+    <rect x="22" y="22" width="1876" height="1036" rx="52" fill="url(#hospital-dot-grid)" />
+    <ellipse cx="1630" cy="700" rx="520" ry="470" fill="url(#hospital-red-glow)" />
+    <path d="M0 0h380l150 1080H0z" fill="url(#hospital-diagonal)" opacity="0.8" />
+
+    <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <path
+        d="M70 210h190l25-42 42 92 46-153 58 221 42-118 38 58h184"
+        stroke="#f8fafc"
+        strokeOpacity="0.16"
+        strokeWidth="3"
+      />
+      <path
+        d="M70 210h190l25-42 42 92 46-153 58 221 42-118 38 58h184"
+        stroke="#ef4444"
+        strokeOpacity="0.42"
+        strokeWidth="1.5"
+      />
+      <circle cx="373" cy="107" r="7" fill="#ef4444" fillOpacity="0.7" stroke="none" filter="url(#hospital-soft-glow)" />
+    </g>
+
+    <g transform="translate(1320 390)" opacity="0.13" fill="none" stroke="#f8fafc">
+      <rect x="0" y="0" width="455" height="470" rx="38" strokeWidth="3" />
+      <path d="M75 0v470M380 0v470M0 112h455" strokeWidth="2" />
+      <path d="M174 48h108M228 0v96" stroke="#ef4444" strokeWidth="20" strokeLinecap="square" />
+      <rect x="118" y="180" width="220" height="122" rx="16" strokeWidth="4" />
+      <path d="M150 180v-34h156v34M146 302l-18 98M310 302l18 98M103 400h250" strokeWidth="4" />
+      <circle cx="128" cy="414" r="14" strokeWidth="4" />
+      <circle cx="328" cy="414" r="14" strokeWidth="4" />
+      <path d="M168 240h34l14-24 26 53 22-37h32" stroke="#ef4444" strokeOpacity="0.8" strokeWidth="4" />
+    </g>
+
+    <g transform="translate(900 735)" opacity="0.11" fill="none" stroke="#bae6fd" strokeWidth="4">
+      <path d="M0 118h680l68 63H-45z" />
+      <path d="M44 118V20h548v98M90 20V-16h454v36" />
+      <path d="M35 181l-24 112M667 181l24 112M-8 293h58M652 293h78" />
+      <path d="M92 70h150M276 70h150M462 70h82" strokeOpacity="0.5" />
+    </g>
+
+    <g opacity="0.12" fill="none" stroke="#ffffff">
+      <path d="M0 430h1920M0 930h1920" />
+      <path d="M1250 0v1080" />
+      <path d="M34 34h270M1616 1046h270" stroke={primaryColor} strokeOpacity="0.85" strokeWidth="3" />
+      <path d="M34 46h170M1716 1034h170" stroke="#ef4444" strokeOpacity="0.85" strokeWidth="3" />
+    </g>
+
+    <rect x="0" y="0" width="10" height="1080" fill="#ef4444" fillOpacity="0.75" />
+    <rect x="10" y="0" width="4" height="1080" fill="#ffffff" fillOpacity="0.75" />
+  </svg>
+);
 
 const getTreatmentStatus = (player: Player): TreatmentStatus => {
   const injury = player.health.injury;
@@ -227,38 +311,39 @@ export const HospitalView: React.FC = () => {
     return [...mainInjured, ...reserveInjured];
   }, [players, userTeamId, reserves]);
 
+  const clubPrimary = userClub?.colorsHex?.[0] || '#38bdf8';
+  const clubSecondary = userClub?.colorsHex?.[1] || '#f8fafc';
+
   return (
     <>
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <img
-          src={szpitalBg}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ opacity: 0.4 }}
-        />
-        <div className="absolute inset-0 bg-slate-950/70" />
+        <HospitalScene primaryColor={clubPrimary} secondaryColor={clubSecondary} />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#020711]/5 via-[#020711]/20 to-[#020711]/65" />
       </div>
 
-      <div className="min-h-screen text-slate-50 p-6 relative z-10 font-black italic uppercase tracking-tighter">
-        <div className="w-full max-w-[1740px] mx-auto flex flex-col gap-6">
-          <div className="flex items-center justify-between">
+      <div className="relative z-10 min-h-screen p-8 text-slate-50 font-black italic uppercase tracking-tighter">
+        <div className="mx-auto flex w-full max-w-[1760px] flex-col gap-7">
+          <div className="flex items-center justify-between border-b border-white/10 pb-6">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-2xl font-black italic uppercase tracking-tighter text-red-300">
-                H
+              <div
+                className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-[20px] border border-red-300/25 bg-[#150b10]/88 text-[36px] font-black not-italic leading-none text-white shadow-[inset_3px_0_0_rgba(248,113,113,0.78),0_10px_28px_rgba(0,0,0,0.32)]"
+                style={{ boxShadow: `inset 3px 0 0 rgba(248,113,113,0.78), 0 0 0 1px ${clubPrimary}26, 0 10px 28px rgba(0,0,0,0.32)` }}
+              >
+                <span className="relative -top-0.5">+</span>
               </div>
               <div>
-                <h1 className="text-5xl font-black italic uppercase tracking-tighter text-white leading-none">
+                <p className="mb-1 text-[10px] font-black italic uppercase tracking-tighter text-red-300/80">Centrum medyczne</p>
+                <h1 className="text-5xl font-black italic uppercase tracking-tighter text-white leading-none drop-shadow-[0_4px_18px_rgba(0,0,0,0.55)]">
                   Szpital
                 </h1>
-                <p className="text-base text-slate-500 mt-2 font-black italic uppercase tracking-tighter">
+                <p className="mt-2 text-base font-black italic uppercase tracking-tighter text-slate-300/60">
                   Kontuzjowani zawodnicy
                 </p>
               </div>
             </div>
             <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
-              className="group flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-300 font-black italic uppercase tracking-tighter text-base hover:bg-white/10 hover:text-white transition-all active:translate-y-[2px]"
-              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
+              className="group flex items-center gap-2 rounded-2xl border border-white/15 bg-[#07111e]/88 px-6 py-3 text-base font-black italic uppercase tracking-tighter text-slate-300 shadow-[0_8px_22px_rgba(0,0,0,0.3)] transition-all hover:border-red-200/30 hover:bg-red-400/10 hover:text-white active:translate-y-[2px]"
             >
               <span className="group-hover:-translate-x-1 transition-transform">←</span>
               <span>Powrót</span>
@@ -266,23 +351,24 @@ export const HospitalView: React.FC = () => {
           </div>
 
           {injuredPlayers.length === 0 ? (
-            <div className="bg-slate-900/40 border border-white/5 rounded-[28px] p-12 text-center">
+            <div className="rounded-[28px] border border-white/10 bg-[#050d18]/90 p-12 text-center shadow-[0_24px_64px_rgba(0,0,0,0.35)] backdrop-blur-md">
               <p className="text-slate-400 font-black italic uppercase tracking-tighter text-xl">
                 Brak kontuzjowanych zawodników
               </p>
             </div>
           ) : (
-            <div className="bg-slate-900/40 border border-white/5 rounded-[28px] overflow-x-auto overflow-y-hidden">
+            <div className="relative overflow-x-auto overflow-y-hidden rounded-[30px] border border-white/10 bg-[#050d18]/92 shadow-[0_28px_76px_rgba(0,0,0,0.42)] backdrop-blur-[8px]">
+              <div className="pointer-events-none absolute inset-x-8 top-0 z-20 h-px bg-gradient-to-r from-transparent via-red-300/65 to-transparent" />
               <table className="w-full min-w-[1480px]">
                 <thead>
-                  <tr className="border-b border-white/5 bg-white/5">
-                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[60px] border-r border-white/[0.06] bg-white/[0.015]">#</th>
-                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[190px] border-r border-white/[0.06] bg-cyan-500/[0.018]">Zawodnik</th>
-                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[190px] border-r border-white/[0.06] bg-red-500/[0.018]">Uraz</th>
-                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[560px] border-r border-white/[0.06] bg-orange-500/[0.018]">Postęp leczenia</th>
-                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[240px] border-r border-white/[0.06] bg-emerald-500/[0.018]">Fizjoterapeuci</th>
-                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[130px] border-r border-white/[0.06] bg-blue-500/[0.018]">Raport</th>
-                    <th className="text-right px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap w-[90px] bg-violet-500/[0.018]">Dni</th>
+                  <tr className="border-b border-white/10 bg-gradient-to-r from-red-500/10 via-white/[0.055] to-transparent">
+                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-300/65 whitespace-nowrap w-[60px] border-r border-white/[0.06] bg-white/[0.015]">#</th>
+                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-300/65 whitespace-nowrap w-[190px] border-r border-white/[0.06]">Zawodnik</th>
+                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-red-200/70 whitespace-nowrap w-[190px] border-r border-white/[0.06] bg-red-500/[0.028]">Uraz</th>
+                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-300/65 whitespace-nowrap w-[560px] border-r border-white/[0.06]">Postęp leczenia</th>
+                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-300/65 whitespace-nowrap w-[240px] border-r border-white/[0.06]">Fizjoterapeuci</th>
+                    <th className="text-left px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-300/65 whitespace-nowrap w-[130px] border-r border-white/[0.06]">Raport</th>
+                    <th className="text-right px-5 py-4 text-sm font-black italic uppercase tracking-tighter text-slate-300/65 whitespace-nowrap w-[90px]">Dni</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -296,7 +382,7 @@ export const HospitalView: React.FC = () => {
                     return (
                       <tr
                         key={player.id}
-                        className={`border-b border-white/5 last:border-0 transition-colors hover:bg-white/10 ${index % 2 === 0 ? 'bg-slate-950/20' : 'bg-white/[0.035]'}`}
+                        className={`border-b border-white/[0.07] last:border-0 transition-colors hover:bg-white/[0.085] ${index % 2 === 0 ? 'bg-[#06111e]/88' : 'bg-[#0a1726]/82'}`}
                       >
                           <td className="px-5 py-5 text-lg font-black italic uppercase tracking-tighter text-slate-500 whitespace-nowrap border-r border-white/[0.06] bg-white/[0.012]">{index + 1}</td>
                           <td className="px-5 py-5 whitespace-nowrap border-r border-white/[0.06] bg-cyan-500/[0.014]">
