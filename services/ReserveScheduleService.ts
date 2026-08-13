@@ -48,11 +48,33 @@ function isAfterSeasonEnd(date: Date, year: number): boolean {
 }
 
 export const ReserveScheduleService = {
+  alignToSeasonStartYear(
+    fixtures: ReserveFixture[],
+    season: number,
+    seasonStartYear: number
+  ): ReserveFixture[] {
+    const seasonIdPart = `_${season}_`;
+
+    return fixtures.map(fixture => {
+      if (!fixture.id.includes(seasonIdPart)) return fixture;
+
+      const date = new Date(fixture.date);
+      if (Number.isNaN(date.getTime())) return fixture;
+
+      const expectedYear = fixture.round === 1 ? seasonStartYear : seasonStartYear + 1;
+      if (date.getFullYear() === expectedYear) return fixture;
+
+      date.setFullYear(expectedYear);
+      return { ...fixture, date: date.toISOString() };
+    });
+  },
+
   generate(
     userClub: Club,
     allPolishClubs: Club[],
     season: number,
-    seed: number
+    seed: number,
+    seasonStartYear: number
   ): ReserveFixture[] {
     const userTier = userClub.tier ?? 1;
     const maxTier = Math.max(...allPolishClubs.map(c => c.tier ?? 1));
@@ -76,7 +98,7 @@ export const ReserveScheduleService = {
     const opponents = shuffled.slice(0, MAX_OPPONENTS);
 
     const fixtures: ReserveFixture[] = [];
-    const seasonYear = season + 2024;
+    const seasonYear = seasonStartYear;
 
     // Runda 1: sierpień → przerwa zimowa (głównie soboty, co 4. mecz w środę)
     let weekSat1 = firstSaturdayOnOrAfter(new Date(seasonYear, SEASON_START_MONTH, SEASON_START_DAY));

@@ -180,7 +180,7 @@ export const CONFMatchLiveView = () => {
     navigateTo, userTeamId, clubs, setClubs, fixtures, players,
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, sessionSeed,
-    activeMatchState: matchState, setActiveMatchState: setMatchState, pressConferenceEffects
+    activeMatchState: matchState, setActiveMatchState: setMatchState, pendingMatchKits, pressConferenceEffects
   } = useGame();
 
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
@@ -272,8 +272,9 @@ export const CONFMatchLiveView = () => {
 
   const kitColors = useMemo(() => {
     if (!ctx) return null;
+    if (pendingMatchKits?.fixtureId === ctx.fixture.id) return pendingMatchKits.kits;
     return KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub);
-  }, [ctx]);
+  }, [ctx, pendingMatchKits]);
 
   const userSide = useMemo(() => {
     if (!ctx || !userTeamId) return 'HOME';

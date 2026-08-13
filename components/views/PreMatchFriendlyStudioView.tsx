@@ -2,11 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { ViewState, CompetitionType, MatchStatus, FriendlyMatchConditions, PreMatchStudioData, PlayerPosition, Player, Club } from '../../types';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
-import { getPlayerCardImage, getClubKitVariantsForClub, KitVariant } from '../../resources/PlayerCardAssets';
+import { getPlayerCardImage, KitVariant } from '../../resources/PlayerCardAssets';
 import { PreMatchStudioService } from '../../services/PreMatchStudioService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
-import { KitSelectionService, KitSelection } from '../../services/KitSelectionService';
+import { KitSelectionService } from '../../services/KitSelectionService';
+import { PreMatchKitSelectionService } from '../../services/PreMatchKitSelectionService';
 import { LineupService } from '../../services/LineupService';
 import { KitPreview } from '../common/KitPreview';
 import bojo2Pitch from '../../Graphic/themes/bojo2.png';
@@ -137,52 +138,6 @@ const PitchPlayerKit: React.FC<{
   );
 };
 
-function kitEffectiveDistance(kA: KitVariant, kB: KitVariant): number {
-  let minDist = KitSelectionService.getColorDistance(kA.hex, kB.hex);
-  if (kA.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.shirtSecondaryHex, kB.hex));
-  if (kB.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.shirtSecondaryHex));
-  if (kA.shirtSecondaryHex && kB.shirtSecondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.shirtSecondaryHex, kB.shirtSecondaryHex));
-  if (kA.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.hex));
-  if (kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.hex, kB.secondaryHex));
-  if (kA.secondaryHex && kB.secondaryHex) minDist = Math.min(minDist, KitSelectionService.getColorDistance(kA.secondaryHex, kB.secondaryHex));
-  return minDist;
-}
-
-function selectKitsFromVariants(homeClub: Club, awayClub: Club): KitSelection {
-  const homeVariants = getClubKitVariantsForClub(homeClub);
-  const awayVariants = getClubKitVariantsForClub(awayClub);
-  const hKit = homeVariants[0];
-  let bestAwayIdx = 0;
-  let maxDistance = -1;
-
-  for (let a = 0; a < awayVariants.length; a++) {
-    const distance = kitEffectiveDistance(hKit, awayVariants[a]);
-    if (distance > maxDistance) {
-      maxDistance = distance;
-      bestAwayIdx = a;
-    }
-  }
-
-  const aKit = awayVariants[bestAwayIdx];
-
-  return {
-    home: {
-      primary: hKit.hex,
-      shirtSecondary: hKit.shirtSecondaryHex,
-      secondary: hKit.secondaryHex ?? hKit.hex,
-      pattern: hKit.pattern,
-      text: KitSelectionService.isColorLight(hKit.hex) ? '#000000' : '#ffffff'
-    },
-    away: {
-      primary: aKit.hex,
-      shirtSecondary: aKit.shirtSecondaryHex,
-      secondary: aKit.secondaryHex ?? aKit.hex,
-      pattern: aKit.pattern,
-      text: KitSelectionService.isColorLight(aKit.hex) ? '#000000' : '#ffffff'
-    }
-  };
-}
-
 export const PreMatchFriendlyStudioView: React.FC = () => {
   const {
     fixtures, clubs, players, lineups, currentDate, navigateTo, userTeamId,
@@ -224,7 +179,7 @@ export const PreMatchFriendlyStudioView: React.FC = () => {
 
   const matchKits = useMemo(() => {
     if (!data) return null;
-    return selectKitsFromVariants(data.homeClub, data.awayClub);
+    return PreMatchKitSelectionService.selectInitialKits(data.homeClub, data.awayClub);
   }, [data]);
 
   // Bardzo niska frekwencja dla sparingów

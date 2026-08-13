@@ -23,6 +23,7 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
     players,
     lineups,
     currentDate,
+    setPendingMatchKits,
   } = useGame();
 
   const [selectedUserKitIndex, setSelectedUserKitIndex] = useState(0);
@@ -115,7 +116,6 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
     }
     const chosenKit = userKits[selectedUserKitIndex] ?? userKits[0];
     const oppClub = isUserHome ? awayClub : homeClub;
-    const oppKitData = KitSelectionService.selectOpponentKit(chosenKit.shirt, oppClub);
     const userKitData = {
       primary: chosenKit.shirt,
       shirtSecondary: chosenKit.shirtSecondary,
@@ -123,6 +123,7 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
       pattern: chosenKit.pattern,
       text: KitSelectionService.isColorLight(chosenKit.shirt) ? '#000000' : '#ffffff',
     };
+    const oppKitData = KitSelectionService.selectOpponentKitForKit(userKitData, oppClub);
     return isUserHome ? { home: userKitData, away: oppKitData } : { home: oppKitData, away: userKitData };
   }, [homeClub, awayClub, fixture, userTeamId, userKits, selectedUserKitIndex]);
 
@@ -550,7 +551,10 @@ export const PreMatchCONFLiveStudioView: React.FC = () => {
                 </div>
               )}
               <button
-                onClick={() => navigateTo(ViewState.MATCH_LIVE_CONF)}
+                onClick={() => {
+                  setPendingMatchKits({ fixtureId: fixture.id, kits: matchKits });
+                  navigateTo(ViewState.MATCH_LIVE_CONF);
+                }}
                 className="px-20 py-5 rounded-[30px] bg-emerald-500 hover:bg-emerald-400 text-white font-black italic text-xl uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-[0_20px_60px_rgba(52,211,153,0.35)] border-b-4 border-emerald-700"
               >
                 ROZPOCZNIJ MECZ 🟢

@@ -415,7 +415,7 @@ export const PreMatchCupStudioView: React.FC = () => {
               <button
                  onClick={() => {
                    if (!lineupValidation.isValid) return;
-                   setPendingMatchKits(matchKits);
+                   setPendingMatchKits({ fixtureId: data.fixture.id, kits: matchKits });
                    navigateTo(ViewState.MATCH_LIVE_CUP);
                  }}
                  disabled={!lineupValidation.isValid}

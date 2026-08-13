@@ -544,7 +544,10 @@ export const PreMatchStudioView: React.FC = () => {
                 🎙️ ANALIZA EKSPERTÓW
               </button>
               <button
-                onClick={() => { setPendingMatchKits(matchKits); navigateTo(ViewState.MATCH_LIVE); }}
+                onClick={() => {
+                  setPendingMatchKits({ fixtureId: data.fixture.id, kits: matchKits });
+                  navigateTo(ViewState.MATCH_LIVE);
+                }}
                 className="group relative flex-1 px-8 py-6 rounded-[32px] bg-white text-slate-950 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:translate-y-[2px] overflow-hidden"
                 style={{ boxShadow: '0 4px 0 rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)' }}
               >

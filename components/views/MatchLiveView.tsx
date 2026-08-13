@@ -946,8 +946,8 @@ export const MatchLiveView = () => {
   }, [userTeamId, clubs, fixtures, players, currentDate, coaches]);
 
   const kitColors = useMemo(() => {
-    if (pendingMatchKits) return pendingMatchKits;
     if (!ctx) return undefined;
+    if (pendingMatchKits?.fixtureId === ctx.fixture.id) return pendingMatchKits.kits;
     return KitSelectionService.selectOptimalKits(ctx.homeClub, ctx.awayClub);
   }, [ctx, pendingMatchKits]);
 

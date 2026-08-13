@@ -1111,8 +1111,8 @@ interface GameContextType {
   jumpToNextEvent: () => void;
   navigateTo: (view: ViewState) => void;
   navigateWithoutHistory: (view: ViewState) => void;
-  pendingMatchKits: KitSelection | null;
-  setPendingMatchKits: React.Dispatch<React.SetStateAction<KitSelection | null>>;
+  pendingMatchKits: { fixtureId: string; kits: KitSelection } | null;
+  setPendingMatchKits: React.Dispatch<React.SetStateAction<{ fixtureId: string; kits: KitSelection } | null>>;
   updateLineup: (clubId: string, lineup: Lineup) => void;
   viewClubDetails: (clubId: string) => void;
   viewPlayerDetails: (playerId: string) => void;
@@ -1540,7 +1540,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [managerJobOffers, setManagerJobOffers] = useState<ManagerJobOffer[]>([]);
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
-  const [pendingMatchKits, setPendingMatchKits] = useState<KitSelection | null>(null);
+  const [pendingMatchKits, setPendingMatchKits] = useState<{ fixtureId: string; kits: KitSelection } | null>(null);
   const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
   const activeEditorDatapackRef = React.useRef<unknown | null>(null);
   const [datapackCareerStartYear, setDatapackCareerStartYear] = useState<number | null>(null);
@@ -4132,7 +4132,15 @@ if (userTeamId) {
     // Official reserve teams use leagueSchedules/globalFixtures and the normal
     // match history. Retaining their old synthetic schedule would show every
     // match twice and could simulate a second, fictitious game on the same day.
-    setReserveFixtures(linkedReserveMigration.linkedReserveClubId ? [] : (data.reserveFixtures ?? []));
+    setReserveFixtures(
+      linkedReserveMigration.linkedReserveClubId
+        ? []
+        : ReserveScheduleService.alignToSeasonStartYear(
+            data.reserveFixtures ?? [],
+            data.seasonNumber,
+            loadedSeasonStartYear
+          )
+    );
     setReserveMatchResults(linkedReserveMigration.linkedReserveClubId ? [] : retainedReserveResults);
     setAcademy(data.academy);
     setScoutPool(data.scoutPool);
@@ -11543,7 +11551,16 @@ const finalResult: SimulationOutput = {
         const polishClubs = clubs.filter(c =>
           c.leagueId === 'L_PL_1' || c.leagueId === 'L_PL_2' || c.leagueId === 'L_PL_3' || c.leagueId === 'L_PL_4'
         );
-        const schedule = ReserveScheduleService.generate(userClub, polishClubs, seasonNumber, sessionSeed);
+        const seasonStartYear = dateToProcess.getMonth() >= 6
+          ? dateToProcess.getFullYear()
+          : dateToProcess.getFullYear() - 1;
+        const schedule = ReserveScheduleService.generate(
+          userClub,
+          polishClubs,
+          seasonNumber,
+          sessionSeed,
+          seasonStartYear
+        );
         setReserveFixtures(schedule);
       }
     }
