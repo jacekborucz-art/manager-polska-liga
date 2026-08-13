@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { MatchSummary } from '../../types';
+import { getClubLogo } from '../../resources/ClubLogoAssets';
 import {
   PostMatchConferenceAnswer,
   PostMatchConferenceOutcome,
   PostMatchPressConferenceService,
 } from '../../services/PostMatchPressConferenceService';
+import { ConferenceScene } from './PreMatchPressConferenceModal';
 
 interface Props {
   summary: MatchSummary;
@@ -37,6 +39,8 @@ export const PostMatchPressConferenceModal: React.FC<Props> = ({ summary, onClos
   const question = conference.questions[questionIndex];
   const opponentName = summary.homeClub.id === summary.userTeamId ? summary.awayClub.name : summary.homeClub.name;
   const pressOutlet = PRESS_OUTLETS[stableHash(`${summary.matchId}_${question.id}_${question.journalist}`) % PRESS_OUTLETS.length];
+  const homeLogo = getClubLogo(summary.homeClub.id);
+  const awayLogo = getClubLogo(summary.awayClub.id);
 
   const finishConference = (answers: PostMatchConferenceAnswer[]) => {
     const nextOutcome = PostMatchPressConferenceService.summarize(answers);
@@ -61,64 +65,122 @@ export const PostMatchPressConferenceModal: React.FC<Props> = ({ summary, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-5 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-5xl overflow-hidden rounded-[34px] border border-white/10 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.75)]">
-        <header className="border-b border-white/10 bg-gradient-to-r from-blue-950/80 via-slate-950 to-slate-950 px-8 py-6">
-          <div className="text-[10px] font-black italic uppercase tracking-tighter text-blue-300">
-            {pressOutlet} · {question.journalist}
-          </div>
-          <h2 className="mt-2 text-3xl font-black italic uppercase tracking-tighter text-white">
-            Konferencja prasowa po meczu z {opponentName}
-          </h2>
-          <div className="mt-4 flex gap-2">
-            {conference.questions.map((item, index) => (
-              <div key={item.id} className={`h-1.5 flex-1 rounded-full ${index <= questionIndex ? 'bg-blue-500' : 'bg-white/10'}`} />
-            ))}
-          </div>
-        </header>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden bg-[#010307]/90 p-7 backdrop-blur-xl animate-fade-in">
+      <div className="relative h-[min(920px,calc(100vh-56px))] w-[min(1660px,calc(100vw-64px))] overflow-hidden rounded-[48px]">
+        <ConferenceScene />
 
-        <section className="space-y-5 bg-blue-900/25 px-8 py-7 shadow-[inset_0_1px_0_rgba(147,197,253,0.08),inset_0_20px_60px_rgba(59,130,246,0.08)]">
-          <div>
-            <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
-              Pytanie {questionIndex + 1} / {conference.questions.length} · {pressOutlet} · {question.journalist}
-            </div>
-            <p className="mt-3 rounded-2xl border border-yellow-400/25 bg-yellow-500/10 px-5 py-4 text-xl font-black italic uppercase tracking-tighter text-yellow-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-              {question.text}
-            </p>
-          </div>
-
-          <div className="h-px rounded-full bg-gradient-to-r from-transparent via-yellow-300/55 to-transparent shadow-[0_0_14px_rgba(250,204,21,0.18)]" />
-
-          <div className="grid gap-3">
-            {question.answers.map((answer, answerIndex) => (
-              <button
-                key={answer.id}
-                onClick={() => handleAnswer(answer)}
-                className={`group flex items-center gap-4 rounded-2xl border px-5 py-4 text-left text-sm font-black italic uppercase tracking-tighter text-cyan-50 transition-all duration-150 hover:-translate-y-[1px] hover:border-cyan-300/70 hover:bg-cyan-500/20 hover:text-white active:translate-y-[2px] ${
-                  answerIndex % 2 === 0
-                    ? 'border-blue-400/25 bg-[#0b1d3b]'
-                    : 'border-cyan-400/20 bg-[#122640]'
-                }`}
-                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-400/10 text-[10px] font-black italic uppercase tracking-tighter text-cyan-300 group-hover:bg-cyan-400 group-hover:text-slate-950">
-                  {answerIndex + 1}
+        <div className="relative z-10 grid h-full grid-cols-[500px_minmax(0,1fr)]">
+          <aside className="flex min-h-0 flex-col justify-between px-14 pb-12 pt-11">
+            <div>
+              <div className="flex items-center gap-3 text-[15px] font-semibold tracking-normal text-cyan-100">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inset-0 rounded-full bg-red-400 opacity-60 animate-ping" />
+                  <span className="relative m-[3px] h-1.5 w-1.5 rounded-full bg-red-400" />
                 </span>
-                <span className="font-black italic uppercase tracking-tighter leading-snug">{answer.text}</span>
-              </button>
-            ))}
-          </div>
+                Konferencja prasowa
+              </div>
+              <p className="mt-2 text-sm font-normal tracking-normal text-blue-200/60">Po meczu</p>
+            </div>
 
-          <button
-            type="button"
-            onClick={handleLeaveConference}
-            className="w-full rounded-2xl border-t border-x border-b border-t-rose-300/30 border-x-rose-400/20 border-b-black/60 bg-rose-500/10 px-5 py-3 text-center text-xs font-black italic uppercase tracking-tighter text-rose-200 transition-all duration-150 hover:-translate-y-[1px] hover:bg-rose-500/20 hover:text-white active:translate-y-[2px]"
-            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
-          >
-            Opuść konferencję prasową
-          </button>
-        </section>
+            <div className="mb-2 max-w-[345px]">
+              <div className="flex items-center justify-between gap-5">
+                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+                  {homeLogo && <img src={homeLogo} alt={`Herb ${summary.homeClub.name}`} className="h-14 w-14 object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,0.5)]" />}
+                  <span className="mt-2 max-w-full truncate text-sm font-medium tracking-normal text-slate-200">{summary.homeClub.name}</span>
+                </div>
+
+                <div className="shrink-0 font-mono text-[35px] font-semibold tracking-tight text-white">
+                  {summary.homeScore} <span className="font-light text-slate-500">:</span> {summary.awayScore}
+                </div>
+
+                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+                  {awayLogo && <img src={awayLogo} alt={`Herb ${summary.awayClub.name}`} className="h-14 w-14 object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,0.5)]" />}
+                  <span className="mt-2 max-w-full truncate text-sm font-medium tracking-normal text-slate-200">{summary.awayClub.name}</span>
+                </div>
+              </div>
+
+              {(summary.homePenaltyScore !== undefined && summary.awayPenaltyScore !== undefined) && (
+                <p className="mt-2 text-center text-xs font-normal tracking-normal text-slate-400">
+                  Rzuty karne: {summary.homePenaltyScore} : {summary.awayPenaltyScore}
+                </p>
+              )}
+
+              <div className="mt-7 flex items-end gap-3">
+                <span className="text-5xl font-light leading-none tracking-normal text-white">
+                  {String(questionIndex + 1).padStart(2, '0')}
+                </span>
+                <span className="pb-1 text-lg font-normal tracking-normal text-blue-200/45">
+                  / {String(conference.questions.length).padStart(2, '0')}
+                </span>
+              </div>
+              <div className="mt-4 flex gap-2">
+                {conference.questions.map((item, index) => (
+                  <span
+                    key={item.id}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${index <= questionIndex ? 'bg-cyan-300' : 'bg-white/15'}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <main className="flex min-h-0 flex-col pb-28 pl-14 pr-16 pt-12">
+            <header className="shrink-0 pr-8">
+              <p className="text-sm font-medium tracking-normal text-cyan-300/80">{pressOutlet} · {question.journalist}</p>
+              <h2 className="mt-2 max-w-[990px] text-[40px] font-semibold leading-[1.12] tracking-[-0.025em] text-white">
+                Konferencja prasowa po meczu z {opponentName}
+              </h2>
+            </header>
+
+            <section className="mt-9 flex min-h-0 flex-1 flex-col">
+              <div className="shrink-0">
+                <div className="flex items-center gap-3 text-[13px] font-medium tracking-normal text-amber-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.75)]" />
+                  {pressOutlet} · {question.journalist}
+                </div>
+                <p className="mt-3 max-w-[1020px] text-[27px] font-semibold leading-[1.3] tracking-[-0.015em] text-slate-50">
+                  {question.text}
+                </p>
+              </div>
+
+              <div className="mt-7 min-h-0 flex-1 overflow-y-auto pr-3 post-conference-scrollbar">
+                {question.answers.map((answer, answerIndex) => (
+                  <button
+                    key={answer.id}
+                    onClick={() => handleAnswer(answer)}
+                    className="group relative flex min-h-[76px] w-full items-center border-b border-white/10 py-4 text-left transition-colors duration-200 first:border-t hover:border-cyan-300/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60"
+                  >
+                    <span className="absolute inset-y-2 left-0 w-0 rounded-r-full bg-gradient-to-r from-cyan-400/12 to-transparent transition-[width] duration-300 group-hover:w-full" />
+                    <span className="relative w-14 shrink-0 text-[14px] font-medium tracking-normal text-cyan-300/70 transition-colors group-hover:text-cyan-200">
+                      {String(answerIndex + 1).padStart(2, '0')}
+                    </span>
+                    <span className="relative pr-12 text-[17px] font-medium leading-[1.45] tracking-normal text-slate-200 transition-colors group-hover:text-white">
+                      {answer.text}
+                    </span>
+                    <span className="relative ml-auto mr-2 text-xl font-light text-cyan-300/0 transition-all duration-200 group-hover:translate-x-1 group-hover:text-cyan-300/80">→</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </main>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleLeaveConference}
+          className="group absolute bottom-10 right-14 z-20 flex w-[360px] items-center overflow-hidden rounded-xl border border-white/15 bg-[#061225]/55 px-5 py-4 text-left text-[16px] font-semibold tracking-normal text-slate-200 shadow-[0_12px_30px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm transition-all duration-200 hover:border-rose-300/40 hover:bg-[#241225]/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/60"
+        >
+          <span className="absolute inset-x-5 bottom-0 h-px bg-gradient-to-r from-rose-300/70 via-fuchsia-400/35 to-transparent transition-all duration-200 group-hover:inset-x-3" />
+          <span className="relative">Opuść konferencję prasową</span>
+          <span className="relative ml-auto text-rose-300 transition-transform group-hover:translate-x-1">→</span>
+        </button>
       </div>
+
+      <style>{`
+        .post-conference-scrollbar::-webkit-scrollbar { width: 3px; }
+        .post-conference-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .post-conference-scrollbar::-webkit-scrollbar-thumb { background: rgba(125, 211, 252, 0.18); border-radius: 10px; }
+      `}</style>
     </div>
   );
 };

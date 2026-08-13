@@ -112,6 +112,7 @@ import { GameScaler } from './components/GameScaler';
 import { PreMatchPressConferenceModal } from './components/modals/PreMatchPressConferenceModal';
 import { ChalkTrail } from './components/ui/ChalkTrail';
 import { ProcessingProvider } from './components/ui/ProcessingOverlay';
+import { LiveMatchCrowdAudio } from './components/ui/LiveMatchCrowdAudio';
 
 const PRESS_CONFERENCE_VIEWS = new Set<ViewState>([
   ViewState.PRE_MATCH_STUDIO,
@@ -545,6 +546,7 @@ case ViewState.CL_GROUP_DRAW:
   return (
     <>
       <main>{renderView()}</main>
+      <LiveMatchCrowdAudio />
       <PreMatchPressConferenceGate />
       <GameNotification />
       <SeasonCelebrationOverlay />

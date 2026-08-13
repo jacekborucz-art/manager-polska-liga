@@ -7610,6 +7610,10 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
         userSide={userSide}
         homeClubName={pendingFinishPayload.summary.homeClub.name}
         awayClubName={pendingFinishPayload.summary.awayClub.name}
+        homeClubId={pendingFinishPayload.summary.homeClub.id}
+        awayClubId={pendingFinishPayload.summary.awayClub.id}
+        homeClubColors={pendingFinishPayload.summary.homeClub.colorsHex}
+        awayClubColors={pendingFinishPayload.summary.awayClub.colorsHex}
         sessionSeed={pendingFinishPayload.sessionSeed}
         leagueMotivationContext={leagueMotivationContext}
       />

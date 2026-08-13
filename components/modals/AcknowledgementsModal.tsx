@@ -15,8 +15,6 @@ const TESTERS = [
   'Paweł Bajon',
 ] as const;
 
-// Alternating cool colors make adjacent names easier to follow without adding boxes.
-const TESTER_TEXT_COLORS = ['text-emerald-300', 'text-cyan-300'] as const;
 const VISIBLE_BEFORE_AUTO_EXIT_MS = 11_000;
 const FADE_DURATION_MS = 1_500;
 
@@ -75,7 +73,7 @@ export const AcknowledgementsModal: React.FC<AcknowledgementsModalProps> = ({ on
           <h3 className="font-black italic uppercase tracking-tighter text-[20px] text-emerald-400">Testerzy</h3>
           <ul className="mx-auto mt-4 flex w-fit flex-col items-start gap-2.5">
             {TESTERS.map((tester, index) => {
-              const testerColor = TESTER_TEXT_COLORS[index % TESTER_TEXT_COLORS.length];
+              const testerColor = index % 2 === 0 ? 'text-emerald-300' : 'text-cyan-300';
               return (
                 <li key={tester} className="flex items-center gap-3">
                   <SoccerBall className="h-5 w-5 shrink-0 opacity-90" />
