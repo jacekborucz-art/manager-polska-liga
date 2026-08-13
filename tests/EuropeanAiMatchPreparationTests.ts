@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { AiMatchPreparationService } from '../services/AiMatchPreparationService';
-import { BackgroundMatchProcessorCL } from '../services/BackgroundMatchProcessorCL';
+import {
+  BackgroundMatchProcessorCL,
+  calculateEuropeanRedCardImpact,
+  sampleEuropeanExtraTimeGoals,
+} from '../services/BackgroundMatchProcessorCL';
 import { BackgroundMatchUEFASuperCup } from '../services/BackgroundMatchUEFASuperCup';
 import { LineupService } from '../services/LineupService';
 import { TacticRepository } from '../resources/tactics_db';
@@ -100,6 +104,13 @@ const coaches = {
   [weakCoach.id]: weakCoach,
   [cautiousCoach.id]: cautiousCoach,
 };
+
+const halfMatchRedImpact = calculateEuropeanRedCardImpact([{ outId: 'test_player', min: 45 }]);
+assert.ok(Math.abs(halfMatchRedImpact.attackMult - 0.66) < 0.000001, 'kartka w 45. minucie ma obniżyć ofensywę proporcjonalnie do czasu gry w osłabieniu');
+assert.ok(Math.abs(halfMatchRedImpact.defenseLeakMult - 1.375) < 0.000001, 'kartka w 45. minucie ma zwiększyć podatność obrony proporcjonalnie do czasu gry w osłabieniu');
+
+const extraTimeWithoutGoalCap = sampleEuropeanExtraTimeGoals(0.8, () => 0.9999, 0);
+assert.ok(extraTimeWithoutGoalCap > 2, 'dogrywka nie może mieć sztywnego limitu dwóch bramek');
 
 assert.equal(
   AiMatchPreparationService.getClubCoach(strongClub, coaches),

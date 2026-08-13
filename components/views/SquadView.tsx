@@ -60,6 +60,201 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
 const staffAttrColor = (v: number) =>
   v >= 17 ? '#34d399' : v >= 13 ? '#60a5fa' : v >= 9 ? '#facc15' : v >= 5 ? '#fb923c' : '#fb7185';
 
+const CoachingStaffScene: React.FC<{ primaryColor: string; secondaryColor: string }> = ({ primaryColor, secondaryColor }) => (
+  <svg
+    className="pointer-events-none absolute inset-0 h-full w-full"
+    viewBox="0 0 920 690"
+    preserveAspectRatio="xMidYMid slice"
+    aria-hidden="true"
+  >
+    <defs>
+      <linearGradient id="staff-scene-base" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#071827" />
+        <stop offset="0.52" stopColor="#071321" />
+        <stop offset="1" stopColor="#030914" />
+      </linearGradient>
+      <linearGradient id="staff-scene-club" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor={primaryColor} stopOpacity="0.26" />
+        <stop offset="0.55" stopColor={secondaryColor} stopOpacity="0.09" />
+        <stop offset="1" stopColor="#020617" stopOpacity="0" />
+      </linearGradient>
+      <radialGradient id="staff-scene-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stopColor="#38bdf8" stopOpacity="0.16" />
+        <stop offset="1" stopColor="#38bdf8" stopOpacity="0" />
+      </radialGradient>
+      <pattern id="staff-scene-grid" width="22" height="22" patternUnits="userSpaceOnUse">
+        <circle cx="1.3" cy="1.3" r="1.05" fill="#bae6fd" fillOpacity="0.09" />
+      </pattern>
+      <filter id="staff-scene-blur" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="9" />
+      </filter>
+    </defs>
+
+    <rect width="920" height="690" rx="38" fill="url(#staff-scene-base)" />
+    <rect width="920" height="690" rx="38" fill="url(#staff-scene-club)" />
+    <rect x="18" y="18" width="884" height="654" rx="28" fill="url(#staff-scene-grid)" />
+    <ellipse cx="710" cy="320" rx="300" ry="300" fill="url(#staff-scene-glow)" />
+
+    <g transform="translate(570 102) rotate(-4)" opacity="0.12" fill="none" stroke="#a5f3fc">
+      <rect x="0" y="0" width="290" height="190" rx="15" strokeWidth="3" />
+      <rect x="14" y="14" width="262" height="162" rx="7" strokeWidth="2" />
+      <line x1="145" y1="14" x2="145" y2="176" strokeWidth="2" />
+      <circle cx="145" cy="95" r="29" strokeWidth="2" />
+      <path d="M14 59h48v72H14M276 59h-48v72h48" strokeWidth="2" />
+      <circle cx="61" cy="55" r="6" fill={primaryColor} stroke="none" />
+      <circle cx="92" cy="87" r="6" fill={primaryColor} stroke="none" />
+      <circle cx="115" cy="129" r="6" fill={primaryColor} stroke="none" />
+      <circle cx="199" cy="51" r="6" fill={secondaryColor} stroke="none" />
+      <circle cx="221" cy="96" r="6" fill={secondaryColor} stroke="none" />
+      <circle cx="184" cy="139" r="6" fill={secondaryColor} stroke="none" />
+      <path d="M67 61l21 19 20 40M194 58l21 29-25 43" stroke="#f8fafc" strokeOpacity="0.5" strokeWidth="2" strokeDasharray="7 7" />
+    </g>
+
+    <g transform="translate(54 408)" opacity="0.105" fill="none" stroke="#f8fafc">
+      <path d="M0 133h460l55 44H-32z" strokeWidth="3" />
+      <path d="M34 133V18h365v115M69 18v-33h295v33" strokeWidth="3" />
+      <path d="M36 177L18 254M444 177l18 77M2 254h58M420 254h72" strokeWidth="4" />
+      <path d="M65 75h88l22-32 37 65 28-44 31 30h96" stroke={secondaryColor} strokeOpacity="0.75" strokeWidth="4" />
+      <circle cx="175" cy="43" r="6" fill={secondaryColor} stroke="none" filter="url(#staff-scene-blur)" />
+    </g>
+
+    <g transform="translate(730 478)" opacity="0.14" fill="none" stroke="#f8fafc" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 75l38-67 38 67zM38 52h30M119 75l27-49 27 49zM136 56h21" strokeWidth="4" />
+      <path d="M18 94h158" stroke={primaryColor} strokeWidth="5" strokeOpacity="0.8" />
+      <path d="M48 130c0-22 17-39 39-39s39 17 39 39-17 39-39 39-39-17-39-39z" strokeWidth="3" />
+      <path d="M87 91v-30c0-22 16-36 36-36h15" strokeWidth="3" />
+      <circle cx="145" cy="25" r="12" strokeWidth="3" />
+    </g>
+
+    <g opacity="0.14" fill="none">
+      <path d="M28 92h864M28 614h864" stroke="#e0f2fe" />
+      <path d="M435 92v522" stroke="#bae6fd" strokeOpacity="0.32" />
+      <path d="M28 39h220" stroke={primaryColor} strokeWidth="3" strokeOpacity="0.82" />
+      <path d="M672 651h220" stroke={secondaryColor} strokeWidth="3" strokeOpacity="0.72" />
+    </g>
+  </svg>
+);
+
+const ManagerProfileScene: React.FC<{ primaryColor: string; secondaryColor: string }> = ({ primaryColor, secondaryColor }) => (
+  <svg
+    className="pointer-events-none absolute inset-0 h-full w-full"
+    viewBox="0 0 1180 900"
+    preserveAspectRatio="xMidYMid slice"
+    aria-hidden="true"
+  >
+    <defs>
+      <linearGradient id="manager-profile-base" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#071827" />
+        <stop offset="0.5" stopColor="#061321" />
+        <stop offset="1" stopColor="#020713" />
+      </linearGradient>
+      <radialGradient id="manager-profile-club" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stopColor={primaryColor} stopOpacity="0.22" />
+        <stop offset="1" stopColor={primaryColor} stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="manager-profile-beam" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stopColor={secondaryColor} stopOpacity="0" />
+        <stop offset="0.52" stopColor={secondaryColor} stopOpacity="0.25" />
+        <stop offset="1" stopColor={secondaryColor} stopOpacity="0" />
+      </linearGradient>
+      <pattern id="manager-profile-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+        <circle cx="1.4" cy="1.4" r="1" fill="#bae6fd" fillOpacity="0.095" />
+      </pattern>
+      <filter id="manager-profile-soft-glow" x="-80%" y="-80%" width="260%" height="260%">
+        <feGaussianBlur stdDeviation="8" />
+      </filter>
+    </defs>
+
+    <rect width="1180" height="900" rx="40" fill="url(#manager-profile-base)" />
+    <rect width="1180" height="900" rx="40" fill="url(#manager-profile-dots)" />
+    <ellipse cx="170" cy="110" rx="310" ry="230" fill="url(#manager-profile-club)" />
+    <ellipse cx="1030" cy="720" rx="350" ry="300" fill="url(#manager-profile-club)" opacity="0.52" />
+    <path d="M0 176h1180" stroke="url(#manager-profile-beam)" strokeWidth="3" />
+
+    <g transform="translate(846 36)" fill="none" opacity="0.18" stroke="#bae6fd">
+      <circle cx="142" cy="112" r="92" strokeWidth="2" />
+      <circle cx="142" cy="112" r="61" strokeWidth="1.5" strokeDasharray="6 8" />
+      <circle cx="142" cy="112" r="30" strokeWidth="1.5" />
+      <path d="M142 20v184M50 112h184M77 47l130 130M207 47L77 177" strokeWidth="1" />
+      <path d="M142 42l48 44-18 61-61 17-33-54 28-48z" fill={primaryColor} fillOpacity="0.18" stroke={secondaryColor} strokeWidth="2.5" />
+      <circle cx="142" cy="42" r="5" fill={secondaryColor} stroke="none" />
+      <circle cx="190" cy="86" r="5" fill={secondaryColor} stroke="none" />
+      <circle cx="172" cy="147" r="5" fill={secondaryColor} stroke="none" />
+      <circle cx="111" cy="164" r="5" fill={secondaryColor} stroke="none" />
+      <circle cx="78" cy="110" r="5" fill={secondaryColor} stroke="none" />
+      <circle cx="106" cy="62" r="5" fill={secondaryColor} stroke="none" />
+    </g>
+
+    <g transform="translate(52 560) rotate(-3)" fill="none" opacity="0.17" stroke="#e0f2fe">
+      <rect x="0" y="0" width="330" height="220" rx="16" strokeWidth="3" />
+      <rect x="16" y="16" width="298" height="188" rx="8" strokeWidth="2" />
+      <line x1="165" y1="16" x2="165" y2="204" strokeWidth="2" />
+      <circle cx="165" cy="110" r="35" strokeWidth="2" />
+      <path d="M16 70h60v80H16M314 70h-60v80h60" strokeWidth="2" />
+      <circle cx="82" cy="64" r="6" fill={primaryColor} stroke="none" />
+      <circle cx="113" cy="114" r="6" fill={primaryColor} stroke="none" />
+      <circle cx="147" cy="166" r="6" fill={primaryColor} stroke="none" />
+      <circle cx="224" cy="58" r="6" fill={secondaryColor} stroke="none" />
+      <circle cx="205" cy="118" r="6" fill={secondaryColor} stroke="none" />
+      <circle cx="250" cy="164" r="6" fill={secondaryColor} stroke="none" />
+      <path d="M86 70l23 36 34 52M224 65l-15 45 36 45" stroke="#f8fafc" strokeOpacity="0.55" strokeDasharray="7 7" />
+    </g>
+
+    <g transform="translate(770 650)" fill="none" opacity="0.17">
+      <path d="M0 150h352" stroke="#e0f2fe" strokeWidth="2" />
+      <path d="M8 131l55-38 52 18 58-74 54 28 54-51 58 29" stroke={secondaryColor} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 131l55-38 52 18 58-74 54 28 54-51 58 29v107H8z" fill={secondaryColor} fillOpacity="0.08" />
+      {[['63', '93'], ['115', '111'], ['173', '37'], ['227', '65'], ['281', '14'], ['339', '43']].map(([x, y]) => (
+        <circle key={`${x}-${y}`} cx={x} cy={y} r="5" fill={primaryColor} stroke="#f8fafc" strokeWidth="2" />
+      ))}
+    </g>
+
+    <g transform="translate(330 515)" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      <g opacity="0.18" stroke="#bae6fd">
+        <path d="M14 282h518l52 48H-34z" fill="#061827" fillOpacity="0.72" strokeWidth="3" />
+        <path d="M30 330L10 395M516 330l20 65M-14 395h72M490 395h76" strokeWidth="5" />
+        <rect x="38" y="42" width="228" height="154" rx="14" fill="#041522" fillOpacity="0.84" strokeWidth="3" />
+        <rect x="55" y="59" width="194" height="120" rx="7" strokeWidth="2" />
+        <line x1="152" y1="59" x2="152" y2="179" strokeWidth="2" />
+        <circle cx="152" cy="119" r="23" strokeWidth="2" />
+        <path d="M55 91h40v56H55M249 91h-40v56h40" strokeWidth="2" />
+        <circle cx="103" cy="89" r="5" fill={primaryColor} stroke="none" />
+        <circle cx="124" cy="132" r="5" fill={primaryColor} stroke="none" />
+        <circle cx="190" cy="86" r="5" fill={secondaryColor} stroke="none" />
+        <circle cx="181" cy="139" r="5" fill={secondaryColor} stroke="none" />
+        <path d="M102 96l19 29M189 93l-8 38" stroke="#f8fafc" strokeOpacity="0.65" strokeDasharray="5 6" />
+        <path d="M128 196v31M176 196v31M104 227h96" strokeWidth="4" />
+
+        <rect x="296" y="72" width="200" height="124" rx="14" fill="#041522" fillOpacity="0.84" strokeWidth="3" />
+        <path d="M316 168h160M322 151l31-33 28 16 38-50 31 22 21-17" stroke={secondaryColor} strokeWidth="4" />
+        <path d="M322 151l31-33 28 16 38-50 31 22 21-17v79H322z" fill={secondaryColor} fillOpacity="0.13" stroke="none" />
+        <circle cx="353" cy="118" r="4" fill={primaryColor} stroke="none" />
+        <circle cx="419" cy="84" r="4" fill={primaryColor} stroke="none" />
+        <circle cx="471" cy="89" r="4" fill={primaryColor} stroke="none" />
+        <path d="M374 196v31M418 196v31M350 227h92" strokeWidth="4" />
+
+        <path d="M-8 16h556M20 16v-46h500v46" strokeWidth="3" />
+        <path d="M52-9h72M155-9h72M258-9h72M361-9h72M464-9h32" strokeWidth="8" />
+        <path d="M224 282v-37c0-15 12-27 27-27h57c15 0 27 12 27 27v37" strokeWidth="4" />
+        <path d="M238 282v79M321 282v79M238 340h83" strokeWidth="4" />
+      </g>
+
+      <g transform="translate(535 190)" opacity="0.22" stroke="#f8fafc">
+        <path d="M0 92h88M17 92V20h54v72" strokeWidth="3" />
+        <path d="M31 20V4h26v16M25 46h38M25 65h38" strokeWidth="3" />
+        <path d="M30 4h28l-7-23H37z" fill={primaryColor} fillOpacity="0.48" stroke={secondaryColor} strokeWidth="2" />
+      </g>
+    </g>
+
+    <g opacity="0.1" fill="none">
+      <path d="M34 32h248" stroke={primaryColor} strokeWidth="4" />
+      <path d="M898 864h248" stroke={secondaryColor} strokeWidth="4" />
+      <path d="M34 842h1112" stroke="#bae6fd" />
+      <circle cx="1136" cy="32" r="5" fill={secondaryColor} filter="url(#manager-profile-soft-glow)" />
+    </g>
+  </svg>
+);
+
 const SquadPlayerFormArrow: React.FC<{ level: PlayerFormLevel; className?: string }> = ({ level, className = '' }) => {
   const config: Record<PlayerFormLevel, { line: [number, number, number, number]; head: string; stroke: string }> = {
     VERY_HIGH: { line: [13, 22, 13, 5], head: 'M8 10 L13 5 L18 10', stroke: '#34d399' },
@@ -3047,6 +3242,12 @@ export const SquadView: React.FC = () => {
           ? ManagerExperienceService.getExperienceProgress(safeManagerProfile.expPoints)
           : null;
         const formatManagerExp = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1);
+        const formatManagerExpText = (value: string) => {
+          const normalized = value.trim().toLocaleLowerCase('pl-PL');
+          return normalized.length > 0
+            ? normalized.charAt(0).toLocaleUpperCase('pl-PL') + normalized.slice(1)
+            : normalized;
+        };
         const managerCareerTotals = safeManagerProfile?.careerHistory.reduce((acc, entry) => ({
           wins: acc.wins + entry.wins,
           draws: acc.draws + entry.draws,
@@ -3071,18 +3272,6 @@ export const SquadView: React.FC = () => {
         const managerFlagUrl = managerCountryCode ? `https://flagcdn.com/w160/${managerCountryCode}.png` : null;
         const managerAccentPrimary = myClub.colorsHex?.[0] ?? '#eab308';
         const managerAccentSecondary = myClub.colorsHex?.[1] ?? managerAccentPrimary;
-        const managerPanelStyle = {
-          background: `radial-gradient(circle at 92% 8%, ${managerAccentPrimary}26 0%, transparent 38%),
-                       radial-gradient(circle at 0% 100%, ${managerAccentSecondary}1f 0%, transparent 44%),
-                       rgba(2, 6, 23, 0.76)`,
-          boxShadow: `0 18px 45px -32px ${managerAccentPrimary}cc, inset 0 1px 0 rgba(255,255,255,0.06)`,
-        };
-        const managerExpPanelStyle = {
-          background: `radial-gradient(circle at 85% 10%, ${managerAccentPrimary}66 0%, transparent 42%),
-                       radial-gradient(circle at 10% 95%, ${managerAccentSecondary}4d 0%, transparent 46%),
-                       rgba(2, 6, 23, 0.82)`,
-          boxShadow: `0 18px 45px -20px ${managerAccentPrimary}99, inset 0 1px 0 rgba(255,255,255,0.08)`,
-        };
 
         const currentYear = currentDate.getFullYear();
         const seasonStartYear = currentDate.getMonth() >= 6 ? currentYear : currentYear - 1;
@@ -3098,21 +3287,127 @@ export const SquadView: React.FC = () => {
           losses: (managerCareerTotals?.losses ?? 0) + (isUserClub ? myClub.stats.losses : 0),
           points: (managerCareerTotals?.points ?? 0) + (isUserClub ? myClub.stats.points : 0),
         };
+        const managerCareerMatches = allCareerTotals.wins + allCareerTotals.draws + allCareerTotals.losses;
+        const managerWinRate = managerCareerMatches > 0
+          ? Math.round((allCareerTotals.wins / managerCareerMatches) * 100)
+          : 0;
+        const managerExpTrendEntries = [...(safeManagerProfile?.expHistory ?? [])].slice(0, 12).reverse();
+        const managerExpTrendValues = managerExpTrendEntries.map(entry => entry.totalAfter);
+        const managerExpTrendMin = Math.min(...managerExpTrendValues, 0);
+        const managerExpTrendMax = Math.max(...managerExpTrendValues, 1);
+        const managerExpTrendRange = Math.max(1, managerExpTrendMax - managerExpTrendMin);
+        const managerExpTrendPoints = managerExpTrendEntries.length > 0
+          ? managerExpTrendEntries.map((entry, index) => {
+              const x = managerExpTrendEntries.length === 1 ? 260 : 18 + (index / (managerExpTrendEntries.length - 1)) * 484;
+              const y = 126 - ((entry.totalAfter - managerExpTrendMin) / managerExpTrendRange) * 96;
+              return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ')
+          : '18,126 502,126';
+        const managerResultSegments = [
+          { label: 'Zwycięstwa', value: allCareerTotals.wins, color: '#34d399' },
+          { label: 'Remisy', value: allCareerTotals.draws, color: '#38bdf8' },
+          { label: 'Porażki', value: allCareerTotals.losses, color: '#fb7185' },
+        ].map(item => ({
+          ...item,
+          fraction: managerCareerMatches > 0 ? item.value / managerCareerMatches : 0,
+        }));
+        const managerProgressPercent = managerExperienceProgress?.progressPercent ?? 0;
+        const managerProgressStops: Array<{ at: number; rgb: [number, number, number] }> = [
+          { at: 0, rgb: [239, 68, 68] },
+          { at: 25, rgb: [249, 115, 22] },
+          { at: 50, rgb: [250, 204, 21] },
+          { at: 75, rgb: [132, 204, 22] },
+          { at: 100, rgb: [34, 197, 94] },
+        ];
+        const getManagerProgressColor = (percent: number) => {
+          const safePercent = Math.max(0, Math.min(100, percent));
+          const upperIndex = Math.min(
+            managerProgressStops.length - 1,
+            Math.max(1, managerProgressStops.findIndex(stop => safePercent <= stop.at)),
+          );
+          const lower = managerProgressStops[upperIndex - 1];
+          const upper = managerProgressStops[upperIndex];
+          const ratio = (safePercent - lower.at) / Math.max(1, upper.at - lower.at);
+          const rgb = lower.rgb.map((channel, index) => Math.round(channel + (upper.rgb[index] - channel) * ratio));
+          return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+        };
+        const managerProgressColor = getManagerProgressColor(managerProgressPercent);
+        const managerProgressSlices = Array.from({ length: Math.ceil(managerProgressPercent) }, (_, index) => {
+          const slicePercent = Math.min(1, managerProgressPercent - index);
+          return {
+            offset: index,
+            length: slicePercent,
+            color: getManagerProgressColor(index + slicePercent / 2),
+          };
+        });
+        const managerProgressAngle = (managerProgressPercent / 100) * Math.PI * 2 - Math.PI / 2;
+        const managerProgressMarkerX = 75 + Math.cos(managerProgressAngle) * 55;
+        const managerProgressMarkerY = 75 + Math.sin(managerProgressAngle) * 55;
 
-        const StaffCard = ({ m, nameColor }: { m: typeof clubStaff[0]; nameColor: string }) => (
-          <div
-            className="flex flex-col items-center gap-0.5 cursor-pointer hover:opacity-70 transition-opacity"
+        const ManagerRingMetric = ({ label, value, percent, color }: { label: string; value: string | number; percent: number; color: string }) => {
+          const safePercent = Math.max(0, Math.min(100, percent));
+          const circumference = 232.48;
+          const endAngle = (safePercent / 100) * Math.PI * 2;
+          const endX = 46 + Math.cos(endAngle) * 37;
+          const endY = 46 + Math.sin(endAngle) * 37;
+          return (
+            <div className="relative flex w-[118px] flex-col items-center">
+              <div
+                className="relative h-[102px] w-[102px] rounded-full"
+                style={{ background: `radial-gradient(circle, ${color}1f 0%, ${color}09 48%, transparent 70%)` }}
+              >
+                <svg viewBox="0 0 92 92" className="h-full w-full -rotate-90" aria-hidden="true">
+                  <circle cx="46" cy="46" r="44" fill="none" stroke={color} strokeOpacity="0.16" strokeWidth="1" strokeDasharray="2 5" />
+                  <circle cx="46" cy="46" r="37" fill={color} fillOpacity="0.075" stroke={color} strokeOpacity="0.2" strokeWidth="8" />
+                  <circle cx="46" cy="46" r="37" fill="none" stroke={color} strokeOpacity="0.16" strokeWidth="16" filter="url(#manager-profile-soft-glow)" />
+                  <circle
+                    cx="46"
+                    cy="46"
+                    r="37"
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference * (1 - safePercent / 100)}
+                  />
+                  <circle cx={endX} cy={endY} r="3.3" fill="#f8fafc" stroke={color} strokeWidth="2" className="manager-profile-pulse" />
+                </svg>
+                <div
+                  className="absolute inset-0 flex items-center justify-center text-[24px] font-black italic uppercase tracking-tighter text-white"
+                  style={{ textShadow: `0 0 18px ${color}99` }}
+                >
+                  {value}
+                </div>
+              </div>
+              <div className="mt-1 text-[9px] font-black italic uppercase tracking-tighter" style={{ color, textShadow: `0 0 10px ${color}55` }}>{label}</div>
+            </div>
+          );
+        };
+
+        const StaffCard = ({ m, accent }: { m: typeof clubStaff[0]; accent: string }) => (
+          <button
+            type="button"
+            className="group flex min-w-[190px] items-center gap-3 rounded-[14px] border border-white/10 bg-[#06111e]/82 px-4 py-3 text-left shadow-[0_7px_18px_rgba(0,0,0,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07]"
+            style={{ boxShadow: `inset 2px 0 0 ${accent}9e, 0 7px 18px rgba(0,0,0,0.2)` }}
             onClick={() => { setSelectedStaffId(m.id); setIsStaffMenuOpen(false); setStaffActionMsg(null); setStaffFireConfirmOpen(false); setStaffNegotiationOpen(false); }}
           >
-            <span className={`text-[17px] font-black italic uppercase tracking-tighter whitespace-nowrap ${nameColor}`}>{m.firstName} {m.lastName}</span>
-          </div>
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full transition-transform duration-200 group-hover:scale-125"
+              style={{ backgroundColor: accent, boxShadow: `0 0 11px ${accent}` }}
+            />
+            <span className="whitespace-nowrap text-[15px] font-semibold tracking-normal text-slate-100">{m.firstName} {m.lastName}</span>
+          </button>
         );
 
-        const Band = ({ label, labelColor, nameColor, bg, children }: { label: string; labelColor: string; nameColor: string; bg: string; children: React.ReactNode }) => (
-          <div className={`w-full flex flex-col items-center gap-3 py-6 px-8 ${bg}`}>
-            <span className={`text-[12px] font-black italic uppercase tracking-tighter ${labelColor}`}>{label}</span>
-            <div className="flex items-start justify-center gap-14 flex-wrap">{children}</div>
-          </div>
+        const StaffGroup = ({ label, accent, children }: { label: string; accent: string; children: React.ReactNode }) => (
+          <section className="relative rounded-[20px] border border-white/[0.085] bg-[#071321]/74 px-5 py-4 backdrop-blur-[3px]">
+            <div className="mb-3 flex items-center gap-2.5">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accent, boxShadow: `0 0 9px ${accent}` }} />
+              <span className="text-[10px] font-black italic uppercase tracking-tighter" style={{ color: accent }}>{label}</span>
+            </div>
+            <div className="flex flex-wrap gap-2.5">{children}</div>
+          </section>
         );
 
         return createPortal(
@@ -3122,120 +3417,286 @@ export const SquadView: React.FC = () => {
             {/* KARTA SZCZEGÓŁÓW */}
             {isManagerProfileOpen && safeManagerProfile && (
               <div
-                className="relative w-[880px] max-h-[90vh] bg-slate-950/95 rounded-[28px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden border border-white/10"
+                className="relative w-[1180px] max-h-[92vh] overflow-hidden rounded-[40px] border border-cyan-100/15 bg-[#04101d] shadow-[0_55px_140px_rgba(0,0,0,0.96)]"
                 onClick={e => e.stopPropagation()}
               >
+                <style>{`
+                  @keyframes manager-profile-in { from { opacity: 0; transform: translateY(20px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+                  @keyframes manager-profile-pulse { 0%, 100% { opacity: .45; transform: scale(1); } 50% { opacity: .9; transform: scale(1.08); } }
+                  @keyframes manager-profile-draw { from { stroke-dashoffset: 700; } to { stroke-dashoffset: 0; } }
+                  .manager-profile-shell { animation: manager-profile-in 500ms cubic-bezier(.2,.9,.3,1) both; }
+                  .manager-profile-pulse { animation: manager-profile-pulse 2.6s ease-in-out infinite; transform-origin: center; }
+                  .manager-profile-trend { stroke-dasharray: 700; animation: manager-profile-draw 1.2s ease-out both; }
+                  .manager-profile-row { transition: background 180ms ease, transform 180ms ease; }
+                  .manager-profile-row:hover { background: rgba(255,255,255,.065) !important; transform: translateX(3px); }
+                  @media (prefers-reduced-motion: reduce) {
+                    .manager-profile-shell, .manager-profile-pulse, .manager-profile-trend { animation: none !important; }
+                  }
+                `}</style>
+                <ManagerProfileScene primaryColor={managerAccentPrimary} secondaryColor={managerAccentSecondary} />
                 <div
-                  className="relative px-8 py-7 border-b border-white/10 overflow-hidden"
-                  style={{
-                    background: `radial-gradient(circle at 82% 20%, ${managerAccentPrimary}40 0%, transparent 36%),
-                                 radial-gradient(circle at 18% 90%, ${managerAccentSecondary}2f 0%, transparent 42%),
-                                 rgba(2, 6, 23, 0.92)`,
-                  }}
+                  className="manager-profile-shell relative z-10 flex min-h-[188px] items-center gap-7 overflow-hidden border-b border-cyan-100/10 px-9 pr-24"
                 >
-                  <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
-                  <div className="absolute right-[-20px] top-[-20px] text-[120px] font-black italic uppercase tracking-tighter text-white/[0.035] select-none pointer-events-none leading-none">EXP</div>
-                  <div className="flex items-center gap-6 pr-12">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-black uppercase tracking-tighter text-yellow-400">Profil trenera</div>
-                      <div className="text-[32px] font-black uppercase tracking-tighter text-yellow-100 leading-none truncate mt-1">
+                  <div
+                    className="manager-profile-pulse absolute left-[-70px] top-[-120px] h-[280px] w-[280px] rounded-full blur-3xl"
+                    style={{ backgroundColor: `${managerAccentPrimary}30` }}
+                  />
+                  <div className="relative flex h-[104px] w-[104px] shrink-0 items-center justify-center rounded-[30px] border border-white/15 bg-[#061321]/90 shadow-[0_20px_55px_rgba(0,0,0,.42)]">
+                    <div className="absolute inset-2 rounded-[23px] border border-white/[0.07]" />
+                    {getClubLogo(myClub.id) ? (
+                      <img src={getClubLogo(myClub.id)!} alt={myClub.name} className="relative z-10 h-[76px] w-[76px] object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,.5)]" />
+                    ) : (
+                      <span className="relative z-10 text-[34px] font-black italic uppercase tracking-tighter text-white">{myClub.name.slice(0, 2)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-black italic uppercase tracking-tighter" style={{ color: managerAccentSecondary }}>Centrum analityczne</div>
+                    <div className="mt-1 text-[15px] font-medium tracking-normal text-cyan-100/60">{myClub.name} · profil trenera</div>
+                    <div className="mt-3 truncate text-[40px] font-black italic uppercase tracking-tighter leading-none text-white">
                         {safeManagerProfile.firstName} {safeManagerProfile.lastName}
-                      </div>
-                      <div className="flex items-center gap-3 mt-3">
-                        <span className="text-[15px] font-black uppercase tracking-tighter text-slate-200">{safeManagerProfile.nationality}</span>
-                        {managerFlagUrl ? (
-                          <img src={managerFlagUrl} alt={safeManagerProfile.nationality} className="h-4 w-7 rounded-sm object-cover border border-white/15" />
-                        ) : (
-                          <span className="text-[16px] leading-none">{managerFlag}</span>
-                        )}
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500/70" />
-                        <span className="text-[15px] font-black uppercase tracking-tighter text-slate-200">{safeManagerProfile.age} lat</span>
-                      </div>
                     </div>
-                    <div className="relative shrink-0 rounded-xl border border-white/15 px-3 py-3 w-[112px] text-center overflow-hidden" style={managerPanelStyle}>
-                      <div className="absolute right-[-4px] top-[-6px] text-[38px] font-black italic uppercase tracking-tighter text-white/[0.04] select-none pointer-events-none">LVL</div>
-                      <div className="relative z-10 text-[10px] font-black uppercase tracking-tighter text-yellow-300 mb-1.5">Doświadczenie</div>
-                      <div className="relative z-10 text-[32px] font-black uppercase tracking-tighter text-white leading-none">{safeManagerProfile.experience}</div>
-                    </div>
-                    <div className="relative shrink-0 rounded-xl border border-white/15 px-3 py-3 w-[118px] text-center overflow-hidden" style={managerExpPanelStyle}>
-                      <div className="absolute right-[-5px] top-[-6px] text-[42px] font-black italic uppercase tracking-tighter text-white/[0.06] select-none pointer-events-none">EXP</div>
-                      <div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.24) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.24) 1px, transparent 1px)', backgroundSize: '18px 18px' }} />
-                      <div className="relative z-10 text-[10px] font-black uppercase tracking-tighter text-emerald-300 mb-1.5">Punkty EXP</div>
-                      <div className="relative z-10 text-[32px] font-black uppercase tracking-tighter text-white leading-none">{formatManagerExp(safeManagerProfile.expPoints)}</div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="text-[14px] font-black italic uppercase tracking-tighter text-slate-200">{safeManagerProfile.nationality}</span>
+                      {managerFlagUrl ? (
+                        <img src={managerFlagUrl} alt={safeManagerProfile.nationality} className="h-4 w-7 rounded-sm border border-white/15 object-cover" />
+                      ) : (
+                        <span className="text-[16px] leading-none">{managerFlag}</span>
+                      )}
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: managerAccentSecondary }} />
+                      <span className="text-[14px] font-black italic uppercase tracking-tighter text-slate-200">{safeManagerProfile.age} lat</span>
                     </div>
                   </div>
-                  <button onClick={() => setIsManagerProfileOpen(false)} className="absolute right-6 top-6 w-9 h-9 rounded-full border border-white/10 bg-slate-950/80 text-slate-400 hover:text-white hover:border-white/30 transition-colors text-lg">✕</button>
+                  <div className="flex shrink-0 items-center gap-2 border-l border-cyan-100/10 pl-5">
+                    <ManagerRingMetric
+                      label="Poziom"
+                      value={safeManagerProfile.experience}
+                      percent={(safeManagerProfile.experience / 99) * 100}
+                      color="#fbbf24"
+                    />
+                    <ManagerRingMetric
+                      label="Punkty EXP"
+                      value={formatManagerExp(safeManagerProfile.expPoints)}
+                      percent={managerExperienceProgress?.progressPercent ?? 0}
+                      color="#a78bfa"
+                    />
+                    <ManagerRingMetric
+                      label="Skuteczność"
+                      value={`${managerWinRate}%`}
+                      percent={managerWinRate}
+                      color="#34d399"
+                    />
+                  </div>
+                  <button onClick={() => setIsManagerProfileOpen(false)} className="absolute right-7 top-7 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-lg text-slate-400 transition-colors hover:border-white/30 hover:text-white">✕</button>
                 </div>
 
                 <div
-                  className="px-8 py-6 overflow-y-auto custom-scrollbar max-h-[70vh]"
-                  style={{
-                    background: `radial-gradient(circle at 100% 12%, ${managerAccentPrimary}18 0%, transparent 30%),
-                                 radial-gradient(circle at 0% 72%, ${managerAccentSecondary}14 0%, transparent 34%),
-                                 #020617`,
-                  }}
+                  className="relative z-10 max-h-[72vh] overflow-y-auto px-9 py-7 custom-scrollbar"
                 >
-                  <div className="relative mb-4 rounded-2xl border border-white/10 px-5 py-3 flex items-center justify-between gap-5 overflow-hidden" style={managerPanelStyle}>
-                    <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-                    <div className="text-[12px] font-black uppercase tracking-tighter text-cyan-300 whitespace-nowrap">OGÓLNY BILANS KARIERY</div>
-                    <div className="grid grid-cols-3 text-center divide-x divide-white/10 flex-1 max-w-[540px]">
-                      <div className="px-4">
-                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Zwycięstwa</div>
-                        <div className="text-[20px] font-black uppercase tracking-tighter text-white leading-none mt-1">{allCareerTotals.wins}</div>
+                  <section className="relative mb-5 border-y border-cyan-100/10 bg-[#03101b]/38 px-1 py-5 backdrop-blur-[1px]">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-cyan-300">Analiza wyników</div>
+                        <div className="mt-1 text-[20px] font-semibold tracking-normal text-white">Ogólny bilans kariery</div>
                       </div>
-                      <div className="px-4">
-                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Remisy</div>
-                        <div className="text-[20px] font-black uppercase tracking-tighter text-white leading-none mt-1">{allCareerTotals.draws}</div>
+                      <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Wyniki wszystkich spotkań</div>
+                    </div>
+                    <div className="grid min-h-[270px] grid-cols-[330px_1fr] divide-x divide-cyan-100/10">
+                      <div className="relative flex items-center justify-center overflow-hidden">
+                        <div className="absolute h-[245px] w-[245px] rounded-full border border-cyan-100/[0.06]" />
+                        <div className="absolute h-[214px] w-[214px] rounded-full border border-dashed border-cyan-100/[0.08]" />
+                        <svg viewBox="0 0 210 210" className="h-[250px] w-[250px] -rotate-90 drop-shadow-[0_18px_25px_rgba(0,0,0,.4)]" aria-label="Wykres wyników kariery">
+                          <circle cx="105" cy="105" r="76" fill="#03101b" fillOpacity="0.78" stroke="#173047" strokeWidth="34" />
+                          {managerResultSegments.map((segment, index) => {
+                            if (segment.fraction <= 0) return null;
+                            const circumference = 477.52;
+                            const previousFraction = managerResultSegments
+                              .slice(0, index)
+                              .reduce((sum, item) => sum + item.fraction, 0);
+                            const segmentLength = segment.fraction * circumference;
+                            return (
+                              <circle
+                                key={segment.label}
+                                cx="105"
+                                cy="105"
+                                r="76"
+                                fill="none"
+                                stroke={segment.color}
+                                strokeWidth="34"
+                                strokeDasharray={`${Math.max(0, segmentLength - 5)} ${circumference}`}
+                                strokeDashoffset={-(previousFraction * circumference + 2.5)}
+                              />
+                            );
+                          })}
+                          <circle cx="105" cy="105" r="54" fill="#041522" stroke="#bae6fd" strokeOpacity="0.08" />
+                        </svg>
+                        <div className="absolute text-center">
+                          <div className="text-[43px] font-black italic uppercase tracking-tighter leading-none text-white">{managerCareerMatches}</div>
+                          <div className="mt-2 text-[9px] font-black italic uppercase tracking-tighter text-slate-500">Spotkań</div>
+                        </div>
                       </div>
-                      <div className="px-4">
-                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Porażki</div>
-                        <div className="text-[20px] font-black uppercase tracking-tighter text-white leading-none mt-1">{allCareerTotals.losses}</div>
+
+                      <div className="grid grid-cols-[1fr_180px] items-center gap-8 px-9 py-3">
+                        <div className="divide-y divide-cyan-100/[0.08]">
+                          {managerResultSegments.map(segment => (
+                            <div key={segment.label} className="flex items-center justify-between py-4">
+                              <div className="flex items-center gap-3">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: segment.color, boxShadow: `0 0 12px ${segment.color}` }} />
+                                <span className="text-[13px] font-medium tracking-normal text-slate-300">{segment.label}</span>
+                              </div>
+                              <div className="flex items-baseline gap-3">
+                                <span className="text-[25px] font-black italic uppercase tracking-tighter text-white">{segment.value}</span>
+                                <span className="w-10 text-right text-[11px] font-normal tracking-normal text-slate-500">{Math.round(segment.fraction * 100)}%</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="border-l border-cyan-100/10 pl-8">
+                          <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300">Punkty</div>
+                          <div className="mt-2 text-[48px] font-black italic uppercase tracking-tighter leading-none text-white">{allCareerTotals.points}</div>
+                          <div className="mt-4 text-[11px] font-normal leading-relaxed tracking-normal text-slate-500">
+                            {managerCareerMatches > 0 ? (allCareerTotals.points / managerCareerMatches).toFixed(2) : '0.00'} pkt na mecz
+                          </div>
+                          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-black/55">
+                            <div
+                              className="h-full rounded-full bg-yellow-400"
+                              style={{
+                                width: `${Math.min(100, managerCareerMatches ? (allCareerTotals.points / (managerCareerMatches * 3)) * 100 : 0)}%`,
+                                boxShadow: '0 0 13px #facc15',
+                              }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </section>
 
                   {managerExperienceProgress && (
-                    <div className="relative rounded-2xl border border-white/10 p-5 mb-5 overflow-hidden" style={managerPanelStyle}>
-                      <div className="absolute right-[-10px] top-[-14px] text-[72px] font-black italic uppercase tracking-tighter text-white/[0.035] select-none pointer-events-none leading-none">EXP</div>
-                      <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
-                      <div className="relative z-10">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-200">Postęp doświadczenia</div>
-                        <div className="text-[12px] font-black uppercase tracking-tighter text-slate-400">
+                    <section
+                      className="relative mb-5 overflow-hidden rounded-[26px] border border-cyan-100/10 px-6 py-6 shadow-[0_24px_55px_rgba(0,0,0,.34),inset_0_1px_0_rgba(255,255,255,.035)]"
+                      style={{
+                        background: `radial-gradient(circle at 12% 48%, ${managerProgressColor}12 0%, transparent 30%), linear-gradient(135deg, rgba(1,8,18,.97), rgba(3,13,25,.94))`,
+                      }}
+                    >
+                      <div className="pointer-events-none absolute inset-0 opacity-[0.025]" style={{ backgroundImage: 'linear-gradient(rgba(186,230,253,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(186,230,253,.18) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+                      <div className="mb-4 flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-[10px] font-black italic uppercase tracking-tighter" style={{ color: managerAccentSecondary }}>Rozwój trenera</div>
+                          <div className="mt-1 text-[20px] font-semibold tracking-normal text-white">Postęp doświadczenia</div>
+                        </div>
+                        <div className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-[10px] font-black italic uppercase tracking-tighter text-slate-400">
                           {managerExperienceProgress.nextRating
                             ? `${formatManagerExp(managerExperienceProgress.pointsToNext)} EXP do poziomu ${managerExperienceProgress.nextRating}`
                             : 'Maksymalny poziom'}
                         </div>
                       </div>
-                      <div className="h-5 rounded-full bg-slate-900 border border-white/10 overflow-hidden">
+
+                      <div className="grid grid-cols-[260px_1fr] divide-x divide-cyan-100/10">
+                        <div className="relative flex min-h-[190px] items-center justify-center overflow-hidden">
+                          <svg viewBox="0 0 150 150" className="h-[156px] w-[156px]" aria-hidden="true">
+                            <circle cx="75" cy="75" r="67" fill="none" stroke="#bae6fd" strokeOpacity="0.08" strokeDasharray="2 7" />
+                            <circle cx="75" cy="75" r="55" fill="#020812" stroke="#64748b" strokeOpacity="0.28" strokeWidth="26" />
+                            <circle cx="75" cy="75" r="55" fill="none" stroke="#27384b" strokeWidth="22" />
+                            <circle cx="75" cy="75" r="43" fill="none" stroke="#cbd5e1" strokeOpacity="0.08" strokeWidth="1.5" />
+                            {managerProgressSlices.map(slice => (
+                              <circle
+                                key={slice.offset}
+                                cx="75"
+                                cy="75"
+                                r="55"
+                                fill="none"
+                                stroke={slice.color}
+                                strokeWidth="18"
+                                strokeLinecap="butt"
+                                strokeDasharray={`${(slice.length / 100) * 345.6 + 0.45} 345.6`}
+                                strokeDashoffset={-(slice.offset / 100) * 345.6}
+                                transform="rotate(-90 75 75)"
+                              />
+                            ))}
+                            <circle
+                              cx={managerProgressMarkerX}
+                              cy={managerProgressMarkerY}
+                              r="5.2"
+                              fill="#f8fafc"
+                              stroke={managerProgressColor}
+                              strokeWidth="3"
+                              className="manager-profile-pulse"
+                            />
+                          </svg>
+                          <div className="absolute text-center">
+                            <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Poziom</div>
+                            <div className="mt-1 text-[38px] font-black italic uppercase tracking-tighter leading-none text-white">{managerExperienceProgress.rating}</div>
+                            <div className="mt-2 text-[12px] font-black italic uppercase tracking-tighter" style={{ color: managerProgressColor, textShadow: `0 0 12px ${managerProgressColor}77` }}>{Math.round(managerExperienceProgress.progressPercent)}%</div>
+                          </div>
+                        </div>
+
+                        <div className="relative min-h-[190px] overflow-hidden px-7 pb-4 pt-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-400">Historia punktów EXP</div>
+                            <div className="text-[12px] font-black italic uppercase tracking-tighter text-white">{formatManagerExp(safeManagerProfile.expPoints)} EXP</div>
+                          </div>
+                          <svg viewBox="0 0 520 145" preserveAspectRatio="none" className="mt-2 h-[132px] w-full" aria-hidden="true">
+                            <defs>
+                              <linearGradient id="manager-exp-area" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0" stopColor={managerAccentSecondary} stopOpacity="0.34" />
+                                <stop offset="1" stopColor={managerAccentSecondary} stopOpacity="0" />
+                              </linearGradient>
+                            </defs>
+                            {[30, 62, 94, 126].map(y => <line key={y} x1="18" y1={y} x2="502" y2={y} stroke="#bae6fd" strokeOpacity="0.09" />)}
+                            {managerExpTrendEntries.length > 1 && (
+                              <polygon points={`18,136 ${managerExpTrendPoints} 502,136`} fill="url(#manager-exp-area)" />
+                            )}
+                            <polyline className="manager-profile-trend" points={managerExpTrendPoints} fill="none" stroke={managerAccentSecondary} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                            {managerExpTrendEntries.map((entry, index) => {
+                              const x = managerExpTrendEntries.length === 1 ? 260 : 18 + (index / (managerExpTrendEntries.length - 1)) * 484;
+                              const y = 126 - ((entry.totalAfter - managerExpTrendMin) / managerExpTrendRange) * 96;
+                              return <circle key={entry.id} cx={x} cy={y} r="4.5" fill={managerAccentPrimary} stroke="#f8fafc" strokeWidth="2" />;
+                            })}
+                          </svg>
+                        </div>
+                      </div>
+
+                      <div className="relative mt-4 h-5 rounded-full border border-white/[0.08] bg-black/65 p-[3px]">
                         <div
-                          className="h-full bg-gradient-to-r from-yellow-500 via-emerald-400 to-cyan-400"
-                          style={{ width: `${managerExperienceProgress.progressPercent}%` }}
+                          className="h-full w-full rounded-full opacity-90"
+                          style={{ background: 'linear-gradient(90deg, #dc2626 0%, #ef4444 25%, #f97316 25%, #fb923c 50%, #eab308 50%, #facc15 75%, #16a34a 75%, #22c55e 100%)' }}
+                        />
+                        <div className="pointer-events-none absolute inset-y-[2px] left-1/4 w-px bg-black/40" />
+                        <div className="pointer-events-none absolute inset-y-[2px] left-1/2 w-px bg-black/40" />
+                        <div className="pointer-events-none absolute inset-y-[2px] left-3/4 w-px bg-black/40" />
+                        <div
+                          className="manager-profile-pulse absolute top-1/2 h-7 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-950 bg-white"
+                          style={{ left: `${Math.max(1, Math.min(99, managerExperienceProgress.progressPercent))}%`, boxShadow: `0 0 14px ${managerProgressColor}` }}
                         />
                       </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-[12px] font-black uppercase tracking-tighter text-slate-500">Poziom {managerExperienceProgress.rating}</span>
-                        <span className="text-[12px] font-black uppercase tracking-tighter text-slate-500">
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">{formatManagerExp(managerExperienceProgress.currentPoints)} EXP</span>
+                        <span className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">
                           {managerExperienceProgress.nextRatingPoints
-                          ? `${formatManagerExp(managerExperienceProgress.nextRatingPoints)} EXP`
-                            : `${formatManagerExp(managerExperienceProgress.currentPoints)} EXP`}
+                            ? `${formatManagerExp(managerExperienceProgress.nextRatingPoints)} EXP`
+                            : 'Poziom maksymalny'}
                         </span>
                       </div>
-                      </div>
-                    </div>
+                    </section>
                   )}
 
                   <div className="grid grid-cols-1 gap-5">
-                    <div className="relative rounded-2xl border border-white/10 p-5 overflow-hidden" style={managerPanelStyle}>
+                    <div className="relative border-y border-cyan-100/10 bg-[#03101b]/40 px-5 py-6 backdrop-blur-[1px]">
                       <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
                       <div className="relative z-10">
-                      <div className="text-[15px] font-black uppercase tracking-tighter text-slate-200 mb-4">Historia kariery</div>
+                      <div className="mb-4 flex items-end justify-between gap-4">
+                        <div>
+                          <div className="text-[10px] font-black italic uppercase tracking-tighter text-cyan-300">Przebieg pracy</div>
+                          <div className="mt-1 text-[20px] font-semibold tracking-normal text-white">Historia kariery</div>
+                        </div>
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-slate-500">Sezony i wyniki ligowe</div>
+                      </div>
                       {safeManagerProfile.careerHistory.length === 0 && !isUserClub ? (
                         <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak zakończonych sezonów</div>
                       ) : (
-                        <div className="overflow-hidden rounded-xl border border-white/10">
-                          <table className="w-full">
-                            <thead className="bg-slate-900/80">
+                        <div className="overflow-hidden rounded-[18px] border border-white/10 bg-[#020a14]/72">
+                          <table className="w-full border-collapse">
+                            <thead className="bg-cyan-950/35">
                               <tr className="border-b border-white/10">
                                 <th className="text-center px-4 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400">Sezon</th>
                                 <th className="text-center px-4 py-3 text-[12px] font-semibold uppercase tracking-tighter text-slate-400 border-l border-white/10">Klub</th>
@@ -3248,7 +3709,7 @@ export const SquadView: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-white/8">
                               {isUserClub && (
-                                <tr className="bg-yellow-950/25">
+                                <tr className="manager-profile-row bg-yellow-950/25">
                                   <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-yellow-200 whitespace-nowrap">
                                     {currentSeasonLabel}
                                     <span className="ml-2 text-[10px] text-yellow-500">obecnie</span>
@@ -3271,7 +3732,7 @@ export const SquadView: React.FC = () => {
                               {safeManagerProfile.careerHistory.map(entry => {
                                 const entryClubLogo = getClubLogo(entry.clubId);
                                 return (
-                                  <tr key={entry.id} className="bg-slate-950/35">
+                                  <tr key={entry.id} className="manager-profile-row bg-slate-950/35">
                                     <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-slate-200 whitespace-nowrap">{entry.seasonLabel}</td>
                                     <td className="px-4 py-3 text-center text-[15px] font-semibold uppercase tracking-tighter text-white border-l border-white/10">
                                       <div className="flex items-center justify-center gap-2">
@@ -3296,10 +3757,13 @@ export const SquadView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="relative rounded-2xl border border-white/10 p-5 overflow-hidden" style={managerPanelStyle}>
+                    <div className="relative border-y border-cyan-100/10 bg-[#03101b]/36 px-5 py-6 backdrop-blur-[1px]">
                       <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
                       <div className="relative z-10">
-                      <div className="text-[15px] font-black uppercase tracking-tighter text-slate-200 mb-4">Osiągnięcia</div>
+                      <div className="mb-4">
+                        <div className="text-[10px] font-black italic uppercase tracking-tighter text-yellow-300">Gabloty i sukcesy</div>
+                        <div className="mt-1 text-[20px] font-semibold tracking-normal text-white">Osiągnięcia</div>
+                      </div>
                       {safeManagerProfile.achievements.length === 0 ? (
                         <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak osiągnięć</div>
                       ) : (
@@ -3312,21 +3776,22 @@ export const SquadView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="relative rounded-2xl border border-white/10 p-5 overflow-hidden" style={managerPanelStyle}>
-                      <div className="absolute right-[-16px] top-[-18px] text-[72px] font-black italic uppercase tracking-tighter text-white/[0.035] select-none pointer-events-none leading-none">EXP</div>
-                      <div className="absolute inset-0 opacity-[0.035] pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
+                    <div className="relative border-y border-cyan-100/10 bg-[#03101b]/40 px-5 py-6 backdrop-blur-[1px]">
                       <div className="relative z-10">
                       <div className="flex items-center justify-between gap-3 mb-4">
-                        <div className="text-[15px] font-black uppercase tracking-tighter text-slate-200">Historia EXP</div>
-                        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/70 p-1">
+                        <div>
+                          <div className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-300">Dziennik rozwoju</div>
+                          <div className="mt-1 text-[16px] font-normal tracking-normal text-white">Historia EXP</div>
+                        </div>
+                        <div className="flex items-center gap-5 border-b border-white/10 px-1">
                           {managerExpFilterOptions.map(option => (
                             <button
                               key={option.id}
                               onClick={() => setManagerExpFilter(option.id)}
-                              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-tighter transition-colors ${
+                              className={`border-b-2 px-1 pb-2 text-[11px] font-normal normal-case tracking-normal transition-colors ${
                                 managerExpFilter === option.id
-                                  ? 'bg-yellow-500 text-slate-950'
-                                  : 'text-slate-500 hover:text-white'
+                                  ? 'border-yellow-400 text-yellow-200'
+                                  : 'border-transparent text-slate-500 hover:text-slate-200'
                               }`}
                             >
                               {option.label}
@@ -3335,39 +3800,39 @@ export const SquadView: React.FC = () => {
                         </div>
                       </div>
                       {safeManagerProfile.expHistory.length === 0 ? (
-                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak wpisów</div>
+                        <div className="py-5 text-center text-[13px] font-normal normal-case tracking-normal text-slate-600">Brak wpisów</div>
                       ) : filteredManagerExpHistory.length === 0 ? (
-                        <div className="text-[14px] font-black uppercase tracking-tighter text-slate-600 text-center py-5">Brak wpisów dla filtra</div>
+                        <div className="py-5 text-center text-[13px] font-normal normal-case tracking-normal text-slate-600">Brak wpisów dla filtra</div>
                       ) : (
                         <>
-                          <div className="overflow-hidden rounded-xl border border-white/10">
-                            <table className="w-full">
-                              <thead className="bg-slate-900/80">
-                                <tr>
-                                  <th className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Data</th>
-                                  <th className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Zdarzenie</th>
-                                  <th className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Rozgrywki</th>
-                                  <th className="text-right px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Zmiana</th>
-                                  <th className="text-right px-4 py-3 text-[12px] font-black uppercase tracking-tighter text-slate-400">Razem</th>
+                          <div className="overflow-hidden border-y border-white/[0.07]">
+                            <table className="w-full border-collapse">
+                              <thead className="bg-white/[0.018]">
+                                <tr className="border-b border-white/[0.07]">
+                                  <th className="px-4 py-2.5 text-left text-[11px] font-normal normal-case tracking-normal text-slate-500">Data</th>
+                                  <th className="px-4 py-2.5 text-left text-[11px] font-normal normal-case tracking-normal text-slate-500">Zdarzenie</th>
+                                  <th className="px-4 py-2.5 text-left text-[11px] font-normal normal-case tracking-normal text-slate-500">Rozgrywki</th>
+                                  <th className="px-4 py-2.5 text-right text-[11px] font-normal normal-case tracking-normal text-slate-500">Zmiana</th>
+                                  <th className="px-4 py-2.5 text-right text-[11px] font-normal normal-case tracking-normal text-slate-500">Razem</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-white/8">
+                              <tbody className="divide-y divide-white/[0.055]">
                                 {filteredManagerExpHistory.slice(0, 24).map(entry => (
-                                  <tr key={entry.id} className="bg-slate-950/35">
-                                    <td className="px-4 py-3 text-[13px] font-black uppercase tracking-tighter text-slate-400 whitespace-nowrap">{entry.date}</td>
-                                    <td className="px-4 py-3 text-[14px] font-black uppercase tracking-tighter text-white">{entry.label}</td>
-                                    <td className="px-4 py-3 text-[13px] font-black uppercase tracking-tighter text-slate-400">{entry.competition}</td>
-                                    <td className={`px-4 py-3 text-right text-[17px] font-black uppercase tracking-tighter whitespace-nowrap ${entry.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                  <tr key={entry.id} className="bg-transparent transition-colors hover:bg-white/[0.025]">
+                                    <td className="whitespace-nowrap px-4 py-2.5 text-[12px] font-normal normal-case tracking-normal text-slate-500">{entry.date}</td>
+                                    <td className="px-4 py-2.5 text-[13px] font-normal normal-case tracking-normal text-slate-200">{formatManagerExpText(entry.label)}</td>
+                                    <td className="px-4 py-2.5 text-[12px] font-normal normal-case tracking-normal text-slate-400">{formatManagerExpText(entry.competition)}</td>
+                                    <td className={`whitespace-nowrap px-4 py-2.5 text-right text-[13px] font-normal normal-case tracking-normal ${entry.delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                                       {entry.delta > 0 ? `+${formatManagerExp(entry.delta)}` : formatManagerExp(entry.delta)}
                                     </td>
-                                    <td className="px-4 py-3 text-right text-[15px] font-black uppercase tracking-tighter text-slate-300 whitespace-nowrap">{formatManagerExp(entry.totalAfter)}</td>
+                                    <td className="whitespace-nowrap px-4 py-2.5 text-right text-[13px] font-normal normal-case tracking-normal text-slate-300">{formatManagerExp(entry.totalAfter)}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
                           {filteredManagerExpHistory.length > 24 && (
-                            <div className="text-[12px] font-black uppercase tracking-tighter text-slate-600 text-center pt-3">
+                            <div className="pt-3 text-center text-[11px] font-normal normal-case tracking-normal text-slate-600">
                               Pokazano 24 z {filteredManagerExpHistory.length} wpisów
                             </div>
                           )}
@@ -3749,87 +4214,102 @@ export const SquadView: React.FC = () => {
             {/* LISTA SZTABU */}
             {!selectedMember && !isManagerProfileOpen && (
               <div
-                className="relative w-[800px] bg-slate-950 rounded-[36px] shadow-[0_50px_120px_rgba(0,0,0,0.95)] overflow-hidden"
+                className="relative max-h-[88vh] w-[900px] overflow-y-auto rounded-[38px] border border-cyan-100/15 shadow-[0_50px_120px_rgba(0,0,0,0.9)] custom-scrollbar"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="flex items-center justify-center gap-4 pt-7 pb-5 bg-slate-950 relative">
-                  {getClubLogo(myClub.id) && (
-                    <img src={getClubLogo(myClub.id)!} alt="" className="w-10 h-10 object-contain" />
-                  )}
-                  <div className="text-center">
-                    <div className="text-[20px] font-black italic uppercase tracking-tighter text-white">{myClub.name}</div>
-                    <div className="text-[22px] font-black italic uppercase tracking-tighter text-white mt-0.5">Sztab szkoleniowy</div>
-                  </div>
-                  <button onClick={() => setIsStaffOpen(false)} className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-600 hover:text-white transition-colors text-lg">✕</button>
-                </div>
+                <CoachingStaffScene primaryColor={managerAccentPrimary} secondaryColor={managerAccentSecondary} />
 
-                <div
-                  className={`w-full flex flex-col items-center gap-1 py-7 bg-gradient-to-b from-yellow-900/60 to-yellow-950/40 transition-colors ${coachName ? 'cursor-pointer hover:from-yellow-800/60 hover:to-yellow-900/40' : 'cursor-default'}`}
-                  onClick={() => {
-                    if (!coachName) return;
-                    if (isUserClub && safeManagerProfile) setIsManagerProfileOpen(true);
-                    else if (myClub.coachId) {
-                      setIsStaffOpen(false);
-                      setSelectedStaffId(null);
-                      viewCoachDetails(myClub.coachId);
-                    }
-                  }}
-                >
-                  <span className="text-[12px] font-black italic uppercase tracking-tighter text-yellow-400">Trener główny</span>
-                  <span className={`text-[28px] font-black italic uppercase tracking-tighter mt-1 ${coachName ? 'text-yellow-100' : 'text-slate-500'}`}>
-                    {coachName ?? 'Wakat'}
-                  </span>
-                </div>
+                <div className="relative z-10">
+                  <header className="relative flex min-h-[122px] items-center gap-5 border-b border-cyan-100/10 px-8 pr-24">
+                    {getClubLogo(myClub.id) && (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] border border-white/10 bg-[#06111f]/75 p-2 shadow-[0_10px_26px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+                        <img src={getClubLogo(myClub.id)!} alt={myClub.name} className="h-full w-full object-contain drop-shadow-lg" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-black italic uppercase tracking-tighter" style={{ color: managerAccentSecondary }}>Centrum treningowe</div>
+                      <div className="mt-1 truncate text-[25px] font-semibold leading-tight tracking-[-0.02em] text-white">{myClub.name}</div>
+                      <div className="mt-1 text-[17px] font-medium tracking-normal text-cyan-100/65">Sztab szkoleniowy</div>
+                    </div>
+                    <div className="ml-auto hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-1.5 sm:flex">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_9px_rgba(110,231,183,0.8)]" />
+                      <span className="text-[9px] font-black italic uppercase tracking-tighter text-emerald-100/70">Sztab aktywny</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsStaffOpen(false)}
+                      aria-label="Zamknij sztab szkoleniowy"
+                      className="absolute right-7 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-[#06111f]/82 text-base text-slate-300 shadow-[0_8px_20px_rgba(0,0,0,0.32)] transition-colors hover:border-cyan-200/35 hover:bg-cyan-300/10 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </header>
 
-                {assistants.length > 0 && (
-                  <Band label="Asystent trenera" labelColor="text-slate-300" nameColor="text-slate-100" bg="bg-gradient-to-b from-slate-700/40 to-slate-800/30">
-                    {assistants.map(m => <StaffCard key={m.id} m={m} nameColor="text-slate-100" />)}
-                  </Band>
-                )}
-
-                {(gkCoaches.length > 0 || fitness.length > 0 || analysts.length > 0) && (
-                  <div className="w-full py-6 px-8 bg-gradient-to-b from-blue-950/50 to-blue-950/30">
-                    <div className="flex items-start justify-center gap-20">
-                      {gkCoaches.length > 0 && (
-                        <div className="flex flex-col items-center gap-3">
-                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-blue-300">Trener bramkarzy</span>
-                          <div className="flex flex-col items-center gap-2">{gkCoaches.map(m => <StaffCard key={m.id} m={m} nameColor="text-blue-100" />)}</div>
+                  <main className="space-y-4 px-7 pb-7 pt-6">
+                    <button
+                      type="button"
+                      className={`group relative w-full overflow-hidden rounded-[22px] border border-white/10 bg-[#081522]/86 px-6 py-5 text-left shadow-[0_15px_34px_rgba(0,0,0,0.28)] transition-all ${coachName ? 'cursor-pointer hover:-translate-y-0.5 hover:border-white/20' : 'cursor-default'}`}
+                      style={{ boxShadow: `inset 4px 0 0 ${managerAccentPrimary}, 0 15px 34px rgba(0,0,0,0.28)` }}
+                      onClick={() => {
+                        if (!coachName) return;
+                        if (isUserClub && safeManagerProfile) setIsManagerProfileOpen(true);
+                        else if (myClub.coachId) {
+                          setIsStaffOpen(false);
+                          setSelectedStaffId(null);
+                          viewCoachDetails(myClub.coachId);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <span className="text-[10px] font-black italic uppercase tracking-tighter" style={{ color: managerAccentSecondary }}>Trener główny</span>
+                          <span className={`mt-1.5 block text-[24px] font-semibold leading-tight tracking-[-0.02em] ${coachName ? 'text-white' : 'text-slate-500'}`}>
+                            {coachName ?? 'Wakat'}
+                          </span>
                         </div>
+                        <svg viewBox="0 0 82 56" className="h-14 w-20 opacity-55" aria-hidden="true">
+                          <rect x="2" y="2" width="78" height="52" rx="7" fill="none" stroke={managerAccentPrimary} strokeWidth="2" />
+                          <line x1="41" y1="3" x2="41" y2="53" stroke={managerAccentPrimary} strokeWidth="1.5" />
+                          <circle cx="41" cy="28" r="9" fill="none" stroke={managerAccentSecondary} strokeWidth="1.5" />
+                          <path d="M2 17h14v22H2M80 17H66v22h14" fill="none" stroke={managerAccentSecondary} strokeWidth="1.5" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      {assistants.length > 0 && (
+                        <StaffGroup label="Asystent trenera" accent="#c4b5fd">
+                          {assistants.map(m => <StaffCard key={m.id} m={m} accent="#c4b5fd" />)}
+                        </StaffGroup>
+                      )}
+                      {gkCoaches.length > 0 && (
+                        <StaffGroup label="Trener bramkarzy" accent="#7dd3fc">
+                          {gkCoaches.map(m => <StaffCard key={m.id} m={m} accent="#7dd3fc" />)}
+                        </StaffGroup>
                       )}
                       {fitness.length > 0 && (
-                        <div className="flex flex-col items-center gap-3">
-                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-blue-300">Przygotowanie motoryczne</span>
-                          <div className="flex flex-col items-center gap-2">{fitness.map(m => <StaffCard key={m.id} m={m} nameColor="text-blue-100" />)}</div>
-                        </div>
+                        <StaffGroup label="Przygotowanie motoryczne" accent="#fbbf24">
+                          {fitness.map(m => <StaffCard key={m.id} m={m} accent="#fbbf24" />)}
+                        </StaffGroup>
                       )}
                       {analysts.length > 0 && (
-                        <div className="flex flex-col items-center gap-3">
-                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-blue-300">Analityk video</span>
-                          <div className="flex flex-col items-center gap-2">{analysts.map(m => <StaffCard key={m.id} m={m} nameColor="text-blue-100" />)}</div>
-                        </div>
+                        <StaffGroup label="Analityk video" accent="#60a5fa">
+                          {analysts.map(m => <StaffCard key={m.id} m={m} accent="#60a5fa" />)}
+                        </StaffGroup>
                       )}
-                    </div>
-                  </div>
-                )}
-
-                {(physios.length > 0 || doctors.length > 0) && (
-                  <div className="w-full py-6 px-8 bg-gradient-to-b from-emerald-950/50 to-emerald-950/30">
-                    <div className="flex items-start justify-center gap-24">
                       {physios.length > 0 && (
-                        <div className="flex flex-col items-center gap-3">
-                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">Fizjoterapeuci</span>
-                          <div className="flex flex-col items-center gap-2">{physios.map(m => <StaffCard key={m.id} m={m} nameColor="text-emerald-100" />)}</div>
-                        </div>
+                        <StaffGroup label="Fizjoterapeuci" accent="#6ee7b7">
+                          {physios.map(m => <StaffCard key={m.id} m={m} accent="#6ee7b7" />)}
+                        </StaffGroup>
                       )}
                       {doctors.length > 0 && (
-                        <div className="flex flex-col items-center gap-3">
-                          <span className="text-[12px] font-black italic uppercase tracking-tighter text-emerald-300">Lekarz klubowy</span>
-                          <div className="flex flex-col items-center gap-2">{doctors.map(m => <StaffCard key={m.id} m={m} nameColor="text-emerald-100" />)}</div>
-                        </div>
+                        <StaffGroup label="Lekarz klubowy" accent="#fda4af">
+                          {doctors.map(m => <StaffCard key={m.id} m={m} accent="#fda4af" />)}
+                        </StaffGroup>
                       )}
                     </div>
-                  </div>
-                )}
+                  </main>
+                </div>
               </div>
             )}
           </div>

@@ -624,7 +624,7 @@ const getRedCardExits = (
 // ============================================================
 //  DOGRYWKA + KARNE — poprawiona wersja
 // ============================================================
-const getShortHandedImpact = (redExits: SimulatedExit[], maxMinute = 90): { attackMult: number; defenseLeakMult: number; winProbPenalty: number } => {
+export const calculateEuropeanRedCardImpact = (redExits: SimulatedExit[], maxMinute = 90): { attackMult: number; defenseLeakMult: number; winProbPenalty: number } => {
   const redEquivalent = redExits.reduce((sum, exit) => {
     const remaining = Math.max(0, maxMinute - Math.max(1, Math.min(maxMinute, exit.min)));
     return sum + remaining / maxMinute;
@@ -637,11 +637,10 @@ const getShortHandedImpact = (redExits: SimulatedExit[], maxMinute = 90): { atta
   };
 };
 
-const getShortHandedGoalChance = (redExits: SimulatedExit[], minute: number): number => {
-  const activeReds = redExits.filter(exit => exit.min < minute).length;
-  if (activeReds >= 2) return 0.001;
-  if (activeReds === 1) return 0.28;
-  return 1;
+const getExtraTimeRedCardImpact = (redExits: SimulatedExit[]): ReturnType<typeof calculateEuropeanRedCardImpact> => {
+  // Kartka pokazana przed dogrywką obowiązuje przez całe dodatkowe 30 minut.
+  const activeFromStart = redExits.map(exit => ({ ...exit, min: 0 }));
+  return calculateEuropeanRedCardImpact(activeFromStart);
 };
 
 const adjustExtraTimeWinProbability = (
@@ -649,30 +648,68 @@ const adjustExtraTimeWinProbability = (
   homeRedExits: SimulatedExit[],
   awayRedExits: SimulatedExit[]
 ): number => {
-  const homeImpact = getShortHandedImpact(homeRedExits);
-  const awayImpact = getShortHandedImpact(awayRedExits);
+  const homeImpact = calculateEuropeanRedCardImpact(homeRedExits);
+  const awayImpact = calculateEuropeanRedCardImpact(awayRedExits);
   return Math.max(0.12, Math.min(0.88, homeWinProb - homeImpact.winProbPenalty + awayImpact.winProbPenalty));
+};
+
+export const sampleEuropeanExtraTimeGoals = (
+  expectedGoals: number,
+  rng: (offset: number) => number,
+  offset: number
+): number => {
+  const lambda = Math.max(0.01, expectedGoals);
+  const roll = rng(offset);
+  let goals = 0;
+  let probability = Math.exp(-lambda);
+  let cumulative = probability;
+
+  // Odwrotna dystrybuanta Poissona nie ma sztywnego limitu liczby bramek.
+  while (roll > cumulative && probability > Number.EPSILON) {
+    goals++;
+    probability *= lambda / goals;
+    cumulative += probability;
+  }
+
+  return goals;
 };
 
 const simulateExtraTimeAndPenalties = (
   homeScore: number,
   awayScore: number,
   homeWinProb: number,
+  xgHome90: number,
+  xgAway90: number,
+  homeRedExits: SimulatedExit[],
+  awayRedExits: SimulatedExit[],
+  isChaosMatch: boolean,
   rng: (o: number) => number,
   baseOffset: number,
   leg1Diff?: number
 ): { homeScore: number; awayScore: number; penaltyHome?: number; penaltyAway?: number } => {
   let h = homeScore;
   let a = awayScore;
-  const homeAdvantage = 0.05;
 
-  // Dogrywka: P(0)=0.55, P(1)=0.35, P(2)=0.10
-  const etRoll = rng(baseOffset);
-  const etGoals = etRoll < 0.10 ? 2 : etRoll < 0.45 ? 1 : 0;
-  for (let i = 0; i < etGoals; i++) {
-    if (rng(baseOffset + 10 + i) < homeWinProb + homeAdvantage) h++;
-    else a++;
-  }
+  // Dogrywka ma własny rozkład Poissona dla obu drużyn. Intensywność 0.24
+  // zachowuje zbliżoną średnią do wcześniejszego modelu, ale nie blokuje 3+ goli.
+  // Czerwona kartka z 90 minut obowiązuje przez całą dogrywkę, dlatego korygujemy
+  // wcześniejszy, czasowo ważony wpływ do pełnego wpływu gry w osłabieniu.
+  const homeWeightedRedImpact = calculateEuropeanRedCardImpact(homeRedExits);
+  const awayWeightedRedImpact = calculateEuropeanRedCardImpact(awayRedExits);
+  const homeExtraTimeRedImpact = getExtraTimeRedCardImpact(homeRedExits);
+  const awayExtraTimeRedImpact = getExtraTimeRedCardImpact(awayRedExits);
+  const xgCap = isChaosMatch ? 3.8 : 2.8;
+  const homeRedAdjustment =
+    (homeExtraTimeRedImpact.attackMult / homeWeightedRedImpact.attackMult) *
+    (awayExtraTimeRedImpact.defenseLeakMult / awayWeightedRedImpact.defenseLeakMult);
+  const awayRedAdjustment =
+    (awayExtraTimeRedImpact.attackMult / awayWeightedRedImpact.attackMult) *
+    (homeExtraTimeRedImpact.defenseLeakMult / homeWeightedRedImpact.defenseLeakMult);
+  const homeExpectedExtraTimeGoals = Math.max(0.01, Math.min(xgCap, xgHome90) * 0.24 * homeRedAdjustment);
+  const awayExpectedExtraTimeGoals = Math.max(0.01, Math.min(xgCap, xgAway90) * 0.24 * awayRedAdjustment);
+
+  h += sampleEuropeanExtraTimeGoals(homeExpectedExtraTimeGoals, rng, baseOffset);
+  a += sampleEuropeanExtraTimeGoals(awayExpectedExtraTimeGoals, rng, baseOffset + 1);
 
   let penaltyHome: number | undefined;
   let penaltyAway: number | undefined;
@@ -778,8 +815,8 @@ const simulateCLMatchFull = (
   awayAllSubs = awayTimeline.appliedSubs;
   let homeMinutesPlayedMap = homeTimeline.minutesPlayedMap;
   let awayMinutesPlayedMap = awayTimeline.minutesPlayedMap;
-  const homeShortHanded = getShortHandedImpact(homeRedExits);
-  const awayShortHanded = getShortHandedImpact(awayRedExits);
+  const homeShortHanded = calculateEuropeanRedCardImpact(homeRedExits);
+  const awayShortHanded = calculateEuropeanRedCardImpact(awayRedExits);
   const formImpact = TeamFormImpactService.calculateMatchImpact(homePlayersAll, awayPlayersAll, homeLineup, awayLineup);
 
   // ── Siła zawodników (ważona czasem gry) ──────────────────────────────
@@ -842,7 +879,6 @@ const simulateCLMatchFull = (
     const subs       = side === 'H' ? homeAllSubs    : awayAllSubs;
     const exits      = side === 'H' ? homeTimeline.appliedExits : awayTimeline.appliedExits;
     const penMin     = Math.floor(5 + rng(rollOffset + 2) * 85);
-    if (rng(rollOffset + 4) > getShortHandedGoalChance(exits, penMin)) return;
     const activeXI   = getActiveLineupAt(penMin, lineup.startingXI, subs, exits);
     const kicker     = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
     if (!kicker) return;
@@ -875,7 +911,6 @@ const simulateCLMatchFull = (
       let minute = Math.floor(1 + rng(baseOffset + i) * 94);
       while (usedMinutes.has(minute)) { minute = minute >= 96 ? 1 : minute + 1; }
       usedMinutes.add(minute);
-      if (rng(baseOffset + i + 503) > getShortHandedGoalChance(exits, minute)) continue;
       const activeXI = getActiveLineupAt(minute, lineup.startingXI, subs, exits);
       const scorer = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(baseOffset + i + 500));
       const assist = scorer ? GoalAttributionService.pickAssistant(teamPlayers, activeXI, scorer.id, false, () => rng(baseOffset + i + 501)) : null;
@@ -927,14 +962,38 @@ const simulateCLMatchFull = (
   );
 
   if (leg1Diff !== undefined && finalHomeScore90 - finalAwayScore90 === leg1Diff) {
-    const etResult = simulateExtraTimeAndPenalties(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1000, leg1Diff);
+    const etResult = simulateExtraTimeAndPenalties(
+      finalHomeScore90,
+      finalAwayScore90,
+      homeWinProb,
+      xgHome,
+      xgAway,
+      homeRedExits,
+      awayRedExits,
+      isChaosMatch,
+      rng,
+      1000,
+      leg1Diff
+    );
     finalHomeScore = etResult.homeScore;
     finalAwayScore = etResult.awayScore;
     penaltyHome = etResult.penaltyHome;
     penaltyAway = etResult.penaltyAway;
     wentToExtraTime = true;
   } else if (isFinalMatch && finalHomeScore90 === finalAwayScore90) {
-    const etResult = simulateExtraTimeAndPenalties(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1000, undefined);
+    const etResult = simulateExtraTimeAndPenalties(
+      finalHomeScore90,
+      finalAwayScore90,
+      homeWinProb,
+      xgHome,
+      xgAway,
+      homeRedExits,
+      awayRedExits,
+      isChaosMatch,
+      rng,
+      1000,
+      undefined
+    );
     finalHomeScore = etResult.homeScore;
     finalAwayScore = etResult.awayScore;
     penaltyHome = etResult.penaltyHome;
