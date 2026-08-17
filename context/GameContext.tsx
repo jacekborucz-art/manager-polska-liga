@@ -188,7 +188,7 @@ import { PlayerRoleConversationResult } from '../services/PlayerRoleMindflowServ
 import { PlayerTransferConversationResult } from '../services/PlayerTransferMindflowService';
 import { PlayerTransferListObjectionResult } from '../services/PlayerTransferListObjectionService';
 // ── Transfer Request Dialog ──────────────────────────────────────────────────
-// 4 ścieżki rozmowy po prośbie o listę transferową (A/B/C/D).
+// 5 ścieżek rozmowy po prośbie o listę transferową (A/B/C/D/E).
 // Modal: PlayerTransferRequestModal | Serwis: PlayerTransferRequestDialogService
 import { PlayerTransferRequestDialogService, TransferRequestDialogResult } from '../services/PlayerTransferRequestDialogService';
 import { PzpnDisciplinaryEvent, PzpnDisciplinaryService } from '../services/PzpnDisciplinaryService';
@@ -1318,7 +1318,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   resolvePlayerRoleConversation: (playerId: string, result: PlayerRoleConversationResult) => void;
   resolvePlayerTransferConversation: (playerId: string, result: PlayerTransferConversationResult) => void;
   // ── Transfer Request Dialog ──────────────────────────────────────────────
-  // Stosuje wynik dialogu A/B/C/D (morale, mindset, obietnice, flagi).
+  // Stosuje wynik dialogu A/B/C/D/E (morale, mindset, obietnice, flagi).
   // Serwis: PlayerTransferRequestDialogService | Modal: PlayerTransferRequestModal
   resolvePlayerTransferRequestDialog: (playerId: string, result: TransferRequestDialogResult) => void;
   pendingOpenTransferRequestDialog: boolean;
@@ -2281,6 +2281,29 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     const allLeagueFixtures = Object.values(leagueSchedules).flatMap(s => s.matchdays.flatMap(m => m.fixtures));
     return [...allLeagueFixtures, ...globalFixtures];
   }, [leagueSchedules, globalFixtures]);
+
+  useEffect(() => {
+    if (!activeManagerContract || activeManagerContract.clubId !== userTeamId) return;
+    const managedClub = clubs.find(club => club.id === userTeamId);
+    if (!managedClub) return;
+    const tenure = ManagerContractService.getManagerTenureSnapshot(
+      activeManagerContract,
+      managedClub,
+      allFixtures,
+      currentDate,
+    );
+    if (tenure.pressureStage !== 'NONE') return;
+
+    const contractStart = new Date(activeManagerContract.signedAt).getTime();
+    setMessages(previous => {
+      const filtered = previous.filter(message => {
+        const messageDate = message.date instanceof Date ? message.date.getTime() : new Date(message.date).getTime();
+        const isPressureMail = /_board_pressure_(critical|warning|concern)_/i.test(message.id);
+        return !isPressureMail || !Number.isFinite(messageDate) || messageDate < contractStart;
+      });
+      return filtered.length === previous.length ? previous : filtered;
+    });
+  }, [activeManagerContract, allFixtures, clubs, currentDate, userTeamId]);
 
   useEffect(() => {
     triggerSeasonCelebrationIfClinched(clubs, allFixtures);
@@ -4250,7 +4273,7 @@ if (userTeamId) {
       data.activeManagerContract?.terms?.salaryModelVersion === ManagerContractService.SALARY_MODEL_VERSION
     );
     const legacyContractStartDate = new Date(loadedSeasonStartYear, 6, 1, 12, 0, 0, 0);
-    const migratedManagerContract: ManagerContract | null = loadedManagerContractIsComplete
+    const loadedOrMigratedManagerContract: ManagerContract | null = loadedManagerContractIsComplete
       ? data.activeManagerContract!
       : (
       loadedEmploymentStatus === 'EMPLOYED' &&
@@ -4264,6 +4287,13 @@ if (userTeamId) {
           )
         : null
       );
+    const migratedManagerContract = loadedOrMigratedManagerContract && loadedUserClub
+      ? ManagerContractService.normalizeManagerContractTargets(
+          loadedOrMigratedManagerContract,
+          loadedUserClub,
+          loadedEmergencyGoalkeeperResult.updatedClubs
+        )
+      : loadedOrMigratedManagerContract;
     const didMigrateManagerContract = !loadedManagerContractIsComplete && migratedManagerContract !== null;
     const migratedContractMail: MailMessage | null = didMigrateManagerContract && loadedUserClub
       ? {
@@ -4285,7 +4315,7 @@ if (userTeamId) {
     const loadedNegotiationClub = loadedManagerContractNegotiation
       ? loadedEmergencyGoalkeeperResult.updatedClubs.find(club => club.id === loadedManagerContractNegotiation.clubId)
       : null;
-    const migratedManagerContractNegotiation = loadedManagerContractNegotiation &&
+    const migratedManagerContractNegotiationBase = loadedManagerContractNegotiation &&
       loadedManagerContractNegotiation.clubTerms.salaryModelVersion !== ManagerContractService.SALARY_MODEL_VERSION &&
       loadedNegotiationClub
         ? ManagerContractService.createNegotiation(
@@ -4297,6 +4327,13 @@ if (userTeamId) {
             loadedManagerContractNegotiation.jobOfferId
           )
         : loadedManagerContractNegotiation;
+    const migratedManagerContractNegotiation = migratedManagerContractNegotiationBase && loadedNegotiationClub
+      ? ManagerContractService.normalizeManagerContractNegotiationTargets(
+          migratedManagerContractNegotiationBase,
+          loadedNegotiationClub,
+          loadedEmergencyGoalkeeperResult.updatedClubs
+        )
+      : migratedManagerContractNegotiationBase;
     setActiveManagerContract(migratedManagerContract);
     setManagerContractNegotiation(migratedManagerContractNegotiation);
     setSeasonNumber(data.seasonNumber);
@@ -7471,16 +7508,17 @@ setMessages(prev => [
   // ═══════════════════════════════════════════════════════════════════════════
   // resolvePlayerTransferRequestDialog
   //
-  // Stosuje pełny wynik dialogu A/B/C/D na zawodniku.
+  // Stosuje pełny wynik dialogu A/B/C/D/E na zawodniku.
   // Wywoływane przez PlayerCard po zamknięciu PlayerTransferRequestModal.
   //
   // Co robi:
   //   1. Aplikuje zmianę morale (withMoraleChange)
   //   2. Aplikuje delty mindset (withMindsetChange)
   //   3. Zapisuje obietnicę kontraktową (ścieżka A) → player.transferContractPromise
-  //   4. Ustawia flagę odejścia po sezonie (ścieżka B) → player.transferAllowAfterSeason
-  //   5. Zapisuje oczekującą odpowiedź (THINKING) → player.transferRequestPendingResponse
-  //   6. Czyści transferListDemandUntil jeśli reakcja = AGREED
+  //   4. Ustawia flagę odejścia po sezonie (ścieżka C) → player.transferAllowAfterSeason
+  //   5. Natychmiast wystawia zawodnika na listę, jeśli trener spełnił jego prośbę
+  //   6. Zapisuje oczekującą odpowiedź (THINKING) → player.transferRequestPendingResponse
+  //   7. Czyści transferListDemandUntil jeśli reakcja = AGREED
   //
   // Daily checks (reviewContractPromise, reviewAllowAfterSeason, reviewPendingResponse)
   // są wywoływane w advanceDay niżej — szukaj komentarza "Transfer Request Dialog checks".
@@ -7516,7 +7554,7 @@ setMessages(prev => [
           updated = { ...updated, transferContractPromise: result.promiseMade };
         }
 
-        // 4. Flaga odejścia po sezonie (ścieżka B, AGREED lub THINKING)
+        // 4. Flaga odejścia po sezonie (ścieżka C, AGREED lub THINKING)
         if (result.allowAfterSeasonFlag) {
           // Deadline = 30 czerwca bieżącego lub następnego roku (wzór identyczny jak computeSeasonEnd w modalu)
           const month = currentDate.getMonth();
@@ -7531,12 +7569,28 @@ setMessages(prev => [
           };
         }
 
-        // 5. Oczekująca odpowiedź (THINKING)
+        // 5. Natychmiastowe wystawienie na listę transferową
+        if (result.listImmediatelyFlag) {
+          updated = {
+            ...updated,
+            isOnTransferList: true,
+            isUntouchable: false,
+            isAvailableForLoan: false,
+            squadRole: null,
+            transferListPrice: updated.transferListPrice ?? updated.marketValue,
+            transferContractPromise: null,
+            transferAllowAfterSeason: false,
+            transferAllowAfterSeasonDeadline: null,
+            transferRequestPendingResponse: null,
+          };
+        }
+
+        // 6. Oczekująca odpowiedź (THINKING)
         if (result.pendingResponse) {
           updated = { ...updated, transferRequestPendingResponse: result.pendingResponse };
         }
 
-        // 6. Wyczyść demand jeśli AGREED
+        // 7. Wyczyść demand jeśli AGREED
         if (result.reaction === 'AGREED') {
           updated = { ...updated, transferListDemandUntil: null };
         }
@@ -12182,7 +12236,8 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber, MatchHistoryService.getAll(), activeManagerContract?.clubId === userClub.id ? activeManagerContract.terms.target.leagueMaxRank : undefined);
+      const currentManagerContract = activeManagerContract?.clubId === userClub.id ? activeManagerContract : null;
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber, MatchHistoryService.getAll(), currentManagerContract?.terms.target.leagueMaxRank, currentManagerContract);
       if (newMails.length > 0) {
         prependUniqueMessages(newMails);
         const sentUnfriendlyPressMonthKeys = newMails
@@ -12798,13 +12853,22 @@ const finalResult: SimulationOutput = {
           const leagueClubs = updatedClubsList.filter(club => club.leagueId === userClub.leagueId);
           const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
           const rank = sorted.findIndex(club => club.id === userClub.id) + 1;
+          const managerTenure = ManagerContractService.getManagerTenureSnapshot(
+            activeManagerContract,
+            userClub,
+            allFixtures,
+            nextDay,
+          );
           const pressure = CoachService.getPerformancePressure(
             userClub,
             rank,
-            managerProfile?.expPoints
+            managerProfile?.expPoints,
+            activeManagerContract?.clubId === userClub.id
+              ? activeManagerContract.terms.target.leagueMaxRank
+              : undefined,
           );
 
-          if (pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
+          if (managerTenure.dismissalEligible && pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
             const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
             assignReplacementCoachToClub(updatedCoaches, userClub, nextDay, userClub.coachId);
             newMails.push(createManagerFiredMail(userClub, nextDay));
@@ -19467,7 +19531,15 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
       return failForNoFunds();
     }
 
-    const hasExceptionalContractApproval = (userClub.boardExceptionalContractApprovals ?? 0) > 0;
+    const exactBoardApproval = userClub.boardApprovedFreeAgentContract;
+    const hasExactBoardApproval = !!exactBoardApproval &&
+      exactBoardApproval.playerId === resolvedPlayer.id &&
+      exactBoardApproval.salary === salary &&
+      exactBoardApproval.bonus === bonus &&
+      exactBoardApproval.years === years &&
+      new Date(exactBoardApproval.expiresAt).getTime() >= currentDate.getTime();
+    const hasGenericExceptionalApproval = (userClub.boardExceptionalContractApprovals ?? 0) > 0;
+    const hasExceptionalContractApproval = hasExactBoardApproval || hasGenericExceptionalApproval;
     if (!hasExceptionalContractApproval) {
       const boardDecision = FinanceService.evaluateFASigningBoardDecision(
         resolvedPlayer,
@@ -19518,7 +19590,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
     }
 
     // A director review is a reversible policy veto, unlike the hard checks above.
-    const directorFreeAgentDecision = userClub.sportingDirector && !bypassDirectorApproval
+    const directorFreeAgentDecision = userClub.sportingDirector && !bypassDirectorApproval && !hasExceptionalContractApproval
       ? SportingDirectorService.evaluateFreeAgentSigningDecision({
           club: userClub,
           player: resolvedPlayer,
@@ -19593,9 +19665,12 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
     setClubs(prev => prev.map(c => c.id === userTeamId ? {
       ...(directorFreeAgentDecision?.relationDelta ? directorFreeAgentDecision.updatedClub : c),
       transferBudget: nextTransferBudget,
-      boardExceptionalContractApprovals: hasExceptionalContractApproval
+      boardExceptionalContractApprovals: hasGenericExceptionalApproval && !hasExactBoardApproval
         ? Math.max(0, (c.boardExceptionalContractApprovals ?? 0) - 1)
         : c.boardExceptionalContractApprovals,
+      boardApprovedFreeAgentContract: hasExactBoardApproval
+        ? null
+        : c.boardApprovedFreeAgentContract,
       financeHistory: [
         {
           id: Math.random().toString(36).substr(2, 9),

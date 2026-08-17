@@ -46,8 +46,16 @@ const CHOICE_OPTIONS: ChoiceOption[] = [
     hoverBorder: 'hover:border-emerald-300/40',
   },
   {
-    choice: 'ALLOW_END_OF_SEASON',
+    choice: 'LIST_IMMEDIATELY',
     marker: 'B',
+    label: 'Wystaw natychmiast na listę transferową',
+    labelColor: 'text-orange-300',
+    markerStyle: 'border-orange-300/35 text-orange-300',
+    hoverBorder: 'hover:border-orange-300/40',
+  },
+  {
+    choice: 'ALLOW_END_OF_SEASON',
+    marker: 'C',
     label: 'Zgoda na odejście po sezonie',
     labelColor: 'text-sky-300',
     markerStyle: 'border-sky-300/35 text-sky-300',
@@ -55,7 +63,7 @@ const CHOICE_OPTIONS: ChoiceOption[] = [
   },
   {
     choice: 'REFUSE_IMPORTANT',
-    marker: 'C',
+    marker: 'D',
     label: 'Odmów: jesteś zbyt ważny',
     labelColor: 'text-amber-300',
     markerStyle: 'border-amber-300/35 text-amber-300',
@@ -63,7 +71,7 @@ const CHOICE_OPTIONS: ChoiceOption[] = [
   },
   {
     choice: 'REFUSE_NO_TALK',
-    marker: 'D',
+    marker: 'E',
     label: 'Odmów rozmowy',
     labelColor: 'text-rose-300',
     markerStyle: 'border-rose-300/35 text-rose-300',
@@ -91,7 +99,7 @@ export const PlayerTransferRequestModal: React.FC<PlayerTransferRequestModalProp
   const handleChoiceSelect = (choice: TransferRequestManagerChoice) => {
     setChosenChoice(choice);
 
-    if (choice === 'REFUSE_NO_TALK') {
+    if (choice === 'REFUSE_NO_TALK' || choice === 'LIST_IMMEDIATELY') {
       const finalResult = PlayerTransferRequestDialogService.finish(
         null,
         player,
@@ -343,6 +351,15 @@ export const PlayerTransferRequestModal: React.FC<PlayerTransferRequestModalProp
                       </p>
                       <p className="mt-1 text-[13px] font-normal text-slate-400/70">
                         Termin realizacji: 30 czerwca
+                      </p>
+                    </div>
+                  )}
+
+                  {result.listImmediatelyFlag && (
+                    <div className="mt-7 border-l-2 border-orange-300/60 py-1 pl-5">
+                      <p className="text-[13px] font-medium text-orange-300">Lista transferowa zaktualizowana</p>
+                      <p className="mt-2 text-[17px] font-medium text-slate-100">
+                        Zawodnik jest od razu dostępny do transferu.
                       </p>
                     </div>
                   )}

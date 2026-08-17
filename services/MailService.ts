@@ -7,6 +7,7 @@ import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
 import { MediaInterviewService } from './MediaInterviewService';
 import { CoachService } from './CoachService';
+import { ManagerContractService } from './ManagerContractService';
 
 export interface SeasonSummaryData {
   year: number;
@@ -1030,7 +1031,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     sentFriendlyPressMonths: string[] = [],
     seasonNumber = 1,
     matchHistory: MatchHistoryEntry[] = [],
-    managerExpectedRank?: number
+    managerExpectedRank?: number,
+    managerContract?: ManagerContract | null,
   ): MailMessage[] => {
     const newMails: MailMessage[] = [];
     const played = userClub.stats.played;
@@ -1114,8 +1116,14 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
         ).length
       : Number.POSITIVE_INFINITY;
     const canSendLateSeasonBoardPressure = remainingUserLeagueMatches >= 3;
+    const managerTenure = ManagerContractService.getManagerTenureSnapshot(
+      managerContract,
+      userClub,
+      allFixtures ?? [],
+      currentDate,
+    );
 
-    if (played >= 3 && isBeforeLastLeagueMatch && !isWinterBreak) {
+    if (played >= 3 && managerTenure.leagueMatchesManaged >= 3 && isBeforeLastLeagueMatch && !isWinterBreak) {
        // expectedRank: non-linear mapping so high-rep clubs (Legia, Lech) expect top 2,
        // mid-rep clubs expect top 5–9, low-rep clubs expect mid/low table
        const expectedRank = Math.max(1, Math.round(19 - userClub.reputation * 1.7));
@@ -1125,8 +1133,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
        if (!alreadySentBoardPositionThisMonth && rng < 0.15) {
           if (rank <= expectedRank - 3) {
              newMails.push(createMail('board_excellent_position', { 'CLUB': userClub.name }));
-          } else if (rank >= expectedRank + 4) {
-             if (isHighRepClub && isFirstHalf) {
+          } else if (rank >= expectedRank + 4 && managerTenure.pressureStage !== 'NONE') {
+             if (managerTenure.pressureStage === 'CONCERN' || (isHighRepClub && isFirstHalf)) {
                 // First half of season: high-rep board watches patiently instead of panicking
                 newMails.push(createMail('board_watching_patience', { 'CLUB': userClub.name }));
              } else {
@@ -1141,7 +1149,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
        let currentLossStreak = 0;
        for (let i = form.length - 1; i >= 0 && form[i] === 'P'; i--) currentLossStreak++;
 
-       if (boardConfidence < 35 && rng < 0.2 && currentLossStreak >= 3) {
+       if (managerTenure.pressureStage === 'FULL' && boardConfidence < 35 && rng < 0.2 && currentLossStreak >= 3) {
           newMails.push(createMail('board_losing_streak', { 'CLUB': userClub.name }));
        } else if (boardConfidence > 85 && rng < 0.1 && currentWinStreak >= 3 && !alreadySentWinningStreakThisMonth) {
           newMails.push(createMail('board_winning_streak', { 'CLUB': userClub.name }));
@@ -1149,7 +1157,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     }
 
     // --- STYCZEŃ: jednorazowy email zarządu o formie przed przerwą zimową ---
-    if (month === 1 && played >= 5) {
+    if (month === 1 && played >= 5 && managerTenure.leagueMatchesManaged >= 5) {
       const alreadySentWinterForm = existingMails.some(m => m.id.includes('WINTER_FORM'));
       if (!alreadySentWinterForm) {
         const recentForm = userClub.stats.form.slice(-5);
@@ -1529,14 +1537,16 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     }
 
     // --- TYGODNIOWY MAIL NACISKU ZARZĄDU (każdy poniedziałek) ---
-    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure) {
+    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure && managerTenure.pressureStage !== 'NONE') {
       const board = userClub.board;
       if (board) {
         const pressure = CoachService.getPerformancePressure(userClub, rank, managerExpPoints, managerExpectedRank);
         const gap = pressure.gap;
 
         if ((pressure.finalChance > 0 || pressure.earlyReviewAllowed) && gap > 0) {
-          if (gap >= 7 || (rank >= 16 && userClub.reputation >= 7)) {
+          if (managerTenure.pressureStage === 'CONCERN') {
+            newMails.push(createMail('board_pressure_concern', { 'CLUB': userClub.name }));
+          } else if (gap >= 7 || (rank >= 16 && userClub.reputation >= 7)) {
             newMails.push(createMail('board_pressure_critical', { 'CLUB': userClub.name }));
           } else if (gap >= 4) {
             newMails.push(createMail('board_pressure_warning', { 'CLUB': userClub.name }));

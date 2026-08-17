@@ -1341,7 +1341,7 @@ export const FinanceService = {
   calculateRemainingContractBudget: (availableBudget: number, annualSalary: number, _years: number, signingBonus: number): number =>
     Math.max(0, availableBudget - FinanceService.calculateFreeAgentCurrentSeasonCost(annualSalary, signingBonus)),
 
-  // Oblicza rynkową wartość pensji dla danego OVR (punkt odniesienia dla Zarządu)
+  // Orientacyjna wartość używana przez agentów i symulację rynku; nie jest limitem zarządu.
    getFairMarketSalary: (ovr: number): number => {
     const base = Math.pow(ovr / 50, 4) * 125000;
     const step = base >= 1_000_000 ? 100_000 : base >= 100_000 ? 10_000 : 5_000;
@@ -1360,24 +1360,32 @@ export const FinanceService = {
     return Math.floor(anchor * (1 + repTax) * chaos);
   },
 
-  evaluateFASigningBoardDecision: (player: Player, proposedSalary: number, proposedBonus: number, squad: Player[], club: Club): { approved: boolean, reason: string } => {
-    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
+  evaluateFASigningBoardDecision: (player: Player, proposedSalary: number, proposedBonus: number, squad: Player[], club: Club): {
+    approved: boolean;
+    reason: string;
+    reasonCode?: 'LIQUIDITY' | 'WAGE_STRUCTURE' | 'SIGNING_BONUS';
+    appealable?: boolean;
+  } => {
     const tier = FinanceService.getClubTier(club);
+    const wageBill = FinanceService.calculateTotalSalaries(squad);
+    const projectedWageBill = wageBill + Math.max(0, proposedSalary);
 
-    // 1. BLOKADA PŁYNNOŚCI: pojedyncza pensja może być wysoka, ale nie może
-    // pochłaniać nieproporcjonalnej części całej gotówki słabszego klubu.
-    // Rozsądna kwota rynkowa pozostaje dozwolona nawet przy małej kasie.
+    // 1. PŁYNNOŚĆ: decyzja wynika z finansów całego klubu, a nie z tabeli OVR → pensja.
+    // Wysoka pensja jest dopuszczalna w bogatym klubie, o ile nie destabilizuje
+    // rocznych środków ani nie uniemożliwia kolejnych ruchów kadrowych.
     const liquiditySalaryCap = club.budget * (tier >= 3 ? 0.35 : 0.30);
-    if (proposedSalary > liquiditySalaryCap && proposedSalary > fairSalary * 1.15) {
+    const projectedWagePressure = projectedWageBill / Math.max(1, club.budget);
+    if (proposedSalary > liquiditySalaryCap || projectedWagePressure > 0.82) {
       return {
         approved: false,
-        reason: `DYREKTOR FINANSOWY: Ta pensja jest zbyt dużym obciążeniem dla gotówki klubu. Przy obecnych finansach zarząd nie zaakceptuje kwoty powyżej około ${Math.floor(liquiditySalaryCap / 10_000) * 10_000} PLN rocznie.`
+        reason: 'Dyrektor finansowy ocenia, że ten kontrakt zbyt mocno obciąży roczne finanse klubu i ograniczy możliwość wykonania kolejnych ruchów kadrowych.',
+        reasonCode: 'LIQUIDITY',
+        appealable: true,
       };
     }
 
-    // 2. HIERARCHIA PŁAC: zarząd pozwala na jednego wyraźnie droższego gracza,
-    // jeżeli jego pensja nadal odpowiada rynkowi i poziomowi sportowemu. VETO
-    // zostaje dopiero dla kwot rażąco odstających od szatni oraz wartości gracza.
+    // 2. HIERARCHIA PŁAC: bogaty klub może ustanowić nowy rekord płacowy. Punktami
+    // odniesienia są obecna szatnia i realna skala finansowa klubu — nigdy sam OVR.
     const highestSalary = squad.length > 0 ? Math.max(...squad.map(p => p.annualSalary)) : 0;
     const averageOverall = squad.length > 0
       ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length
@@ -1393,29 +1401,29 @@ export const FinanceService = {
       : player.overallRating >= averageOverall
         ? (tier >= 3 ? 2.75 : 2.55)
         : (tier >= 3 ? 2.40 : 2.25);
-    const marketBasedHierarchyFloor = fairSalary * (tier >= 3 ? 0.72 : 0.68);
-    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, marketBasedHierarchyFloor);
+    const financialStructureFloor = club.budget * (
+      tier === 1 ? 0.045 :
+      tier === 2 ? 0.035 :
+      tier === 3 ? 0.025 : 0.020
+    );
+    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, financialStructureFloor);
 
     if (highestSalary > 0 && proposedSalary > hierarchySalaryCap) {
       return {
         approved: false,
-        reason: `PREZES: Możemy zgodzić się na najlepiej opłacanego zawodnika w zespole, ale ta kwota zbyt mocno odbiega od poziomu sportowego i obecnej hierarchii płac. Najwyższa pensja w kadrze wynosi ${highestSalary.toLocaleString('pl-PL')} PLN.`
-      };
-    }
-
-    // 3. OCENA WARTOŚCI RYNKOWEJ (Usunięto lukę dla OVR 78+)
-    const overpayRatio = proposedSalary / fairSalary;
-    const allowedOverpay = 1.2 + ((10 - club.boardStrictness) / 10); // Max 2.1x przy bardzo luźnym zarządzie
-
-    if (overpayRatio > allowedOverpay) {
-      return {
-        approved: false,
-        reason: `ZARZĄD: Ta kwota to absurd! Sugerowana pensja rynkowa dla OVR ${player.overallRating} to ok. ${fairSalary.toLocaleString()} PLN. Nie pozwolimy na taką niegospodarność.`
+        reason: `Prezes uważa, że proponowana pensja zbyt gwałtownie zmieni obecną hierarchię wynagrodzeń. Najwyższa pensja w kadrze wynosi obecnie ${highestSalary.toLocaleString('pl-PL')} PLN, dlatego zarząd oczekuje dodatkowego uzasadnienia dla ustanowienia nowego poziomu płac.`,
+        reasonCode: 'WAGE_STRUCTURE',
+        appealable: true,
       };
     }
 
     if (proposedBonus > club.budget * 0.5) {
-      return { approved: false, reason: "ZARZĄD: Bonus za podpis jest zbyt wysoki w stosunku do wolnej gotówki w klubie." };
+      return {
+        approved: false,
+        reason: 'Zarząd uważa, że jednorazowy bonus za podpis jest zbyt wysoki w stosunku do wolnych środków klubu.',
+        reasonCode: 'SIGNING_BONUS',
+        appealable: true,
+      };
     }
 
     return { approved: true, reason: "" };

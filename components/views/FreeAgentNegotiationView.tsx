@@ -6,6 +6,11 @@ import { FinanceService } from '@/services/FinanceService';
 import { BoardBudgetRequestService, BoardRequestResult } from '../../services/BoardBudgetRequestService';
 import { ManagerNegotiationInfluenceService } from '../../services/ManagerNegotiationInfluenceService';
 import { FreeAgentContractPackageService } from '../../services/FreeAgentContractPackageService';
+import {
+  FreeAgentBoardAppealAction,
+  FreeAgentBoardAppealResult,
+  FreeAgentBoardAppealService,
+} from '../../services/FreeAgentBoardAppealService';
 
 const sanitizeAgentInterestMessage = (message: string): string => {
   const normalized = message.toLowerCase();
@@ -44,6 +49,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
     pendingNegotiations,
     setClubs,
     managerProfile,
+    activeManagerContract,
   } = useGame();
 
   const player = useMemo(
@@ -88,7 +94,9 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const [cleanSheetBonus, setCleanSheetBonus] = useState(() => agentDemands?.cleanSheetBonus ?? 0);
   const [isSending, setIsSending] = useState(false);
   const [agentReaction, setAgentReaction] = useState<{ type: string; msg: string } | null>(null);
-  const [boardVeto, setBoardVeto] = useState<{ msg: string } | null>(null);
+  const [boardVeto, setBoardVeto] = useState<{ msg: string; appealable: boolean } | null>(null);
+  const [boardAppealAttempted, setBoardAppealAttempted] = useState(false);
+  const [boardAppealResult, setBoardAppealResult] = useState<FreeAgentBoardAppealResult | null>(null);
   const [extraBudget, setExtraBudget] = useState(0);
   const [boardRequestResult, setBoardRequestResult] = useState<BoardRequestResult | null>(null);
 
@@ -142,6 +150,13 @@ export const FreeAgentNegotiationView: React.FC = () => {
   const cleanSheetBonusMax = Math.max(5_000, (agentDemands?.cleanSheetBonus ?? 0) * 2, cleanSheetBonus);
   const boardRequestsUsed = myClub.boardBudgetRequestsThisSeason ?? 0;
   const canRequestBoard = !isOfferWithinBudget && boardRequestsUsed < 2;
+  const approvedContract = myClub.boardApprovedFreeAgentContract;
+  const hasMatchingBoardApproval = !!approvedContract &&
+    approvedContract.playerId === player.id &&
+    approvedContract.salary === salary &&
+    approvedContract.bonus === bonus &&
+    approvedContract.years === years &&
+    new Date(approvedContract.expiresAt).getTime() >= currentDate.getTime();
 
   /*
    * Salary, signing bonus and contract length are deliberately independent inputs.
@@ -149,9 +164,62 @@ export const FreeAgentNegotiationView: React.FC = () => {
    * move another value. The UI now changes only the field touched by the user; the
    * guaranteed cost below is a transparent summary, never an allocation controller.
    */
-  const handleSalaryChange = (requestedSalary: number) => setSalary(normalizeOfferMoney(requestedSalary));
-  const handleSigningBonusChange = (requestedBonus: number) => setBonus(normalizeOfferMoney(requestedBonus));
-  const handleContractYearsChange = (nextYears: number) => setYears(nextYears);
+  const resetBoardReview = () => {
+    setBoardVeto(null);
+    setBoardAppealAttempted(false);
+    setBoardAppealResult(null);
+  };
+  const handleSalaryChange = (requestedSalary: number) => {
+    setSalary(normalizeOfferMoney(requestedSalary));
+    resetBoardReview();
+  };
+  const handleSigningBonusChange = (requestedBonus: number) => {
+    setBonus(normalizeOfferMoney(requestedBonus));
+    resetBoardReview();
+  };
+  const handleContractYearsChange = (nextYears: number) => {
+    setYears(nextYears);
+    resetBoardReview();
+  };
+
+  const handleBoardAppeal = (action: FreeAgentBoardAppealAction) => {
+    if (!boardVeto?.appealable || boardAppealAttempted) return;
+    const result = FreeAgentBoardAppealService.evaluate({
+      player,
+      salary,
+      bonus,
+      years,
+      squad: mySquad,
+      club: myClub,
+      managerProfile,
+      managerContract: activeManagerContract,
+      currentDate,
+      action,
+    });
+    const approvalExpiry = new Date(currentDate);
+    approvalExpiry.setDate(approvalExpiry.getDate() + 21);
+
+    setBoardAppealAttempted(true);
+    setBoardAppealResult(result);
+    setClubs(previousClubs => previousClubs.map(club => club.id === myClub.id
+      ? {
+          ...club,
+          boardConfidence: Math.max(0, Math.min(100, (club.boardConfidence ?? 60) + result.boardConfidenceDelta)),
+          boardApprovedFreeAgentContract: result.approved
+            ? {
+                playerId: player.id,
+                salary,
+                bonus,
+                years,
+                approvedAt: currentDate.toISOString(),
+                expiresAt: approvalExpiry.toISOString(),
+              }
+            : club.boardApprovedFreeAgentContract,
+        }
+      : club
+    ));
+    if (result.approved) setBoardVeto(null);
+  };
 
   const handleBoardRequest = () => {
     const shortfall = currentSeasonCostPreview - availableBudget;
@@ -185,6 +253,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
     if (activeClubLockoutUntil) {
       setBoardVeto({
         msg: 'TEN ZAWODNIK NIE CHCE WRACAC DO ROZMOW Z TWOIM KLUBEM PO POPRZEDNICH NEGOCJACJACH. SPROBUJ PONOWNIE ZA KILKA MIESIECY.',
+        appealable: false,
       });
       return;
     }
@@ -192,6 +261,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
     if (mySquad.length >= 30) {
       setBoardVeto({
         msg: 'ZARZAD NIE ZEZWALA NA ZATRUDNIENIE. NAJPIERW ZWOLNIJ MIEJSCE W KADRZE.',
+        appealable: false,
       });
       return;
     }
@@ -202,13 +272,17 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
     const currentSeasonCost = FinanceService.calculateFreeAgentCurrentSeasonCost(salary, bonus);
     if (currentSeasonCost > availableBudget) {
-      setBoardVeto({ msg: `Koszt kontraktu w bieżącym sezonie (${currentSeasonCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).` });
+      setBoardVeto({
+        msg: `Koszt kontraktu w bieżącym sezonie (${currentSeasonCost.toLocaleString('pl-PL')} PLN) przekracza dostępny budżet transferowy (${availableBudget.toLocaleString('pl-PL')} PLN).`,
+        appealable: false,
+      });
       return;
     }
 
     const boardCheck = FinanceService.evaluateFASigningBoardDecision(player, salary, bonus, mySquad, myClub);
-    if (!boardCheck.approved) {
-      setBoardVeto({ msg: boardCheck.reason });
+    if (!boardCheck.approved && !hasMatchingBoardApproval) {
+      setBoardVeto({ msg: boardCheck.reason, appealable: boardCheck.appealable === true });
+      setBoardAppealAttempted(false);
       return;
     }
 
@@ -736,14 +810,81 @@ export const FreeAgentNegotiationView: React.FC = () => {
 
       {boardVeto && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-lg animate-fade-in p-6">
-          <div className="max-w-md w-full p-10 rounded-[40px] border-2 border-red-500 bg-slate-900 shadow-[0_0_100px_rgba(239,68,68,0.2)] text-center flex flex-col items-center gap-6">
-            <h3 className="text-2xl font-black uppercase italic text-red-500 tracking-tighter">VETO ZARZADU</h3>
-            <p className="text-slate-300 italic font-medium leading-relaxed">"{boardVeto.msg}"</p>
+          <div className="max-w-2xl w-full p-10 rounded-[40px] border-2 border-red-500/70 bg-[#07111f] shadow-[0_0_100px_rgba(239,68,68,0.2)] text-center flex flex-col items-center gap-6">
+            <h3 className="text-2xl text-red-400 font-black italic uppercase tracking-tighter">WETO ZARZĄDU</h3>
+            <p className="text-slate-200 leading-relaxed font-black italic uppercase tracking-tighter">„{boardVeto.msg}”</p>
+
+            {boardVeto.appealable && !boardAppealAttempted && (
+              <div className="grid w-full grid-cols-1 gap-3 border-y border-white/10 py-5 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => handleBoardAppeal('SPORTING_ARGUMENT')}
+                  className="rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-4 text-[11px] text-sky-200 transition-all hover:border-sky-300 hover:bg-sky-500/20 font-black italic uppercase tracking-tighter"
+                >
+                  Przedstaw plan sportowy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBoardAppeal('SEASON_TARGET')}
+                  className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-4 text-[11px] text-emerald-200 transition-all hover:border-emerald-300 hover:bg-emerald-500/20 font-black italic uppercase tracking-tighter"
+                >
+                  Powołaj się na cel sezonu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBoardAppeal('PRESS_BOARD')}
+                  className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-4 text-[11px] text-amber-200 transition-all hover:border-amber-300 hover:bg-amber-500/20 font-black italic uppercase tracking-tighter"
+                >
+                  Naciskaj na zarząd
+                </button>
+              </div>
+            )}
+
+            {!boardVeto.appealable && (
+              <p className="text-[11px] text-amber-200/80 font-black italic uppercase tracking-tighter">
+                Ta decyzja wynika z braku środków albo ograniczeń organizacyjnych i nie może zostać ominięta rozmową.
+              </p>
+            )}
             <button
-              onClick={() => setBoardVeto(null)}
-              className="mt-4 w-full py-5 bg-red-600 text-white font-black uppercase rounded-2xl hover:bg-red-500 transition-all shadow-xl border-b-4 border-red-900 active:scale-95"
+              onClick={() => {
+                setBoardVeto(null);
+                setBoardAppealAttempted(false);
+              }}
+              className="mt-2 w-full rounded-2xl border-b-4 border-red-900 bg-red-600 py-5 text-white transition-all shadow-xl hover:bg-red-500 active:scale-95 font-black italic uppercase tracking-tighter"
             >
-              SKORYGUJE OFERTE
+              Skoryguję ofertę
+            </button>
+          </div>
+        </div>
+      )}
+
+      {boardAppealResult && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/90 p-6 backdrop-blur-lg animate-fade-in">
+          <div className={`flex w-full max-w-xl flex-col items-center gap-6 rounded-[40px] border-2 p-10 text-center shadow-2xl ${
+            boardAppealResult.approved
+              ? 'border-emerald-400/70 bg-[#071b19]'
+              : 'border-red-400/70 bg-[#1b0b13]'
+          }`}>
+            <h3 className={`text-2xl ${boardAppealResult.approved ? 'text-emerald-300' : 'text-red-300'} font-black italic uppercase tracking-tighter`}>
+              {boardAppealResult.approved ? 'Zarząd zatwierdza wyjątek' : 'Zarząd podtrzymuje weto'}
+            </h3>
+            <p className="text-slate-100 leading-relaxed font-black italic uppercase tracking-tighter">
+              {boardAppealResult.message}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const approved = boardAppealResult.approved;
+                setBoardAppealResult(null);
+                if (!approved) setBoardVeto(null);
+              }}
+              className={`w-full rounded-2xl py-4 text-white shadow-xl transition-all active:scale-95 font-black italic uppercase tracking-tighter ${
+                boardAppealResult.approved
+                  ? 'bg-emerald-600 hover:bg-emerald-500'
+                  : 'bg-red-600 hover:bg-red-500'
+              }`}
+            >
+              {boardAppealResult.approved ? 'Wróć do oferty' : 'Skoryguj warunki'}
             </button>
           </div>
         </div>

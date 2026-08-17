@@ -699,6 +699,7 @@ export function normalizeSaveState(data: SaveState): SaveState {
         : undefined,
       boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
       boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
+      boardApprovedFreeAgentContract: club.boardApprovedFreeAgentContract ?? null,
       boardBudgetMonitorState: club.boardBudgetMonitorState ?? 'NORMAL',
       signingBonusPool: club.signingBonusPool ?? 0,
       financeHistory: asArray(club.financeHistory),

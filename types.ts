@@ -679,7 +679,7 @@ export interface MailMessage {
     playerId: string;
     reaction: 'AGREED' | 'REFUSED';
     managerChoice: 'PROMISE_CONTRACT' | 'ALLOW_END_OF_SEASON' | 'REFUSE_IMPORTANT';
-    /** % podwyżki wybrany przez gracza (ścieżka A); null dla B i C. */
+    /** % podwyżki wybrany przez gracza (ścieżka A); null dla C i D. */
     promisedRaisePct: number | null;
   } | {
     // ── Przypomnienie o obietnicy kontraktowej (14 dni przed deadline) ───────────
@@ -1581,16 +1581,16 @@ export interface Player {
   transferListDemandUntil?: string | null;
   oneTimeBonusPromise?: PlayerOneTimeBonusPromise | null;
   oneTimeBonusAwardedSeason?: number | null;
-  // ─── Transfer Request Dialog (ścieżki A–D po prośbie o listę transferową) ────
+  // ─── Transfer Request Dialog (ścieżki A–E po prośbie o listę transferową) ────
   // Serwis:    services/PlayerTransferRequestDialogService.ts
   // Modal:     components/modals/PlayerTransferRequestModal.tsx
   // Handler:   GameContext.resolvePlayerTransferRequestDialog
   // Daily:     GameContext (advanceDay) → reviewContractPromise + reviewAllowAfterSeason
   /** Obietnica kontraktowa złożona zawodnikowi (ścieżka A). Czyść po podpisaniu kontraktu. */
   transferContractPromise?: TransferContractPromise | null;
-  /** true = manager zgodził się na odejście po sezonie (ścieżka B). */
+  /** true = manager zgodził się na odejście po sezonie (ścieżka C). */
   transferAllowAfterSeason?: boolean;
-  /** ISO date końca sezonu — deadline dla wystawienia na listę transferową (ścieżka B). */
+  /** ISO date końca sezonu — deadline dla wystawienia na listę transferową (ścieżka C). */
   transferAllowAfterSeasonDeadline?: string | null;
   /** Oczekująca odpowiedź gracza — "zastanawia się" 5–14 dni (THINKING state). */
   transferRequestPendingResponse?: TransferRequestPendingResponse | null;
@@ -2033,6 +2033,15 @@ export interface Club {
   reserveSquadLastEmergencyMoveDate?: string;
   boardBudgetRequestsThisSeason?: number;
   boardExceptionalContractApprovals?: number;
+  /** Jednorazowa zgoda zarządu na dokładnie wskazany kontrakt wolnego zawodnika. */
+  boardApprovedFreeAgentContract?: {
+    playerId: string;
+    salary: number;
+    bonus: number;
+    years: number;
+    approvedAt: string;
+    expiresAt: string;
+  } | null;
   /** ISO date used to enforce one contract ultimatum per rolling 12 months. */
   lastContractUltimatumDate?: string;
   oneTimePlayerBonusesThisSeason?: number;
@@ -3572,6 +3581,7 @@ export type ManagerContractTargetType =
   | 'CHAMPION'
   | 'PROMOTION_PLAYOFFS'
   | 'PROMOTION'
+  | 'PROMOTION_AND_CUP'
   | 'POLISH_CUP'
   | 'LEAGUE_AND_CUP';
 

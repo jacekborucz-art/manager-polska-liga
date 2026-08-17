@@ -58,6 +58,41 @@ var getTier = (club2) => {
   return Number.isFinite(parsed) ? parsed : Math.max(1, club2.tier ?? 3);
 };
 var getLeagueSize = (club2, clubs2) => Math.max(16, clubs2.filter((candidate) => candidate.leagueId === club2.leagueId).length);
+var getDayTimestamp = (value) => {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return Number.NaN;
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+};
+function getManagerTenureSnapshot(contract, club2, fixtures, currentDate) {
+  if (!contract || contract.clubId !== club2.id) {
+    return {
+      daysInRole: Number.POSITIVE_INFINITY,
+      leagueMatchesManaged: Math.max(0, club2.stats.played ?? 0),
+      pressureStage: "FULL",
+      dismissalEligible: true
+    };
+  }
+  const signedAt = getDayTimestamp(contract.signedAt || contract.terms.startDate);
+  const currentDay = getDayTimestamp(currentDate);
+  if (!Number.isFinite(signedAt) || !Number.isFinite(currentDay)) {
+    return { daysInRole: 0, leagueMatchesManaged: 0, pressureStage: "NONE", dismissalEligible: false };
+  }
+  const leagueMatchesManaged = fixtures.filter((fixture) => {
+    if (fixture.status !== "FINISHED" /* FINISHED */ || fixture.leagueId !== club2.leagueId) return false;
+    if (fixture.homeTeamId !== club2.id && fixture.awayTeamId !== club2.id) return false;
+    const fixtureDay = getDayTimestamp(fixture.date);
+    return Number.isFinite(fixtureDay) && fixtureDay >= signedAt && fixtureDay <= currentDay;
+  }).length;
+  const daysInRole = Math.max(0, Math.floor((currentDay - signedAt) / DAY_MS));
+  const pressureStage = daysInRole < 21 || leagueMatchesManaged < 3 ? "NONE" : daysInRole < 42 || leagueMatchesManaged < 6 ? "CONCERN" : "FULL";
+  return {
+    daysInRole,
+    leagueMatchesManaged,
+    pressureStage,
+    dismissalEligible: daysInRole >= 60 && leagueMatchesManaged >= 8
+  };
+}
 function getManagerPolishChampionshipCount(profile) {
   if (!profile) return 0;
   const achievementTitles = new Set(
@@ -143,14 +178,14 @@ function getAvailableTargets(club2, clubs2) {
   const survivalRank = Math.max(10, leagueSize - 3);
   const middleRank = Math.max(8, Math.ceil(leagueSize * 0.58));
   if (tier >= 2) {
+    const promotionDestination = tier === 2 ? "Ekstraklasy" : tier === 3 ? "1. ligi" : "wy\u017Cszej ligi";
     return [
       target(club2, clubs2, "SURVIVAL", "Utrzymanie w lidze", "Zesp\xF3\u0142 ma utrzyma\u0107 si\u0119 w lidze i zako\u0144czy\u0107 sezon poza stref\u0105 spadkow\u0105.", 1, survivalRank),
       target(club2, clubs2, "MID_TABLE", "Bezpieczny \u015Brodek tabeli", "Celem jest spokojny sezon i stabilna pozycja w \u015Brodku tabeli.", 2, middleRank),
       target(club2, clubs2, "PROMOTION_PLAYOFFS", "Miejsce bara\u017Cowe", "Dru\u017Cyna ma zakwalifikowa\u0107 si\u0119 do bara\u017Cy o awans.", 3, 6),
-      target(club2, clubs2, "PROMOTION", "Bezpo\u015Bredni awans", "Celem jest wywalczenie bezpo\u015Bredniego awansu.", 4, 2),
-      target(club2, clubs2, "CHAMPION", "Mistrzostwo ligi", "Celem jest zdobycie mistrzostwa ligi.", 5, 1),
+      target(club2, clubs2, "PROMOTION", `Awans do ${promotionDestination}`, `Celem jest wywalczenie bezpo\u015Bredniego awansu do ${promotionDestination}.`, 4, 2),
       target(club2, clubs2, "POLISH_CUP", "Zdobycie Pucharu Polski", `Zesp\xF3\u0142 ma utrzyma\u0107 bezpieczn\u0105 pozycj\u0119 ligow\u0105 i zdoby\u0107 Puchar Polski.`, 5, middleRank, true),
-      target(club2, clubs2, "LEAGUE_AND_CUP", "Mistrzostwo i Puchar Polski", "Celem jest mistrzostwo ligi oraz zdobycie Pucharu Polski w tym samym sezonie.", 7, 1, true)
+      target(club2, clubs2, "PROMOTION_AND_CUP", `Awans do ${promotionDestination} i Puchar Polski`, `Celem jest bezpo\u015Bredni awans do ${promotionDestination} oraz zdobycie Pucharu Polski w tym samym sezonie.`, 7, 2, true)
     ];
   }
   return [
@@ -169,7 +204,43 @@ function getBoardPreferredTarget(club2, clubs2) {
   const ambition = BOARD_LEVEL[club2.board?.ambicja ?? "przecietna"];
   const reputationBoost = (club2.reputation ?? 5) >= 9 ? 1 : 0;
   const preferredAmbition = clamp(Math.round(expectation * 0.65 + ambition * 0.35 + reputationBoost), 1, 5);
-  return [...options].filter((option) => option.type !== "POLISH_CUP" && option.type !== "LEAGUE_AND_CUP").sort((a, b) => Math.abs(a.ambitionLevel - preferredAmbition) - Math.abs(b.ambitionLevel - preferredAmbition))[0];
+  return [...options].filter((option) => option.type !== "POLISH_CUP" && option.type !== "LEAGUE_AND_CUP" && option.type !== "PROMOTION_AND_CUP").sort((a, b) => Math.abs(a.ambitionLevel - preferredAmbition) - Math.abs(b.ambitionLevel - preferredAmbition))[0];
+}
+var normalizeTargetForClub = (currentTarget, club2, clubs2) => {
+  const availableTargets = getAvailableTargets(club2, clubs2);
+  const exactTarget = availableTargets.find((option) => option.type === currentTarget.type);
+  if (exactTarget) return exactTarget;
+  const tier = getTier(club2);
+  const replacementType = tier >= 2 ? currentTarget.type === "CHAMPION" ? "PROMOTION" : currentTarget.type === "LEAGUE_AND_CUP" ? "PROMOTION_AND_CUP" : null : currentTarget.type === "PROMOTION_AND_CUP" ? "LEAGUE_AND_CUP" : null;
+  const replacement = replacementType ? availableTargets.find((option) => option.type === replacementType) : null;
+  if (replacement) return replacement;
+  return [...availableTargets].sort(
+    (a, b) => Math.abs(a.ambitionLevel - currentTarget.ambitionLevel) - Math.abs(b.ambitionLevel - currentTarget.ambitionLevel)
+  )[0];
+};
+function normalizeManagerContractTargets(contract, club2, clubs2) {
+  return {
+    ...contract,
+    terms: {
+      ...contract.terms,
+      target: normalizeTargetForClub(contract.terms.target, club2, clubs2)
+    }
+  };
+}
+function normalizeManagerContractNegotiationTargets(negotiation, club2, clubs2) {
+  const availableTargets = getAvailableTargets(club2, clubs2);
+  return {
+    ...negotiation,
+    availableTargets,
+    clubTerms: {
+      ...negotiation.clubTerms,
+      target: normalizeTargetForClub(negotiation.clubTerms.target, club2, clubs2)
+    },
+    agreedTerms: negotiation.agreedTerms ? {
+      ...negotiation.agreedTerms,
+      target: normalizeTargetForClub(negotiation.agreedTerms.target, club2, clubs2)
+    } : void 0
+  };
 }
 function getBoardMinimumTarget(club2, clubs2) {
   const preferred = getBoardPreferredTarget(club2, clubs2);
@@ -496,7 +567,10 @@ var ManagerContractService = {
   calculateClubManagerSalaryBenchmark,
   calculateManagerNegotiationSalaryCeiling,
   getManagerSalaryLeverage,
+  getManagerTenureSnapshot,
   getAvailableTargets,
+  normalizeManagerContractTargets,
+  normalizeManagerContractNegotiationTargets,
   getBoardPreferredTarget,
   getBoardMinimumTarget,
   calculateBaseSalary,
@@ -559,6 +633,44 @@ try {
     const salary = ManagerContractService.calculateSalaryForTarget(club, clubs, null, option);
     import_strict.default.equal(salary % 5e5, 0, "ka\u017Cda stawka musi by\u0107 zaokr\u0105glona do 500 tys. PLN");
   });
+  const firstLeagueClubs = clubs.map((candidate, index) => ({
+    ...candidate,
+    id: `FIRST_${index + 1}`,
+    leagueId: "L_PL_2",
+    tier: 2
+  }));
+  const firstLeagueTargets = ManagerContractService.getAvailableTargets(firstLeagueClubs[0], firstLeagueClubs);
+  import_strict.default.equal(firstLeagueTargets.some((option) => option.type === "CHAMPION"), false, "1. liga nie mo\u017Ce oferowa\u0107 celu mistrzowskiego");
+  import_strict.default.equal(firstLeagueTargets.some((option) => option.type === "LEAGUE_AND_CUP"), false, "1. liga nie mo\u017Ce oferowa\u0107 mistrzostwa po\u0142\u0105czonego z Pucharem Polski");
+  import_strict.default.equal(firstLeagueTargets.find((option) => option.type === "PROMOTION")?.label, "Awans do Ekstraklasy");
+  import_strict.default.equal(firstLeagueTargets.find((option) => option.type === "PROMOTION_AND_CUP")?.label, "Awans do Ekstraklasy i Puchar Polski");
+  const secondLeagueClubs = clubs.map((candidate, index) => ({
+    ...candidate,
+    id: `SECOND_${index + 1}`,
+    leagueId: "L_PL_3",
+    tier: 3
+  }));
+  const secondLeagueTargets = ManagerContractService.getAvailableTargets(secondLeagueClubs[0], secondLeagueClubs);
+  import_strict.default.equal(secondLeagueTargets.some((option) => option.type === "CHAMPION"), false, "2. liga nie mo\u017Ce oferowa\u0107 celu mistrzowskiego");
+  import_strict.default.equal(secondLeagueTargets.some((option) => option.type === "LEAGUE_AND_CUP"), false, "2. liga nie mo\u017Ce oferowa\u0107 mistrzostwa po\u0142\u0105czonego z Pucharem Polski");
+  import_strict.default.equal(secondLeagueTargets.find((option) => option.type === "PROMOTION")?.label, "Awans do 1. ligi");
+  import_strict.default.equal(secondLeagueTargets.find((option) => option.type === "PROMOTION_AND_CUP")?.label, "Awans do 1. ligi i Puchar Polski");
+  const staleLowerLeagueContract = {
+    id: "STALE_LOWER_LEAGUE_CONTRACT",
+    clubId: firstLeagueClubs[0].id,
+    signedAt: start.toISOString(),
+    source: "CAREER_START",
+    status: "ACTIVE",
+    terms: ManagerContractService.createTerms(firstLeagueClubs[0], firstLeagueClubs, null, start),
+    standardRenewalMonths: 6
+  };
+  staleLowerLeagueContract.terms.target = champion;
+  const normalizedLowerLeagueContract = ManagerContractService.normalizeManagerContractTargets(
+    staleLowerLeagueContract,
+    firstLeagueClubs[0],
+    firstLeagueClubs
+  );
+  import_strict.default.equal(normalizedLowerLeagueContract.terms.target.type, "PROMOTION", "stary cel mistrzowski z 1. ligi powinien zosta\u0107 zmieniony na awans");
   const legia = { ...club, id: "PL_LEGIA_WARSZAWA", name: "Legia Warszawa", reputation: 10 };
   const wealthyLegia = { ...legia, budget: 217e6, transferBudget: 7e7 };
   const rookieProfile = { expPoints: 1, expHistory: [], careerHistory: [], achievements: [] };
@@ -597,6 +709,49 @@ try {
   );
   const discountedTerms = ManagerContractService.createTerms(legia, clubs, { expPoints: 1 }, start);
   import_strict.default.equal(discountedTerms.salaryReviewAfterOneSeason, true, "ni\u017Csza stawka powinna zawiera\u0107 mo\u017Cliwo\u015B\u0107 przegl\u0105du po sezonie");
+  const tenureContract = {
+    id: "TENURE_TEST",
+    clubId: club.id,
+    signedAt: "2026-12-08T12:00:00.000Z",
+    source: "JOB_MARKET",
+    status: "ACTIVE",
+    terms: ManagerContractService.createTerms(club, clubs, rookieProfile, /* @__PURE__ */ new Date("2026-12-08T12:00:00.000Z")),
+    standardRenewalMonths: 6
+  };
+  const tenureFixtures = Array.from({ length: 8 }, (_, index) => ({
+    id: `TENURE_FIXTURE_${index + 1}`,
+    leagueId: club.leagueId,
+    homeTeamId: club.id,
+    awayTeamId: clubs[index + 1].id,
+    date: new Date(2026, 11, 9 + index * 8),
+    status: "FINISHED",
+    homeScore: 0,
+    awayScore: 1
+  }));
+  const firstMatchTenure = ManagerContractService.getManagerTenureSnapshot(
+    tenureContract,
+    club,
+    tenureFixtures.slice(0, 1),
+    /* @__PURE__ */ new Date("2026-12-14T12:00:00.000Z")
+  );
+  import_strict.default.equal(firstMatchTenure.pressureStage, "NONE", "po pierwszym meczu nowy trener nie mo\u017Ce otrzyma\u0107 ostrze\u017Cenia zarz\u0105du");
+  import_strict.default.equal(firstMatchTenure.dismissalEligible, false, "po pierwszym meczu nowy trener nie mo\u017Ce zosta\u0107 zwolniony");
+  const earlyTenure = ManagerContractService.getManagerTenureSnapshot(
+    tenureContract,
+    club,
+    tenureFixtures.slice(0, 4),
+    /* @__PURE__ */ new Date("2027-01-08T12:00:00.000Z")
+  );
+  import_strict.default.equal(earlyTenure.pressureStage, "CONCERN", "po kilku meczach zarz\u0105d mo\u017Ce przekaza\u0107 jedynie \u0142agodn\u0105 uwag\u0119");
+  import_strict.default.equal(earlyTenure.dismissalEligible, false);
+  const establishedTenure = ManagerContractService.getManagerTenureSnapshot(
+    tenureContract,
+    club,
+    tenureFixtures,
+    /* @__PURE__ */ new Date("2027-02-15T12:00:00.000Z")
+  );
+  import_strict.default.equal(establishedTenure.pressureStage, "FULL", "pe\u0142na ocena zarz\u0105du powinna rozpocz\u0105\u0107 si\u0119 po odpowiednio d\u0142ugiej pracy");
+  import_strict.default.equal(establishedTenure.dismissalEligible, true, "zwolnienie mo\u017Ce by\u0107 rozwa\u017Cane dopiero po 60 dniach i 8 meczach ligowych");
   Math.random = () => 0.999999;
   const rookieLegiaNegotiation = ManagerContractService.createNegotiation(legia, clubs, rookieProfile, start, "CAREER_START");
   const rookieHighDemandCounter = ManagerContractService.negotiate(

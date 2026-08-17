@@ -52,6 +52,47 @@ try {
     assert.equal(salary % 500_000, 0, 'każda stawka musi być zaokrąglona do 500 tys. PLN');
   });
 
+  const firstLeagueClubs = clubs.map((candidate, index) => ({
+    ...candidate,
+    id: `FIRST_${index + 1}`,
+    leagueId: 'L_PL_2',
+    tier: 2,
+  }));
+  const firstLeagueTargets = ManagerContractService.getAvailableTargets(firstLeagueClubs[0], firstLeagueClubs);
+  assert.equal(firstLeagueTargets.some(option => option.type === 'CHAMPION'), false, '1. liga nie może oferować celu mistrzowskiego');
+  assert.equal(firstLeagueTargets.some(option => option.type === 'LEAGUE_AND_CUP'), false, '1. liga nie może oferować mistrzostwa połączonego z Pucharem Polski');
+  assert.equal(firstLeagueTargets.find(option => option.type === 'PROMOTION')?.label, 'Awans do Ekstraklasy');
+  assert.equal(firstLeagueTargets.find(option => option.type === 'PROMOTION_AND_CUP')?.label, 'Awans do Ekstraklasy i Puchar Polski');
+
+  const secondLeagueClubs = clubs.map((candidate, index) => ({
+    ...candidate,
+    id: `SECOND_${index + 1}`,
+    leagueId: 'L_PL_3',
+    tier: 3,
+  }));
+  const secondLeagueTargets = ManagerContractService.getAvailableTargets(secondLeagueClubs[0], secondLeagueClubs);
+  assert.equal(secondLeagueTargets.some(option => option.type === 'CHAMPION'), false, '2. liga nie może oferować celu mistrzowskiego');
+  assert.equal(secondLeagueTargets.some(option => option.type === 'LEAGUE_AND_CUP'), false, '2. liga nie może oferować mistrzostwa połączonego z Pucharem Polski');
+  assert.equal(secondLeagueTargets.find(option => option.type === 'PROMOTION')?.label, 'Awans do 1. ligi');
+  assert.equal(secondLeagueTargets.find(option => option.type === 'PROMOTION_AND_CUP')?.label, 'Awans do 1. ligi i Puchar Polski');
+
+  const staleLowerLeagueContract = {
+    id: 'STALE_LOWER_LEAGUE_CONTRACT',
+    clubId: firstLeagueClubs[0].id,
+    signedAt: start.toISOString(),
+    source: 'CAREER_START',
+    status: 'ACTIVE',
+    terms: ManagerContractService.createTerms(firstLeagueClubs[0], firstLeagueClubs, null, start),
+    standardRenewalMonths: 6,
+  } as any;
+  staleLowerLeagueContract.terms.target = champion;
+  const normalizedLowerLeagueContract = ManagerContractService.normalizeManagerContractTargets(
+    staleLowerLeagueContract,
+    firstLeagueClubs[0],
+    firstLeagueClubs
+  );
+  assert.equal(normalizedLowerLeagueContract.terms.target.type, 'PROMOTION', 'stary cel mistrzowski z 1. ligi powinien zostać zmieniony na awans');
+
   const legia = { ...club, id: 'PL_LEGIA_WARSZAWA', name: 'Legia Warszawa', reputation: 10 };
   const wealthyLegia = { ...legia, budget: 217_000_000, transferBudget: 70_000_000 };
   const rookieProfile = { expPoints: 1, expHistory: [], careerHistory: [], achievements: [] } as any;
@@ -90,6 +131,50 @@ try {
   );
   const discountedTerms = ManagerContractService.createTerms(legia, clubs, { expPoints: 1 } as any, start);
   assert.equal(discountedTerms.salaryReviewAfterOneSeason, true, 'niższa stawka powinna zawierać możliwość przeglądu po sezonie');
+
+  const tenureContract = {
+    id: 'TENURE_TEST',
+    clubId: club.id,
+    signedAt: '2026-12-08T12:00:00.000Z',
+    source: 'JOB_MARKET',
+    status: 'ACTIVE',
+    terms: ManagerContractService.createTerms(club, clubs, rookieProfile, new Date('2026-12-08T12:00:00.000Z')),
+    standardRenewalMonths: 6,
+  } as any;
+  const tenureFixtures = Array.from({ length: 8 }, (_, index) => ({
+    id: `TENURE_FIXTURE_${index + 1}`,
+    leagueId: club.leagueId,
+    homeTeamId: club.id,
+    awayTeamId: clubs[index + 1].id,
+    date: new Date(2026, 11, 9 + index * 8),
+    status: 'FINISHED',
+    homeScore: 0,
+    awayScore: 1,
+  })) as any[];
+  const firstMatchTenure = ManagerContractService.getManagerTenureSnapshot(
+    tenureContract,
+    club,
+    tenureFixtures.slice(0, 1),
+    new Date('2026-12-14T12:00:00.000Z')
+  );
+  assert.equal(firstMatchTenure.pressureStage, 'NONE', 'po pierwszym meczu nowy trener nie może otrzymać ostrzeżenia zarządu');
+  assert.equal(firstMatchTenure.dismissalEligible, false, 'po pierwszym meczu nowy trener nie może zostać zwolniony');
+  const earlyTenure = ManagerContractService.getManagerTenureSnapshot(
+    tenureContract,
+    club,
+    tenureFixtures.slice(0, 4),
+    new Date('2027-01-08T12:00:00.000Z')
+  );
+  assert.equal(earlyTenure.pressureStage, 'CONCERN', 'po kilku meczach zarząd może przekazać jedynie łagodną uwagę');
+  assert.equal(earlyTenure.dismissalEligible, false);
+  const establishedTenure = ManagerContractService.getManagerTenureSnapshot(
+    tenureContract,
+    club,
+    tenureFixtures,
+    new Date('2027-02-15T12:00:00.000Z')
+  );
+  assert.equal(establishedTenure.pressureStage, 'FULL', 'pełna ocena zarządu powinna rozpocząć się po odpowiednio długiej pracy');
+  assert.equal(establishedTenure.dismissalEligible, true, 'zwolnienie może być rozważane dopiero po 60 dniach i 8 meczach ligowych');
 
   Math.random = () => 0.999999;
   const rookieLegiaNegotiation = ManagerContractService.createNegotiation(legia, clubs, rookieProfile, start, 'CAREER_START');

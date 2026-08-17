@@ -314,7 +314,7 @@ export const PreMatchBriefingModal = ({
             </div>
           </aside>
 
-          <main className="flex min-h-0 flex-col pb-11 pl-14 pr-16 pt-10">
+          <main className="relative flex min-h-0 flex-col pb-11 pl-14 pr-16 pt-10">
             <header className="shrink-0">
               <p className="text-sm font-medium tracking-normal text-cyan-300/80">Przed pierwszym gwizdkiem</p>
               <h1 className="mt-1 text-[38px] font-semibold leading-tight tracking-[-0.025em] text-white">Przemowa do drużyny</h1>
@@ -382,7 +382,7 @@ export const PreMatchBriefingModal = ({
 
                 <button
                   onClick={handleConfirm}
-                  className="group mt-9 flex w-full max-w-[430px] items-center border-b border-white/15 py-4 text-left text-[18px] font-semibold tracking-normal text-white transition-colors hover:border-cyan-300/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                  className="group absolute bottom-10 right-16 flex w-[430px] items-center border-b border-white/15 py-4 text-left text-[18px] font-semibold tracking-normal text-white transition-colors hover:border-cyan-300/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
                 >
                   Wyjdź z drużyną na boisko
                   <span className="ml-auto text-cyan-300 transition-transform group-hover:translate-x-1">→</span>

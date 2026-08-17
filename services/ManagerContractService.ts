@@ -56,6 +56,62 @@ export interface ManagerSalaryLeverage {
   isDiscountedOffer: boolean;
 }
 
+export interface ManagerTenureSnapshot {
+  daysInRole: number;
+  leagueMatchesManaged: number;
+  pressureStage: 'NONE' | 'CONCERN' | 'FULL';
+  dismissalEligible: boolean;
+}
+
+const getDayTimestamp = (value: Date | string): number => {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return Number.NaN;
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+};
+
+export function getManagerTenureSnapshot(
+  contract: ManagerContract | null | undefined,
+  club: Club,
+  fixtures: Fixture[],
+  currentDate: Date,
+): ManagerTenureSnapshot {
+  if (!contract || contract.clubId !== club.id) {
+    return {
+      daysInRole: Number.POSITIVE_INFINITY,
+      leagueMatchesManaged: Math.max(0, club.stats.played ?? 0),
+      pressureStage: 'FULL',
+      dismissalEligible: true,
+    };
+  }
+
+  const signedAt = getDayTimestamp(contract.signedAt || contract.terms.startDate);
+  const currentDay = getDayTimestamp(currentDate);
+  if (!Number.isFinite(signedAt) || !Number.isFinite(currentDay)) {
+    return { daysInRole: 0, leagueMatchesManaged: 0, pressureStage: 'NONE', dismissalEligible: false };
+  }
+
+  const leagueMatchesManaged = fixtures.filter(fixture => {
+    if (fixture.status !== MatchStatus.FINISHED || fixture.leagueId !== club.leagueId) return false;
+    if (fixture.homeTeamId !== club.id && fixture.awayTeamId !== club.id) return false;
+    const fixtureDay = getDayTimestamp(fixture.date);
+    return Number.isFinite(fixtureDay) && fixtureDay >= signedAt && fixtureDay <= currentDay;
+  }).length;
+  const daysInRole = Math.max(0, Math.floor((currentDay - signedAt) / DAY_MS));
+  const pressureStage = daysInRole < 21 || leagueMatchesManaged < 3
+    ? 'NONE' as const
+    : daysInRole < 42 || leagueMatchesManaged < 6
+      ? 'CONCERN' as const
+      : 'FULL' as const;
+
+  return {
+    daysInRole,
+    leagueMatchesManaged,
+    pressureStage,
+    dismissalEligible: daysInRole >= 60 && leagueMatchesManaged >= 8,
+  };
+}
+
 export function getManagerPolishChampionshipCount(profile: ManagerProfile | null): number {
   if (!profile) return 0;
   const achievementTitles = new Set(
@@ -169,14 +225,14 @@ export function getAvailableTargets(club: Club, clubs: Club[]): ManagerContractT
   const middleRank = Math.max(8, Math.ceil(leagueSize * 0.58));
 
   if (tier >= 2) {
+    const promotionDestination = tier === 2 ? 'Ekstraklasy' : tier === 3 ? '1. ligi' : 'wyższej ligi';
     return [
       target(club, clubs, 'SURVIVAL', 'Utrzymanie w lidze', 'Zespół ma utrzymać się w lidze i zakończyć sezon poza strefą spadkową.', 1, survivalRank),
       target(club, clubs, 'MID_TABLE', 'Bezpieczny środek tabeli', 'Celem jest spokojny sezon i stabilna pozycja w środku tabeli.', 2, middleRank),
       target(club, clubs, 'PROMOTION_PLAYOFFS', 'Miejsce barażowe', 'Drużyna ma zakwalifikować się do baraży o awans.', 3, 6),
-      target(club, clubs, 'PROMOTION', 'Bezpośredni awans', 'Celem jest wywalczenie bezpośredniego awansu.', 4, 2),
-      target(club, clubs, 'CHAMPION', 'Mistrzostwo ligi', 'Celem jest zdobycie mistrzostwa ligi.', 5, 1),
+      target(club, clubs, 'PROMOTION', `Awans do ${promotionDestination}`, `Celem jest wywalczenie bezpośredniego awansu do ${promotionDestination}.`, 4, 2),
       target(club, clubs, 'POLISH_CUP', 'Zdobycie Pucharu Polski', `Zespół ma utrzymać bezpieczną pozycję ligową i zdobyć Puchar Polski.`, 5, middleRank, true),
-      target(club, clubs, 'LEAGUE_AND_CUP', 'Mistrzostwo i Puchar Polski', 'Celem jest mistrzostwo ligi oraz zdobycie Pucharu Polski w tym samym sezonie.', 7, 1, true),
+      target(club, clubs, 'PROMOTION_AND_CUP', `Awans do ${promotionDestination} i Puchar Polski`, `Celem jest bezpośredni awans do ${promotionDestination} oraz zdobycie Pucharu Polski w tym samym sezonie.`, 7, 2, true),
     ];
   }
 
@@ -198,8 +254,73 @@ export function getBoardPreferredTarget(club: Club, clubs: Club[]): ManagerContr
   const reputationBoost = (club.reputation ?? 5) >= 9 ? 1 : 0;
   const preferredAmbition = clamp(Math.round((expectation * 0.65) + (ambition * 0.35) + reputationBoost), 1, 5);
   return [...options]
-    .filter(option => option.type !== 'POLISH_CUP' && option.type !== 'LEAGUE_AND_CUP')
+    .filter(option => option.type !== 'POLISH_CUP' && option.type !== 'LEAGUE_AND_CUP' && option.type !== 'PROMOTION_AND_CUP')
     .sort((a, b) => Math.abs(a.ambitionLevel - preferredAmbition) - Math.abs(b.ambitionLevel - preferredAmbition))[0];
+}
+
+const normalizeTargetForClub = (
+  currentTarget: ManagerContractTarget,
+  club: Club,
+  clubs: Club[],
+): ManagerContractTarget => {
+  const availableTargets = getAvailableTargets(club, clubs);
+  const exactTarget = availableTargets.find(option => option.type === currentTarget.type);
+  if (exactTarget) return exactTarget;
+
+  const tier = getTier(club);
+  const replacementType: ManagerContractTarget['type'] | null = tier >= 2
+    ? currentTarget.type === 'CHAMPION'
+      ? 'PROMOTION'
+      : currentTarget.type === 'LEAGUE_AND_CUP'
+        ? 'PROMOTION_AND_CUP'
+        : null
+    : currentTarget.type === 'PROMOTION_AND_CUP'
+      ? 'LEAGUE_AND_CUP'
+      : null;
+  const replacement = replacementType
+    ? availableTargets.find(option => option.type === replacementType)
+    : null;
+  if (replacement) return replacement;
+
+  return [...availableTargets].sort(
+    (a, b) => Math.abs(a.ambitionLevel - currentTarget.ambitionLevel) - Math.abs(b.ambitionLevel - currentTarget.ambitionLevel)
+  )[0];
+};
+
+export function normalizeManagerContractTargets(
+  contract: ManagerContract,
+  club: Club,
+  clubs: Club[],
+): ManagerContract {
+  return {
+    ...contract,
+    terms: {
+      ...contract.terms,
+      target: normalizeTargetForClub(contract.terms.target, club, clubs),
+    },
+  };
+}
+
+export function normalizeManagerContractNegotiationTargets(
+  negotiation: ManagerContractNegotiation,
+  club: Club,
+  clubs: Club[],
+): ManagerContractNegotiation {
+  const availableTargets = getAvailableTargets(club, clubs);
+  return {
+    ...negotiation,
+    availableTargets,
+    clubTerms: {
+      ...negotiation.clubTerms,
+      target: normalizeTargetForClub(negotiation.clubTerms.target, club, clubs),
+    },
+    agreedTerms: negotiation.agreedTerms
+      ? {
+          ...negotiation.agreedTerms,
+          target: normalizeTargetForClub(negotiation.agreedTerms.target, club, clubs),
+        }
+      : undefined,
+  };
 }
 
 export function getBoardMinimumTarget(club: Club, clubs: Club[]): ManagerContractTarget {
@@ -658,7 +779,10 @@ export const ManagerContractService = {
   calculateClubManagerSalaryBenchmark,
   calculateManagerNegotiationSalaryCeiling,
   getManagerSalaryLeverage,
+  getManagerTenureSnapshot,
   getAvailableTargets,
+  normalizeManagerContractTargets,
+  normalizeManagerContractNegotiationTargets,
   getBoardPreferredTarget,
   getBoardMinimumTarget,
   calculateBaseSalary,

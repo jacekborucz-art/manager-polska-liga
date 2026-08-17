@@ -1,14 +1,15 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // PlayerTransferRequestDialogService
 //
-// Obsługuje 4 ścieżki rozmowy managera z zawodnikiem po odebraniu prośby
+// Obsługuje 5 ścieżek rozmowy managera z zawodnikiem po odebraniu prośby
 // o wystawienie na listę transferową (mail PLAYER_MORALE_REQUEST / TRANSFER_LIST).
 //
 // ── ŚCIEŻKI ──────────────────────────────────────────────────────────────────
 //   A — PROMISE_CONTRACT:    manager obiecuje lepszy kontrakt (sub-dialog 3 pytania)
-//   B — ALLOW_END_OF_SEASON: zgoda na odejście po sezonie (sub-dialog 1 pytanie)
-//   C — REFUSE_IMPORTANT:    odmowa — zawodnik jest zbyt ważny (sub-dialog 2 pytania)
-//   D — REFUSE_NO_TALK:      odmowa rozmowy (bez dialogu, natychmiastowe konsekwencje)
+//   B — LIST_IMMEDIATELY:    natychmiastowe wystawienie na listę (bez sub-dialogu)
+//   C — ALLOW_END_OF_SEASON: zgoda na odejście po sezonie (sub-dialog 1 pytanie)
+//   D — REFUSE_IMPORTANT:    odmowa — zawodnik jest zbyt ważny (sub-dialog 2 pytania)
+//   E — REFUSE_NO_TALK:      odmowa rozmowy (bez dialogu, natychmiastowe konsekwencje)
 //
 // ── REAKCJE GRACZA ────────────────────────────────────────────────────────────
 //   AGREED   – akceptuje decyzję managera natychmiast
@@ -44,7 +45,7 @@
 //   Przypomnienie 14 dni przed deadline:
 //     → mail TRANSFER_CONTRACT_PROMISE_REMINDER (bez kar)
 //
-// ── ZGODA NA ODEJŚCIE PO SEZONIE (ścieżka B) ─────────────────────────────────
+// ── ZGODA NA ODEJŚCIE PO SEZONIE (ścieżka C) ─────────────────────────────────
 //   Flaga player.transferAllowAfterSeason = true + deadline (koniec sezonu).
 //   Jeśli po sezonie zawodnik NIE jest na liście transferowej:
 //     → conflictLevel +20, coachTrust −25, morale −6
@@ -80,9 +81,10 @@ import { PlayerMoraleService } from './PlayerMoraleService';
 /** Wybór managera — który wariant odpowiedzi na prośbę o listę transferową. */
 export type TransferRequestManagerChoice =
   | 'PROMISE_CONTRACT'    // A: obiecuję lepszy kontrakt
-  | 'ALLOW_END_OF_SEASON' // B: możesz odejść, ale dopiero po sezonie
-  | 'REFUSE_IMPORTANT'    // C: nie pozwolę ci odejść — jesteś zbyt ważny
-  | 'REFUSE_NO_TALK';     // D: nie chcę w ogóle rozmawiać
+  | 'LIST_IMMEDIATELY'    // B: wystawiam zawodnika na listę od razu
+  | 'ALLOW_END_OF_SEASON' // C: możesz odejść, ale dopiero po sezonie
+  | 'REFUSE_IMPORTANT'    // D: nie pozwolę ci odejść — jesteś zbyt ważny
+  | 'REFUSE_NO_TALK';     // E: nie chcę w ogóle rozmawiać
 
 /** Reakcja gracza po rozmowie lub po upływie czasu zastanowienia. */
 export type TransferRequestPlayerReaction = 'AGREED' | 'THINKING' | 'REFUSED';
@@ -131,8 +133,10 @@ export interface TransferRequestDialogResult {
   };
   /** Obiekt obietnicy do zapisania jako player.transferContractPromise (ścieżka A, tylko AGREED/THINKING). */
   promiseMade: TransferContractPromise | null;
-  /** true = ustaw player.transferAllowAfterSeason = true (ścieżka B, AGREED/THINKING). */
+  /** true = ustaw player.transferAllowAfterSeason = true (ścieżka C, AGREED/THINKING). */
   allowAfterSeasonFlag: boolean;
+  /** true = natychmiast wystaw zawodnika na listę transferową. */
+  listImmediatelyFlag: boolean;
   /** Dane dla player.transferRequestPendingResponse (tylko gdy reaction = 'THINKING'). */
   pendingResponse: TransferRequestPendingResponse | null;
   title: string;
@@ -255,7 +259,7 @@ const QUESTIONS_A: TransferRequestDialogQuestion[] = [
 ];
 
 /**
- * Ścieżka B (ALLOW_END_OF_SEASON) — 1 pytanie gracza o gwarancję odejścia.
+ * Ścieżka C (ALLOW_END_OF_SEASON) — 1 pytanie gracza o gwarancję odejścia.
  * Maks wynik: 3 punkty.
  * Pytanie dotyczy tego, czy obietnica jest bezwarunkowa i wiążąca.
  */
@@ -287,7 +291,7 @@ const QUESTIONS_B: TransferRequestDialogQuestion[] = [
 ];
 
 /**
- * Ścieżka C (REFUSE_IMPORTANT) — 2 pytania gracza kwestionujące odmowę.
+ * Ścieżka D (REFUSE_IMPORTANT) — 2 pytania gracza kwestionujące odmowę.
  * Maks wynik: 6 punktów (2 × 3).
  * Pytania dotyczą: dlaczego nie może sprawdzić ofert, co on sam ma z tej decyzji.
  */
@@ -414,7 +418,12 @@ const computePlayerReaction = (
   maxDialogScore: number,
   seed: number
 ): { reaction: TransferRequestPlayerReaction; delayDays: number | null } => {
-  // Ścieżka D zawsze daje REFUSED bez losowania
+  // Spełnienie dokładnej prośby zawodnika nie wymaga dalszej zgody ani oczekiwania.
+  if (choice === 'LIST_IMMEDIATELY') {
+    return { reaction: 'AGREED', delayDays: null };
+  }
+
+  // Ścieżka E zawsze daje REFUSED bez losowania
   if (choice === 'REFUSE_NO_TALK') {
     return { reaction: 'REFUSED', delayDays: null };
   }
@@ -492,6 +501,56 @@ const computePlayerReaction = (
 };
 
 /**
+ * Reakcja morale po natychmiastowym wystawieniu na listę nie jest z góry pozytywna.
+ * Ulga wynikająca ze spełnienia prośby konkuruje z niepewnością związaną z odejściem.
+ * Wynik uwzględnia cechy zawodnika oraz ukryte, deterministyczne RNG.
+ */
+const computeImmediateListingEffects = (
+  player: Player,
+  seed: number
+): {
+  moraleDelta: number;
+  mindsetDeltas: TransferRequestDialogResult['mindsetDeltas'];
+} => {
+  const mindset = player.playerMindset;
+  const transferOpenness = mindset?.transferOpenness ?? 50;
+  const conflictLevel = mindset?.conflictLevel ?? 50;
+  const loyalty = Math.max(1, Math.min(99, player.lojalnosc ?? 50));
+  const mentality = Math.max(1, Math.min(99, player.attributes?.mentality ?? 50));
+  const personality: PlayerMoralePersonality = player.moralePersonality ?? 'CALM';
+
+  const personalityModifier: Partial<Record<PlayerMoralePersonality, number>> = {
+    AMBITIOUS: 2.0,
+    CONFIDENT: 1.0,
+    EGOIST: 1.5,
+    PROFESSIONAL: 0.5,
+    CALM: 0,
+    NERVOUS: -1.5,
+    SENSITIVE: -2.0,
+    LOYAL: -2.5,
+  };
+
+  const attributeScore =
+    (transferOpenness - 50) * 0.08
+    + (conflictLevel - 50) * 0.03
+    - (loyalty - 50) * 0.05
+    + (mentality - 50) * 0.015
+    + (personalityModifier[personality] ?? 0);
+  const rngScore = seededRandom(seed + 271) * 9 - 4;
+  const moraleDelta = Math.max(-8, Math.min(10, Math.round(attributeScore + rngScore)));
+
+  return {
+    moraleDelta,
+    mindsetDeltas: {
+      coachTrust: moraleDelta < 0 ? 2 : 5,
+      clubHappiness: moraleDelta < 0 ? -2 : moraleDelta > 0 ? 4 : 1,
+      conflictLevel: -18,
+      transferOpenness: 8,
+    },
+  };
+};
+
+/**
  * Oblicza efekty na morale i mindset zależnie od ścieżki i reakcji.
  * Kalibracja: zmień wartości poniżej. Ujemne conflictLevel = spada konflikt (dobrze).
  */
@@ -502,6 +561,11 @@ const computeEffects = (
   moraleDelta: number;
   mindsetDeltas: TransferRequestDialogResult['mindsetDeltas'];
 } => {
+  // Ta ścieżka korzysta z computeImmediateListingEffects, ponieważ wymaga cech zawodnika i RNG.
+  if (choice === 'LIST_IMMEDIATELY') {
+    return { moraleDelta: 0, mindsetDeltas: {} };
+  }
+
   if (choice === 'REFUSE_NO_TALK') {
     return { moraleDelta: -6, mindsetDeltas: { coachTrust: -20, conflictLevel: 15 } };
   }
@@ -531,8 +595,21 @@ const computeEffects = (
 const buildSummary = (
   choice: TransferRequestManagerChoice,
   reaction: TransferRequestPlayerReaction,
-  promise: TransferContractPromise | null
+  promise: TransferContractPromise | null,
+  moraleDelta: number
 ): { title: string; summary: string } => {
+  if (choice === 'LIST_IMMEDIATELY') {
+    const moraleSummary = moraleDelta > 0
+      ? 'Spełnienie prośby przyniosło mu ulgę i poprawiło nastrój.'
+      : moraleDelta < 0
+        ? 'Mimo spełnienia prośby perspektywa odejścia wywołała u niego niepewność i pogorszyła nastrój.'
+        : 'Zawodnik przyjął decyzję spokojnie, bez wyraźnej zmiany nastroju.';
+    return {
+      title: 'Zawodnik trafił na listę transferową',
+      summary: `Klub natychmiast wystawił zawodnika na listę transferową. ${moraleSummary}`,
+    };
+  }
+
   if (choice === 'REFUSE_NO_TALK') {
     return {
       title: 'Trener odmówił rozmowy',
@@ -563,7 +640,7 @@ const buildSummary = (
 
 export const PlayerTransferRequestDialogService = {
 
-  /** Zwraca listę pytań dla wybranej ścieżki managera (pusta dla D). */
+  /** Zwraca listę pytań dla wybranej ścieżki managera (pusta dla B i E). */
   getQuestionsForChoice: (choice: TransferRequestManagerChoice): TransferRequestDialogQuestion[] => {
     if (choice === 'PROMISE_CONTRACT') return QUESTIONS_A;
     if (choice === 'ALLOW_END_OF_SEASON') return QUESTIONS_B;
@@ -581,7 +658,7 @@ export const PlayerTransferRequestDialogService = {
 
   /**
    * Tworzy nową sesję sub-dialogu dla wybranej ścieżki.
-   * Wywoływane przez modal po kliknięciu jednego z 4 przycisków wyboru ścieżki.
+   * Wywoływane przez modal po kliknięciu jednego z 5 przycisków wyboru ścieżki.
    */
   createSession: (choice: TransferRequestManagerChoice): TransferRequestDialogSession => ({
     managerChoice: choice,
@@ -615,7 +692,7 @@ export const PlayerTransferRequestDialogService = {
    * Finalizuje dialog i oblicza pełny wynik.
    * Wywoływane przez modal po zakończeniu wszystkich pytań.
    *
-   * @param session        aktywna sesja sub-dialogu (null tylko dla ścieżki D)
+   * @param session        aktywna sesja sub-dialogu (null dla ścieżek B i E)
    * @param player         zawodnik, z którym trwa rozmowa
    * @param choice         wybrana ścieżka managera
    * @param currentDate    bieżąca data gry
@@ -639,7 +716,9 @@ export const PlayerTransferRequestDialogService = {
     );
 
     const { reaction, delayDays } = computePlayerReaction(player, choice, dialogScore, maxScore, playerSeed);
-    const { moraleDelta, mindsetDeltas } = computeEffects(choice, reaction);
+    const { moraleDelta, mindsetDeltas } = choice === 'LIST_IMMEDIATELY'
+      ? computeImmediateListingEffects(player, playerSeed)
+      : computeEffects(choice, reaction);
 
     // ── Obietnica kontraktowa (ścieżka A, tylko gdy AGREED lub THINKING) ──────
     let promiseMade: TransferContractPromise | null = null;
@@ -654,9 +733,10 @@ export const PlayerTransferRequestDialogService = {
       };
     }
 
-    // ── Flaga odejścia po sezonie (ścieżka B, tylko gdy AGREED lub THINKING) ──
+    // ── Flaga odejścia po sezonie (ścieżka C, tylko gdy AGREED lub THINKING) ──
     const allowAfterSeasonFlag =
       choice === 'ALLOW_END_OF_SEASON' && (reaction === 'AGREED' || reaction === 'THINKING');
+    const listImmediatelyFlag = choice === 'LIST_IMMEDIATELY';
 
     // ── Oczekująca odpowiedź (tylko gdy THINKING) ─────────────────────────────
     let pendingResponse: TransferRequestPendingResponse | null = null;
@@ -671,7 +751,7 @@ export const PlayerTransferRequestDialogService = {
       };
     }
 
-    const { title, summary } = buildSummary(choice, reaction, promiseMade);
+    const { title, summary } = buildSummary(choice, reaction, promiseMade, moraleDelta);
 
     return {
       managerChoice: choice,
@@ -681,6 +761,7 @@ export const PlayerTransferRequestDialogService = {
       mindsetDeltas,
       promiseMade,
       allowAfterSeasonFlag,
+      listImmediatelyFlag,
       pendingResponse,
       title,
       summary,
@@ -767,7 +848,7 @@ export const PlayerTransferRequestDialogService = {
       } as any,
     };
 
-    // Jeśli AGREED i to była ścieżka B — ustaw flagę allowAfterSeason
+    // Jeśli AGREED i to była ścieżka C — ustaw flagę allowAfterSeason
     const wasPathB = pending.managerChoice === 'ALLOW_END_OF_SEASON';
     const wasPathA = pending.managerChoice === 'PROMISE_CONTRACT';
 
@@ -893,7 +974,7 @@ export const PlayerTransferRequestDialogService = {
   },
 
   /**
-   * Sprawdza obietnicę odejścia po sezonie (ścieżka B).
+   * Sprawdza obietnicę odejścia po sezonie (ścieżka C).
    * Jeśli transferAllowAfterSeasonDeadline minął i gracz NIE jest na liście → złamanie.
    * Jeśli gracz Jest na liście → czyść flagi (obietnica spełniona, brak kary).
    *
