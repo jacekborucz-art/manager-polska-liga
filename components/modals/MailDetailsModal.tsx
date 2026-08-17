@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useModalClose } from '../ui/useModalClose';
 import { Club, MailMessage, MailType, Newspaper, PlayerPosition, ViewState } from '../../types';
 import { useGame } from '../../context/GameContext';
@@ -1019,6 +1019,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
     respondToSportingDirectorContractVeto,
     terminateLoanEarly,
     deleteMessage,
+    resolveInterviewRequest,
     navigateWithoutHistory,
     viewPlayerDetails,
     setContractManagementInitialMode,
@@ -1048,6 +1049,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   const { closeModal, exitClass } = useModalClose(onClose);
   const [financeReportLeague, setFinanceReportLeague] = useState<{ id: string; name: string } | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const interviewResolutionLock = useRef(false);
   /*
    * Dashboard keeps the originally selected mail object while this modal is open.
    * Mirror only the veto case locally so each dialogue response renders at once;
@@ -1091,6 +1093,8 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
   };
 
   const handleInterviewComplete = (result: MediaInterviewResult) => {
+    if (interviewResolutionLock.current || mail.metadata?.type !== 'INTERVIEW_REQUEST' || mail.metadata.resolution) return;
+    interviewResolutionLock.current = true;
     setMediaRelationships(prev =>
       MediaInterviewService.updateRelationship(prev, result.newspaper as Newspaper, result.totalRelationshipDelta)
     );
@@ -1127,13 +1131,14 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
       const deliveryDate = pressArticleMail.date.toISOString().split('T')[0];
       addPendingPressArticle({ mail: pressArticleMail, deliveryDate });
     }
-    deleteMessage(mail.id);
+    resolveInterviewRequest(mail.id, 'COMPLETED', currentDate);
     setShowInterviewModal(false);
     onClose();
   };
 
   const handleInterviewDecline = () => {
-    if (mail.metadata?.type !== 'INTERVIEW_REQUEST') return;
+    if (interviewResolutionLock.current || mail.metadata?.type !== 'INTERVIEW_REQUEST' || mail.metadata.resolution) return;
+    interviewResolutionLock.current = true;
     const newspaper = mail.metadata.newspaper as Newspaper;
     const declineOutcome = MediaInterviewService.determineDeniedPressOutcome();
     setMediaRelationships(prev =>
@@ -1151,7 +1156,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
       const deliveryDate = pressArticleMail.date.toISOString().split('T')[0];
       addPendingPressArticle({ mail: pressArticleMail, deliveryDate });
     }
-    deleteMessage(mail.id);
+    resolveInterviewRequest(mail.id, 'DECLINED', currentDate);
     onClose();
   };
   const isTeamOfWeek = mail.metadata?.type === 'TEAM_OF_WEEK';
@@ -1618,7 +1623,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               </>
             )}
 
-            {mail.metadata?.type === 'INTERVIEW_REQUEST' && (
+            {mail.metadata?.type === 'INTERVIEW_REQUEST' && !mail.metadata.resolution && (
               <>
                 <button
                   onClick={() => setShowInterviewModal(true)}
@@ -1633,6 +1638,14 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
                   Odmów wywiadu
                 </button>
               </>
+            )}
+
+            {mail.metadata?.type === 'INTERVIEW_REQUEST' && mail.metadata.resolution && (
+              <div className="mr-4 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-8 py-4">
+                <p className="text-xs font-black italic uppercase tracking-tighter text-cyan-100">
+                  {mail.metadata.resolution === 'COMPLETED' ? 'Wywiad został już udzielony' : 'Prośba o wywiad została odrzucona'}
+                </p>
+              </div>
             )}
 
             <button
@@ -1653,7 +1666,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
         />
       )}
 
-      {showInterviewModal && mail.metadata?.type === 'INTERVIEW_REQUEST' && (
+      {showInterviewModal && mail.metadata?.type === 'INTERVIEW_REQUEST' && !mail.metadata.resolution && (
         <MediaInterviewModal
           isOpen={showInterviewModal}
           onClose={handleInterviewComplete}

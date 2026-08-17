@@ -1140,6 +1140,7 @@ interface GameContextType {
   setMediaRelationships: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   markMessageRead: (id: string) => void;
   deleteMessage: (id: string) => void;
+  resolveInterviewRequest: (id: string, resolution: 'COMPLETED' | 'DECLINED', resolvedAt: Date) => void;
   addPendingPressArticle: (item: { mail: MailMessage; deliveryDate: string }) => void;
   setActiveTrainingId: (id: string | null) => void;
   confirmCupDraw: (pairs: Fixture[]) => void;
@@ -4957,7 +4958,7 @@ const takingOverInterviewMail = isNewJobAfterGameStart
   : null;
 setMessages(prev => [
   ...(shouldSendFriendlyPlanningReminder && friendlyPlanningReminder && !prev.some(message => message.id === friendlyPlanningReminder.id) ? [friendlyPlanningReminder] : []),
-  ...(takingOverInterviewMail ? [takingOverInterviewMail] : []),
+  ...(takingOverInterviewMail && !prev.some(message => message.id === takingOverInterviewMail.id) ? [takingOverInterviewMail] : []),
   welcomeMail,
   fanMail,
   ...prev,
@@ -16055,6 +16056,22 @@ const finalResult: SimulationOutput = {
 
   const markMessageRead = (id: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
   const deleteMessage = (id: string) => setMessages(prev => prev.filter(m => m.id !== id));
+  const resolveInterviewRequest = (id: string, resolution: 'COMPLETED' | 'DECLINED', resolvedAt: Date) => {
+    setMessages(previous => previous.map(message => {
+      if (message.id !== id || message.metadata?.type !== 'INTERVIEW_REQUEST' || message.metadata.resolution) {
+        return message;
+      }
+      return {
+        ...message,
+        isRead: true,
+        metadata: {
+          ...message.metadata,
+          resolution,
+          resolvedAt: resolvedAt.toISOString(),
+        },
+      };
+    }));
+  };
   const addPendingPressArticle = (item: { mail: MailMessage; deliveryDate: string }) =>
     setPendingPressArticles(prev => [...prev, item]);
 
@@ -20514,7 +20531,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
       aiFriendlyPairs, aiFriendlyReports, aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,
       setMessages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, setMediaRelationships, pendingNegotiations, setPendingNegotiations, finalizeFreeAgentContract, respondToSportingDirectorContractVeto, transferOffers, submitTransferOffer, submitLoanOffer, finalizeTransferNegotiation, incomingOffers, viewedIncomingOfferId, respondToIncomingOffer, confirmIncomingTransfer, navigateToIncomingOffer, transferNewsActiveTab, setTransferNewsActiveTab, contractManagementInitialMode, setContractManagementInitialMode, europeanStatus, setEuropeanStatus, aiTransferLog,
-            markMessageRead, deleteMessage, addPendingPressArticle, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
+            markMessageRead, deleteMessage, resolveInterviewRequest, addPendingPressArticle, setActiveTrainingId, confirmCupDraw, confirmCLDraw, confirmELDraw, confirmELR2QDraw, confirmCONFDraw, confirmCONFR2QDraw, activeGroupDraw,
     confirmCLGroupDraw, confirmELGroupDraw, confirmELR16Draw, confirmCLQFDraw, confirmCLSFDraw, confirmCLR16Draw, confirmELQFDraw, confirmELSFDraw, confirmELFinalDraw, confirmCONFGroupDraw, confirmCONFR16Draw, confirmCONFQFDraw, confirmCONFSFDraw, confirmCONFFinalDraw, confirmSeasonEnd, clGroups, activeELGroupDraw, elGroups, activeConfGroupDraw, confGroups, processBackgroundCupMatches, processCLMatchDay, sessionSeed, matchSimulationSeed, updatePlayer, importSquad, toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, addFinanceLog, supercupWinners, addSupercupWinner, currentCLWinnerId, currentELWinnerId, lastUEFASuperCupResult, setLastUEFASuperCupResult, elHistoryInitialRound, setElHistoryInitialRound, confHistoryInitialRound, setConfHistoryInitialRound,
     nationalTeams, setNationalTeams,
     lastNTMatchResults, setLastNTMatchResults,

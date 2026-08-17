@@ -1642,8 +1642,12 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
 
     // --- 3 LIPCA: Email z prośbą o wywiad (objęcie stanowiska) ---
     if (seasonNumber === 1 && month === 7 && day === 3) {
-      const interviewMailId = `MEDIA_INTERVIEW_OBJECIE_${currentDate.getFullYear()}`;
-      const alreadySent = existingMails.some(m => m.id === interviewMailId);
+      const interviewMailId = MediaInterviewService.getTakingOverInterviewMailId(userClub, currentDate);
+      const legacyInterviewMailId = `MEDIA_INTERVIEW_OBJECIE_${currentDate.getFullYear()}`;
+      const alreadySent = existingMails.some(m =>
+        m.id === interviewMailId ||
+        (m.id === legacyInterviewMailId && m.metadata?.type === 'INTERVIEW_REQUEST' && m.metadata.placeholders.clubName === userClub.name)
+      );
       if (!alreadySent) {
         const mail = MediaInterviewService.generateTakingOverInterviewMail(
           userClub,

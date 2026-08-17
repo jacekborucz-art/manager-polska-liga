@@ -671,6 +671,9 @@ export interface MailMessage {
     questionIds: string[];
     placeholders: Record<string, string>;
     deadline: string;
+    interviewKind?: 'TAKING_OVER' | 'SEASON' | 'GENERAL';
+    resolution?: 'COMPLETED' | 'DECLINED';
+    resolvedAt?: string;
   } | {
     // ── Transfer Request Dialog — odpowiedź gracza po THINKING ──────────────────
     // Generowane przez: PlayerTransferRequestDialogService.reviewPendingResponse

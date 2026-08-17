@@ -107,6 +107,12 @@ export const MediaInterviewModal = ({
     <div className="fixed inset-0 z-[1200] flex items-center justify-center overflow-hidden bg-[#010307]/90 p-7 backdrop-blur-xl animate-fade-in">
       <div className="relative h-[min(920px,calc(100vh-56px))] w-[min(1660px,calc(100vw-64px))] overflow-hidden rounded-[48px]">
         <ConferenceScene />
+        <div
+          className="pointer-events-none absolute inset-0 z-[1]"
+          style={{
+            background: 'linear-gradient(90deg, rgba(0, 4, 13, 0.42) 0%, rgba(0, 3, 11, 0.72) 42%, rgba(0, 2, 8, 0.86) 100%)',
+          }}
+        />
 
         <div className="relative z-10 grid h-full grid-cols-[500px_minmax(0,1fr)]">
           <aside className="flex min-h-0 flex-col justify-between px-14 pb-12 pt-11">

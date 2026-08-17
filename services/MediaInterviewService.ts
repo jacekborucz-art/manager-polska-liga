@@ -59,6 +59,11 @@ export interface MediaDeclineOutcome {
 }
 
 export class MediaInterviewService {
+  static getTakingOverInterviewMailId(userClub: Club, currentDate: Date): string {
+    const dateKey = currentDate.toISOString().split('T')[0];
+    return `MEDIA_INTERVIEW_OBJECIE_${userClub.id}_${dateKey}`;
+  }
+
   static getPressManagerLabel(managerName?: string): string {
     const normalized = managerName?.trim().replace(/\s+/g, ' ');
     if (!normalized) return 'nowego trenera';
@@ -192,7 +197,7 @@ export class MediaInterviewService {
     deadline.setDate(deadline.getDate() + 7);
 
     return {
-      id: `MEDIA_INTERVIEW_OBJECIE_${currentDate.getFullYear()}`,
+      id: MediaInterviewService.getTakingOverInterviewMailId(userClub, currentDate),
       sender: displayName,
       role: 'Dziennikarz',
       subject: `${managerName} trenerem ${userClub.name}`,
@@ -207,6 +212,7 @@ export class MediaInterviewService {
         questionIds,
         placeholders,
         deadline: deadline.toISOString(),
+        interviewKind: 'TAKING_OVER',
       },
     };
   }
@@ -259,6 +265,7 @@ export class MediaInterviewService {
         questionIds,
         placeholders,
         deadline: deadline.toISOString(),
+        interviewKind: 'SEASON',
       },
     };
   }
@@ -286,6 +293,7 @@ export class MediaInterviewService {
         questionIds: [question.id],
         placeholders: {},
         deadline: new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        interviewKind: 'GENERAL',
       },
     };
   }
