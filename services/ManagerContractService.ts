@@ -49,7 +49,8 @@ export interface ManagerSalaryLeverage {
   requiredExp: number;
   managerExp: number;
   polishChampionships: number;
-  clubSalaryCeiling: number;
+  clubSalaryBenchmark: number;
+  negotiationSalaryCeiling: number;
   offerMultiplier: number;
   maxNegotiatedPremium: number;
   isDiscountedOffer: boolean;
@@ -70,7 +71,7 @@ export function getManagerPolishChampionshipCount(profile: ManagerProfile | null
   return Math.max(achievementTitles.size, expHistoryTitles.size);
 }
 
-export function calculateClubManagerSalaryCeiling(club: Club): number {
+export function calculateClubManagerSalaryBenchmark(club: Club): number {
   const tier = getTier(club);
   const reputation = clamp(club.reputation ?? 5, 1, 20);
   if (tier === 1) return roundSalary(clamp(2_000_000 + reputation * 300_000, 2_500_000, 5_000_000));
@@ -79,13 +80,39 @@ export function calculateClubManagerSalaryCeiling(club: Club): number {
   return roundSalary(clamp(250_000 + reputation * 50_000, 500_000, 1_000_000));
 }
 
+export function calculateManagerNegotiationSalaryCeiling(club: Club, profile: ManagerProfile | null): number {
+  const clubSalaryBenchmark = calculateClubManagerSalaryBenchmark(club);
+  const tier = getTier(club);
+  const requiredExp = Math.max(1, getRequiredManagerExp(club));
+  const managerExp = Math.max(1, profile?.expPoints ?? 1);
+  const experienceRatio = managerExp / requiredExp;
+  const polishChampionships = getManagerPolishChampionshipCount(profile);
+  const careerSeasons = Math.max(0, profile?.careerHistory?.length ?? 0);
+
+  // Typowa stawka klubu nie jest twardym limitem. Renomowany trener może
+  // przekroczyć ją tylko wtedy, gdy klub ma odpowiednie możliwości finansowe.
+  const experienceGrowth = clamp(Math.log2(Math.max(1, experienceRatio)) * 0.025, 0, 0.22);
+  const honoursGrowth = clamp(Math.max(0, polishChampionships - 1) * 0.07, 0, 0.28);
+  const longevityGrowth = clamp(Math.max(0, careerSeasons - 3) * 0.015, 0, 0.08);
+  const managerGrowth = experienceGrowth + honoursGrowth + longevityGrowth;
+
+  const financialStrength = Math.max(0, club.budget ?? 0) + Math.max(0, club.transferBudget ?? 0) * 0.35;
+  const wealthThreshold = tier === 1 ? 60_000_000 : tier === 2 ? 18_000_000 : tier === 3 ? 6_000_000 : 2_000_000;
+  const wealthRange = tier === 1 ? 300_000_000 : tier === 2 ? 90_000_000 : tier === 3 ? 30_000_000 : 12_000_000;
+  const financialGrowthCapacity = clamp((financialStrength - wealthThreshold) / wealthRange, 0, 0.55);
+  const dynamicGrowth = Math.min(managerGrowth, financialGrowthCapacity);
+
+  return normalizeNegotiatedSalary(clubSalaryBenchmark * (1 + dynamicGrowth));
+}
+
 export function getManagerSalaryLeverage(club: Club, profile: ManagerProfile | null): ManagerSalaryLeverage {
   const requiredExp = Math.max(1, getRequiredManagerExp(club));
   const managerExp = Math.max(1, profile?.expPoints ?? 1);
   const ratio = clamp(managerExp / requiredExp, 0, 1.5);
   const polishChampionships = getManagerPolishChampionshipCount(profile);
   const careerSeasons = Math.max(0, profile?.careerHistory?.length ?? 0);
-  const clubSalaryCeiling = calculateClubManagerSalaryCeiling(club);
+  const clubSalaryBenchmark = calculateClubManagerSalaryBenchmark(club);
+  const negotiationSalaryCeiling = calculateManagerNegotiationSalaryCeiling(club, profile);
   const experienceContribution = clamp((ratio - 0.1) / 0.9, 0, 1) * 0.06;
   const offerMultiplier = clamp(
     0.5 + Math.min(3, polishChampionships) * 0.12 + experienceContribution + Math.min(5, careerSeasons) * 0.008,
@@ -102,7 +129,8 @@ export function getManagerSalaryLeverage(club: Club, profile: ManagerProfile | n
     requiredExp,
     managerExp,
     polishChampionships,
-    clubSalaryCeiling,
+    clubSalaryBenchmark,
+    negotiationSalaryCeiling,
     offerMultiplier,
     maxNegotiatedPremium,
     isDiscountedOffer: offerMultiplier < 0.8,
@@ -185,7 +213,7 @@ export function getBoardMinimumTarget(club: Club, clubs: Club[]): ManagerContrac
 
 export function calculateBaseSalary(club: Club, profile: ManagerProfile | null): number {
   const leverage = getManagerSalaryLeverage(club, profile);
-  return roundSalary(leverage.clubSalaryCeiling * leverage.offerMultiplier);
+  return roundSalary(leverage.clubSalaryBenchmark * leverage.offerMultiplier);
 }
 
 export function calculateSalaryForTarget(
@@ -199,7 +227,7 @@ export function calculateSalaryForTarget(
   const multiplier = ambitionDelta >= 0
     ? 1 + ambitionDelta * 0.13
     : 1 + ambitionDelta * 0.09;
-  const salaryCeiling = calculateClubManagerSalaryCeiling(club);
+  const salaryCeiling = calculateManagerNegotiationSalaryCeiling(club, profile);
   return Math.min(salaryCeiling, roundSalary(calculateBaseSalary(club, profile) * clamp(multiplier, 0.72, 1.85)));
 }
 
@@ -300,7 +328,7 @@ const getExceptionalSalaryAcceptanceChance = (
   profile: ManagerProfile | null,
 ): number => {
   const leverage = getManagerSalaryLeverage(club, profile);
-  if (proposedTerms.annualSalary > leverage.clubSalaryCeiling) return 0;
+  if (proposedTerms.annualSalary > leverage.negotiationSalaryCeiling) return 0;
   const generosity = BOARD_LEVEL[club.board?.hojnosc ?? 'przecietna'];
   const ambition = BOARD_LEVEL[club.board?.ambicja ?? 'przecietna'];
   const excessRatio = proposedTerms.annualSalary / Math.max(1, standardSalaryLimit) - 1;
@@ -346,7 +374,7 @@ export function negotiate(
   const hardVeto = selectedTarget.ambitionLevel < minimumTarget.ambitionLevel;
   const salaryLeverage = getManagerSalaryLeverage(club, profile);
   const standardSalaryLimit = Math.min(
-    salaryLeverage.clubSalaryCeiling,
+    salaryLeverage.negotiationSalaryCeiling,
     normalizeNegotiatedSalary(calculatedTerms.annualSalary * (1 + salaryLeverage.maxNegotiatedPremium))
   );
 
@@ -391,9 +419,9 @@ export function negotiate(
       };
     }
 
-    const aboveClubCeiling = requestedTerms.annualSalary > salaryLeverage.clubSalaryCeiling;
+    const aboveClubCeiling = requestedTerms.annualSalary > salaryLeverage.negotiationSalaryCeiling;
     const salaryMessage = aboveClubCeiling
-      ? `Proponowane wynagrodzenie przekracza limit płacowy przewidziany dla trenera pierwszego zespołu. Zarząd nie może zaoferować więcej niż ${salaryLeverage.clubSalaryCeiling.toLocaleString('pl-PL')} PLN rocznie.`
+      ? `Proponowane wynagrodzenie przekracza obecne możliwości finansowe klubu oraz poziom warunków uzasadniony Pana dotychczasowym dorobkiem. Zarząd może obecnie rozmawiać o stawce do ${salaryLeverage.negotiationSalaryCeiling.toLocaleString('pl-PL')} PLN rocznie.`
       : salaryLeverage.managerExp < salaryLeverage.requiredExp
         ? `Po przeanalizowaniu Pana dotychczasowego doświadczenia Zarząd uznał, że proponowane wynagrodzenie znacząco wykracza poza standardowe warunki. Klub podtrzymuje ofertę w wysokości ${standardSalaryLimit.toLocaleString('pl-PL')} PLN rocznie. Wyższa stawka może zostać zaakceptowana wyłącznie w drodze wyjątkowej decyzji Zarządu. Po zakończeniu pełnego sezonu pracy będzie Pan mógł wystąpić o renegocjację warunków kontraktu.`
         : `Zarząd wysoko ocenia Pana doświadczenie, jednak proponowane wynagrodzenie wykracza poza standardowe warunki. Klub podtrzymuje ofertę w wysokości ${standardSalaryLimit.toLocaleString('pl-PL')} PLN rocznie.`;
@@ -627,7 +655,8 @@ export const ManagerContractService = {
   RELEGATION_MANAGER_SURVIVAL_CHANCE,
   normalizeNegotiatedSalary,
   getManagerPolishChampionshipCount,
-  calculateClubManagerSalaryCeiling,
+  calculateClubManagerSalaryBenchmark,
+  calculateManagerNegotiationSalaryCeiling,
   getManagerSalaryLeverage,
   getAvailableTargets,
   getBoardPreferredTarget,

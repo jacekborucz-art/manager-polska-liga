@@ -53,6 +53,7 @@ try {
   });
 
   const legia = { ...club, id: 'PL_LEGIA_WARSZAWA', name: 'Legia Warszawa', reputation: 10 };
+  const wealthyLegia = { ...legia, budget: 217_000_000, transferBudget: 70_000_000 };
   const rookieProfile = { expPoints: 1, expHistory: [], careerHistory: [], achievements: [] } as any;
   const decoratedProfile = {
     expPoints: 500,
@@ -66,7 +67,16 @@ try {
   } as any;
   const legiaRookieSalary = ManagerContractService.calculateBaseSalary(legia, rookieProfile);
   const legiaDecoratedSalary = ManagerContractService.calculateBaseSalary(legia, decoratedProfile);
-  assert.equal(ManagerContractService.calculateClubManagerSalaryCeiling(legia), 5_000_000, 'maksymalny pułap pensji trenera Legii powinien wynosić 5 mln PLN');
+  assert.equal(ManagerContractService.calculateClubManagerSalaryBenchmark(legia), 5_000_000, 'typowa stawka referencyjna Legii powinna wynosić 5 mln PLN');
+  assert.equal(
+    ManagerContractService.calculateManagerNegotiationSalaryCeiling(wealthyLegia, rookieProfile),
+    5_000_000,
+    'początkujący trener nie powinien automatycznie otrzymywać dostępu do wyższych stawek bogatego klubu'
+  );
+  assert.ok(
+    ManagerContractService.calculateManagerNegotiationSalaryCeiling(wealthyLegia, decoratedProfile) > 5_000_000,
+    'dynamiczny pułap negocjacji powinien przekraczać 5 mln dla utytułowanego trenera w bogatym klubie'
+  );
   assert.equal(legiaRookieSalary, 2_500_000, 'początkujący trener Legii powinien otrzymać wyraźnie niższą ofertę startową');
   assert.equal(legiaDecoratedSalary, 4_500_000, 'trzykrotny mistrz Polski powinien otrzymać ofertę zbliżoną do klubowego maksimum');
   const lowExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: 1 } as any);
@@ -125,7 +135,31 @@ try {
     2,
     5_100_000
   );
-  assert.notEqual(aboveClubLimit.status, 'AGREED', 'stawka powyżej klubowego limitu 5 mln nie może zostać zaakceptowana');
+  assert.notEqual(aboveClubLimit.status, 'AGREED', 'początkujący trener nie powinien przekroczyć aktualnego pułapu uzasadnionego swoim dorobkiem');
+
+  const decoratedWealthyNegotiation = ManagerContractService.createNegotiation(wealthyLegia, clubs, decoratedProfile, start, 'JOB_MARKET');
+  const decoratedDynamicCeiling = ManagerContractService.calculateManagerNegotiationSalaryCeiling(wealthyLegia, decoratedProfile);
+  assert.ok(decoratedDynamicCeiling > 5_000_000);
+  Math.random = () => 0;
+  const decoratedOpeningCounter = ManagerContractService.negotiate(
+    decoratedWealthyNegotiation,
+    wealthyLegia,
+    clubs,
+    decoratedProfile,
+    decoratedWealthyNegotiation.clubTerms.target.id,
+    2,
+    decoratedDynamicCeiling
+  );
+  const decoratedExceptionalAgreement = ManagerContractService.negotiate(
+    decoratedOpeningCounter,
+    wealthyLegia,
+    clubs,
+    decoratedProfile,
+    decoratedOpeningCounter.clubTerms.target.id,
+    2,
+    decoratedDynamicCeiling
+  );
+  assert.equal(decoratedExceptionalAgreement.status, 'AGREED', 'bogaty klub powinien móc wyjątkowo zaakceptować stawkę powyżej 5 mln dla utytułowanego trenera');
 
   Math.random = () => 0;
   const eliteNegotiation = ManagerContractService.createNegotiation(legia, clubs, null, start, 'CAREER_START');
