@@ -1112,7 +1112,7 @@ interface GameContextType {
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
   beginInitialManagerContractNegotiation: (clubId: string) => ManagerContractNegotiationResult;
-  submitManagerContractProposal: (targetId: string, durationYears: ManagerContractDurationYears) => ManagerContractNegotiationResult;
+  submitManagerContractProposal: (targetId: string, durationYears: ManagerContractDurationYears, annualSalary: number) => ManagerContractNegotiationResult;
   signAgreedManagerContract: () => ManagerContractNegotiationResult;
   closeManagerContractNegotiation: () => void;
   advanceDay: () => void;
@@ -2890,6 +2890,14 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         .join(', ')}`);
     }
 
+    const userWasRelegated = Boolean(userTeamId && (
+      relegateFromL1Ids.includes(userTeamId) ||
+      relegateFromL2Ids.includes(userTeamId) ||
+      relegateFromL3Ids.includes(userTeamId)
+    ));
+    const dismissUserAfterRelegation = userWasRelegated &&
+      ManagerContractService.shouldDismissManagerAfterRelegation();
+
     if (userTeamId && !celebrationAlreadyFiredRef.current) {
       if (champion?.id === userTeamId) {
         celebrationAlreadyFiredRef.current = true;
@@ -3063,7 +3071,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         });
       }
 
-      if (relegateFromL1Ids.includes(userTeamId) || relegateFromL2Ids.includes(userTeamId) || relegateFromL3Ids.includes(userTeamId)) {
+      if (userWasRelegated) {
         const relegationDelta = relegateFromL1Ids.includes(userTeamId) ? -40 : relegateFromL2Ids.includes(userTeamId) ? -30 : -25;
         managerAwards.push({
           sourceKey: `season:${seasonLabel}:relegation:${userTeamId}`,
@@ -3424,9 +3432,6 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       date: new Date(newYear, 6, 1),
     });
 
-    setCoaches(updatedCoaches);
-    setClubs(updatedClubs);
-
 // Reset europejskiego statusu — wszyscy z powrotem biorą udział w LM na nowy sezon
     const freshEuropeanStatus: Record<string, EuropeanStatus> = {};
     RAW_CHAMPIONS_LEAGUE_CLUBS.forEach(club => {
@@ -3638,18 +3643,70 @@ if (userTeamId) {
       setMessages(prev => [retirementMail, ...prev]);
     }
 
-    const staffRetirementResult = SeasonTransitionService.processStaffRetirement(staffMembers, coaches, updatedClubs, userTeamId);
-    setStaffMembers(staffRetirementResult.updatedStaff);
-    setCoaches(staffRetirementResult.updatedCoaches);
-    setClubs(prev => prev.map(c => {
-      const upd = staffRetirementResult.clubStaffUpdates[c.id];
-      if (!upd) return c;
+    const staffRetirementResult = SeasonTransitionService.processStaffRetirement(staffMembers, updatedCoaches, updatedClubs, userTeamId);
+    const clubsAfterStaffRetirement = updatedClubs.map(club => {
+      const upd = staffRetirementResult.clubStaffUpdates[club.id];
+      if (!upd) return club;
       return {
-        ...c,
+        ...club,
         staffIds: upd.staffIds,
-        coachId: upd.coachId === null ? undefined : (upd.coachId ?? c.coachId),
+        coachId: upd.coachId === null ? undefined : (upd.coachId ?? club.coachId),
       };
-    }));
+    });
+    const coachesAfterStaffRetirement = { ...staffRetirementResult.updatedCoaches };
+
+    if (userWasRelegated && userTeamId) {
+      const relegatedUserClub = clubsAfterStaffRetirement.find(club => club.id === userTeamId);
+      const decisionDate = new Date(newYear - 1, 5, 30, 12, 0, 0, 0);
+      if (relegatedUserClub && dismissUserAfterRelegation) {
+        assignReplacementCoachToClub(coachesAfterStaffRetirement, relegatedUserClub, decisionDate, relegatedUserClub.coachId);
+        const firingMail = createManagerFiredMail(relegatedUserClub, decisionDate);
+        setMessages(previous => previous.some(message => message.id === firingMail.id) ? previous : [firingMail, ...previous]);
+        setManagerProfile(previous => {
+          const profileWithLastClub = previous ? { ...previous, lastManagedClubId: relegatedUserClub.id } : previous;
+          const expPenalty = calculateManagerFiringExpPenalty(profileWithLastClub, relegatedUserClub);
+          if (!profileWithLastClub || expPenalty <= 0) return profileWithLastClub;
+          return ManagerExperienceService.applyExpAwards(profileWithLastClub, [{
+            sourceKey: `manager-fired-after-relegation:${relegatedUserClub.id}:${newYear - 1}`,
+            date: decisionDate,
+            season: seasonNumber,
+            delta: -expPenalty,
+            competition: relegatedUserClub.name,
+            label: 'Zwolnienie po spadku',
+          }]);
+        });
+        setIsResigned(true);
+        setManagerEmploymentStatus('FIRED');
+        setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
+        setIncomingOffers([]);
+        setActiveTrainingId(null);
+        setActiveManagerContract(null);
+        setManagerContractNegotiation(null);
+        showGameNotification({
+          title: 'Zwolnienie z klubu',
+          message: createManagerFiringMessage(relegatedUserClub, decisionDate),
+          tone: 'error',
+          display: 'modal',
+        });
+      } else if (relegatedUserClub) {
+        const survivalMail: MailMessage = {
+          id: `MANAGER_SURVIVES_RELEGATION_${relegatedUserClub.id}_${newYear - 1}`,
+          sender: `Zarząd ${relegatedUserClub.name}`,
+          role: 'Zarząd klubu',
+          subject: 'Decyzja zarządu po spadku',
+          body: `Szanowny Panie,\n\nPomimo spadku z ligi Zarząd Klubu zdecydował się wyjątkowo utrzymać Pana na stanowisku trenera pierwszego zespołu. Oczekujemy odbudowy drużyny i zdecydowanej walki o powrót na wyższy poziom rozgrywkowy.\n\nZ poważaniem,\nZarząd Klubu ${relegatedUserClub.name}`,
+          date: decisionDate,
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 96,
+        };
+        setMessages(previous => previous.some(message => message.id === survivalMail.id) ? previous : [survivalMail, ...previous]);
+      }
+    }
+
+    setStaffMembers(staffRetirementResult.updatedStaff);
+    setCoaches(coachesAfterStaffRetirement);
+    setClubs(clubsAfterStaffRetirement);
     if (userTeamId && staffRetirementResult.retiredFromUserTeam.length > 0) {
       const staffRetireMail = MailService.generateStaffRetirementMail(staffRetirementResult.retiredFromUserTeam);
       setMessages(prev => [staffRetireMail, ...prev]);
@@ -4672,7 +4729,8 @@ if (userTeamId) {
 
   const submitManagerContractProposal = (
     targetId: string,
-    durationYears: ManagerContractDurationYears
+    durationYears: ManagerContractDurationYears,
+    annualSalary: number
   ): ManagerContractNegotiationResult => {
     if (!managerContractNegotiation || managerContractNegotiation.status !== 'NEGOTIATING') {
       return { ok: false, status: managerContractNegotiation?.status ?? 'FAILED', message: 'Brak aktywnych negocjacji.' };
@@ -4686,7 +4744,8 @@ if (userTeamId) {
       clubs,
       managerProfile,
       targetId,
-      durationYears
+      durationYears,
+      annualSalary
     );
     setManagerContractNegotiation(updated);
     if (updated.source === 'RENEWAL' && updated.status === 'FAILED') {
@@ -4886,20 +4945,21 @@ setMessages(prev => [
     setActiveManagerContract(signedContract);
     setManagerContractNegotiation(null);
 
-    if (negotiation.source === 'RENEWAL') {
+    if (negotiation.source === 'RENEWAL' || negotiation.source === 'RENEGOTIATION') {
+      const isRenegotiation = negotiation.source === 'RENEGOTIATION';
       const renewalMail: MailMessage = {
-        id: `MANAGER_CONTRACT_RENEWED_${club.id}_${currentDate.toISOString().split('T')[0]}`,
+        id: `${isRenegotiation ? 'MANAGER_CONTRACT_RENEGOTIATED' : 'MANAGER_CONTRACT_RENEWED'}_${club.id}_${currentDate.toISOString().split('T')[0]}`,
         sender: `Zarząd ${club.name}`,
         role: 'Zarząd klubu',
-        subject: 'Przedłużenie kontraktu trenera',
-        body: `Szanowny Panie,\n\nZ przyjemnością potwierdzamy podpisanie nowego kontraktu. Umowa obowiązuje do ${new Date(signedContract.terms.endDate).toLocaleDateString('pl-PL')}.\n\nUzgodniony cel: ${signedContract.terms.target.label}.\n${signedContract.terms.target.description}\n\nWynagrodzenie roczne: ${signedContract.terms.annualSalary.toLocaleString('pl-PL')} PLN.\n\nZ poważaniem,\nZarząd Klubu ${club.name}`,
+        subject: isRenegotiation ? 'Nowe warunki kontraktu trenera' : 'Przedłużenie kontraktu trenera',
+        body: `Szanowny Panie,\n\nZ przyjemnością potwierdzamy ${isRenegotiation ? 'uzgodnienie nowych warunków obowiązującego kontraktu' : 'podpisanie nowego kontraktu'}. Umowa obowiązuje do ${new Date(signedContract.terms.endDate).toLocaleDateString('pl-PL')}.\n\nUzgodniony cel: ${signedContract.terms.target.label}.\n${signedContract.terms.target.description}\n\nWynagrodzenie roczne: ${signedContract.terms.annualSalary.toLocaleString('pl-PL')} PLN.\n\nZ poważaniem,\nZarząd Klubu ${club.name}`,
         date: new Date(currentDate),
         isRead: false,
         type: MailType.BOARD,
         priority: 96,
       };
       setMessages(previous => [renewalMail, ...previous]);
-      return { ok: true, status: 'AGREED', message: 'Nowy kontrakt został podpisany.' };
+      return { ok: true, status: 'AGREED', message: isRenegotiation ? 'Nowe warunki kontraktu zostały podpisane.' : 'Nowy kontrakt został podpisany.' };
     }
 
     if (negotiation.jobOfferId) {
@@ -12738,15 +12798,10 @@ const finalResult: SimulationOutput = {
           const leagueClubs = updatedClubsList.filter(club => club.leagueId === userClub.leagueId);
           const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
           const rank = sorted.findIndex(club => club.id === userClub.id) + 1;
-          const contractPerformance = activeManagerContract?.clubId === userClub.id
-            ? ManagerContractService.evaluateContractPerformance(activeManagerContract, userClub, updatedClubsList, allFixtures)
-            : null;
-          const cupFailureRankPenalty = contractPerformance && activeManagerContract?.terms.target.requiresPolishCup && contractPerformance.cupState === 'OUT' ? 3 : 0;
           const pressure = CoachService.getPerformancePressure(
             userClub,
-            rank + cupFailureRankPenalty,
-            managerProfile?.expPoints,
-            activeManagerContract?.clubId === userClub.id ? activeManagerContract.terms.target.leagueMaxRank : undefined
+            rank,
+            managerProfile?.expPoints
           );
 
           if (pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
@@ -15998,6 +16053,100 @@ const finalResult: SimulationOutput = {
       bardzo_wysoka: 4,
     }[level ?? 'przecietna']);
 
+    if (requestType === 'MANAGER_CONTRACT_RENEGOTIATION') {
+      const eligibility = ManagerContractService.getManagerContractRenegotiationEligibility(activeManagerContract, date);
+      if (!activeManagerContract || activeManagerContract.clubId !== userClub.id || !eligibility.eligible) {
+        showGameNotification({
+          title: 'Renegocjacja niedostępna',
+          message: eligibility.reason,
+          tone: 'warning',
+        });
+        return;
+      }
+      if (managerContractNegotiation) {
+        showGameNotification({
+          title: 'Rozmowy już trwają',
+          message: 'Najpierw zakończ trwające negocjacje kontraktowe.',
+          tone: 'warning',
+        });
+        return;
+      }
+
+      const performance = ManagerContractService.evaluateContractPerformance(activeManagerContract, userClub, clubs, allFixtures);
+      const board = userClub.board;
+      const confidence = userClub.boardConfidence ?? 70;
+      const generosity = levelScore(board?.hojnosc);
+      const patience = levelScore(board?.cierpliwosc);
+      const greed = levelScore(board?.chciwosc);
+      const salaryLeverage = ManagerContractService.getManagerSalaryLeverage(userClub, managerProfile);
+      const expAdvantage = Math.max(-12, Math.min(18, (salaryLeverage.managerExp / Math.max(1, salaryLeverage.requiredExp) - 1) * 18));
+      const chance = Math.max(22, Math.min(92,
+        24 + performance.score * 0.38 + confidence * 0.22 + generosity * 4 + patience * 2 - greed * 3 + expAdvantage
+      ));
+      const approved = Math.random() * 100 <= chance;
+      const requestDate = date.toISOString();
+      setActiveManagerContract(previous => previous ? { ...previous, lastRenegotiationRequestAt: requestDate } : previous);
+
+      if (approved) {
+        const duration = activeManagerContract.terms.durationYears;
+        const proposedTerms = ManagerContractService.createTerms(
+          userClub,
+          clubs,
+          managerProfile,
+          date,
+          activeManagerContract.terms.target,
+          duration
+        );
+        const negotiation = ManagerContractService.createNegotiation(
+          userClub,
+          clubs,
+          managerProfile,
+          date,
+          'RENEGOTIATION',
+          undefined,
+          proposedTerms
+        );
+        setManagerContractNegotiation(negotiation);
+        setMessages(previous => [{
+          id: `MANAGER_RENEGOTIATION_APPROVED_${userClub.id}_${date.toISOString().split('T')[0]}`,
+          sender: `Zarząd ${userClub.name}`,
+          role: 'Zarząd klubu',
+          subject: 'Zgoda na renegocjację kontraktu',
+          body: `Szanowny Panie,\n\nZarząd ${userClub.name} przyjął wniosek o rozpoczęcie rozmów dotyczących nowych warunków kontraktu. Dotychczasowa praca, aktualne wyniki oraz zdobyte doświadczenie uzasadniają ponowne otwarcie negocjacji.\n\nSzczegóły zostaną ustalone przy stole negocjacyjnym.\n\nZ poważaniem,\nZarząd Klubu ${userClub.name}`,
+          date: new Date(date),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 94,
+        }, ...previous]);
+        showGameNotification({
+          title: 'Zarząd zgodził się na rozmowy',
+          message: 'Rozpoczynają się negocjacje nowych warunków kontraktu.',
+          tone: 'success',
+        });
+      } else {
+        const refusal = performance.score < 50
+          ? 'Zarząd uznał, że aktualne wyniki nie uzasadniają obecnie podwyżki wynagrodzenia.'
+          : 'Zarząd nie wyraził obecnie zgody na zmianę warunków finansowych kontraktu.';
+        setMessages(previous => [{
+          id: `MANAGER_RENEGOTIATION_REFUSED_${userClub.id}_${date.toISOString().split('T')[0]}`,
+          sender: `Zarząd ${userClub.name}`,
+          role: 'Zarząd klubu',
+          subject: 'Decyzja w sprawie renegocjacji kontraktu',
+          body: `Szanowny Panie,\n\n${refusal} Do tematu będzie można wrócić po upływie trzech miesięcy.\n\nZ poważaniem,\nZarząd Klubu ${userClub.name}`,
+          date: new Date(date),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 82,
+        }, ...previous]);
+        showGameNotification({
+          title: 'Wniosek odrzucony',
+          message: `${refusal} Kolejny wniosek będzie możliwy za trzy miesiące.`,
+          tone: 'warning',
+        });
+      }
+      return;
+    }
+
     if (requestType === 'WAGE_COST_CONTROL') {
       const pressureRatio = userClub.budget > 0 ? wageBill / userClub.budget : 9;
       const pressureLabel = pressureRatio >= 0.85
@@ -16187,7 +16336,7 @@ const finalResult: SimulationOutput = {
       message: resultMessage,
       tone: approved ? 'success' : 'warning',
     });
-  }, [clubs, currentDate, players, showGameNotification, userTeamId]);
+  }, [activeManagerContract, allFixtures, clubs, currentDate, managerContractNegotiation, managerProfile, players, showGameNotification, userTeamId]);
 
   const requestStadiumExpansion = useCallback((stand: StadiumStand, requestedIncrease: number) => {
     if (!userTeamId) return;

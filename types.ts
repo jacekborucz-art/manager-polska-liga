@@ -2125,6 +2125,7 @@ export type BoardClubRequestType =
   | 'TRANSFER_BUDGET'
   | 'RESERVE_STATUS'
   | 'EXCEPTIONAL_CONTRACT'
+  | 'MANAGER_CONTRACT_RENEGOTIATION'
   | 'WAGE_COST_CONTROL';
 
 export type WinterCampLocation = 'turkey' | 'cyprus' | 'greece' | 'poland';
@@ -3585,7 +3586,7 @@ export interface ManagerContractTarget {
 }
 
 export type ManagerContractDurationYears = 1 | 2 | 3;
-export type ManagerContractSource = 'CAREER_START' | 'JOB_MARKET' | 'RENEWAL';
+export type ManagerContractSource = 'CAREER_START' | 'JOB_MARKET' | 'RENEWAL' | 'RENEGOTIATION';
 
 export interface ManagerContractTerms {
   startDate: string;
@@ -3594,6 +3595,7 @@ export interface ManagerContractTerms {
   annualSalary: number;
   target: ManagerContractTarget;
   salaryModelVersion?: number;
+  salaryReviewAfterOneSeason?: boolean;
 }
 
 export interface ManagerContract {
@@ -3605,6 +3607,7 @@ export interface ManagerContract {
   terms: ManagerContractTerms;
   standardRenewalMonths: number;
   earlyRenewalChecked?: boolean;
+  lastRenegotiationRequestAt?: string;
   renewalDecision?: 'OFFERED' | 'DECLINED_BY_CLUB' | 'DECLINED_BY_MANAGER' | 'NEGOTIATIONS_FAILED';
 }
 

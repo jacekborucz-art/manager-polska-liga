@@ -24,6 +24,19 @@ var __toESM = (mod, isNodeMode, target2) => (target2 = mod != null ? __create(__
 // tests/ManagerContractServiceTests.ts
 var import_strict = __toESM(require("node:assert/strict"), 1);
 
+// services/ManagerJobService.ts
+function getLeagueTier(club2) {
+  const tier = Number.parseInt(String(club2.leagueId).split("_")[2] || "", 10);
+  return Number.isFinite(tier) ? tier : club2.tier ?? 4;
+}
+function getRequiredManagerExp(club2) {
+  const tier = getLeagueTier(club2);
+  const reputation = club2.reputation ?? 5;
+  if (tier === 1) return Math.round(130 + reputation * 18);
+  if (tier === 2) return Math.round(35 + reputation * 9);
+  return Math.max(1, Math.round(reputation * 4));
+}
+
 // services/ManagerContractService.ts
 var DAY_MS = 864e5;
 var BOARD_LEVEL = {
@@ -34,14 +47,31 @@ var BOARD_LEVEL = {
   bardzo_wysoka: 5
 };
 var clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-var SALARY_MODEL_VERSION = 2;
+var SALARY_MODEL_VERSION = 3;
 var SALARY_STEP = 5e5;
+var MANAGER_SALARY_NEGOTIATION_STEP = 1e5;
+var RELEGATION_MANAGER_SURVIVAL_CHANCE = 0.05;
 var roundSalary = (value) => Math.max(SALARY_STEP, Math.round(value / SALARY_STEP) * SALARY_STEP);
+var normalizeNegotiatedSalary = (value) => Math.max(MANAGER_SALARY_NEGOTIATION_STEP, Math.round(value / MANAGER_SALARY_NEGOTIATION_STEP) * MANAGER_SALARY_NEGOTIATION_STEP);
 var getTier = (club2) => {
   const parsed = Number.parseInt(String(club2.leagueId).split("_")[2] || "", 10);
   return Number.isFinite(parsed) ? parsed : Math.max(1, club2.tier ?? 3);
 };
 var getLeagueSize = (club2, clubs2) => Math.max(16, clubs2.filter((candidate) => candidate.leagueId === club2.leagueId).length);
+function getManagerSalaryLeverage(club2, profile) {
+  const requiredExp = Math.max(1, getRequiredManagerExp(club2));
+  const managerExp = Math.max(1, profile?.expPoints ?? 1);
+  const ratio = managerExp / requiredExp;
+  const offerMultiplier = ratio < 1 ? 0.8 + clamp((ratio - 0.1) / 0.9, 0, 1) * 0.2 : clamp(1 + Math.log2(Math.max(1, ratio)) * 0.1, 1, 1.2);
+  const maxNegotiatedPremium = ratio < 0.5 ? 0.06 : ratio < 1 ? 0.12 : clamp(0.18 + Math.log2(ratio) * 0.08, 0.18, 0.4);
+  return {
+    requiredExp,
+    managerExp,
+    offerMultiplier,
+    maxNegotiatedPremium,
+    isDiscountedOffer: offerMultiplier < 0.995
+  };
+}
 var getSeasonEnd = (startDate, durationYears) => {
   return new Date(startDate.getFullYear() + durationYears, 5, 30, 12, 0, 0, 0);
 };
@@ -61,22 +91,22 @@ function getAvailableTargets(club2, clubs2) {
   const middleRank = Math.max(8, Math.ceil(leagueSize * 0.58));
   if (tier >= 2) {
     return [
-      target(club2, clubs2, "SURVIVAL", "Utrzymanie w lidze", `Zesp\xF3\u0142 ma zako\u0144czy\u0107 sezon poza stref\u0105 spadkow\u0105, na miejscu ${survivalRank}. lub wy\u017Cszym.`, 1, survivalRank),
-      target(club2, clubs2, "MID_TABLE", "Bezpieczny \u015Brodek tabeli", `Celem jest spokojne miejsce w \u015Brodku tabeli \u2014 maksymalnie ${middleRank}. pozycja.`, 2, middleRank),
-      target(club2, clubs2, "PROMOTION_PLAYOFFS", "Miejsce bara\u017Cowe", "Dru\u017Cyna ma zako\u0144czy\u0107 sezon w TOP 6 i zakwalifikowa\u0107 si\u0119 co najmniej do bara\u017Cy o awans.", 3, 6),
-      target(club2, clubs2, "PROMOTION", "Bezpo\u015Bredni awans", "Zesp\xF3\u0142 ma zako\u0144czy\u0107 lig\u0119 w TOP 2 i wywalczy\u0107 bezpo\u015Bredni awans.", 4, 2),
-      target(club2, clubs2, "CHAMPION", "Mistrzostwo ligi", "Celem jest pierwsze miejsce i zdobycie mistrzostwa ligi.", 5, 1),
+      target(club2, clubs2, "SURVIVAL", "Utrzymanie w lidze", "Zesp\xF3\u0142 ma utrzyma\u0107 si\u0119 w lidze i zako\u0144czy\u0107 sezon poza stref\u0105 spadkow\u0105.", 1, survivalRank),
+      target(club2, clubs2, "MID_TABLE", "Bezpieczny \u015Brodek tabeli", "Celem jest spokojny sezon i stabilna pozycja w \u015Brodku tabeli.", 2, middleRank),
+      target(club2, clubs2, "PROMOTION_PLAYOFFS", "Miejsce bara\u017Cowe", "Dru\u017Cyna ma zakwalifikowa\u0107 si\u0119 do bara\u017Cy o awans.", 3, 6),
+      target(club2, clubs2, "PROMOTION", "Bezpo\u015Bredni awans", "Celem jest wywalczenie bezpo\u015Bredniego awansu.", 4, 2),
+      target(club2, clubs2, "CHAMPION", "Mistrzostwo ligi", "Celem jest zdobycie mistrzostwa ligi.", 5, 1),
       target(club2, clubs2, "POLISH_CUP", "Zdobycie Pucharu Polski", `Zesp\xF3\u0142 ma utrzyma\u0107 bezpieczn\u0105 pozycj\u0119 ligow\u0105 i zdoby\u0107 Puchar Polski.`, 5, middleRank, true),
       target(club2, clubs2, "LEAGUE_AND_CUP", "Mistrzostwo i Puchar Polski", "Celem jest mistrzostwo ligi oraz zdobycie Pucharu Polski w tym samym sezonie.", 7, 1, true)
     ];
   }
   return [
-    target(club2, clubs2, "SURVIVAL", "Utrzymanie w Ekstraklasie", `Zesp\xF3\u0142 ma unikn\u0105\u0107 spadku i zako\u0144czy\u0107 sezon co najmniej na ${survivalRank}. miejscu.`, 1, survivalRank),
-    target(club2, clubs2, "MID_TABLE", "\u015Arodek tabeli", `Celem jest stabilna pozycja w \u015Brodku tabeli \u2014 maksymalnie ${middleRank}. miejsce.`, 2, middleRank),
-    target(club2, clubs2, "TOP_SIX", "G\xF3rna sz\xF3stka", "Dru\u017Cyna ma zako\u0144czy\u0107 sezon w TOP 6.", 3, 6),
-    target(club2, clubs2, "TOP_THREE", "Podium", "Zesp\xF3\u0142 ma zako\u0144czy\u0107 sezon w pierwszej tr\xF3jce i walczy\u0107 o europejskie puchary.", 4, 3),
-    target(club2, clubs2, "CHAMPION", "Mistrzostwo Polski", "Celem jest pierwsze miejsce i zdobycie Mistrzostwa Polski.", 5, 1),
-    target(club2, clubs2, "POLISH_CUP", "Zdobycie Pucharu Polski", `Zesp\xF3\u0142 ma zaj\u0105\u0107 co najmniej ${middleRank}. miejsce i zdoby\u0107 Puchar Polski.`, 5, middleRank, true),
+    target(club2, clubs2, "SURVIVAL", "Utrzymanie w Ekstraklasie", "Zesp\xF3\u0142 ma unikn\u0105\u0107 spadku i zachowa\u0107 miejsce w Ekstraklasie.", 1, survivalRank),
+    target(club2, clubs2, "MID_TABLE", "\u015Arodek tabeli", "Celem jest stabilna pozycja w \u015Brodku tabeli.", 2, middleRank),
+    target(club2, clubs2, "TOP_SIX", "G\xF3rna sz\xF3stka", "Celem jest zako\u0144czenie sezonu w g\xF3rnej cz\u0119\u015Bci tabeli.", 3, 6),
+    target(club2, clubs2, "TOP_THREE", "Podium", "Celem jest miejsce na podium i walka o europejskie puchary.", 4, 3),
+    target(club2, clubs2, "CHAMPION", "Mistrzostwo Polski", "Celem jest zdobycie Mistrzostwa Polski.", 5, 1),
+    target(club2, clubs2, "POLISH_CUP", "Zdobycie Pucharu Polski", "Zesp\xF3\u0142 ma utrzyma\u0107 stabiln\u0105 pozycj\u0119 ligow\u0105 i zdoby\u0107 Puchar Polski.", 5, middleRank, true),
     target(club2, clubs2, "LEAGUE_AND_CUP", "Mistrzostwo i Puchar Polski", "Celem jest zdobycie Mistrzostwa Polski oraz Pucharu Polski w tym samym sezonie.", 7, 1, true)
   ];
 }
@@ -96,10 +126,9 @@ function getBoardMinimumTarget(club2, clubs2) {
 }
 function calculateBaseSalary(club2, profile) {
   const tier = getTier(club2);
-  const tierBase = tier === 1 ? 3e6 : tier === 2 ? 1e6 : tier === 3 ? 55e4 : 3e5;
+  const tierBase = tier === 1 ? 375e4 : tier === 2 ? 15e5 : tier === 3 ? 7e5 : 4e5;
   const reputationMultiplier = 0.72 + clamp(club2.reputation ?? 5, 1, 20) * 0.075;
-  const expPoints = Math.max(1, profile?.expPoints ?? 1);
-  const experienceMultiplier = 0.9 + Math.min(0.5, Math.log10(expPoints + 9) * 0.16);
+  const experienceMultiplier = getManagerSalaryLeverage(club2, profile).offerMultiplier;
   return roundSalary(tierBase * reputationMultiplier * experienceMultiplier);
 }
 function calculateSalaryForTarget(club2, clubs2, profile, selectedTarget) {
@@ -115,7 +144,8 @@ function createTerms(club2, clubs2, profile, startDate, selectedTarget = getBoar
     durationYears,
     annualSalary: calculateSalaryForTarget(club2, clubs2, profile, selectedTarget),
     target: selectedTarget,
-    salaryModelVersion: SALARY_MODEL_VERSION
+    salaryModelVersion: SALARY_MODEL_VERSION,
+    salaryReviewAfterOneSeason: getManagerSalaryLeverage(club2, profile).isDiscountedOffer
   };
 }
 function createNegotiation(club2, clubs2, profile, startDate, source, jobOfferId, proposedTerms) {
@@ -131,7 +161,7 @@ function createNegotiation(club2, clubs2, profile, startDate, source, jobOfferId
     maxRounds: 4 + Math.floor(Math.random() * 4),
     availableTargets,
     clubTerms,
-    message: source === "RENEWAL" ? "Zarz\u0105d chce om\xF3wi\u0107 warunki dalszej wsp\xF3\u0142pracy." : "Zarz\u0105d przedstawi\u0142 warunki obj\u0119cia pierwszego zespo\u0142u.",
+    message: source === "RENEWAL" ? "Zarz\u0105d chce om\xF3wi\u0107 warunki dalszej wsp\xF3\u0142pracy." : source === "RENEGOTIATION" ? "Zarz\u0105d zgodzi\u0142 si\u0119 rozpocz\u0105\u0107 renegocjacj\u0119 obowi\u0105zuj\u0105cego kontraktu." : "Zarz\u0105d przedstawi\u0142 warunki obj\u0119cia pierwszego zespo\u0142u.",
     lastResponseType: "INFO",
     startedAt: startDate.toISOString()
   };
@@ -147,13 +177,19 @@ var getNegotiationAcceptanceChance = (negotiation, club2, proposedTerms, profile
   const patience = BOARD_LEVEL[board?.cierpliwosc ?? "przecietna"];
   const competence = BOARD_LEVEL[board?.kompetencja ?? "przecietna"];
   const expBonus = Math.min(12, Math.log10(Math.max(1, profile?.expPoints ?? 1) + 9) * 4);
-  const salaryPremium = Math.max(0, proposedTerms.annualSalary / Math.max(1, negotiation.clubTerms.annualSalary) - 1);
+  const salaryLeverage = getManagerSalaryLeverage(club2, profile);
+  const salaryRatio = proposedTerms.annualSalary / Math.max(1, negotiation.clubTerms.annualSalary);
+  const salaryPremium = Math.max(0, salaryRatio - 1);
+  const salaryDiscount = Math.max(0, 1 - salaryRatio);
   let chance = 82 + expBonus;
   if (delta > 0) {
-    chance = 44 + ambition * 7 + generosity * 5 - greed * 4 - delta * 10 - salaryPremium * 28 + expBonus;
+    chance = 44 + ambition * 7 + generosity * 5 - greed * 4 - delta * 10 + expBonus;
   } else if (delta < 0) {
     chance = 48 + patience * 5 + greed * 3 - ambition * 8 - Math.abs(delta) * 9 + expBonus;
   }
+  const premiumTolerance = 1 + salaryLeverage.maxNegotiatedPremium * 1.8;
+  chance -= salaryPremium / premiumTolerance * (45 + greed * 5 - generosity * 3);
+  chance += salaryDiscount * (8 + generosity * 2);
   if (proposedTerms.durationYears === 3) chance += patience * 2 - greed * 2;
   if (proposedTerms.durationYears === 1) chance += greed * 2 - patience;
   chance += competence * 1.5;
@@ -167,15 +203,23 @@ var counterTarget = (negotiation, requestedTarget) => {
   const step = requestedIndex > currentIndex ? 1 : -1;
   return ordered[clamp(currentIndex + step, 0, ordered.length - 1)];
 };
-function negotiate(negotiation, club2, clubs2, profile, targetId, durationYears) {
+function negotiate(negotiation, club2, clubs2, profile, targetId, durationYears, proposedAnnualSalary) {
   if (negotiation.status !== "NEGOTIATING") return negotiation;
   const selectedTarget = negotiation.availableTargets.find((option) => option.id === targetId) ?? negotiation.clubTerms.target;
   const startDate = new Date(negotiation.clubTerms.startDate);
-  const requestedTerms = createTerms(club2, clubs2, profile, startDate, selectedTarget, durationYears);
+  const calculatedTerms = createTerms(club2, clubs2, profile, startDate, selectedTarget, durationYears);
+  const requestedTerms = {
+    ...calculatedTerms,
+    annualSalary: Number.isFinite(proposedAnnualSalary) ? normalizeNegotiatedSalary(proposedAnnualSalary) : calculatedTerms.annualSalary
+  };
   const roundsUsed = negotiation.roundsUsed + 1;
   const preferredTarget = getBoardPreferredTarget(club2, clubs2);
   const minimumTarget = getBoardMinimumTarget(club2, clubs2);
   const hardVeto = selectedTarget.ambitionLevel < minimumTarget.ambitionLevel;
+  const salaryLeverage = getManagerSalaryLeverage(club2, profile);
+  const maximumNegotiableSalary = normalizeNegotiatedSalary(
+    calculatedTerms.annualSalary * (1 + salaryLeverage.maxNegotiatedPremium)
+  );
   if (hardVeto) {
     const vetoMessage = `Veto zarz\u0105du: cel \u201E${selectedTarget.label}\u201D jest nie do przyj\u0119cia. Ambicj\u0105 klubu jest \u201E${preferredTarget.label}\u201D, a najni\u017Cszy cel, o kt\xF3rym zarz\u0105d mo\u017Ce rozmawia\u0107, to \u201E${minimumTarget.label}\u201D. Klub podtrzymuje swoj\u0105 propozycj\u0119 i oczekuje wyra\u017Anie ambitniejszego planu.`;
     if (roundsUsed >= negotiation.maxRounds) {
@@ -195,7 +239,26 @@ function negotiate(negotiation, club2, clubs2, profile, targetId, durationYears)
       message: vetoMessage
     };
   }
-  const proposalDiffersFromClubTerms = selectedTarget.id !== negotiation.clubTerms.target.id || durationYears !== negotiation.clubTerms.durationYears;
+  if (requestedTerms.annualSalary > maximumNegotiableSalary) {
+    const salaryMessage = salaryLeverage.managerExp < salaryLeverage.requiredExp ? `Zarz\u0105d uwa\u017Ca, \u017Ce przy obecnym dorobku ${salaryLeverage.managerExp.toLocaleString("pl-PL")} EXP proponowana pensja jest zbyt wysoka. Klub mo\u017Ce obecnie rozmawia\u0107 o stawce do ${maximumNegotiableSalary.toLocaleString("pl-PL")} PLN rocznie. Po pe\u0142nym sezonie pracy b\u0119dzie mo\u017Cna wyst\u0105pi\u0107 o renegocjacj\u0119.` : `Zarz\u0105d docenia do\u015Bwiadczenie trenera, ale proponowana pensja przekracza aktualne mo\u017Cliwo\u015Bci klubu. Klub mo\u017Ce obecnie rozmawia\u0107 o stawce do ${maximumNegotiableSalary.toLocaleString("pl-PL")} PLN rocznie.`;
+    if (roundsUsed >= negotiation.maxRounds) {
+      return {
+        ...negotiation,
+        roundsUsed,
+        status: "FAILED",
+        lastResponseType: "FAILED",
+        message: `${salaryMessage} Zarz\u0105d zako\u0144czy\u0142 negocjacje.`
+      };
+    }
+    return {
+      ...negotiation,
+      roundsUsed,
+      clubTerms: { ...negotiation.clubTerms, annualSalary: maximumNegotiableSalary },
+      lastResponseType: "VETO",
+      message: salaryMessage
+    };
+  }
+  const proposalDiffersFromClubTerms = selectedTarget.id !== negotiation.clubTerms.target.id || durationYears !== negotiation.clubTerms.durationYears || requestedTerms.annualSalary !== negotiation.clubTerms.annualSalary;
   const requiresOpeningCounter = negotiation.roundsUsed === 0 && proposalDiffersFromClubTerms;
   const accepted = !requiresOpeningCounter && Math.random() * 100 <= getNegotiationAcceptanceChance(negotiation, club2, requestedTerms, profile);
   if (accepted) {
@@ -308,8 +371,47 @@ function shouldOfferRenewal(contract, club2, clubs2, fixtures, early) {
 function daysUntilContractEnd(contract, date) {
   return Math.ceil((new Date(contract.terms.endDate).getTime() - date.getTime()) / DAY_MS);
 }
+function getManagerContractRenegotiationEligibility(contract, date) {
+  if (!contract || contract.status !== "ACTIVE") {
+    return { eligible: false, reason: "Brak aktywnego kontraktu trenera." };
+  }
+  if (contract.renewalDecision) {
+    return {
+      eligible: false,
+      reason: "Decyzja dotycz\u0105ca dalszej wsp\xF3\u0142pracy zosta\u0142a ju\u017C podj\u0119ta w ramach obecnego cyklu kontraktowego."
+    };
+  }
+  const eligibleAt = new Date(contract.signedAt);
+  eligibleAt.setFullYear(eligibleAt.getFullYear() + 1);
+  if (date.getTime() < eligibleAt.getTime()) {
+    return {
+      eligible: false,
+      eligibleAt,
+      reason: `Renegocjacja b\u0119dzie mo\u017Cliwa po pe\u0142nym roku pracy, od ${eligibleAt.toLocaleDateString("pl-PL")}.`
+    };
+  }
+  if (contract.lastRenegotiationRequestAt) {
+    const retryAt = new Date(contract.lastRenegotiationRequestAt);
+    retryAt.setDate(retryAt.getDate() + 90);
+    if (date.getTime() < retryAt.getTime()) {
+      return {
+        eligible: false,
+        retryAt,
+        reason: `Zarz\u0105d wr\xF3ci do kolejnego wniosku najwcze\u015Bniej ${retryAt.toLocaleDateString("pl-PL")}.`
+      };
+    }
+  }
+  return { eligible: true, eligibleAt, reason: "Mo\u017Cesz wyst\u0105pi\u0107 do zarz\u0105du o renegocjacj\u0119 kontraktu." };
+}
+function shouldDismissManagerAfterRelegation(randomValue = Math.random()) {
+  return clamp(randomValue, 0, 1) >= RELEGATION_MANAGER_SURVIVAL_CHANCE;
+}
 var ManagerContractService = {
   SALARY_MODEL_VERSION,
+  MANAGER_SALARY_NEGOTIATION_STEP,
+  RELEGATION_MANAGER_SURVIVAL_CHANCE,
+  normalizeNegotiatedSalary,
+  getManagerSalaryLeverage,
   getAvailableTargets,
   getBoardPreferredTarget,
   getBoardMinimumTarget,
@@ -323,7 +425,9 @@ var ManagerContractService = {
   getLeagueRank,
   evaluateContractPerformance,
   shouldOfferRenewal,
-  daysUntilContractEnd
+  daysUntilContractEnd,
+  getManagerContractRenegotiationEligibility,
+  shouldDismissManagerAfterRelegation
 };
 
 // tests/ManagerContractServiceTests.ts
@@ -374,6 +478,16 @@ try {
   const legia = { ...club, id: "PL_LEGIA_WARSZAWA", name: "Legia Warszawa", reputation: 10 };
   const legiaBaseSalary = ManagerContractService.calculateBaseSalary(legia, null);
   import_strict.default.equal(legiaBaseSalary, 45e5, "bazowa pensja pocz\u0105tkuj\u0105cego trenera Legii powinna wynosi\u0107 4,5 mln PLN rocznie");
+  const lowExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: 1 });
+  const highExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: lowExpLeverage.requiredExp * 2 });
+  import_strict.default.equal(lowExpLeverage.offerMultiplier, 0.8, "klub mo\u017Ce obni\u017Cy\u0107 ofert\u0119 niedo\u015Bwiadczonemu trenerowi o 20%");
+  import_strict.default.ok(highExpLeverage.offerMultiplier > 1, "wysoki EXP powinien podnosi\u0107 ofert\u0119 bazow\u0105");
+  import_strict.default.ok(
+    highExpLeverage.maxNegotiatedPremium > lowExpLeverage.maxNegotiatedPremium,
+    "do\u015Bwiadczony trener powinien m\xF3c negocjowa\u0107 wi\u0119ksz\u0105 podwy\u017Ck\u0119"
+  );
+  const discountedTerms = ManagerContractService.createTerms(legia, clubs, { expPoints: 1 }, start);
+  import_strict.default.equal(discountedTerms.salaryReviewAfterOneSeason, true, "ni\u017Csza stawka powinna zawiera\u0107 mo\u017Cliwo\u015B\u0107 przegl\u0105du po sezonie");
   Math.random = () => 0;
   const eliteNegotiation = ManagerContractService.createNegotiation(legia, clubs, null, start, "CAREER_START");
   const eliteVeto = ManagerContractService.negotiate(eliteNegotiation, legia, clubs, null, conservative.id, 2);
@@ -381,6 +495,30 @@ try {
   import_strict.default.equal(eliteVeto.lastResponseType, "VETO", "elity klub powinien zawetowa\u0107 cel utrzymania");
   import_strict.default.equal(eliteVeto.clubTerms.target.type, "CHAMPION", "po veto elitarny klub powinien podtrzyma\u0107 cel mistrzowski");
   import_strict.default.match(eliteVeto.message, /najniższy cel/i, "zarz\u0105d powinien wyja\u015Bni\u0107 granic\u0119 negocjacji");
+  const salaryOpeningCounter = ManagerContractService.negotiate(
+    shortest,
+    club,
+    clubs,
+    null,
+    shortest.clubTerms.target.id,
+    shortest.clubTerms.durationYears,
+    shortest.clubTerms.annualSalary + 1e5
+  );
+  import_strict.default.equal(salaryOpeningCounter.status, "NEGOTIATING", "podwy\u017Cszenie pensji powinno najpierw wywo\u0142a\u0107 kontrofert\u0119");
+  import_strict.default.equal(salaryOpeningCounter.lastResponseType, "COUNTER");
+  const requestedNegotiatedSalary = salaryOpeningCounter.clubTerms.annualSalary + 1e5;
+  const salaryAgreement = ManagerContractService.negotiate(
+    salaryOpeningCounter,
+    club,
+    clubs,
+    null,
+    salaryOpeningCounter.clubTerms.target.id,
+    salaryOpeningCounter.clubTerms.durationYears,
+    requestedNegotiatedSalary
+  );
+  import_strict.default.equal(salaryAgreement.status, "AGREED");
+  import_strict.default.equal(salaryAgreement.agreedTerms?.annualSalary, requestedNegotiatedSalary);
+  import_strict.default.equal(requestedNegotiatedSalary % ManagerContractService.MANAGER_SALARY_NEGOTIATION_STEP, 0);
   let rejected = { ...shortest, maxRounds: 4 };
   Math.random = () => 0.999999;
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -405,6 +543,35 @@ try {
   import_strict.default.ok(migrated.terms.annualSalary > 0, "migracja starego zapisu musi uzupe\u0142ni\u0107 wynagrodzenie");
   import_strict.default.equal(migrated.terms.salaryModelVersion, ManagerContractService.SALARY_MODEL_VERSION);
   import_strict.default.equal(migrated.standardRenewalMonths, migratedAgain.standardRenewalMonths, "migracja powinna by\u0107 deterministyczna");
+  const renegotiationTooEarly = ManagerContractService.getManagerContractRenegotiationEligibility(
+    migrated,
+    /* @__PURE__ */ new Date("2027-06-30T11:59:59.000Z")
+  );
+  import_strict.default.equal(renegotiationTooEarly.eligible, false, "renegocjacja nie mo\u017Ce ruszy\u0107 przed pe\u0142nym rokiem pracy");
+  const renegotiationAvailable = ManagerContractService.getManagerContractRenegotiationEligibility(
+    migrated,
+    /* @__PURE__ */ new Date("2027-07-01T12:00:00.000Z")
+  );
+  import_strict.default.equal(renegotiationAvailable.eligible, true, "po pe\u0142nym roku pracy renegocjacja powinna by\u0107 dost\u0119pna");
+  const recentlyRequested = {
+    ...migrated,
+    lastRenegotiationRequestAt: "2027-07-01T12:00:00.000Z"
+  };
+  import_strict.default.equal(
+    ManagerContractService.getManagerContractRenegotiationEligibility(recentlyRequested, /* @__PURE__ */ new Date("2027-08-01T12:00:00.000Z")).eligible,
+    false,
+    "po z\u0142o\u017Ceniu wniosku kolejna pr\xF3ba powinna by\u0107 zablokowana na 90 dni"
+  );
+  const renegotiation = ManagerContractService.createNegotiation(club, clubs, { expPoints: 20 }, /* @__PURE__ */ new Date("2027-07-02T12:00:00.000Z"), "RENEGOTIATION");
+  import_strict.default.equal(renegotiation.source, "RENEGOTIATION");
+  import_strict.default.match(renegotiation.message, /renegocjację/i);
+  import_strict.default.equal(
+    ManagerContractService.shouldDismissManagerAfterRelegation(0.049),
+    false,
+    "po spadku trener powinien mie\u0107 jedynie 5% szans na zachowanie pracy"
+  );
+  import_strict.default.equal(ManagerContractService.shouldDismissManagerAfterRelegation(0.05), true);
+  import_strict.default.equal(ManagerContractService.shouldDismissManagerAfterRelegation(0.99), true);
   console.log("Manager contract service tests: OK");
 } finally {
   Math.random = originalRandom;

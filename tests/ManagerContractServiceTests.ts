@@ -55,6 +55,16 @@ try {
   const legia = { ...club, id: 'PL_LEGIA_WARSZAWA', name: 'Legia Warszawa', reputation: 10 };
   const legiaBaseSalary = ManagerContractService.calculateBaseSalary(legia, null);
   assert.equal(legiaBaseSalary, 4_500_000, 'bazowa pensja początkującego trenera Legii powinna wynosić 4,5 mln PLN rocznie');
+  const lowExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: 1 } as any);
+  const highExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: lowExpLeverage.requiredExp * 2 } as any);
+  assert.equal(lowExpLeverage.offerMultiplier, 0.8, 'klub może obniżyć ofertę niedoświadczonemu trenerowi o 20%');
+  assert.ok(highExpLeverage.offerMultiplier > 1, 'wysoki EXP powinien podnosić ofertę bazową');
+  assert.ok(
+    highExpLeverage.maxNegotiatedPremium > lowExpLeverage.maxNegotiatedPremium,
+    'doświadczony trener powinien móc negocjować większą podwyżkę'
+  );
+  const discountedTerms = ManagerContractService.createTerms(legia, clubs, { expPoints: 1 } as any, start);
+  assert.equal(discountedTerms.salaryReviewAfterOneSeason, true, 'niższa stawka powinna zawierać możliwość przeglądu po sezonie');
 
   Math.random = () => 0;
   const eliteNegotiation = ManagerContractService.createNegotiation(legia, clubs, null, start, 'CAREER_START');
@@ -63,6 +73,31 @@ try {
   assert.equal(eliteVeto.lastResponseType, 'VETO', 'elity klub powinien zawetować cel utrzymania');
   assert.equal(eliteVeto.clubTerms.target.type, 'CHAMPION', 'po veto elitarny klub powinien podtrzymać cel mistrzowski');
   assert.match(eliteVeto.message, /najniższy cel/i, 'zarząd powinien wyjaśnić granicę negocjacji');
+
+  const salaryOpeningCounter = ManagerContractService.negotiate(
+    shortest,
+    club,
+    clubs,
+    null,
+    shortest.clubTerms.target.id,
+    shortest.clubTerms.durationYears,
+    shortest.clubTerms.annualSalary + 100_000
+  );
+  assert.equal(salaryOpeningCounter.status, 'NEGOTIATING', 'podwyższenie pensji powinno najpierw wywołać kontrofertę');
+  assert.equal(salaryOpeningCounter.lastResponseType, 'COUNTER');
+  const requestedNegotiatedSalary = salaryOpeningCounter.clubTerms.annualSalary + 100_000;
+  const salaryAgreement = ManagerContractService.negotiate(
+    salaryOpeningCounter,
+    club,
+    clubs,
+    null,
+    salaryOpeningCounter.clubTerms.target.id,
+    salaryOpeningCounter.clubTerms.durationYears,
+    requestedNegotiatedSalary
+  );
+  assert.equal(salaryAgreement.status, 'AGREED');
+  assert.equal(salaryAgreement.agreedTerms?.annualSalary, requestedNegotiatedSalary);
+  assert.equal(requestedNegotiatedSalary % ManagerContractService.MANAGER_SALARY_NEGOTIATION_STEP, 0);
 
   let rejected = { ...shortest, maxRounds: 4 };
   Math.random = () => 0.999999;
@@ -90,6 +125,37 @@ try {
   assert.ok(migrated.terms.annualSalary > 0, 'migracja starego zapisu musi uzupełnić wynagrodzenie');
   assert.equal(migrated.terms.salaryModelVersion, ManagerContractService.SALARY_MODEL_VERSION);
   assert.equal(migrated.standardRenewalMonths, migratedAgain.standardRenewalMonths, 'migracja powinna być deterministyczna');
+
+  const renegotiationTooEarly = ManagerContractService.getManagerContractRenegotiationEligibility(
+    migrated,
+    new Date('2027-06-30T11:59:59.000Z')
+  );
+  assert.equal(renegotiationTooEarly.eligible, false, 'renegocjacja nie może ruszyć przed pełnym rokiem pracy');
+  const renegotiationAvailable = ManagerContractService.getManagerContractRenegotiationEligibility(
+    migrated,
+    new Date('2027-07-01T12:00:00.000Z')
+  );
+  assert.equal(renegotiationAvailable.eligible, true, 'po pełnym roku pracy renegocjacja powinna być dostępna');
+  const recentlyRequested = {
+    ...migrated,
+    lastRenegotiationRequestAt: '2027-07-01T12:00:00.000Z',
+  };
+  assert.equal(
+    ManagerContractService.getManagerContractRenegotiationEligibility(recentlyRequested, new Date('2027-08-01T12:00:00.000Z')).eligible,
+    false,
+    'po złożeniu wniosku kolejna próba powinna być zablokowana na 90 dni'
+  );
+  const renegotiation = ManagerContractService.createNegotiation(club, clubs, { expPoints: 20 } as any, new Date('2027-07-02T12:00:00.000Z'), 'RENEGOTIATION');
+  assert.equal(renegotiation.source, 'RENEGOTIATION');
+  assert.match(renegotiation.message, /renegocjację/i);
+
+  assert.equal(
+    ManagerContractService.shouldDismissManagerAfterRelegation(0.049),
+    false,
+    'po spadku trener powinien mieć jedynie 5% szans na zachowanie pracy'
+  );
+  assert.equal(ManagerContractService.shouldDismissManagerAfterRelegation(0.05), true);
+  assert.equal(ManagerContractService.shouldDismissManagerAfterRelegation(0.99), true);
 
   console.log('Manager contract service tests: OK');
 } finally {

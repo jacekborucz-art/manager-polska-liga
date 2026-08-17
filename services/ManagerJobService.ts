@@ -17,7 +17,7 @@ function getLeagueTier(club: Club): number {
   return Number.isFinite(tier) ? tier : club.tier ?? 4;
 }
 
-function getRequiredExp(club: Club): number {
+export function getRequiredManagerExp(club: Club): number {
   const tier = getLeagueTier(club);
   const reputation = club.reputation ?? 5;
 
@@ -65,7 +65,7 @@ export function evaluateManagerJob(
   profile: ManagerProfile | null,
   employmentStatus: ManagerEmploymentStatus,
 ): ManagerJobEvaluation {
-  const requiredExp = getRequiredExp(club);
+  const requiredExp = getRequiredManagerExp(club);
   const managerExp = Math.max(1, profile?.expPoints ?? 1);
   const isVacant = !club.coachId || coaches[club.coachId]?.currentClubId !== club.id;
   const reviewPressure = isVacant ? 100 : getReviewPressure(club, clubs);
@@ -115,6 +115,7 @@ export function getManagerJobLeagueLabel(club: Club): string {
 
 export const ManagerJobService = {
   evaluateManagerJob,
+  getRequiredManagerExp,
   getManagerJobLeagueLabel,
   isPolishManagerJobClub,
 };

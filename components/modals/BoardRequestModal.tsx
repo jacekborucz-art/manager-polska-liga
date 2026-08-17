@@ -52,6 +52,14 @@ const requestCards: RequestCard[] = [
     tone: 'sky',
   },
   {
+    type: 'MANAGER_CONTRACT_RENEGOTIATION',
+    category: 'Kontrakt trenera',
+    title: 'Renegocjacja kontraktu',
+    description: 'Poproś zarząd o rozpoczęcie rozmów dotyczących nowej stawki i dalszych warunków współpracy.',
+    meta: 'Dostępna po pełnym roku pracy',
+    tone: 'amber',
+  },
+  {
     type: 'WAGE_COST_CONTROL',
     category: 'Analiza',
     title: 'Kontrola kosztów płac',
