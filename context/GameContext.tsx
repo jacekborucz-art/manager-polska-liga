@@ -13438,7 +13438,13 @@ const finalResult: SimulationOutput = {
           ),
           911
         );
-        const offerCandidateSquad = rotateBySeed(userSquad, 1301);
+        // Rezerwy użytkownika są przechowywane poza `players[userTeamId]`.
+        // Łączymy obie kadry, aby przesunięcie do rezerw nie ukrywało starszego
+        // zawodnika przed zwykłym skanowaniem transferowym klubów AI.
+        const userMarketSquad = [...userSquad, ...reserves].filter((player, index, squad) =>
+          squad.findIndex(candidate => candidate.id === player.id) === index
+        );
+        const offerCandidateSquad = rotateBySeed(userMarketSquad, 1301);
         aiClubs.forEach(aiClub => {
           if (newOffersToAdd.length >= maxDailyNewOffers) return;
           const buyerSquad = players[aiClub.id] || [];
@@ -13452,13 +13458,14 @@ const finalResult: SimulationOutput = {
               [...newOffersToAdd, ...processed],
               seed,
               nextDay,
-              userSquad,
+              userMarketSquad,
               buyerSquad
             );
             if (!offerDecision.shouldGenerate) return;
             const { fee, aiMaxFee, aiUrgency, timing } = IncomingTransferService.calculateOffer(
               p, aiClub, userClub, isInsideWindow, seed
             );
+            if (reserves.some(reservePlayer => reservePlayer.id === p.id) && timing !== TransferTiming.IMMEDIATE) return;
             if (shouldUsePreContractInsteadOfPaidOffer(p, timing)) return;
             if (fee <= 0 || fee > aiClub.budget) return;
             const boardPressure = IncomingTransferService.evaluateBoardPressure({ fee }, p, userClub, aiClub, seed);
@@ -13692,7 +13699,7 @@ const finalResult: SimulationOutput = {
         const dailyLoanOfferRoll = IncomingTransferService.seededRandom(nextDay.getTime() + 2404);
         const maxDailyLoanOffers = isInsideWindow && dailyLoanOfferRoll < 0.24 ? 1 : 0;
         const loanCandidateSquad = rotateBySeed(
-          userSquad.filter(p =>
+          userMarketSquad.filter(p =>
             p.isAvailableForLoan &&
             !p.loan &&
             !p.transferPendingClubId
@@ -13774,6 +13781,10 @@ const finalResult: SimulationOutput = {
           const buyerSquad = players[aiClub.id] || [];
           offerCandidateSquad.forEach(p => {
             if (aiPreContractSigned) return;
+            // Odroczone przejścia są rozliczane przez mapę pierwszego zespołu.
+            // Rezerwowi pozostają na zwykłej ścieżce natychmiastowego transferu,
+            // aby nie utworzyć umowy, której stary mechanizm przyjścia nie wykona.
+            if (reserves.some(reservePlayer => reservePlayer.id === p.id)) return;
             if (p.transferPendingClubId) return;
             if (p.transferOfferBanUntil && nextDay < new Date(p.transferOfferBanUntil)) return;
 
@@ -13962,6 +13973,21 @@ const finalResult: SimulationOutput = {
           if (!changed) return prev;
           return { ...prev, [userTeamId]: updatedUserPlayers };
         });
+
+        setReserves(prev => prev.map(player => {
+          const clubsToAdd = spontaneousInterestAdds.get(player.id);
+          if (!clubsToAdd || clubsToAdd.size === 0) return player;
+
+          const existingInterestedClubs = player.interestedClubs || [];
+          const mergedInterestedClubs = [
+            ...existingInterestedClubs,
+            ...Array.from(clubsToAdd).filter(clubId => !existingInterestedClubs.includes(clubId))
+          ];
+
+          return mergedInterestedClubs.length === existingInterestedClubs.length
+            ? player
+            : { ...player, interestedClubs: mergedInterestedClubs };
+        }));
       }
 
       if (reserveTalentInterestAdds.size > 0) {
@@ -16623,8 +16649,10 @@ const finalResult: SimulationOutput = {
 
   const toggleTransferList = (playerId: string, price?: number) => {
     if (!userTeamId) return;
-    const squad = players[userTeamId] || [];
-    const player = squad.find(p => p.id === playerId);
+    const firstTeamSquad = players[userTeamId] || [];
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    const squad = [...firstTeamSquad, ...reserves];
+    const player = firstTeamSquad.find(p => p.id === playerId) ?? reservePlayer;
     if (player) {
       if (player.transferPendingClubId) return;
       if (player.loan) {
@@ -16721,7 +16749,7 @@ const finalResult: SimulationOutput = {
         }
       }
 
-      updatePlayer(userTeamId, playerId, {
+      const playerUpdate: Partial<Player> = {
         morale: moraleAdjustedPlayer.morale,
         moralePersonality: moraleAdjustedPlayer.moralePersonality,
         moraleHistory: moraleAdjustedPlayer.moraleHistory,
@@ -16739,7 +16767,13 @@ const finalResult: SimulationOutput = {
         isOnTransferList: !player.isOnTransferList,
         isAvailableForLoan: isAddingToTransferList ? false : player.isAvailableForLoan,
         transferListPrice: !player.isOnTransferList ? price : undefined
-      });
+      };
+
+      if (reservePlayer) {
+        setReserves(prev => prev.map(p => p.id === playerId ? { ...p, ...playerUpdate } : p));
+      } else {
+        updatePlayer(userTeamId, playerId, playerUpdate);
+      }
 
       if (transferListObjectionMail) {
         prependUniqueMessages([transferListObjectionMail]);
@@ -16749,8 +16783,10 @@ const finalResult: SimulationOutput = {
 
   const toggleLoanAvailability = (playerId: string) => {
     if (!userTeamId) return;
-    const squad = players[userTeamId] || [];
-    const player = squad.find(p => p.id === playerId);
+    const firstTeamSquad = players[userTeamId] || [];
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    const squad = [...firstTeamSquad, ...reserves];
+    const player = firstTeamSquad.find(p => p.id === playerId) ?? reservePlayer;
     if (!player) return;
 
     if (player.transferPendingClubId) {
@@ -16888,7 +16924,7 @@ const finalResult: SimulationOutput = {
       };
     }
 
-    updatePlayer(userTeamId, playerId, {
+    const playerUpdate: Partial<Player> = {
       morale: moraleAdjustedPlayer.morale,
       moralePersonality: moraleAdjustedPlayer.moralePersonality,
       moraleHistory: moraleAdjustedPlayer.moraleHistory,
@@ -16900,7 +16936,13 @@ const finalResult: SimulationOutput = {
       isAvailableForLoan: isMakingAvailable,
       isUntouchable: isMakingAvailable ? false : player.isUntouchable,
       squadRole: isMakingAvailable ? null : player.squadRole,
-    });
+    };
+
+    if (reservePlayer) {
+      setReserves(prev => prev.map(p => p.id === playerId ? { ...p, ...playerUpdate } : p));
+    } else {
+      updatePlayer(userTeamId, playerId, playerUpdate);
+    }
 
     showGameNotification({
       title: boardOverrideApplied
@@ -17267,17 +17309,24 @@ const finalResult: SimulationOutput = {
 
   const toggleUntouchable = (playerId: string) => {
     if (!userTeamId) return;
-    const squad = players[userTeamId] || [];
-    const player = squad.find(p => p.id === playerId);
+    const firstTeamPlayer = (players[userTeamId] || []).find(p => p.id === playerId);
+    const reservePlayer = reserves.find(p => p.id === playerId);
+    const player = firstTeamPlayer ?? reservePlayer;
     if (!player || player.transferPendingClubId) return;
 
     const isMarkingUntouchable = !player.isUntouchable;
-    updatePlayer(userTeamId, playerId, {
+    const playerUpdate: Partial<Player> = {
       isUntouchable: isMarkingUntouchable,
       isOnTransferList: isMarkingUntouchable ? false : player.isOnTransferList,
       transferListPrice: isMarkingUntouchable ? undefined : player.transferListPrice,
       isAvailableForLoan: isMarkingUntouchable ? false : player.isAvailableForLoan,
-    });
+    };
+
+    if (reservePlayer) {
+      setReserves(prev => prev.map(p => p.id === playerId ? { ...p, ...playerUpdate } : p));
+    } else {
+      updatePlayer(userTeamId, playerId, playerUpdate);
+    }
   };
 
   const setSquadRole = (playerId: string, role: 'STARTER' | 'KEY_PLAYER' | null) => {
@@ -17416,6 +17465,7 @@ const finalResult: SimulationOutput = {
     sellerClub: Club,
     forced: boolean = false
   ): void => {
+    const isReservePlayer = reserves.some(reservePlayer => reservePlayer.id === player.id);
     const dateStr = new Date(currentDate).toISOString().split('T')[0];
     const loanEndDate = offer.loanEndDate || IncomingTransferService.resolveLoanEndDate(currentDate, offer.loanDuration || 'SEASON');
     const loanFee = offer.loanFee ?? offer.fee ?? 0;
@@ -17488,7 +17538,9 @@ const finalResult: SimulationOutput = {
     const loanedPlayer = PlayerClubAdaptationService.beginForClub(loanedPlayerBase, buyerClub.id, loanInfo.startDate);
 
     setPlayers(prev => {
-      const sellerSquad = (prev[sellerClub.id] || []).filter(p => p.id !== player.id);
+      const sellerSquad = isReservePlayer
+        ? (prev[sellerClub.id] || [])
+        : (prev[sellerClub.id] || []).filter(p => p.id !== player.id);
       const buyerSquad = [
         ...(prev[buyerClub.id] || []).filter(p => p.id !== player.id),
         loanedPlayer,
@@ -17500,12 +17552,22 @@ const finalResult: SimulationOutput = {
       };
     });
 
+    if (isReservePlayer) {
+      setReserves(prev => prev.filter(reservePlayer => reservePlayer.id !== player.id));
+    }
+
     setClubs(prev => prev.map(club => {
       if (club.id === sellerClub.id) {
         return {
           ...club,
           budget: club.budget + loanFee,
           transferBudget: club.transferBudget + loanFee,
+          rosterIds: club.rosterIds.filter(id => id !== player.id),
+        };
+      }
+      if (isReservePlayer && managedReserveClubId && club.id === managedReserveClubId) {
+        return {
+          ...club,
           rosterIds: club.rosterIds.filter(id => id !== player.id),
         };
       }
@@ -17522,12 +17584,16 @@ const finalResult: SimulationOutput = {
 
     setLineups(prev => {
       const next = { ...prev };
-      const sellerSquad = (players[sellerClub.id] || []).filter(p => p.id !== player.id);
+      const sellerSquad = isReservePlayer
+        ? reserves.filter(reservePlayer => reservePlayer.id !== player.id)
+        : (players[sellerClub.id] || []).filter(p => p.id !== player.id);
       const buyerSquad = [
         ...(players[buyerClub.id] || []).filter(p => p.id !== player.id),
         loanedPlayer,
       ];
-      if (next[sellerClub.id]) {
+      if (isReservePlayer && managedReserveClubId && next[managedReserveClubId]) {
+        next[managedReserveClubId] = LineupService.repairLineup(next[managedReserveClubId], sellerSquad);
+      } else if (next[sellerClub.id]) {
         next[sellerClub.id] = LineupService.repairLineup(next[sellerClub.id], sellerSquad);
       }
       if (next[buyerClub.id]) {
@@ -17720,28 +17786,34 @@ const finalResult: SimulationOutput = {
         : undefined,
     };
 
-    setPlayers(prev => ({
-      ...prev,
-      [userTeamId]: (prev[userTeamId] || []).map(currentPlayer => {
-        if (currentPlayer.id !== withMorale.id) return currentPlayer;
-        const adjusted = PlayerMoraleService.withMoraleChange(
-          PlayerMoraleService.ensurePlayerState(currentPlayer),
-          moraleDelta,
-          strongConflict
-            ? 'Konflikt po zablokowaniu kuszącej oferty transferowej'
-            : 'Niezadowolenie po zignorowanej kuszącej ofercie transferowej',
-          date
-        );
-        return {
-          ...adjusted,
-          lastTemptingOfferConflictDate: dateKey,
-          transferListDemandUntil: strongConflict
-            ? adjusted.transferListDemandUntil ?? deadlineKey
-            : adjusted.transferListDemandUntil,
-          isUntouchable: strongConflict ? false : adjusted.isUntouchable,
-        };
-      }),
-    }));
+    const applyConflictToPlayer = (currentPlayer: Player): Player => {
+      if (currentPlayer.id !== withMorale.id) return currentPlayer;
+      const adjusted = PlayerMoraleService.withMoraleChange(
+        PlayerMoraleService.ensurePlayerState(currentPlayer),
+        moraleDelta,
+        strongConflict
+          ? 'Konflikt po zablokowaniu kuszącej oferty transferowej'
+          : 'Niezadowolenie po zignorowanej kuszącej ofercie transferowej',
+        date
+      );
+      return {
+        ...adjusted,
+        lastTemptingOfferConflictDate: dateKey,
+        transferListDemandUntil: strongConflict
+          ? adjusted.transferListDemandUntil ?? deadlineKey
+          : adjusted.transferListDemandUntil,
+        isUntouchable: strongConflict ? false : adjusted.isUntouchable,
+      };
+    };
+
+    if (reserves.some(reservePlayer => reservePlayer.id === withMorale.id)) {
+      setReserves(prev => prev.map(applyConflictToPlayer));
+    } else {
+      setPlayers(prev => ({
+        ...prev,
+        [userTeamId]: (prev[userTeamId] || []).map(applyConflictToPlayer),
+      }));
+    }
     prependUniqueMessages([mail]);
   }
 
@@ -17759,11 +17831,7 @@ const finalResult: SimulationOutput = {
 
     const selectedOffer = incomingOffers.find(o => o.id === offerId);
     if (selectedOffer?.kind === 'LOAN') {
-      let loanPlayer: Player | undefined;
-      for (const cId in players) {
-        loanPlayer = players[cId].find(p => p.id === selectedOffer.playerId);
-        if (loanPlayer) break;
-      }
+      const { player: loanPlayer } = findIncomingPlayerInUserClub(selectedOffer.playerId);
       const buyerClub = clubs.find(c => c.id === selectedOffer.buyerClubId);
       const sellerClub = clubs.find(c => c.id === userTeamId);
       if (!loanPlayer || !buyerClub || !sellerClub) return;
@@ -18016,11 +18084,7 @@ const finalResult: SimulationOutput = {
         return;
       }
 
-      let loanPlayer: Player | undefined;
-      for (const cId in players) {
-        loanPlayer = players[cId].find(p => p.id === offer.playerId);
-        if (loanPlayer) break;
-      }
+      const { player: loanPlayer } = findIncomingPlayerInUserClub(offer.playerId);
       const buyerClub = clubs.find(c => c.id === offer.buyerClubId);
       const sellerClub = clubs.find(c => c.id === userTeamId);
       if (!loanPlayer || !buyerClub || !sellerClub) return;

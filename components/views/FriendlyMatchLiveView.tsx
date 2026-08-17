@@ -7,7 +7,7 @@ import {
   Lineup,
   PlayerPerformance,
   MatchEvent,
-  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack
+  InstructionTempo, InstructionMindset, InstructionIntensity, InstructionPassing, InstructionPressing, InstructionCounterAttack, InstructionMarking
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 
@@ -3561,6 +3561,39 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
               options: [
                 { val: 'NORMAL' as InstructionCounterAttack, label: 'Nie' },
                 { val: 'COUNTER' as InstructionCounterAttack, label: 'Tak' },
+              ],
+            })}
+          </div>
+        );
+      })()}
+      {(() => {
+        const cd = matchState.userInstructions.markingCooldown ?? -1;
+        const locked = cd > 0 && matchState.minute < cd;
+        const cur = matchState.userInstructions.marking ?? 'NONE';
+        const pick = (val: InstructionMarking) => setMatchState(s => {
+          if (!s) return s;
+          const c = s.userInstructions.markingCooldown ?? -1;
+          if (c > 0 && s.minute < c) return s;
+          if ((s.userInstructions.marking ?? 'NONE') === val) return s;
+          const rf = val === 'NONE' ? 1.0 : parseFloat((0.6 + Math.random() * 0.8).toFixed(2));
+          const cooldown = s.minute + 5 + Math.floor(Math.random() * 6);
+          return { ...s, userInstructions: { ...s.userInstructions, marking: val, markingCooldown: cooldown, markingResponseFactor: rf } };
+        });
+        return (
+          <div className={`relative flex flex-col items-center gap-0.5 px-0 py-1 transition-opacity ${locked ? 'opacity-40 pointer-events-none' : ''}`}>
+            <span className="text-[8px] text-yellow-500 font-black italic uppercase tracking-tighter">
+              Krycie
+            </span>
+            {renderTacticalSelect({
+              value: cur,
+              locked,
+              accent: '#a78bfa',
+              width: '102px',
+              onPick: pick,
+              options: [
+                { val: 'ZONE' as InstructionMarking, label: 'Strefa' },
+                { val: 'MAN' as InstructionMarking, label: '1-1' },
+                { val: 'NONE' as InstructionMarking, label: 'Brak instrukcji' },
               ],
             })}
           </div>

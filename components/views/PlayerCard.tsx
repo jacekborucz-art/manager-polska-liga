@@ -258,6 +258,7 @@ export const PlayerCard: React.FC = () => {
   if (!data) return null;
  const isMatchContext = previousViewState === ViewState.MATCH_LIVE || previousViewState === ViewState.MATCH_LIVE_CUP;
   const { player, club, isReserve } = data;
+  const isUserOwnedPlayer = player.clubId === userTeamId || (isReserve && reserves.some(reservePlayer => reservePlayer.id === player.id));
   const countrySource = player.nationalityCountry || REGION_NATIONALITY_LABEL[player.nationality] || player.nationality;
   const countryName = formatCountryName(countrySource);
   const countryNameDisplay = countryName.toLocaleUpperCase('pl-PL');
@@ -685,7 +686,7 @@ export const PlayerCard: React.FC = () => {
                     <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">Morale zawodnika</span>
                     <span className={`text-xs font-black italic uppercase tracking-tighter ${moraleInfo.colorClass}`}>{moraleInfo.label}</span>
                   </div>
-                  {player.clubId === userTeamId && !isMatchContext && (
+                  {isUserOwnedPlayer && !isMatchContext && (
                     <button
                       onClick={() => { setIsTalkPanelOpen(true); setTalkResult(null); }}
                       disabled={!canTalk}
@@ -783,7 +784,7 @@ export const PlayerCard: React.FC = () => {
                 </div>
               </div>
 
-              {player.clubId === userTeamId && (
+              {isUserOwnedPlayer && (
               <div className="p-3 bg-black/25 rounded-[20px] border border-white/5">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <span className="text-[8px] font-black italic uppercase tracking-tighter text-slate-400">Mindset zawodnika</span>
@@ -1240,7 +1241,7 @@ export const PlayerCard: React.FC = () => {
               </div>
             )}
 
-            {player.clubId === userTeamId && !isMatchContext && (
+            {isUserOwnedPlayer && !isMatchContext && (
               <div
                 className="bg-slate-900/70 border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/70 rounded-[16px] p-3 mt-1 drop-shadow-lg"
                 style={button3DStyle}
@@ -1330,7 +1331,7 @@ export const PlayerCard: React.FC = () => {
               </div>
             )}
 
-            {player.clubId === userTeamId && !isMatchContext && (
+            {isUserOwnedPlayer && !isMatchContext && (
               <div className="mt-1">
                 {showPricePanel && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowPricePanel(false)}>
