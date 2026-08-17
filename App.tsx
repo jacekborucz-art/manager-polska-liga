@@ -90,6 +90,7 @@ import { ELQFDrawView } from './components/views/ELQFDrawView';
 import { ELSFDrawView } from './components/views/ELSFDrawView';
 import { ELFinalDrawView } from './components/views/ELFinalDrawView';
 import { GameNotification } from './components/ui/GameNotification';
+import { ManagerContractNegotiationModal } from './components/modals/ManagerContractNegotiationModal';
 import winnerPolishImg from './Graphic/cup/winnerpolish.png';
 import awansEkstImg from './Graphic/cup/awans-do-ekst.png';
 import awans1LigiImg from './Graphic/cup/awans-do-1ligi.png';
@@ -549,6 +550,7 @@ case ViewState.CL_GROUP_DRAW:
       <LiveMatchCrowdAudio />
       <PreMatchPressConferenceGate />
       <GameNotification />
+      <ManagerContractNegotiationModal />
       <SeasonCelebrationOverlay />
     </>
   );

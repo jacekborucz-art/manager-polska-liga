@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useProcessing } from '../components/ui/ProcessingOverlay';
 import {
   ViewState, Club, League, Player, PlayerLoanInfo, LoanOfferDuration, Lineup, Fixture, FinanceLog,
-  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, ManagerJobOffer, ManagerJobApplicationResult, MatchLiveState,
+  SeasonTemplate, LeagueSchedule, PlayerNextEvent, EventKind, MatchSummary, LeagueRoundResults, ManagerProfile, ManagerEmploymentStatus, ManagerJobOffer, ManagerJobApplicationResult, ManagerContract, ManagerContractNegotiation, ManagerContractNegotiationResult, ManagerContractDurationYears, MatchLiveState,
   MailMessage, MatchStatus, MailType, CompetitionType,
 Coach, TrainingIntensity, IndividualTalkType,
 PendingNegotiation, NegotiationStatus, PendingFriendlyRequest, FriendlyMatchConditions,
@@ -114,6 +114,7 @@ import { UserFirstTeamMinimumService } from '../services/UserFirstTeamMinimumSer
 import { ClubReputationService } from '../services/ClubReputationService';
 import type { EuropeanClubTrophy } from '../services/ClubReputationService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
+import { ManagerContractService } from '../services/ManagerContractService';
 import { ManagedReserveTeamService } from '../services/ManagedReserveTeamService';
 import { ReserveTeamFinanceService } from '../services/ReserveTeamFinanceService';
 import { PlayerReputationGrowthService } from '../services/PlayerReputationGrowthService';
@@ -1057,6 +1058,8 @@ interface GameContextType {
   isJumping: boolean;
   managerProfile: ManagerProfile | null;
   managerJobOffers: ManagerJobOffer[];
+  activeManagerContract: ManagerContract | null;
+  managerContractNegotiation: ManagerContractNegotiation | null;
   seasonNumber: number;
   activeMatchState: MatchLiveState | null;
   messages: MailMessage[];
@@ -1108,6 +1111,10 @@ interface GameContextType {
   importEditorFullPack: (data: unknown, options?: ImportEditorFullPackOptions) => { success: boolean; message: string };
   saveManagerProfile: (profile: ManagerProfile) => void;
   selectUserTeam: (clubId: string) => void;
+  beginInitialManagerContractNegotiation: (clubId: string) => ManagerContractNegotiationResult;
+  submitManagerContractProposal: (targetId: string, durationYears: ManagerContractDurationYears) => ManagerContractNegotiationResult;
+  signAgreedManagerContract: () => ManagerContractNegotiationResult;
+  closeManagerContractNegotiation: () => void;
   advanceDay: () => void;
   jumpToDate: (date: Date) => void;
   jumpToNextEvent: () => void;
@@ -1540,6 +1547,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roundResults, setRoundResults] = useState<Record<string, LeagueRoundResults>>({});
   const [managerProfile, setManagerProfile] = useState<ManagerProfile | null>(null);
   const [managerJobOffers, setManagerJobOffers] = useState<ManagerJobOffer[]>([]);
+  const [activeManagerContract, setActiveManagerContract] = useState<ManagerContract | null>(null);
+  const [managerContractNegotiation, setManagerContractNegotiation] = useState<ManagerContractNegotiation | null>(null);
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
   const [pendingMatchKits, setPendingMatchKits] = useState<{ fixtureId: string; kits: KitSelection } | null>(null);
@@ -2470,6 +2479,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setUserTeamId(null);
     setManagerProfile(options?.preserveManagerProfile ?? null);
     setManagerJobOffers([]);
+    setActiveManagerContract(null);
+    setManagerContractNegotiation(null);
     setLineups({});
     setLegacyReserves([]);
     setReserveReleaseDirective(null);
@@ -3772,6 +3783,8 @@ if (userTeamId) {
     roundResults,
     managerProfile,
     managerJobOffers,
+    activeManagerContract,
+    managerContractNegotiation,
     seasonNumber,
     messages: SaveArchiveService.archiveMessagesBefore(messages, saveArchiveCutoffDate),
     mediaRelationships,
@@ -4168,8 +4181,69 @@ if (userTeamId) {
     setRoundResults(data.roundResults);
     setManagerProfile(data.managerProfile);
     setManagerJobOffers(data.managerJobOffers ?? []);
+    const loadedEmploymentStatus = data.managerEmploymentStatus ?? (data.isResigned ? 'RESIGNED' : 'EMPLOYED');
+    const loadedUserClub = loadedEmergencyGoalkeeperResult.updatedClubs.find(club => club.id === data.userTeamId);
+    const loadedManagerContractIsComplete = Boolean(
+      data.activeManagerContract?.clubId &&
+      data.activeManagerContract?.terms?.startDate &&
+      data.activeManagerContract?.terms?.endDate &&
+      (data.activeManagerContract?.terms?.annualSalary ?? 0) > 0 &&
+      data.activeManagerContract?.terms?.target?.id &&
+      data.activeManagerContract?.terms?.target?.label &&
+      data.activeManagerContract?.terms?.salaryModelVersion === ManagerContractService.SALARY_MODEL_VERSION
+    );
+    const legacyContractStartDate = new Date(loadedSeasonStartYear, 6, 1, 12, 0, 0, 0);
+    const migratedManagerContract: ManagerContract | null = loadedManagerContractIsComplete
+      ? data.activeManagerContract!
+      : (
+      loadedEmploymentStatus === 'EMPLOYED' &&
+      loadedUserClub &&
+      data.userTeamId !== UNEMPLOYED_MANAGER_CLUB_ID
+        ? ManagerContractService.createLegacyContract(
+            loadedUserClub,
+            loadedEmergencyGoalkeeperResult.updatedClubs,
+            data.managerProfile,
+            legacyContractStartDate
+          )
+        : null
+      );
+    const didMigrateManagerContract = !loadedManagerContractIsComplete && migratedManagerContract !== null;
+    const migratedContractMail: MailMessage | null = didMigrateManagerContract && loadedUserClub
+      ? {
+          id: `MANAGER_CONTRACT_MIGRATED_${loadedUserClub.id}_${loadedSeasonStartYear}`,
+          sender: `Zarząd ${loadedUserClub.name}`,
+          role: 'Zarząd klubu',
+          subject: 'Potwierdzenie warunków kontraktu',
+          body: `Szanowny Panie,\n\nW dokumentacji klubowej uzupełniono warunki obowiązującego kontraktu trenera pierwszego zespołu.\n\nUzgodniony cel sportowy: ${migratedManagerContract.terms.target.label}.\n${migratedManagerContract.terms.target.description}\n\nUmowa obowiązuje od ${new Date(migratedManagerContract.terms.startDate).toLocaleDateString('pl-PL')} do ${new Date(migratedManagerContract.terms.endDate).toLocaleDateString('pl-PL')}.\nWynagrodzenie roczne wynosi ${migratedManagerContract.terms.annualSalary.toLocaleString('pl-PL')} PLN.\n\nOd tej chwili ocena pracy sztabu będzie prowadzona względem powyższego celu.\n\nZ poważaniem,\nZarząd Klubu ${loadedUserClub.name}`,
+          date: new Date(loadedDate),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 96,
+        }
+      : null;
+    const messagesWithMigratedContract = migratedContractMail && !loadedMessages.some(message => message.id === migratedContractMail.id)
+      ? [migratedContractMail, ...loadedMessages]
+      : loadedMessages;
+    const loadedManagerContractNegotiation = data.managerContractNegotiation ?? null;
+    const loadedNegotiationClub = loadedManagerContractNegotiation
+      ? loadedEmergencyGoalkeeperResult.updatedClubs.find(club => club.id === loadedManagerContractNegotiation.clubId)
+      : null;
+    const migratedManagerContractNegotiation = loadedManagerContractNegotiation &&
+      loadedManagerContractNegotiation.clubTerms.salaryModelVersion !== ManagerContractService.SALARY_MODEL_VERSION &&
+      loadedNegotiationClub
+        ? ManagerContractService.createNegotiation(
+            loadedNegotiationClub,
+            loadedEmergencyGoalkeeperResult.updatedClubs,
+            data.managerProfile,
+            new Date(loadedDate),
+            loadedManagerContractNegotiation.source,
+            loadedManagerContractNegotiation.jobOfferId
+          )
+        : loadedManagerContractNegotiation;
+    setActiveManagerContract(migratedManagerContract);
+    setManagerContractNegotiation(migratedManagerContractNegotiation);
     setSeasonNumber(data.seasonNumber);
-    setMessages(loadedMessages);
+    setMessages(messagesWithMigratedContract);
     setMediaRelationships(data.mediaRelationships ?? {});
     setSentUnfriendlyPressMonths(data.sentUnfriendlyPressMonths ?? []);
     setSentFriendlyPressMonths(data.sentFriendlyPressMonths ?? []);
@@ -4217,7 +4291,7 @@ if (userTeamId) {
     setProcessedDrawIds(data.processedDrawIds);
     setGlobalFixtures(data.globalFixtures);
     setIsResigned(data.isResigned);
-    setManagerEmploymentStatus(data.managerEmploymentStatus ?? (data.isResigned ? 'RESIGNED' : 'EMPLOYED'));
+    setManagerEmploymentStatus(loadedEmploymentStatus);
     setCurrentPolishChampionId(data.currentPolishChampionId);
     setCurrentPolishViceChampionId(data.currentPolishViceChampionId ?? null);
     setCurrentPolishCupWinnerId(data.currentPolishCupWinnerId);
@@ -4580,7 +4654,54 @@ if (userTeamId) {
     navigateTo(ViewState.TEAM_SELECTION);
   };
 
-const selectUserTeam = (clubId: string) => {
+  const beginInitialManagerContractNegotiation = (clubId: string): ManagerContractNegotiationResult => {
+    const club = clubs.find(candidate => candidate.id === clubId);
+    if (!club || !ReserveTeamLeagueService.canBeSelectedAsUserClub(clubId)) {
+      return { ok: false, status: 'FAILED', message: 'Nie można rozpocząć rozmów z tym klubem.' };
+    }
+    const negotiation = ManagerContractService.createNegotiation(
+      club,
+      clubs,
+      managerProfile,
+      currentDate,
+      'CAREER_START'
+    );
+    setManagerContractNegotiation(negotiation);
+    return { ok: true, status: negotiation.status, message: negotiation.message };
+  };
+
+  const submitManagerContractProposal = (
+    targetId: string,
+    durationYears: ManagerContractDurationYears
+  ): ManagerContractNegotiationResult => {
+    if (!managerContractNegotiation || managerContractNegotiation.status !== 'NEGOTIATING') {
+      return { ok: false, status: managerContractNegotiation?.status ?? 'FAILED', message: 'Brak aktywnych negocjacji.' };
+    }
+    const club = clubs.find(candidate => candidate.id === managerContractNegotiation.clubId);
+    if (!club) return { ok: false, status: 'FAILED', message: 'Nie znaleziono klubu prowadzącego rozmowy.' };
+
+    const updated = ManagerContractService.negotiate(
+      managerContractNegotiation,
+      club,
+      clubs,
+      managerProfile,
+      targetId,
+      durationYears
+    );
+    setManagerContractNegotiation(updated);
+    if (updated.source === 'RENEWAL' && updated.status === 'FAILED') {
+      setActiveManagerContract(previous => previous ? { ...previous, renewalDecision: 'NEGOTIATIONS_FAILED' } : previous);
+    }
+    if (updated.source === 'JOB_MARKET' && updated.status === 'FAILED' && updated.jobOfferId) {
+      setManagerJobOffers(previous => previous.map(offer => offer.id === updated.jobOfferId
+        ? { ...offer, status: 'REJECTED', response: 'Nie osiągnięto porozumienia w sprawie kontraktu.' }
+        : offer
+      ));
+    }
+    return { ok: updated.status !== 'FAILED', status: updated.status, message: updated.message };
+  };
+
+const selectUserTeam = (clubId: string, signedContract?: ManagerContract) => {
     const club = clubs.find(c => c.id === clubId);
     if (!club) {
       showGameNotification({
@@ -4609,6 +4730,7 @@ const selectUserTeam = (clubId: string) => {
     setUserTeamId(clubId);
     setIsResigned(false);
     setManagerEmploymentStatus('EMPLOYED');
+    if (signedContract) setActiveManagerContract(signedContract);
     const squad = getOrGenerateSquad(clubId);
     const sportingDirector = club.sportingDirector ?? SportingDirectorService.generateForClub(club);
     if (club.coachId) {
@@ -4721,7 +4843,7 @@ const selectUserTeam = (clubId: string) => {
     });
     setLineups(prev => ({ ...prev, ...otherLineups }));
 
-   const welcomeMail = MailService.generateWelcomeMail(selectedClub, squad, currentDate);
+   const welcomeMail = MailService.generateWelcomeMail(selectedClub, squad, currentDate, signedContract ?? activeManagerContract);
 const fanMail = MailService.generateFanWelcomeMail(selectedClub, squad, currentDate); // Tę funkcję zaraz dopiszemy
 const friendlyPlanningReminder = buildFriendlyPlanningReminder(selectedClub, currentDate, allFixtures);
 const shouldSendFriendlyPlanningReminder = !!friendlyPlanningReminder && !sentMailIdsRef.current.has(friendlyPlanningReminder.id);
@@ -4746,6 +4868,62 @@ setMessages(prev => [
 ]);
 
     navigateTo(isTakingNewJob ? ViewState.DASHBOARD : ViewState.SQUAD_IMPORT);
+  };
+
+  const signAgreedManagerContract = (): ManagerContractNegotiationResult => {
+    if (!managerContractNegotiation) {
+      return { ok: false, status: 'FAILED', message: 'Brak uzgodnionego kontraktu.' };
+    }
+    const signedContract = ManagerContractService.createSignedContract(managerContractNegotiation, currentDate);
+    if (!signedContract) {
+      return { ok: false, status: managerContractNegotiation.status, message: 'Warunki nie zostały jeszcze uzgodnione.' };
+    }
+
+    const negotiation = managerContractNegotiation;
+    const club = clubs.find(candidate => candidate.id === negotiation.clubId);
+    if (!club) return { ok: false, status: 'FAILED', message: 'Nie znaleziono klubu dla kontraktu.' };
+
+    setActiveManagerContract(signedContract);
+    setManagerContractNegotiation(null);
+
+    if (negotiation.source === 'RENEWAL') {
+      const renewalMail: MailMessage = {
+        id: `MANAGER_CONTRACT_RENEWED_${club.id}_${currentDate.toISOString().split('T')[0]}`,
+        sender: `Zarząd ${club.name}`,
+        role: 'Zarząd klubu',
+        subject: 'Przedłużenie kontraktu trenera',
+        body: `Szanowny Panie,\n\nZ przyjemnością potwierdzamy podpisanie nowego kontraktu. Umowa obowiązuje do ${new Date(signedContract.terms.endDate).toLocaleDateString('pl-PL')}.\n\nUzgodniony cel: ${signedContract.terms.target.label}.\n${signedContract.terms.target.description}\n\nWynagrodzenie roczne: ${signedContract.terms.annualSalary.toLocaleString('pl-PL')} PLN.\n\nZ poważaniem,\nZarząd Klubu ${club.name}`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 96,
+      };
+      setMessages(previous => [renewalMail, ...previous]);
+      return { ok: true, status: 'AGREED', message: 'Nowy kontrakt został podpisany.' };
+    }
+
+    if (negotiation.jobOfferId) {
+      setManagerJobOffers(previous => previous.map(offer => {
+        if (offer.id === negotiation.jobOfferId) return { ...offer, status: 'ACCEPTED', response: 'Kontrakt podpisany.' };
+        if (offer.status === 'OFFERED' || offer.status === 'APPLIED') return { ...offer, status: 'EXPIRED' };
+        return offer;
+      }));
+    }
+    selectUserTeam(club.id, signedContract);
+    return { ok: true, status: 'AGREED', message: `Podpisałeś kontrakt z ${club.name}.` };
+  };
+
+  const closeManagerContractNegotiation = () => {
+    if (managerContractNegotiation?.source === 'RENEWAL' && managerContractNegotiation.status !== 'AGREED') {
+      setActiveManagerContract(previous => previous ? { ...previous, renewalDecision: 'DECLINED_BY_MANAGER' } : previous);
+    }
+    if (managerContractNegotiation?.source === 'JOB_MARKET' && managerContractNegotiation.status !== 'AGREED' && managerContractNegotiation.jobOfferId) {
+      setManagerJobOffers(previous => previous.map(offer => offer.id === managerContractNegotiation.jobOfferId
+        ? { ...offer, status: 'REJECTED', response: 'Trener zakończył rozmowy kontraktowe.' }
+        : offer
+      ));
+    }
+    setManagerContractNegotiation(null);
   };
 
   const calculateManagerFiringExpPenalty = (profile: ManagerProfile | null, club: Club): number => {
@@ -4814,6 +4992,7 @@ setMessages(prev => [
       requiredExp: evaluation.requiredExp,
       chance: evaluation.chance,
       reason: customReason ?? evaluation.reason,
+      proposedContractTerms: ManagerContractService.createTerms(club, clubs, managerProfile, date),
     };
   };
 
@@ -4822,7 +5001,7 @@ setMessages(prev => [
     sender: `Zarząd ${club.name}`,
     role: 'Oferta pracy',
     subject: `Propozycja pracy: ${club.name}`,
-    body: `Zarząd klubu ${club.name} zaprasza Pana do objęcia funkcji pierwszego trenera.\n\nPowód: ${offer.reason}.\nWymagane doświadczenie: ${offer.requiredExp} EXP.\nPańskie szanse w tej rekrutacji oceniono na ${offer.chance}%.\n\nOferta jest ważna do ${new Date(offer.expiresAt).toLocaleDateString('pl-PL')}. Można ją przyjąć z poziomu tej wiadomości albo rynku pracy.`,
+    body: `Zarząd klubu ${club.name} zaprasza Pana do objęcia funkcji pierwszego trenera.\n\nPowód: ${offer.reason}.\n\nWstępny cel sportowy: ${offer.proposedContractTerms?.target.label ?? 'do uzgodnienia'}.\n${offer.proposedContractTerms?.target.description ?? 'Szczegółowy cel zostanie przedstawiony podczas negocjacji.'}\n\nWstępne wynagrodzenie: ${offer.proposedContractTerms?.annualSalary.toLocaleString('pl-PL') ?? 'do uzgodnienia'} PLN rocznie.\nDługość proponowanej umowy: ${offer.proposedContractTerms?.durationYears ?? 2} lata.\n\nOferta jest ważna do ${new Date(offer.expiresAt).toLocaleDateString('pl-PL')}. Po jej przyjęciu rozpoczną się właściwe negocjacje kontraktowe.`,
     date,
     isRead: false,
     type: MailType.BOARD,
@@ -4901,13 +5080,17 @@ setMessages(prev => [
     const club = clubs.find(item => item.id === offer.clubId);
     if (!club) return { ok: false, message: 'Nie znaleziono klubu dla tej oferty.' };
 
-    setManagerJobOffers(prev => prev.map(item => {
-      if (item.id === offerId) return { ...item, status: 'ACCEPTED', response: 'Oferta przyjęta.' };
-      if (item.status === 'OFFERED' || item.status === 'APPLIED') return { ...item, status: 'EXPIRED' };
-      return item;
-    }));
-    selectUserTeam(club.id);
-    return { ok: true, offer: { ...offer, status: 'ACCEPTED' }, message: `Podpisałeś kontrakt z ${club.name}.` };
+    const negotiation = ManagerContractService.createNegotiation(
+      club,
+      clubs,
+      managerProfile,
+      currentDate,
+      'JOB_MARKET',
+      offer.id,
+      offer.proposedContractTerms
+    );
+    setManagerContractNegotiation(negotiation);
+    return { ok: true, offer, message: `Rozpoczęto rozmowy kontraktowe z ${club.name}.` };
   };
 
   const assignReplacementCoachToClub = (
@@ -4948,6 +5131,8 @@ setMessages(prev => [
     setManagerEmploymentStatus('RESIGNED');
     setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
     setIncomingOffers([]);
+    setActiveManagerContract(null);
+    setManagerContractNegotiation(null);
   };
 
   const updateLineup = (clubId: string, lineup: Lineup) => {
@@ -11108,9 +11293,14 @@ Asystent`,
         const squad = postReviewPlayers[club.id] || [];
         const totalSalaries = FinanceService.calculateTotalSalaries(squad);
         
-        // Obliczanie wynagrodzenia trenera (1-3 * 2.5% budżetu rocznie)
-        const trainerSalaryFactor = (1 + Math.random() * 2) * 0.025; // 2.5% - 7.5%
-        const trainerSalary = Math.floor(club.budget * trainerSalaryFactor);
+        // Kontrakt gracza jest jedynym źródłem jego rocznego wynagrodzenia.
+        // Dla trenerów AI zachowujemy ich zapisaną pensję, a stary losowy koszt
+        // pozostaje wyłącznie awaryjną migracją dla dawnych zapisów gry.
+        const aiCoachSalary = club.coachId ? updatedCoachesJuly[club.coachId]?.annualSalary : undefined;
+        const legacyTrainerSalary = Math.floor(club.budget * ((1 + Math.random() * 2) * 0.025));
+        const trainerSalary = club.id === userTeamId && activeManagerContract?.clubId === club.id
+          ? activeManagerContract.terms.annualSalary
+          : Math.max(0, aiCoachSalary ?? legacyTrainerSalary);
         
         const totalCost = totalSalaries + trainerSalary;
         const newBudget = club.budget - totalCost;
@@ -11932,7 +12122,7 @@ const finalResult: SimulationOutput = {
         .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
       
       // Zastosowanie recoveredPlayers zapewnia świeże dane w mailach
-      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber, MatchHistoryService.getAll());
+      const newMails = MailService.generateDailyMails(dateToProcess, userClub, finalResult.updatedPlayers, finalResult.updatedClubs, userRank, confidence, recentFixture, nextFixture, messages, postLoanLineups[userTeamId], allFixtures, managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : undefined, managerProfile?.expPoints, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, seasonNumber, MatchHistoryService.getAll(), activeManagerContract?.clubId === userClub.id ? activeManagerContract.terms.target.leagueMaxRank : undefined);
       if (newMails.length > 0) {
         prependUniqueMessages(newMails);
         const sentUnfriendlyPressMonthKeys = newMails
@@ -12548,7 +12738,16 @@ const finalResult: SimulationOutput = {
           const leagueClubs = updatedClubsList.filter(club => club.leagueId === userClub.leagueId);
           const sorted = [...leagueClubs].sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference || b.stats.goalsFor - a.stats.goalsFor);
           const rank = sorted.findIndex(club => club.id === userClub.id) + 1;
-          const pressure = CoachService.getPerformancePressure(userClub, rank, managerProfile?.expPoints);
+          const contractPerformance = activeManagerContract?.clubId === userClub.id
+            ? ManagerContractService.evaluateContractPerformance(activeManagerContract, userClub, updatedClubsList, allFixtures)
+            : null;
+          const cupFailureRankPenalty = contractPerformance && activeManagerContract?.terms.target.requiresPolishCup && contractPerformance.cupState === 'OUT' ? 3 : 0;
+          const pressure = CoachService.getPerformancePressure(
+            userClub,
+            rank + cupFailureRankPenalty,
+            managerProfile?.expPoints,
+            activeManagerContract?.clubId === userClub.id ? activeManagerContract.terms.target.leagueMaxRank : undefined
+          );
 
           if (pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
             const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
@@ -12571,6 +12770,8 @@ const finalResult: SimulationOutput = {
             setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
             setIncomingOffers([]);
             setActiveTrainingId(null);
+            setActiveManagerContract(null);
+            setManagerContractNegotiation(null);
             showGameNotification({
               title: 'Zwolnienie z klubu',
               message: createManagerFiringMessage(userClub, nextDay),
@@ -19458,6 +19659,8 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
       setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
       setIncomingOffers([]);
       setActiveTrainingId(null);
+      setActiveManagerContract(null);
+      setManagerContractNegotiation(null);
       showGameNotification({
         title: 'Zwolnienie z klubu',
         message: createManagerFiringMessage(userClub, currentDate),
@@ -19973,14 +20176,115 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
     }
   }, [currentDate, userTeamId, leagueSchedules, seasonTemplate, clubs, allFixtures]);
 
+  useEffect(() => {
+    if (!activeManagerContract || activeManagerContract.status !== 'ACTIVE') return;
+    if (managerEmploymentStatus !== 'EMPLOYED' || userTeamId !== activeManagerContract.clubId) return;
+
+    const club = clubs.find(candidate => candidate.id === activeManagerContract.clubId);
+    if (!club) return;
+    const daysLeft = ManagerContractService.daysUntilContractEnd(activeManagerContract, currentDate);
+    const dateKey = currentDate.toISOString().split('T')[0];
+
+    if (daysLeft <= 0) {
+      const expiryMail: MailMessage = {
+        id: `MANAGER_CONTRACT_EXPIRED_${club.id}_${dateKey}`,
+        sender: `Zarząd ${club.name}`,
+        role: 'Zarząd klubu',
+        subject: 'Zakończenie obowiązywania kontraktu',
+        body: `Szanowny Panie,\n\nZ dniem ${currentDate.toLocaleDateString('pl-PL')} wygasł kontrakt dotyczący pełnienia funkcji trenera pierwszego zespołu. Ponieważ nie uzgodniono warunków dalszej współpracy, umowa nie zostanie przedłużona.\n\nDziękujemy za dotychczasową pracę i życzymy powodzenia w dalszej karierze.\n\nZ poważaniem,\nZarząd Klubu ${club.name}`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 97,
+      };
+      setMessages(previous => previous.some(message => message.id === expiryMail.id) ? previous : [expiryMail, ...previous]);
+      setManagerProfile(previous => previous ? { ...previous, lastManagedClubId: club.id } : previous);
+      setActiveManagerContract(null);
+      setManagerContractNegotiation(null);
+      setIsResigned(true);
+      setManagerEmploymentStatus('RESIGNED');
+      setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
+      setIncomingOffers([]);
+      setActiveTrainingId(null);
+      showGameNotification({
+        title: 'Kontrakt wygasł',
+        message: `Umowa z ${club.name} dobiegła końca. Nie uzgodniono warunków dalszej współpracy.`,
+        tone: 'warning',
+        display: 'modal',
+      });
+      return;
+    }
+
+    if (managerContractNegotiation || activeManagerContract.renewalDecision) return;
+    const standardWindowDays = Math.round(activeManagerContract.standardRenewalMonths * 30.44);
+    const createRenewalOffer = (early: boolean): void => {
+      const negotiation = ManagerContractService.createNegotiation(
+        club,
+        clubs,
+        managerProfile,
+        currentDate,
+        'RENEWAL'
+      );
+      const renewalMail: MailMessage = {
+        id: `MANAGER_RENEWAL_OFFER_${club.id}_${dateKey}`,
+        sender: `Zarząd ${club.name}`,
+        role: 'Zarząd klubu',
+        subject: early ? 'Wcześniejsza oferta nowego kontraktu' : 'Rozmowy o przedłużeniu kontraktu',
+        body: `Szanowny Panie,\n\nZarząd ${club.name} zaprasza do rozmów dotyczących dalszej współpracy. Nasza propozycja zakłada cel: ${negotiation.clubTerms.target.label}.\n\n${negotiation.clubTerms.target.description}\n\nSzczegółowe warunki finansowe i długość umowy zostaną ustalone przy stole negocjacyjnym.`,
+        date: new Date(currentDate),
+        isRead: false,
+        type: MailType.BOARD,
+        priority: 95,
+      };
+      setActiveManagerContract(previous => previous ? {
+        ...previous,
+        earlyRenewalChecked: previous.earlyRenewalChecked || early,
+        renewalDecision: 'OFFERED',
+      } : previous);
+      setManagerContractNegotiation(negotiation);
+      setMessages(previous => previous.some(message => message.id === renewalMail.id) ? previous : [renewalMail, ...previous]);
+    };
+
+    if (daysLeft <= 245 && daysLeft > standardWindowDays && !activeManagerContract.earlyRenewalChecked) {
+      const offerEarly = ManagerContractService.shouldOfferRenewal(activeManagerContract, club, clubs, allFixtures, true);
+      if (offerEarly) {
+        createRenewalOffer(true);
+      } else {
+        setActiveManagerContract(previous => previous ? { ...previous, earlyRenewalChecked: true } : previous);
+      }
+      return;
+    }
+
+    if (daysLeft <= standardWindowDays) {
+      const offerRenewal = ManagerContractService.shouldOfferRenewal(activeManagerContract, club, clubs, allFixtures, false);
+      if (offerRenewal) {
+        createRenewalOffer(false);
+      } else {
+        const refusalMail: MailMessage = {
+          id: `MANAGER_RENEWAL_REFUSED_${club.id}_${dateKey}`,
+          sender: `Zarząd ${club.name}`,
+          role: 'Zarząd klubu',
+          subject: 'Decyzja w sprawie kontraktu',
+          body: `Szanowny Panie,\n\nPo analizie realizacji celów sportowych Zarząd ${club.name} zdecydował, że nie rozpocznie rozmów o przedłużeniu obecnej umowy. Kontrakt pozostaje ważny do ${new Date(activeManagerContract.terms.endDate).toLocaleDateString('pl-PL')}.\n\nZ poważaniem,\nZarząd Klubu ${club.name}`,
+          date: new Date(currentDate),
+          isRead: false,
+          type: MailType.BOARD,
+          priority: 94,
+        };
+        setActiveManagerContract(previous => previous ? { ...previous, renewalDecision: 'DECLINED_BY_CLUB' } : previous);
+        setMessages(previous => previous.some(message => message.id === refusalMail.id) ? previous : [refusalMail, ...previous]);
+      }
+    }
+  }, [activeManagerContract, allFixtures, clubs, currentDate, managerContractNegotiation, managerEmploymentStatus, managerProfile, showGameNotification, userTeamId]);
+
   return (
     <GameContext.Provider value={{
       currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, staffMembers, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, nextEvent,
     viewedClubId, viewedPlayerId, viewedCoachId, viewedRefereeId, previousViewState, lastMatchSummary, roundResults, isJumping: targetJumpTime !== null,
       lastRecoveryDate,
-      managerProfile, managerJobOffers, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
+      managerProfile, managerJobOffers, activeManagerContract, managerContractNegotiation, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
-      startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, advanceDay: advanceDayWithProcessing, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
+      startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, beginInitialManagerContractNegotiation, submitManagerContractProposal, signAgreedManagerContract, closeManagerContractNegotiation, advanceDay: advanceDayWithProcessing, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
       setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports, aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter,

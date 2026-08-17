@@ -1,6 +1,7 @@
 ﻿import { Club, Player, MailMessage, MailType, Fixture, MatchStatus, HealthStatus, InjurySeverity, RetirementInfo, Lineup, WCQPlayoffMatchResult, WCQPlayoffState } from '../types';
 import { MAIL_TEMPLATES, MailTemplate } from '../data/mail_templates_pl';
 import { Newspaper } from '../types';
+import type { ManagerContract } from '../types';
 import type { MatchHistoryEntry } from '../types';
 import { FinanceService } from './FinanceService';
 import { RivalryService } from './RivalryService';
@@ -350,7 +351,7 @@ export const MailService = {
   /**
    * Generuje wiadomość powitalną od zarządu na start kariery.
    */
-  generateWelcomeMail: (userClub: Club, squad: Player[], gameDate?: Date): MailMessage => {
+  generateWelcomeMail: (userClub: Club, squad: Player[], gameDate?: Date, managerContract?: ManagerContract | null): MailMessage => {
     const topPlayers = [...squad].sort((a, b) => b.overallRating - a.overallRating).slice(0, 15);
     const avgSquadOvr = topPlayers.reduce((acc, p) => acc + p.overallRating, 0) / topPlayers.length;
 
@@ -392,12 +393,35 @@ export const MailService = {
     const subject = template.subject
       .replace(/\{CLUB\}/g, userClub.name)
       .replace(/\{TARGET_LEAGUE\}/g, targetLeagueName);
-    const body = template.body
+    let body = template.body
       .replace(/\{CLUB\}/g, userClub.name)
       .replace(/\{TARGET_LEAGUE\}/g, targetLeagueName)
       .replace(/\{TRANSFER_BUDGET\}/g, userClub.transferBudget.toLocaleString('pl-PL'))
       .replace(/\{BOARD_SIGNATORY_NAME\}/g, signatory.name)
       .replace(/\{BOARD_SIGNATORY_ROLE\}/g, signatory.role);
+
+    if (managerContract?.clubId === userClub.id) {
+      const terms = managerContract.terms;
+      body = [
+        'Szanowny Panie Trenerze,',
+        '',
+        `W imieniu Zarządu ${userClub.name} witamy Pana w klubie i potwierdzamy warunki podpisanego kontraktu.`,
+        '',
+        `Uzgodniony cel sportowy: ${terms.target.label}.`,
+        terms.target.description,
+        '',
+        `Umowa obowiązuje do ${new Date(terms.endDate).toLocaleDateString('pl-PL')}.`,
+        `Wynagrodzenie roczne wynosi ${terms.annualSalary.toLocaleString('pl-PL')} PLN.`,
+        '',
+        `Budżet transferowy na obecny sezon wynosi ${userClub.transferBudget.toLocaleString('pl-PL')} PLN.`,
+        '',
+        'Ocena pracy sztabu będzie prowadzona względem uzgodnionego celu, aktualnych wyników oraz sytuacji sportowej drużyny.',
+        '',
+        'Z poważaniem,',
+        signatory.name,
+        `${signatory.role}, ${userClub.name}`,
+      ].join('\n');
+    }
     
     return {
       id: `WELCOME_MAIL_${Date.now()}`,
@@ -1005,7 +1029,8 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     sentUnfriendlyPressMonths: string[] = [],
     sentFriendlyPressMonths: string[] = [],
     seasonNumber = 1,
-    matchHistory: MatchHistoryEntry[] = []
+    matchHistory: MatchHistoryEntry[] = [],
+    managerExpectedRank?: number
   ): MailMessage[] => {
     const newMails: MailMessage[] = [];
     const played = userClub.stats.played;
@@ -1507,7 +1532,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure) {
       const board = userClub.board;
       if (board) {
-        const pressure = CoachService.getPerformancePressure(userClub, rank, managerExpPoints);
+        const pressure = CoachService.getPerformancePressure(userClub, rank, managerExpPoints, managerExpectedRank);
         const gap = pressure.gap;
 
         if ((pressure.finalChance > 0 || pressure.earlyReviewAllowed) && gap > 0) {

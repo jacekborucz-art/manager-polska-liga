@@ -553,7 +553,7 @@ export const SquadView: React.FC = () => {
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
           toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails, setMessages,
-          managedReserveClubId } = useGame();
+          managedReserveClubId, activeManagerContract } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -3272,6 +3272,25 @@ export const SquadView: React.FC = () => {
         const managerFlagUrl = managerCountryCode ? `https://flagcdn.com/w160/${managerCountryCode}.png` : null;
         const managerAccentPrimary = myClub.colorsHex?.[0] ?? '#eab308';
         const managerAccentSecondary = myClub.colorsHex?.[1] ?? managerAccentPrimary;
+        const managerClubContract = isUserClub && activeManagerContract?.clubId === myClub.id && activeManagerContract.status === 'ACTIVE'
+          ? activeManagerContract
+          : null;
+        const managerContractEndDate = managerClubContract ? new Date(managerClubContract.terms.endDate) : null;
+        const managerContractDaysLeft = managerContractEndDate
+          ? Math.max(0, Math.ceil((managerContractEndDate.getTime() - currentDate.getTime()) / 86_400_000))
+          : 0;
+        const managerContractMonthsLeft = Math.max(0, Math.ceil(managerContractDaysLeft / 30.44));
+        const managerContractYearsPart = Math.floor(managerContractMonthsLeft / 12);
+        const managerContractMonthsPart = managerContractMonthsLeft % 12;
+        const managerContractTimeLabel = managerClubContract
+          ? [
+              managerContractYearsPart > 0 ? `${managerContractYearsPart} ${managerContractYearsPart === 1 ? 'rok' : managerContractYearsPart < 5 ? 'lata' : 'lat'}` : '',
+              managerContractMonthsPart > 0 ? `${managerContractMonthsPart} mies.` : '',
+            ].filter(Boolean).join(' ') || 'mniej niż miesiąc'
+          : 'Brak umowy';
+        const managerContractAnnualValue = managerClubContract
+          ? `${managerClubContract.terms.annualSalary.toLocaleString('pl-PL')} PLN`
+          : '—';
 
         const currentYear = currentDate.getFullYear();
         const seasonStartYear = currentDate.getMonth() >= 6 ? currentYear : currentYear - 1;
@@ -3464,6 +3483,30 @@ export const SquadView: React.FC = () => {
                       )}
                       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: managerAccentSecondary }} />
                       <span className="text-[14px] font-black italic uppercase tracking-tighter text-slate-200">{safeManagerProfile.age} lat</span>
+                    </div>
+                  </div>
+                  <div className="grid w-[218px] shrink-0 gap-2 border-l border-cyan-100/10 pl-5">
+                    <div className="group relative overflow-hidden rounded-[16px] border border-cyan-200/15 bg-[#04111e]/80 px-4 py-3 shadow-[0_10px_25px_rgba(0,0,0,.26)]">
+                      <svg className="absolute -right-2 -top-3 h-16 w-16 opacity-[0.09]" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                        <rect x="10" y="14" width="44" height="40" rx="8" stroke={managerAccentSecondary} strokeWidth="4" />
+                        <path d="M20 9v12M44 9v12M11 27h42" stroke={managerAccentSecondary} strokeWidth="4" strokeLinecap="round" />
+                        <path d="M22 37h8M36 37h7M22 45h8" stroke={managerAccentSecondary} strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                      <div className="relative text-[9px] font-black italic uppercase tracking-tighter" style={{ color: managerAccentSecondary }}>Czas kontraktu</div>
+                      <div className="relative mt-1 truncate text-[17px] font-semibold tracking-normal text-white">{managerContractTimeLabel}</div>
+                      <div className="relative mt-0.5 text-[10px] font-normal tracking-normal text-slate-500">
+                        {managerContractEndDate ? `do ${managerContractEndDate.toLocaleDateString('pl-PL')}` : 'brak aktywnego kontraktu'}
+                      </div>
+                    </div>
+                    <div className="group relative overflow-hidden rounded-[16px] border border-emerald-200/15 bg-[#04151b]/78 px-4 py-3 shadow-[0_10px_25px_rgba(0,0,0,.26)]">
+                      <svg className="absolute -right-2 -top-3 h-16 w-16 opacity-[0.09]" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                        <path d="M12 17h40v34H12z" stroke={managerAccentPrimary} strokeWidth="4" strokeLinejoin="round" />
+                        <path d="M18 25h28M18 33h18M18 41h13" stroke={managerAccentPrimary} strokeWidth="3" strokeLinecap="round" />
+                        <circle cx="46" cy="44" r="10" fill={managerAccentPrimary} fillOpacity="0.45" stroke={managerAccentPrimary} strokeWidth="3" />
+                      </svg>
+                      <div className="relative text-[9px] font-black italic uppercase tracking-tighter" style={{ color: managerAccentPrimary }}>Wartość kontraktu</div>
+                      <div className="relative mt-1 truncate text-[17px] font-semibold tracking-normal text-white">{managerContractAnnualValue}</div>
+                      <div className="relative mt-0.5 text-[10px] font-normal tracking-normal text-slate-500">wynagrodzenie roczne</div>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 border-l border-cyan-100/10 pl-5">

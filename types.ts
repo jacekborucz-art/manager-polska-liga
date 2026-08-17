@@ -3563,6 +3563,73 @@ export interface ManagerProfile {
 
 export type ManagerEmploymentStatus = 'EMPLOYED' | 'RESIGNED' | 'FIRED';
 
+export type ManagerContractTargetType =
+  | 'SURVIVAL'
+  | 'MID_TABLE'
+  | 'TOP_SIX'
+  | 'TOP_THREE'
+  | 'CHAMPION'
+  | 'PROMOTION_PLAYOFFS'
+  | 'PROMOTION'
+  | 'POLISH_CUP'
+  | 'LEAGUE_AND_CUP';
+
+export interface ManagerContractTarget {
+  id: string;
+  type: ManagerContractTargetType;
+  label: string;
+  description: string;
+  ambitionLevel: number;
+  leagueMaxRank: number;
+  requiresPolishCup: boolean;
+}
+
+export type ManagerContractDurationYears = 1 | 2 | 3;
+export type ManagerContractSource = 'CAREER_START' | 'JOB_MARKET' | 'RENEWAL';
+
+export interface ManagerContractTerms {
+  startDate: string;
+  endDate: string;
+  durationYears: ManagerContractDurationYears;
+  annualSalary: number;
+  target: ManagerContractTarget;
+  salaryModelVersion?: number;
+}
+
+export interface ManagerContract {
+  id: string;
+  clubId: string;
+  signedAt: string;
+  source: ManagerContractSource;
+  status: 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
+  terms: ManagerContractTerms;
+  standardRenewalMonths: number;
+  earlyRenewalChecked?: boolean;
+  renewalDecision?: 'OFFERED' | 'DECLINED_BY_CLUB' | 'DECLINED_BY_MANAGER' | 'NEGOTIATIONS_FAILED';
+}
+
+export interface ManagerContractNegotiation {
+  id: string;
+  clubId: string;
+  source: ManagerContractSource;
+  jobOfferId?: string;
+  status: 'NEGOTIATING' | 'AGREED' | 'FAILED';
+  roundsUsed: number;
+  maxRounds: number;
+  availableTargets: ManagerContractTarget[];
+  clubTerms: ManagerContractTerms;
+  agreedTerms?: ManagerContractTerms;
+  message: string;
+  lastResponseType?: 'INFO' | 'VETO' | 'COUNTER' | 'ACCEPTED' | 'FAILED';
+  startedAt: string;
+}
+
+export interface ManagerContractNegotiationResult {
+  ok: boolean;
+  status: ManagerContractNegotiation['status'];
+  message: string;
+}
+
 export type ManagerJobOfferStatus = 'OPEN' | 'APPLIED' | 'REJECTED' | 'OFFERED' | 'ACCEPTED' | 'EXPIRED';
 export type ManagerJobOfferSource = 'VACANCY' | 'APPLICATION' | 'CLUB_OFFER';
 
@@ -3578,6 +3645,7 @@ export interface ManagerJobOffer {
   chance: number;
   reason: string;
   response?: string;
+  proposedContractTerms?: ManagerContractTerms;
 }
 
 export interface ManagerJobApplicationResult {

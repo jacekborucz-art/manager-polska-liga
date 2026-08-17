@@ -635,7 +635,7 @@ const DirectorAttrBar: React.FC<{ label: string; value: number; index: number }>
 
 export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, fixtures, onClose }) => {
   const { closeModal, exitClass } = useModalClose(onClose);
-  const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion, submitBoardClubRequest } = useGame();
+  const { respondToSportingDirectorObjective, players, currentDate, requestStadiumExpansion, submitBoardClubRequest, activeManagerContract } = useGame();
   const [isDirectorModalOpen, setIsDirectorModalOpen] = useState(false);
   const [isBoardRequestOpen, setIsBoardRequestOpen] = useState(false);
   const [isStadiumModalOpen, setIsStadiumModalOpen] = useState(false);
@@ -654,6 +654,9 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
     requestStadiumExpansion(stand, requestedIncrease);
   };
   const board = club.board;
+  const contractTarget = activeManagerContract?.clubId === club.id && activeManagerContract.status === 'ACTIVE'
+    ? activeManagerContract.terms.target
+    : null;
   const sportingDirector = club.sportingDirector;
   const directorPolicy = club.sportingDirectorPolicy;
   const directorObjective = club.sportingDirectorObjective;
@@ -703,7 +706,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
     if (polishCupWins >= 3) return { situationType: 'cupPolish', seed: s };
 
     // Sytuacja ligowa
-    const expectedMax = EXPECTED_MAX_RANK[board.oczekiwania];
+    const expectedMax = contractTarget?.leagueMaxRank ?? EXPECTED_MAX_RANK[board.oczekiwania];
     const patience   = PATIENCE_THRESHOLD[board.cierpliwosc];
     const gap = rank - expectedMax;
 
@@ -713,7 +716,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
     if (gap > 2 && played >= patience) return { situationType: 'concern', seed: s };
     if (gap > 3) return { situationType: 'mixed', seed: s };
     return { situationType: 'mixed', seed: s };
-  }, [club, rank, fixtures, board]);
+  }, [club, rank, fixtures, board, contractTarget]);
 
   const situationComment = useMemo(() => pick(SITUATION_MESSAGES[situationType], seed), [situationType, seed]);
 
@@ -961,7 +964,10 @@ export const BoardModal: React.FC<BoardModalProps> = ({ club, confidence, rank, 
 
             {board && (
               <p className={`text-[14px] font-normal leading-[1.6] tracking-normal ${infoColor}`}>
-                {getExpectationsText(board.oczekiwania, club.reputation, board.ambicja, club.leagueId, seed)} {HOJNOSC_TEXT[board.hojnosc]}
+                {contractTarget
+                  ? `${contractTarget.label}. ${contractTarget.description}`
+                  : getExpectationsText(board.oczekiwania, club.reputation, board.ambicja, club.leagueId, seed)}{' '}
+                {HOJNOSC_TEXT[board.hojnosc]}
               </p>
             )}
 

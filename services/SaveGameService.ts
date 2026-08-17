@@ -42,6 +42,8 @@ export interface SaveState {
   roundResults: Record<string, any>;
   managerProfile: any;
   managerJobOffers?: any[];
+  activeManagerContract?: import('../types').ManagerContract | null;
+  managerContractNegotiation?: import('../types').ManagerContractNegotiation | null;
   seasonNumber: number;
   messages: any[];
   activeTrainingId: string | null;
@@ -819,6 +821,8 @@ export function normalizeSaveState(data: SaveState): SaveState {
     roundResults: asRecord(data.roundResults),
     managerProfile: ManagerExperienceService.ensureManagerExperience(data.managerProfile),
     managerJobOffers: asArray((data as any).managerJobOffers),
+    activeManagerContract: (data as any).activeManagerContract ?? null,
+    managerContractNegotiation: (data as any).managerContractNegotiation ?? null,
     seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
     messages: migrateWelcomeMailSignatories(normalizeMessages(data.messages), normalizedClubs, data.userTeamId ?? null),
     activeTrainingId: typeof data.activeTrainingId === 'string' ? data.activeTrainingId : null,

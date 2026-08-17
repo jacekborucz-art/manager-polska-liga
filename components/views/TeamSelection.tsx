@@ -38,7 +38,7 @@ const ClubSelectionBadge: React.FC<{
 };
 
 export const TeamSelection: React.FC = () => {
-  const { clubs, currentDate, managerProfile, selectUserTeam, startNewGame, navigateTo } = useGame();
+  const { clubs, currentDate, managerProfile, beginInitialManagerContractNegotiation, startNewGame, navigateTo } = useGame();
   const { isProcessing, runWithProcessing } = useProcessing();
   
   const [selectedLeagueTier, setSelectedLeagueTier] = useState<number | 'FOREIGN'>(1);
@@ -126,7 +126,7 @@ export const TeamSelection: React.FC = () => {
 
   const handleConfirm = () => {
     if (selectedClubId) {
-      selectUserTeam(selectedClubId);
+      beginInitialManagerContractNegotiation(selectedClubId);
     }
   };
 

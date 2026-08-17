@@ -36,6 +36,7 @@
     "test:managed-reserve-team": "esbuild tests/ManagedReserveTeamTests.ts --bundle --platform=node --format=cjs --outfile=tmp/managed-reserve-team-tests.cjs && node tmp/managed-reserve-team-tests.cjs",
     "test:reserve-schedule": "esbuild tests/ReserveScheduleServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/reserve-schedule-service-tests.cjs && node tmp/reserve-schedule-service-tests.cjs",
     "test:kit-selection": "esbuild tests/KitSelectionServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/kit-selection-service-tests.cjs && node tmp/kit-selection-service-tests.cjs",
+    "test:manager-contract": "esbuild tests/ManagerContractServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/manager-contract-service-tests.cjs && node tmp/manager-contract-service-tests.cjs",
     "test:cup-v2-balance": "esbuild tests/CupMatchEngineV2BalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-balance-tests.cjs && node tmp/cup-v2-balance-tests.cjs",
     "test:cup-v2-adapter": "esbuild tests/CupMatchEngineV2AdapterTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-adapter-tests.cjs && node tmp/cup-v2-adapter-tests.cjs",
     "test:cup-v2-shadow-audit": "esbuild tests/CupMatchEngineV2ShadowAuditTests.ts --bundle --platform=node --format=cjs --outfile=tmp/cup-v2-shadow-audit-tests.cjs && node tmp/cup-v2-shadow-audit-tests.cjs",

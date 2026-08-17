@@ -201,7 +201,7 @@ const getExperienceTrustMultiplier = (expPoints?: number | null): number => {
   return clamp(1.18 - rating * 0.0042, 0.76, 1.18);
 };
 
-const calculatePerformancePressure = (club: Club, rank: number, expPoints?: number | null): CoachPerformancePressure => {
+const calculatePerformancePressure = (club: Club, rank: number, expPoints?: number | null, expectedRankOverride?: number): CoachPerformancePressure => {
   const board = club.board;
 
   const EXPECTED_RANK_FROM_BOARD: Record<string, number> = {
@@ -223,7 +223,9 @@ const calculatePerformancePressure = (club: Club, rank: number, expPoints?: numb
     bardzo_niska:  +4,
   };
   const ambicjaOffset = board ? AMBICJA_OFFSET[board.ambicja] : 0;
-  const expectedRank  = Math.max(1, baseExpected + ambicjaOffset);
+  const expectedRank  = expectedRankOverride != null
+    ? Math.max(1, expectedRankOverride)
+    : Math.max(1, baseExpected + ambicjaOffset);
   const gap = rank - expectedRank;
 
   let baseChance: number;
@@ -365,8 +367,8 @@ export const CoachService = {
     return stableHash(`${coach.id}|${club.id}|${renewalKey}|contract-renewal`) % 2 === 0;
   },
 
-  getPerformancePressure: (club: Club, rank: number, expPoints?: number | null): CoachPerformancePressure =>
-    calculatePerformancePressure(club, rank, expPoints),
+  getPerformancePressure: (club: Club, rank: number, expPoints?: number | null, expectedRankOverride?: number): CoachPerformancePressure =>
+    calculatePerformancePressure(club, rank, expPoints, expectedRankOverride),
 
   findReplacementCoach: (
     coaches: Record<string, Coach>,
