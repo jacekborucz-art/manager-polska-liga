@@ -20,6 +20,31 @@ function seededShuffle(arr, seed) {
   }
   return result;
 }
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+function createSeededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = Math.imul(state, 1664525) + 1013904223 >>> 0;
+    return state / 4294967296;
+  };
+}
+function samplePoisson(lambda, random) {
+  const limit = Math.exp(-lambda);
+  let product = 1;
+  let goals = -1;
+  do {
+    goals += 1;
+    product *= Math.max(1e-6, random());
+  } while (product > limit && goals < 9);
+  return Math.max(0, goals);
+}
 function firstSaturdayOnOrAfter(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -118,6 +143,64 @@ var ReserveScheduleService = {
       weekSat2.setDate(weekSat2.getDate() + 7);
     }
     return fixtures;
+  },
+  /**
+   * Odtwarza wirtualne rozgrywki rezerw po przejęciu klubu w trakcie sezonu.
+   * Zakończone terminy otrzymują wyłącznie deterministyczny wynik, bez zdarzeń
+   * i statystyk zawodników. Pierwszy późniejszy mecz pozostaje nierozstrzygnięty,
+   * dzięki czemu standardowy silnik przygotuje dla niego pełny raport.
+   */
+  generateForMidSeasonTakeover(userClub2, allPolishClubs, season, seed, seasonStartYear, takeoverDate2) {
+    const schedule = this.generate(userClub2, allPolishClubs, season, seed, seasonStartYear);
+    const clubById = new Map(allPolishClubs.map((club) => [club.id, club]));
+    const takeoverDayEnd = new Date(takeoverDate2);
+    takeoverDayEnd.setHours(23, 59, 59, 999);
+    const results = [];
+    const fixtures = schedule.map((fixture) => {
+      const fixtureDate = new Date(fixture.date);
+      if (Number.isNaN(fixtureDate.getTime()) || fixtureDate.getTime() > takeoverDayEnd.getTime()) {
+        return fixture;
+      }
+      const opponent = clubById.get(fixture.opponentClubId);
+      const userReputation = userClub2.reputation ?? 5;
+      const opponentReputation = opponent?.reputation ?? 5;
+      const homeReputation = fixture.isHome ? userReputation : opponentReputation;
+      const awayReputation = fixture.isHome ? opponentReputation : userReputation;
+      const strengthDifference = homeReputation - awayReputation;
+      const random = createSeededRandom(
+        (seed ^ hashString(`${userClub2.id}|${fixture.id}|${fixture.date}`)) >>> 0
+      );
+      const homeExpectedGoals = Math.max(0.3, Math.min(3.5, 1.35 + strengthDifference * 0.08 + 0.22));
+      const awayExpectedGoals = Math.max(0.25, Math.min(3.25, 1.2 - strengthDifference * 0.08));
+      const homeScore = samplePoisson(homeExpectedGoals, random);
+      const awayScore = samplePoisson(awayExpectedGoals, random);
+      const resultId = `res_summary_${fixture.id}`;
+      const userTeamName = `${userClub2.shortName || userClub2.name} II`;
+      const opponentTeamName = `${opponent?.shortName || opponent?.name || fixture.opponentClubName} II`;
+      results.push({
+        id: resultId,
+        date: fixture.date,
+        season,
+        homeTeamName: fixture.isHome ? userTeamName : opponentTeamName,
+        awayTeamName: fixture.isHome ? opponentTeamName : userTeamName,
+        isUserHome: fixture.isHome,
+        homeScore,
+        awayScore,
+        venue: fixture.isHome ? userClub2.stadiumName ?? "Stadion" : opponent?.stadiumName ?? "Stadion",
+        opponentClubId: fixture.opponentClubId,
+        goals: [],
+        missedPenalties: [],
+        cards: [],
+        substitutions: [],
+        injuries: [],
+        ratings: {},
+        userStartingXI: [],
+        matchPlayers: [],
+        isSummaryOnly: true
+      });
+      return { ...fixture, resultId };
+    });
+    return { fixtures, results };
   }
 };
 
@@ -154,5 +237,44 @@ import_node_assert.strict.ok(
 import_node_assert.strict.ok(
   migratedSchedule.filter((fixture) => fixture.round === 2).every((fixture) => new Date(fixture.date).getFullYear() === 2027),
   "wczytany b\u0142\u0119dny terminarz rundy wiosennej musi zosta\u0107 przesuni\u0119ty na kolejny rok"
+);
+var takeoverDate = new Date(2026, 9, 5, 12, 0, 0);
+var takeoverSchedule = ReserveScheduleService.generateForMidSeasonTakeover(
+  userClub,
+  [userClub, ...opponents],
+  1,
+  12345,
+  2026,
+  takeoverDate
+);
+var pastFixtures = takeoverSchedule.fixtures.filter((fixture) => new Date(fixture.date).getTime() <= new Date(2026, 9, 5, 23, 59, 59, 999).getTime());
+var futureFixtures = takeoverSchedule.fixtures.filter((fixture) => new Date(fixture.date).getTime() > new Date(2026, 9, 5, 23, 59, 59, 999).getTime());
+import_node_assert.strict.ok(pastFixtures.length > 0, "przej\u0119cie klubu w trakcie sezonu musi znale\u017A\u0107 wcze\u015Bniejsze mecze rezerw");
+import_node_assert.strict.ok(futureFixtures.length > 0, "po przej\u0119ciu klubu musi pozosta\u0107 co najmniej jeden przysz\u0142y mecz rezerw");
+import_node_assert.strict.equal(
+  takeoverSchedule.results.length,
+  pastFixtures.length,
+  "ka\u017Cdy wcze\u015Bniejszy termin musi otrzyma\u0107 uproszczony wynik"
+);
+import_node_assert.strict.ok(pastFixtures.every((fixture) => fixture.resultId), "wcze\u015Bniejsze mecze musz\u0105 wskazywa\u0107 zapisany wynik");
+import_node_assert.strict.ok(futureFixtures.every((fixture) => !fixture.resultId), "przysz\u0142e mecze nie mog\u0105 zosta\u0107 zasymulowane podczas przej\u0119cia klubu");
+import_node_assert.strict.ok(
+  takeoverSchedule.results.every(
+    (result) => result.isSummaryOnly && result.goals.length === 0 && result.cards.length === 0 && result.substitutions.length === 0 && Object.keys(result.ratings).length === 0
+  ),
+  "odtworzone wyniki nie mog\u0105 zawiera\u0107 pe\u0142nego raportu ani statystyk zawodnik\xF3w"
+);
+var repeatedTakeoverSchedule = ReserveScheduleService.generateForMidSeasonTakeover(
+  userClub,
+  [userClub, ...opponents],
+  1,
+  12345,
+  2026,
+  takeoverDate
+);
+import_node_assert.strict.deepEqual(
+  repeatedTakeoverSchedule.results.map((result) => [result.homeScore, result.awayScore]),
+  takeoverSchedule.results.map((result) => [result.homeScore, result.awayScore]),
+  "szybkie wyniki musz\u0105 by\u0107 deterministyczne dla tego samego zapisu gry"
 );
 console.log("ReserveScheduleServiceTests: OK");

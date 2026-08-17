@@ -1,5 +1,5 @@
 
-import { Club, ReserveFixture } from '../types';
+import { Club, ReserveFixture, ReserveMatchResult } from '../types';
 
 const SEASON_START_MONTH = 7; // sierpień (0-indexed)
 const SEASON_START_DAY = 1;
@@ -11,6 +11,11 @@ const SEASON_END_MONTH = 5; // czerwiec
 const SEASON_END_DAY = 30;
 const MAX_OPPONENTS = 17;
 
+export interface ReserveTakeoverSchedule {
+  fixtures: ReserveFixture[];
+  results: ReserveMatchResult[];
+}
+
 function seededShuffle<T>(arr: T[], seed: number): T[] {
   const result = [...arr];
   let s = seed;
@@ -20,6 +25,34 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function samplePoisson(lambda: number, random: () => number): number {
+  const limit = Math.exp(-lambda);
+  let product = 1;
+  let goals = -1;
+  do {
+    goals += 1;
+    product *= Math.max(0.000001, random());
+  } while (product > limit && goals < 9);
+  return Math.max(0, goals);
 }
 
 function firstSaturdayOnOrAfter(date: Date): Date {
@@ -151,5 +184,78 @@ export const ReserveScheduleService = {
     }
 
     return fixtures;
+  },
+
+  /**
+   * Odtwarza wirtualne rozgrywki rezerw po przejęciu klubu w trakcie sezonu.
+   * Zakończone terminy otrzymują wyłącznie deterministyczny wynik, bez zdarzeń
+   * i statystyk zawodników. Pierwszy późniejszy mecz pozostaje nierozstrzygnięty,
+   * dzięki czemu standardowy silnik przygotuje dla niego pełny raport.
+   */
+  generateForMidSeasonTakeover(
+    userClub: Club,
+    allPolishClubs: Club[],
+    season: number,
+    seed: number,
+    seasonStartYear: number,
+    takeoverDate: Date
+  ): ReserveTakeoverSchedule {
+    const schedule = this.generate(userClub, allPolishClubs, season, seed, seasonStartYear);
+    const clubById = new Map(allPolishClubs.map(club => [club.id, club]));
+    const takeoverDayEnd = new Date(takeoverDate);
+    takeoverDayEnd.setHours(23, 59, 59, 999);
+    const results: ReserveMatchResult[] = [];
+
+    const fixtures = schedule.map(fixture => {
+      const fixtureDate = new Date(fixture.date);
+      if (Number.isNaN(fixtureDate.getTime()) || fixtureDate.getTime() > takeoverDayEnd.getTime()) {
+        return fixture;
+      }
+
+      const opponent = clubById.get(fixture.opponentClubId);
+      const userReputation = userClub.reputation ?? 5;
+      const opponentReputation = opponent?.reputation ?? 5;
+      const homeReputation = fixture.isHome ? userReputation : opponentReputation;
+      const awayReputation = fixture.isHome ? opponentReputation : userReputation;
+      const strengthDifference = homeReputation - awayReputation;
+      const random = createSeededRandom(
+        (seed ^ hashString(`${userClub.id}|${fixture.id}|${fixture.date}`)) >>> 0
+      );
+      const homeExpectedGoals = Math.max(0.3, Math.min(3.5, 1.35 + strengthDifference * 0.08 + 0.22));
+      const awayExpectedGoals = Math.max(0.25, Math.min(3.25, 1.20 - strengthDifference * 0.08));
+      const homeScore = samplePoisson(homeExpectedGoals, random);
+      const awayScore = samplePoisson(awayExpectedGoals, random);
+      const resultId = `res_summary_${fixture.id}`;
+      const userTeamName = `${userClub.shortName || userClub.name} II`;
+      const opponentTeamName = `${opponent?.shortName || opponent?.name || fixture.opponentClubName} II`;
+
+      results.push({
+        id: resultId,
+        date: fixture.date,
+        season,
+        homeTeamName: fixture.isHome ? userTeamName : opponentTeamName,
+        awayTeamName: fixture.isHome ? opponentTeamName : userTeamName,
+        isUserHome: fixture.isHome,
+        homeScore,
+        awayScore,
+        venue: fixture.isHome
+          ? (userClub.stadiumName ?? 'Stadion')
+          : (opponent?.stadiumName ?? 'Stadion'),
+        opponentClubId: fixture.opponentClubId,
+        goals: [],
+        missedPenalties: [],
+        cards: [],
+        substitutions: [],
+        injuries: [],
+        ratings: {},
+        userStartingXI: [],
+        matchPlayers: [],
+        isSummaryOnly: true,
+      });
+
+      return { ...fixture, resultId };
+    });
+
+    return { fixtures, results };
   },
 };

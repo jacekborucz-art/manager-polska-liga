@@ -1089,6 +1089,8 @@ export interface ReserveMatchResult {
   userStartingXI: string[];
   manOfTheMatch?: string;
   matchPlayers?: ReserveMatchPlayerEntry[];
+  /** Wynik odtworzony przy przejęciu klubu w trakcie sezonu, bez raportu meczowego. */
+  isSummaryOnly?: boolean;
 }
 
 export interface ReserveMatchPlayerEntry {
@@ -3556,6 +3558,7 @@ export interface ManagerProfile {
   expHistory: ManagerExpEntry[];
   careerHistory: ManagerCareerSeason[];
   achievements: ManagerAchievement[];
+  lastManagedClubId?: string;
 }
 
 export type ManagerEmploymentStatus = 'EMPLOYED' | 'RESIGNED' | 'FIRED';

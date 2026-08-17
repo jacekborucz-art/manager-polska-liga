@@ -513,9 +513,10 @@ export const ReserveScheduleModal: React.FC<Props> = ({ onClose }) => {
                       return (
                         <div
                           key={f.id}
-                          className={`flex items-center justify-between px-2 py-1.5 rounded-md text-sm border border-white/5 ${result ? 'cursor-pointer hover:brightness-125' : ''}`}
+                          className={`flex items-center justify-between px-2 py-1.5 rounded-md text-sm border border-white/5 ${result && !result.isSummaryOnly ? 'cursor-pointer hover:brightness-125' : ''}`}
                           style={{ background: gradient }}
-                          onClick={() => { if (result) { setSelectedResult(result); setSelectedFixture(f); } }}
+                          title={result?.isSummaryOnly ? 'Wynik archiwalny bez szczegółowego raportu' : undefined}
+                          onClick={() => { if (result && !result.isSummaryOnly) { setSelectedResult(result); setSelectedFixture(f); } }}
                         >
                           <div className="flex items-center gap-2 w-full">
                             <span className={`text-xs w-4 shrink-0 italic uppercase tracking-tighter ${f.isHome ? 'text-green-400' : 'text-blue-400'}`}>

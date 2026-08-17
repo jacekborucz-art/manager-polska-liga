@@ -213,7 +213,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
   const {
     coaches, clubs, navigateTo, viewCoachDetails, viewClubDetails, players, viewPlayerDetails,
     transferOffers, pendingNegotiations, userTeamId, isResigned, managerEmploymentStatus,
-    managerProfile, managerJobOffers, applyForManagerJob, acceptManagerJobOffer, currentDate,
+    managerProfile, managerJobOffers, applyForManagerJob, acceptManagerJobOffer, currentDate, messages,
     discoveredTransferPlayerIds,
   } = useGame();
 
@@ -241,6 +241,18 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
 
   const userClub = useMemo(() => clubs.find(c => c.id === userTeamId) ?? null, [clubs, userTeamId]);
   const isOutOfClub = isResigned || userClub?.leagueId === 'NONE';
+  const lastManagedClubId = useMemo(() => {
+    if (managerProfile?.lastManagedClubId) return managerProfile.lastManagedClubId;
+
+    const latestFiringMail = messages
+      .filter(message => message.id.startsWith('MANAGER_FIRED_'))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const clubFromFiringMail = latestFiringMail
+      ? clubs.find(club => latestFiringMail.id.startsWith(`MANAGER_FIRED_${club.id}_`))
+      : undefined;
+
+    return clubFromFiringMail?.id ?? managerProfile?.careerHistory?.[0]?.clubId;
+  }, [clubs, managerProfile, messages]);
   const managerJobRows = useMemo(() => {
     if (!isOutOfClub) return [];
 
@@ -254,6 +266,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
 
     return clubs
       .filter(ManagerJobService.isPolishManagerJobClub)
+      .filter(club => club.id !== lastManagedClubId)
       .map(club => ({
         club,
         evaluation: ManagerJobService.evaluateManagerJob(club, clubs, coaches, managerProfile, managerEmploymentStatus),
@@ -271,7 +284,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
         b.evaluation.chance - a.evaluation.chance ||
         b.club.reputation - a.club.reputation
       );
-  }, [clubs, coaches, managerProfile, managerEmploymentStatus, managerJobOffers, isOutOfClub, currentDate]);
+  }, [clubs, coaches, managerProfile, managerEmploymentStatus, managerJobOffers, isOutOfClub, currentDate, lastManagedClubId]);
 
   const allPlayersFlat = useMemo(() => Object.values(players).flat(), [players]);
   const clubById = useMemo(() => new Map(clubs.map(club => [club.id, club])), [clubs]);
@@ -552,43 +565,56 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
         {/* HEADER */}
         <header className="flex items-center justify-between mb-4 shrink-0 bg-white/[0.03] border border-white/10 rounded-[30px] p-5 shadow-2xl">
           <div className="flex items-center gap-6">
-            <div className="text-3xl animate-pulse">🛰️</div>
+            <div className="text-3xl animate-pulse">{isOutOfClub ? '💼' : '🛰️'}</div>
             <div>
-              <h1 className="text-3xl font-black italic uppercase tracking-tighter leading-none">CENTRUM <span className="text-emerald-400">TRANSFEROWE</span></h1>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em] mt-1">Baza danych PZPN • Rynek Zawodników</p>
+              {isOutOfClub ? (
+                <>
+                  <h1 className="text-3xl font-black italic uppercase tracking-tighter leading-none">Rynek <span className="text-orange-400">pracy trenera</span></h1>
+                  <p className="mt-1 text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Oferty zatrudnienia i wakaty klubowe</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-3xl font-black italic uppercase tracking-tighter leading-none">CENTRUM <span className="text-emerald-400">TRANSFEROWE</span></h1>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.5em] mt-1">Baza danych PZPN • Rynek Zawodników</p>
+                </>
+              )}
             </div>
           </div>
-          {userClub && (
+          {!isOutOfClub && userClub && (
             <div className="text-center">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fundusze transferowe</p>
               <p className="text-xl font-black text-emerald-400">{userClub.transferBudget.toLocaleString('pl-PL')} <span className="text-sm text-slate-400">PLN</span></p>
             </div>
           )}
           <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenScouting}
-              className="px-8 py-3 bg-amber-500/10 border border-amber-400/25 rounded-xl text-[9px] text-amber-300 hover:bg-amber-500/20 transition-all shadow-xl active:scale-95 group font-black italic uppercase tracking-tighter"
-            >
-              <span className="group-hover:text-amber-200 transition-colors font-black italic uppercase tracking-tighter">🔭 Scouting</span>
-            </button>
-            <button
-              onClick={() => setShowMyList(true)}
-              className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
-            >
-              <span className="group-hover:text-cyan-400 transition-colors">📋 Moja lista</span>
-            </button>
-            <button
-              onClick={() => navigateTo(ViewState.STAFF_SEARCH)}
-              className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
-            >
-              <span className="group-hover:text-purple-400 transition-colors">🧑‍💼 Wyszukaj współpracowników</span>
-            </button>
-            <button
-              onClick={() => navigateTo(ViewState.TRANSFER_NEWS)}
-              className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
-            >
-              <span className="group-hover:text-yellow-400 transition-colors">📡 Aktywność rynkowa</span>
-            </button>
+            {!isOutOfClub && (
+              <>
+                <button
+                  onClick={onOpenScouting}
+                  className="px-8 py-3 bg-amber-500/10 border border-amber-400/25 rounded-xl text-[9px] text-amber-300 hover:bg-amber-500/20 transition-all shadow-xl active:scale-95 group font-black italic uppercase tracking-tighter"
+                >
+                  <span className="group-hover:text-amber-200 transition-colors font-black italic uppercase tracking-tighter">🔭 Scouting</span>
+                </button>
+                <button
+                  onClick={() => setShowMyList(true)}
+                  className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+                >
+                  <span className="group-hover:text-cyan-400 transition-colors">📋 Moja lista</span>
+                </button>
+                <button
+                  onClick={() => navigateTo(ViewState.STAFF_SEARCH)}
+                  className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+                >
+                  <span className="group-hover:text-purple-400 transition-colors">🧑‍💼 Wyszukaj współpracowników</span>
+                </button>
+                <button
+                  onClick={() => navigateTo(ViewState.TRANSFER_NEWS)}
+                  className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
+                >
+                  <span className="group-hover:text-yellow-400 transition-colors">📡 Aktywność rynkowa</span>
+                </button>
+              </>
+            )}
             <button
               onClick={() => navigateTo(ViewState.DASHBOARD)}
               className="px-8 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/[0.15] transition-all shadow-xl active:scale-95 group"
@@ -599,7 +625,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
         </header>
 
         {/* MOJA LISTA - OVERLAY */}
-        {showMyList && (
+        {!isOutOfClub && showMyList && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowMyList(false)}>
             <div className="relative w-[820px] max-h-[80vh] flex flex-col bg-slate-950 border border-white/10 rounded-[24px] shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
 
@@ -692,18 +718,12 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
         )}
 
         {isOutOfClub && (
-          <section className="mb-4 shrink-0 bg-slate-950/80 border border-orange-400/20 rounded-[24px] overflow-hidden shadow-2xl">
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-orange-400/20 bg-slate-950/80 shadow-2xl">
             <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10">
               <div>
                 <h2 className="text-xl text-white font-black italic uppercase tracking-tighter">Rynek pracy trenera</h2>
                 <p className="text-[10px] text-slate-400 mt-1 font-black italic uppercase tracking-tighter">
-                  Aplikuj o wakaty albo przyjmij propozycje klubów zainteresowanych Twoim EXP
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">Twój status</p>
-                <p className="text-sm text-orange-300 font-black italic uppercase tracking-tighter">
-                  {managerEmploymentStatus === 'FIRED' ? 'Zwolniony' : 'Bez klubu'} · {managerProfile?.expPoints ?? 1} EXP
+                  Aplikuj o wakaty albo przyjmij bezpośrednie propozycje klubów
                 </p>
               </div>
             </div>
@@ -714,7 +734,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
               </div>
             )}
 
-            <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
+            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
               {managerJobRows.length === 0 ? (
                 <div className="px-6 py-10 text-center text-slate-500 font-black italic uppercase tracking-tighter">
                   Brak otwartych rekrutacji. Przewiń kalendarz i obserwuj zwolnienia trenerów.
@@ -726,18 +746,19 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
                       <th className="px-6 py-3 text-left text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Klub</th>
                       <th className="px-4 py-3 text-left text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Liga</th>
                       <th className="px-4 py-3 text-left text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Sytuacja</th>
-                      <th className="px-4 py-3 text-center text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Wymagane EXP</th>
-                      <th className="px-4 py-3 text-center text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Szansa</th>
                       <th className="px-6 py-3 text-right text-[9px] text-slate-400 font-black italic uppercase tracking-tighter">Decyzja</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {managerJobRows.map(({ club, evaluation, offer }) => {
+                    {managerJobRows.map(({ club, evaluation, offer }, index) => {
                       const isOffered = offer?.status === 'OFFERED' && new Date(offer.expiresAt).getTime() >= currentDate.getTime();
                       const isRejected = offer?.status === 'REJECTED';
                       const canApply = !isOffered && !isRejected;
                       return (
-                        <tr key={club.id} className="border-b border-white/[0.05] hover:bg-white/[0.03] transition-colors">
+                        <tr
+                          key={club.id}
+                          className={`${index % 2 === 0 ? 'bg-slate-900/65' : 'bg-slate-800/35'} border-b border-white/[0.06] hover:bg-orange-400/[0.08] transition-colors`}
+                        >
                           <td className="px-6 py-4">
                             <button
                               onClick={() => viewClubDetails(club.id)}
@@ -756,14 +777,6 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
                             <div className="text-[9px] text-slate-500 mt-0.5 font-black italic uppercase tracking-tighter">
                               {offer?.response || offer?.reason || evaluation.reason}
                             </div>
-                          </td>
-                          <td className="px-4 py-4 text-center text-[12px] text-slate-200 font-black italic uppercase tracking-tighter">
-                            {evaluation.requiredExp}
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <span className={`text-[12px] font-black italic uppercase tracking-tighter ${evaluation.chance >= 65 ? 'text-emerald-300' : evaluation.chance >= 35 ? 'text-yellow-300' : 'text-red-300'}`}>
-                              {evaluation.chance}%
-                            </span>
                           </td>
                           <td className="px-6 py-4 text-right">
                             {isOffered ? (
@@ -801,6 +814,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
           </section>
         )}
 
+        {!isOutOfClub && (
         <div className="flex-1 flex gap-4 min-h-0">
           
           {/* COLUMN 1: ATTRIBUTE FILTERS */}
@@ -1218,8 +1232,10 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
           </section>
 
         </div>
+        )}
 
         {/* SYSTEM STATUS FOOTER */}
+        {!isOutOfClub && (
         <footer className="relative z-10 mt-4 h-9 bg-white/[0.02] rounded-full border border-white/10 flex items-center justify-center px-10 shadow-2xl shrink-0">
            <div className="flex gap-12 text-[6.5px] font-black text-slate-600 uppercase tracking-[0.4em]">
               <span className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" /> System Transferowy aktywny</span>
@@ -1227,6 +1243,7 @@ const JobMarketContent: React.FC<{ onOpenScouting: () => void }> = ({ onOpenScou
               <span className="flex items-center gap-2"><div className="w-1 h-1 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" /> Autoryzacja PZPN v2.9</span>
            </div>
         </footer>
+        )}
 
       </div>
 

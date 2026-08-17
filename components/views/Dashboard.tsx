@@ -158,6 +158,10 @@ export const Dashboard: React.FC = () => {
   const isOutOfClub = isResigned || myClub?.leagueId === 'NONE';
   const wasFired = managerEmploymentStatus === 'FIRED';
   const clubManagementDisabled = isJumping || isOutOfClub;
+
+  useEffect(() => {
+    if (wasFired) setActiveMailboxTab('main');
+  }, [wasFired]);
   const isWorldCupTournamentOpen = Boolean(
     wcState &&
     currentDate.getFullYear() === wcState.year &&
@@ -811,6 +815,7 @@ const boardConfidence = useMemo(() => {
     tone?: string;
     size?: 'large' | 'wide' | 'small';
     customIcon?: React.ReactNode;
+    highlighted?: boolean;
   };
 
   const renderDashboardActionIcon = (icon: DashboardActionIcon, color: string) => {
@@ -978,7 +983,7 @@ const boardConfidence = useMemo(() => {
     }
   };
 
-  const DashboardSvgButton = ({ label, icon, onClick, disabled = false, tone, size = 'small', customIcon }: DashboardSvgButtonProps) => {
+  const DashboardSvgButton = ({ label, icon, onClick, disabled = false, tone, size = 'small', customIcon, highlighted = false }: DashboardSvgButtonProps) => {
     const accent = tone ?? clubPrimary;
     const sizeClass =
       size === 'large'
@@ -990,12 +995,24 @@ const boardConfidence = useMemo(() => {
     const iconBoxClass = customIcon && size === 'large' ? 'w-44 h-20' : size === 'small' ? 'w-14 h-14' : 'w-20 h-20';
 
     return (
-      <div className={`group relative ${sizeClass}`}>
+      <div className={`group relative ${sizeClass} ${highlighted ? 'z-20' : ''}`}>
+      {highlighted && (
+        <div
+          className="pointer-events-none absolute -inset-1 rounded-[26px] animate-pulse"
+          style={{
+            border: `2px solid ${accent}`,
+            boxShadow: `0 0 22px ${accent}90, 0 0 48px ${accent}45`,
+          }}
+        />
+      )}
       <button
         onClick={onClick}
         disabled={disabled}
         className={`
-          relative w-full h-full overflow-hidden rounded-[22px] border border-white/[0.08] bg-slate-950/58 text-left shadow-[0_14px_34px_rgba(0,0,0,0.34)] transition-all duration-300
+          relative w-full h-full overflow-hidden rounded-[22px] border bg-slate-950/58 text-left transition-all duration-300
+          ${highlighted
+            ? 'border-orange-300/80 shadow-[0_0_30px_rgba(249,115,22,0.55),0_18px_44px_rgba(0,0,0,0.5)]'
+            : 'border-white/[0.08] shadow-[0_14px_34px_rgba(0,0,0,0.34)]'}
           hover:-translate-y-1 hover:border-white/20 hover:bg-slate-900/70 hover:shadow-[0_22px_52px_rgba(0,0,0,0.54)]
           active:translate-y-0 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-30
         `}
@@ -1157,7 +1174,7 @@ const boardConfidence = useMemo(() => {
                  {managerProfile ? `${managerProfile.firstName} ${managerProfile.lastName}` : 'NOWY MANAGER'}
               </span>
               <span className={`text-sm font-black italic uppercase tracking-tighter px-2 py-0.5 rounded ${isOutOfClub ? 'bg-slate-700 text-slate-300' : 'bg-red-600 text-white'}`}>
-                {isOutOfClub ? (wasFired ? 'ZWOLNIONY' : 'BEZ KLUBU') : myClub?.leagueId === 'L_PL_1' ? 'Ekstraklasa' : myClub?.leagueId === 'L_PL_2' ? 'I Liga' : myClub?.leagueId === 'L_PL_3' ? 'II Liga' : myClub?.leagueId === 'L_PL_4' ? 'III Liga' : 'Ekstraklasa'}
+                {isOutOfClub ? (wasFired ? 'BEZ PRACY' : 'BEZ KLUBU') : myClub?.leagueId === 'L_PL_1' ? 'Ekstraklasa' : myClub?.leagueId === 'L_PL_2' ? 'I Liga' : myClub?.leagueId === 'L_PL_3' ? 'II Liga' : myClub?.leagueId === 'L_PL_4' ? 'III Liga' : 'Ekstraklasa'}
               </span>
               <span className="text-sm font-black italic uppercase tracking-tighter text-blue-400">SEZON {seasonNumber} ({seasonYearLabel})</span>
             </div>
@@ -1531,7 +1548,7 @@ const boardConfidence = useMemo(() => {
       </div>
 
       <div className="flex-1 flex gap-6 min-h-0 z-0">
-        <div className={`w-80 flex flex-col gap-4 shrink-0 rounded-[26px] bg-slate-950/50 border border-white/[0.06] backdrop-blur-md p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] relative transition-all ${isOutOfClub ? 'grayscale opacity-60' : ''}`}>
+        <div className="w-80 flex flex-col gap-4 shrink-0 rounded-[26px] bg-slate-950/50 border border-white/[0.06] backdrop-blur-md p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)] relative transition-all">
           <Card className="rounded-[28px] border border-white/[0.08] bg-slate-950/48 backdrop-blur-2xl relative group shrink-0 overflow-hidden shadow-2xl">
             <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: clubPrimary }} />
             <div className="absolute right-[-8px] bottom-[-22px] text-8xl font-black italic text-white/[0.025] select-none pointer-events-none">
@@ -1540,11 +1557,9 @@ const boardConfidence = useMemo(() => {
             <div className="relative z-10 p-2">
               <div className="flex flex-col items-center gap-1">
                 <h3 className="text-base text-white leading-tight truncate font-black italic uppercase tracking-tighter text-center w-full">
-                  {isOutOfClub ? (wasFired ? 'ZWOLNIONY' : 'BEZ KLUBU') : myClub?.name}
+                  {isOutOfClub ? (wasFired ? 'BEZ PRACY' : 'BEZ KLUBU') : myClub?.name}
                 </h3>
-                {isOutOfClub ? (
-                  <div className="w-16 h-16 flex items-center justify-center text-2xl">👨‍💼</div>
-                ) : getClubLogo(myClub?.id || '') ? (
+                {!isOutOfClub && (getClubLogo(myClub?.id || '') ? (
                   <div className="w-16 h-16 shrink-0 transition-transform group-hover:-rotate-2">
                     <img
                       src={getClubLogo(myClub?.id || '')}
@@ -1557,21 +1572,10 @@ const boardConfidence = useMemo(() => {
                     <div className="flex-1" style={{ backgroundColor: clubPrimary }} />
                     <div className="flex-1" style={{ backgroundColor: clubSecondary }} />
                   </div>
-                )}
+                ))}
               </div>
             </div>
           </Card>
-
-          {isOutOfClub && (
-            <div className="rounded-[18px] border border-slate-500/20 bg-slate-950/70 px-4 py-3 text-center">
-              <p className="text-[11px] text-slate-300 font-black italic uppercase tracking-tighter">
-                {wasFired ? 'Zarząd zakończył współpracę' : 'Nie prowadzisz obecnie klubu'}
-              </p>
-              <p className="mt-1 text-[9px] text-slate-500 font-black italic uppercase tracking-tighter">
-                Opcje prowadzenia zespołu są niedostępne
-              </p>
-            </div>
-          )}
 
           <div className="relative z-10 grid w-full grid-cols-3 gap-2">
             <DashboardSvgButton
@@ -1684,6 +1688,7 @@ const boardConfidence = useMemo(() => {
               tone="#f97316"
               onClick={() => navigateTo(ViewState.JOB_MARKET)}
               disabled={isJumping}
+              highlighted={wasFired}
             />
             <DashboardSvgButton
               label="Finanse"
@@ -1718,7 +1723,11 @@ const boardConfidence = useMemo(() => {
         </div>
 
         <div className="flex-1 flex flex-col min-w-0 min-h-0 h-[800px]">
-          <Card className="flex-1 rounded-[32px] border border-white/[0.08] bg-slate-950/48 flex flex-col overflow-hidden backdrop-blur-xl shadow-[0_28px_80px_rgba(0,0,0,0.55)] relative h-full">
+          <Card className={`flex-1 rounded-[32px] border bg-slate-950/48 flex flex-col overflow-hidden backdrop-blur-xl relative h-full transition-all duration-500 ${
+            wasFired
+              ? 'border-amber-300/70 shadow-[0_0_34px_rgba(251,191,36,0.30),0_28px_80px_rgba(0,0,0,0.65)]'
+              : 'border-white/[0.08] shadow-[0_28px_80px_rgba(0,0,0,0.55)]'
+          }`}>
             {/* Internal Glass Gloss Background for Mailbox */}
               <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1551290464-67296061329c?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-[0.025] mix-blend-overlay grayscale" />
@@ -1732,6 +1741,14 @@ const boardConfidence = useMemo(() => {
 
               
               <div className="relative z-10 flex flex-col h-full min-h-0">
+                 {wasFired && (
+                   <div className="relative shrink-0 overflow-hidden border-b border-amber-300/30 bg-amber-400/[0.10] px-7 py-2.5">
+                     <div className="absolute inset-y-0 left-0 w-1 bg-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.9)]" />
+                     <p className="text-[10px] font-black italic uppercase tracking-[0.18em] text-amber-200">
+                       Ważna wiadomość od zarządu znajduje się w skrzynce
+                     </p>
+                   </div>
+                 )}
                  <div className="px-7 py-5 border-b border-white/[0.07] bg-black/20 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-4">
                   <div>
@@ -1898,6 +1915,7 @@ const boardConfidence = useMemo(() => {
            </Card>
         </div>
 
+        {!isOutOfClub && (
         <div className="w-[320px] flex flex-col gap-3 shrink-0 rounded-[28px] border border-white/[0.08] bg-slate-950/55 p-3 backdrop-blur-xl shadow-[0_24px_65px_rgba(0,0,0,0.48)]">
           <div className="flex flex-col overflow-hidden rounded-[20px] border border-white/[0.06] bg-black/20">
             <div className="px-3 py-2 border-b border-white/[0.06] shrink-0">
@@ -2000,6 +2018,7 @@ const boardConfidence = useMemo(() => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       <style>{`

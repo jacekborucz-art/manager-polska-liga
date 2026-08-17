@@ -1007,11 +1007,13 @@ type SeasonCelebrationTriggerResult = {
 };
 
 type GameNotificationTone = 'success' | 'info' | 'warning' | 'error';
+type GameNotificationDisplay = 'toast' | 'modal';
 
 interface GameNotificationState {
   title: string;
   message: string;
   tone: GameNotificationTone;
+  display: GameNotificationDisplay;
   onAction?: () => void;
   actionLabel?: string;
 }
@@ -1235,7 +1237,7 @@ finalizeFreeAgentContract: (mailId: string) => void;
   applyForManagerJob: (clubId: string) => ManagerJobApplicationResult;
   acceptManagerJobOffer: (offerId: string) => ManagerJobApplicationResult;
   gameNotification: GameNotificationState | null;
-  showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => void;
+  showGameNotification: (notification: { title: string; message: string; tone?: GameNotificationTone; display?: GameNotificationDisplay; onAction?: () => void; actionLabel?: string }) => void;
   clearGameNotification: () => void;
   respondToSportingDirectorObjective: (response: import('../types').SportingDirectorObjectiveResponse) => void;
   requestStadiumExpansion: (stand: StadiumStand, requestedIncrease: number) => void;
@@ -1877,11 +1879,12 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
     ));
   }, [currentDate, clubs]);
 
-  const showGameNotification = useCallback((notification: { title: string; message: string; tone?: GameNotificationTone; onAction?: () => void; actionLabel?: string }) => {
+  const showGameNotification = useCallback((notification: { title: string; message: string; tone?: GameNotificationTone; display?: GameNotificationDisplay; onAction?: () => void; actionLabel?: string }) => {
     setGameNotification({
       title: notification.title,
       message: notification.message,
       tone: notification.tone || 'info',
+      display: notification.display || 'toast',
       onAction: notification.onAction,
       actionLabel: notification.actionLabel
     });
@@ -2022,7 +2025,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   }, [currentDate, releaseReservePlayersByBoard, reserveReleaseDirective]);
 
   useEffect(() => {
-    if (!gameNotification) return;
+    if (!gameNotification || gameNotification.display === 'modal') return;
 
     const timer = window.setTimeout(() => {
       setGameNotification(null);
@@ -4599,6 +4602,10 @@ const selectUserTeam = (clubId: string) => {
       return;
     }
 
+    const isTakingNewJob = isResigned ||
+      managerEmploymentStatus !== 'EMPLOYED' ||
+      userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
+
     setUserTeamId(clubId);
     setIsResigned(false);
     setManagerEmploymentStatus('EMPLOYED');
@@ -4624,8 +4631,30 @@ const selectUserTeam = (clubId: string) => {
       : SquadGeneratorService.generateReservesSquad(clubId, club.name, leagueTier, club.reputation || 5, club.budget || 5000000);
     setLegacyReserves(generatedReserves);
     setReserveReleaseDirective(null);
-    setReserveFixtures([]);
-    setReserveMatchResults([]);
+    if (!officialReserveClubId && isTakingNewJob) {
+      const polishClubs = clubs.filter(candidate =>
+        candidate.leagueId === 'L_PL_1' ||
+        candidate.leagueId === 'L_PL_2' ||
+        candidate.leagueId === 'L_PL_3' ||
+        candidate.leagueId === 'L_PL_4'
+      );
+      const seasonStartYear = seasonTemplate?.seasonStartYear ?? (
+        currentDate.getMonth() >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1
+      );
+      const repairedReserveSchedule = ReserveScheduleService.generateForMidSeasonTakeover(
+        selectedClub,
+        polishClubs,
+        seasonNumber,
+        sessionSeed,
+        seasonStartYear,
+        currentDate
+      );
+      setReserveFixtures(repairedReserveSchedule.fixtures);
+      setReserveMatchResults(repairedReserveSchedule.results);
+    } else {
+      setReserveFixtures([]);
+      setReserveMatchResults([]);
+    }
 
     if (officialReserveClubId) {
       // The linked reserve club was initialized with the rest of the Polish
@@ -4699,7 +4728,7 @@ const shouldSendFriendlyPlanningReminder = !!friendlyPlanningReminder && !sentMa
 if (shouldSendFriendlyPlanningReminder && friendlyPlanningReminder) {
   sentMailIdsRef.current.add(friendlyPlanningReminder.id);
 }
-const isNewJobAfterGameStart = seasonNumber > 1 || isResigned || userTeamId === UNEMPLOYED_MANAGER_CLUB_ID;
+const isNewJobAfterGameStart = seasonNumber > 1 || isTakingNewJob;
 const takingOverInterviewMail = isNewJobAfterGameStart
   ? MediaInterviewService.generateTakingOverInterviewMail(
       selectedClub,
@@ -4716,7 +4745,7 @@ setMessages(prev => [
   ...prev,
 ]);
 
-    navigateTo(ViewState.SQUAD_IMPORT);
+    navigateTo(isTakingNewJob ? ViewState.DASHBOARD : ViewState.SQUAD_IMPORT);
   };
 
   const calculateManagerFiringExpPenalty = (profile: ManagerProfile | null, club: Club): number => {
@@ -4728,12 +4757,35 @@ setMessages(prev => [
     return Math.min(expPoints - 1, Math.max(5, reputationPart + experiencePart));
   };
 
-  const createManagerFiredMail = (club: Club, reason: string, rank: number, date: Date, expPenalty: number): MailMessage => ({
+  const createManagerFiringMessage = (club: Club, date: Date): string => {
+    const effectiveDate = date.toLocaleDateString('pl-PL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+
+    return [
+      'Szanowny Panie,',
+      '',
+      'Informujemy, że Zarząd Klubu podjął decyzję o zakończeniu współpracy i rozwiązaniu umowy dotyczącej pełnienia funkcji trenera pierwszego zespołu.',
+      '',
+      'Dziękujemy za dotychczasową pracę, zaangażowanie oraz wkład w funkcjonowanie drużyny.',
+      '',
+      `Decyzja wchodzi w życie z dniem ${effectiveDate}.`,
+      '',
+      'Życzymy powodzenia oraz sukcesów w dalszej karierze trenerskiej.',
+      '',
+      'Z poważaniem,',
+      `Zarząd Klubu ${club.name}`,
+    ].join('\n');
+  };
+
+  const createManagerFiredMail = (club: Club, date: Date): MailMessage => ({
     id: `MANAGER_FIRED_${club.id}_${date.getFullYear()}_${date.getMonth() + 1}_${date.getDate()}`,
     sender: `Zarząd ${club.name}`,
     role: 'Zarząd klubu',
     subject: `Zwolnienie z funkcji trenera ${club.name}`,
-    body: `Po analizie wyników sportowych zarząd klubu ${club.name} podjął decyzję o zakończeniu współpracy. Aktualna pozycja w lidze: ${rank}. Powód: ${reason}\n\nKonsekwencja reputacyjna: ${expPenalty > 0 ? `-${expPenalty} punktów EXP.` : 'brak utraty EXP, ponieważ doświadczenie nie może spaść poniżej minimum.'}\n\nKlub natychmiast rozpoczyna pracę z nowym szkoleniowcem. Do czasu znalezienia kolejnego zatrudnienia pozostaje Pan bez klubu.`,
+    body: createManagerFiringMessage(club, date),
     date,
     isRead: false,
     type: MailType.BOARD,
@@ -4889,6 +4941,9 @@ setMessages(prev => [
   };
 
   const resignFromClub = () => {
+    if (userTeamId && userTeamId !== UNEMPLOYED_MANAGER_CLUB_ID) {
+      setManagerProfile(prev => prev ? { ...prev, lastManagedClubId: userTeamId } : prev);
+    }
     setIsResigned(true);
     setManagerEmploymentStatus('RESIGNED');
     setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
@@ -12498,22 +12553,30 @@ const finalResult: SimulationOutput = {
           if (pressure.finalChance > 0 && Math.random() < pressure.finalChance) {
             const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
             assignReplacementCoachToClub(updatedCoaches, userClub, nextDay, userClub.coachId);
-            newMails.push(createManagerFiredMail(userClub, pressure.reason, rank, nextDay, expPenalty));
-            if (expPenalty > 0) {
-              setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, [{
+            newMails.push(createManagerFiredMail(userClub, nextDay));
+            setManagerProfile(prev => {
+              const profileWithLastClub = prev ? { ...prev, lastManagedClubId: userClub.id } : prev;
+              if (expPenalty <= 0) return profileWithLastClub;
+              return ManagerExperienceService.applyExpAwards(profileWithLastClub, [{
                 sourceKey: `manager-fired:${userClub.id}:${nextDay.toISOString().split('T')[0]}`,
                 date: nextDay,
                 season: seasonNumber,
                 delta: -expPenalty,
                 competition: userClub.name,
                 label: 'Zwolnienie przez zarząd',
-              }]));
-            }
+              }]);
+            });
             setIsResigned(true);
             setManagerEmploymentStatus('FIRED');
             setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
             setIncomingOffers([]);
             setActiveTrainingId(null);
+            showGameNotification({
+              title: 'Zwolnienie z klubu',
+              message: createManagerFiringMessage(userClub, nextDay),
+              tone: 'error',
+              display: 'modal',
+            });
             coachClubStateChanged = true;
           }
         }
@@ -19370,41 +19433,37 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
      * user from the club and clear club-specific pending activity.
      */
     if (decision.fired) {
-      const leagueClubs = clubs.filter(club => club.leagueId === userClub.leagueId);
-      const sorted = [...leagueClubs].sort((left, right) =>
-        right.stats.points - left.stats.points || right.stats.goalDifference - left.stats.goalDifference || right.stats.goalsFor - left.stats.goalsFor
-      );
-      const rank = Math.max(1, sorted.findIndex(club => club.id === userClub.id) + 1);
       const expPenalty = calculateManagerFiringExpPenalty(managerProfile, userClub);
       const replacementClub: Club = { ...userClub, ...clubPatch };
       const updatedCoaches = { ...coaches };
       assignReplacementCoachToClub(updatedCoaches, replacementClub, currentDate, userClub.coachId);
       setCoaches(updatedCoaches);
       setClubs(prev => prev.map(club => club.id === userClub.id ? replacementClub : club));
-      if (expPenalty > 0) {
-        setManagerProfile(prev => ManagerExperienceService.applyExpAwards(prev, [{
+      setManagerProfile(prev => {
+        const profileWithLastClub = prev ? { ...prev, lastManagedClubId: userClub.id } : prev;
+        if (expPenalty <= 0) return profileWithLastClub;
+        return ManagerExperienceService.applyExpAwards(profileWithLastClub, [{
           sourceKey: `manager-fired-ultimatum:${userClub.id}:${currentDate.toISOString().split('T')[0]}`,
           date: currentDate,
           season: seasonNumber,
           delta: -expPenalty,
           competition: userClub.name,
           label: 'Zwolnienie po ultimatum kontraktowym',
-        }]));
-      }
-      const firedMail = createManagerFiredMail(
-        userClub,
-        'Ultimatum postawione właścicielowi w sprawie zawetowanego kontraktu.',
-        rank,
-        currentDate,
-        expPenalty,
-      );
+        }]);
+      });
+      const firedMail = createManagerFiredMail(userClub, currentDate);
       setMessages(prev => [firedMail, ...prev.filter(message => message.id !== vetoMailId && message.id !== contractMail.id)]);
       setIsResigned(true);
       setManagerEmploymentStatus('FIRED');
       setUserTeamId(UNEMPLOYED_MANAGER_CLUB_ID);
       setIncomingOffers([]);
       setActiveTrainingId(null);
-      showGameNotification({ title: 'Zwolnienie z klubu', message: decision.message, tone: 'error' });
+      showGameNotification({
+        title: 'Zwolnienie z klubu',
+        message: createManagerFiringMessage(userClub, currentDate),
+        tone: 'error',
+        display: 'modal',
+      });
       return { ok: true, message: decision.message, state: decision.state, closeMail: true };
     }
 

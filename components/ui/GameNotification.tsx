@@ -38,6 +38,53 @@ export const GameNotification: React.FC = () => {
     border: 'border-sky-400/20'
   };
 
+  if (gameNotification.display === 'modal') {
+    return (
+      <div className="fixed inset-0 z-[1600] flex items-center justify-center bg-black/80 px-5 py-8 backdrop-blur-xl">
+        <div className={`relative w-full max-w-3xl overflow-hidden rounded-[36px] border bg-slate-950/95 shadow-[0_45px_120px_rgba(0,0,0,0.80)] ${toneStyles.border}`}>
+          <div className={`absolute inset-0 bg-gradient-to-br ${toneStyles.glow} opacity-70`} />
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-rose-400 to-transparent" />
+          <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-25" viewBox="0 0 800 560" aria-hidden>
+            <path d="M-40 110 C170 10 560 30 850 155" fill="none" stroke="#fb7185" strokeOpacity="0.35" strokeWidth="2" strokeDasharray="12 14" />
+            <circle cx="720" cy="475" r="145" fill="none" stroke="#ffffff" strokeOpacity="0.10" strokeWidth="2" />
+            <circle cx="720" cy="475" r="92" fill="none" stroke="#fb7185" strokeOpacity="0.12" strokeWidth="2" />
+          </svg>
+
+          <div className="relative px-9 py-8 sm:px-12 sm:py-10">
+            <div className="flex items-start gap-5">
+              <div className="mt-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-rose-300/25 bg-rose-500/10 shadow-[0_0_25px_rgba(244,63,94,0.18)]">
+                <span className="text-2xl" aria-hidden>⚑</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className={`text-[10px] font-black uppercase tracking-[0.34em] ${toneStyles.badge}`}>
+                  Oficjalna decyzja zarządu
+                </div>
+                <h2 className="mt-2 text-3xl font-black italic tracking-tight text-white sm:text-4xl">
+                  {gameNotification.title}
+                </h2>
+              </div>
+            </div>
+
+            <div className="mt-7 rounded-[26px] border border-white/10 bg-black/25 px-7 py-6 shadow-inner">
+              <p className="whitespace-pre-line text-[15px] font-medium leading-7 text-slate-200 sm:text-base">
+                {gameNotification.message}
+              </p>
+            </div>
+
+            <div className="mt-7 flex justify-end">
+              <button
+                onClick={clearGameNotification}
+                className="rounded-[18px] border border-rose-300/30 bg-rose-500/15 px-8 py-3 text-xs font-black uppercase tracking-[0.18em] text-rose-100 transition-all hover:-translate-y-0.5 hover:border-rose-200/60 hover:bg-rose-500/25"
+              >
+                Przyjmuję do wiadomości
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pointer-events-none fixed inset-x-0 top-5 z-[1400] flex justify-center px-4">
       <div className={`pointer-events-auto relative w-full max-w-2xl overflow-hidden rounded-[30px] border bg-slate-950/88 shadow-[0_40px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl ${toneStyles.border}`}>
