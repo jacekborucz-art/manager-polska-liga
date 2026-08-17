@@ -53,18 +53,79 @@ try {
   });
 
   const legia = { ...club, id: 'PL_LEGIA_WARSZAWA', name: 'Legia Warszawa', reputation: 10 };
-  const legiaBaseSalary = ManagerContractService.calculateBaseSalary(legia, null);
-  assert.equal(legiaBaseSalary, 4_500_000, 'bazowa pensja początkującego trenera Legii powinna wynosić 4,5 mln PLN rocznie');
+  const rookieProfile = { expPoints: 1, expHistory: [], careerHistory: [], achievements: [] } as any;
+  const decoratedProfile = {
+    expPoints: 500,
+    expHistory: [],
+    careerHistory: [{}, {}, {}],
+    achievements: [
+      { id: 'mp-1', seasonLabel: '2026/27', title: 'Mistrz Polski 2026/27', competition: 'Ekstraklasa' },
+      { id: 'mp-2', seasonLabel: '2027/28', title: 'Mistrz Polski 2027/28', competition: 'Ekstraklasa' },
+      { id: 'mp-3', seasonLabel: '2028/29', title: 'Mistrz Polski 2028/29', competition: 'Ekstraklasa' },
+    ],
+  } as any;
+  const legiaRookieSalary = ManagerContractService.calculateBaseSalary(legia, rookieProfile);
+  const legiaDecoratedSalary = ManagerContractService.calculateBaseSalary(legia, decoratedProfile);
+  assert.equal(ManagerContractService.calculateClubManagerSalaryCeiling(legia), 5_000_000, 'maksymalny pułap pensji trenera Legii powinien wynosić 5 mln PLN');
+  assert.equal(legiaRookieSalary, 2_500_000, 'początkujący trener Legii powinien otrzymać wyraźnie niższą ofertę startową');
+  assert.equal(legiaDecoratedSalary, 4_500_000, 'trzykrotny mistrz Polski powinien otrzymać ofertę zbliżoną do klubowego maksimum');
   const lowExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: 1 } as any);
-  const highExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, { expPoints: lowExpLeverage.requiredExp * 2 } as any);
-  assert.equal(lowExpLeverage.offerMultiplier, 0.8, 'klub może obniżyć ofertę niedoświadczonemu trenerowi o 20%');
-  assert.ok(highExpLeverage.offerMultiplier > 1, 'wysoki EXP powinien podnosić ofertę bazową');
+  const highExpLeverage = ManagerContractService.getManagerSalaryLeverage(legia, decoratedProfile);
+  assert.equal(lowExpLeverage.offerMultiplier, 0.5, 'początkujący trener powinien zaczynać od połowy klubowego pułapu');
+  assert.ok(highExpLeverage.offerMultiplier > lowExpLeverage.offerMultiplier, 'duże doświadczenie i sukcesy powinny podnosić ofertę bazową');
+  assert.equal(highExpLeverage.polishChampionships, 3, 'model powinien rozpoznawać zdobyte mistrzostwa Polski');
   assert.ok(
     highExpLeverage.maxNegotiatedPremium > lowExpLeverage.maxNegotiatedPremium,
     'doświadczony trener powinien móc negocjować większą podwyżkę'
   );
   const discountedTerms = ManagerContractService.createTerms(legia, clubs, { expPoints: 1 } as any, start);
   assert.equal(discountedTerms.salaryReviewAfterOneSeason, true, 'niższa stawka powinna zawierać możliwość przeglądu po sezonie');
+
+  Math.random = () => 0.999999;
+  const rookieLegiaNegotiation = ManagerContractService.createNegotiation(legia, clubs, rookieProfile, start, 'CAREER_START');
+  const rookieHighDemandCounter = ManagerContractService.negotiate(
+    rookieLegiaNegotiation,
+    legia,
+    clubs,
+    rookieProfile,
+    rookieLegiaNegotiation.clubTerms.target.id,
+    2,
+    5_000_000
+  );
+  assert.equal(rookieHighDemandCounter.status, 'NEGOTIATING', 'bardzo wysoka prośba początkującego trenera powinna wywołać kontrofertę');
+  assert.equal(rookieHighDemandCounter.lastResponseType, 'VETO');
+  const rookieHighDemandRejected = ManagerContractService.negotiate(
+    rookieHighDemandCounter,
+    legia,
+    clubs,
+    rookieProfile,
+    rookieHighDemandCounter.clubTerms.target.id,
+    2,
+    5_000_000
+  );
+  assert.equal(rookieHighDemandRejected.status, 'NEGOTIATING', 'przy niekorzystnym RNG wyjątkowo wysoka stawka nie powinna zostać zaakceptowana');
+
+  Math.random = () => 0;
+  const rookieExceptionalAgreement = ManagerContractService.negotiate(
+    rookieHighDemandCounter,
+    legia,
+    clubs,
+    rookieProfile,
+    rookieHighDemandCounter.clubTerms.target.id,
+    2,
+    5_000_000
+  );
+  assert.equal(rookieExceptionalAgreement.status, 'AGREED', 'minimalna szansa RNG powinna pozwalać na wyjątkową zgodę zarządu');
+  const aboveClubLimit = ManagerContractService.negotiate(
+    rookieHighDemandCounter,
+    legia,
+    clubs,
+    rookieProfile,
+    rookieHighDemandCounter.clubTerms.target.id,
+    2,
+    5_100_000
+  );
+  assert.notEqual(aboveClubLimit.status, 'AGREED', 'stawka powyżej klubowego limitu 5 mln nie może zostać zaakceptowana');
 
   Math.random = () => 0;
   const eliteNegotiation = ManagerContractService.createNegotiation(legia, clubs, null, start, 'CAREER_START');
