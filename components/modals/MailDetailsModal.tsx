@@ -1317,7 +1317,7 @@ export const MailDetailsModal: React.FC<MailDetailsModalProps> = ({ mail, onClos
               <WCQPlayoffPolandMail mail={mail} />
             ) : mail.metadata?.type === 'AI_FRIENDLY_REPORT_LINK' || mail.metadata?.type === 'NATIONAL_TEAM_FRIENDLY_RESULTS' ? (
               <FriendlyResultsMail mail={mail} />
-            ) : mail.subject?.toLowerCase().includes('sparing') ? (
+            ) : /^wyniki sparingów\b/i.test(mail.subject ?? '') ? (
               (() => {
                 const matchRegex = /^(.+)\s(\d+[–-]\d+)\s(.+)$/;
                 const lines = mail.body.split('\n');

@@ -123,8 +123,8 @@ export const ManagerContractNegotiationModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[1600] flex items-center justify-center bg-[#010307]/92 p-5 backdrop-blur-xl">
-      <section className="relative h-[min(920px,calc(100vh-38px))] w-[min(1540px,calc(100vw-42px))] overflow-hidden rounded-[42px] border border-white/15 shadow-[0_40px_120px_rgba(0,0,0,0.75)]">
+    <div className="fixed inset-0 z-[1600] flex items-center justify-center bg-[#010307]/92 p-3 backdrop-blur-xl">
+      <section className="relative h-[min(1056px,calc(100dvh-24px))] w-[min(1540px,calc(100vw-24px))] overflow-hidden rounded-[42px] border border-white/15 shadow-[0_40px_120px_rgba(0,0,0,0.75)]">
         <ContractOfficeScene primary={primary} secondary={secondary} />
         <div className="relative z-10 grid h-full grid-cols-[370px_minmax(0,1fr)]">
           <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#020711]/55 px-11 py-10">
