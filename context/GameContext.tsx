@@ -2268,7 +2268,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
       sender: assistantName,
       role: 'Asystent trenera',
       subject: 'Przypomnienie: warto zaplanować sparingi',
-      body: `Trenerze,\n\nnie mamy obecnie zaplanowanego żadnego sparingu ${preparationLabel}. Warto zorganizować mecze kontrolne, aby drużyna złapała rytm, a zawodnicy ograli się przed najbliższymi spotkaniami.\n\nPozdrawiam,\n${assistantName}\nAsystent trenera`,
+      body: `Trenerze,\n\nNie mamy obecnie zaplanowanego żadnego sparingu ${preparationLabel}. Warto zorganizować mecze kontrolne, aby drużyna złapała rytm, a zawodnicy ograli się przed najbliższymi spotkaniami.\n\nPozdrawiam,\n${assistantName}\nAsystent trenera`,
       date: new Date(date),
       isRead: false,
       type: MailType.STAFF,
