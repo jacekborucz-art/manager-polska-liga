@@ -95,6 +95,14 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     body: 'Obecna lokata {CLUB} w tabeli jest upokarzająca dla marki o takiej reputacji. Nie po to inwestujemy w kadrę, by oglądać plecy znacznie słabszych zespołów. Oczekujemy jak najszybszej poprawy wyników.'
   },
   {
+    id: 'board_recovery_progress',
+    type: MailType.BOARD,
+    sender: 'Zarząd Klubu',
+    role: 'Prezes Zarządu',
+    subject: 'Wyraźny postęp drużyny',
+    body: 'Panie Trenerze,\n\nChoć obecna pozycja {CLUB} w tabeli nadal odbiega od naszych oczekiwań, Zarząd dostrzega wyraźną poprawę wyników od momentu objęcia przez Pana zespołu. Drużyna regularnie zdobywa punkty i skutecznie odrabia stratę powstałą we wcześniejszej części sezonu.\n\nDoceniamy wykonaną pracę oraz kierunek zmian. Prosimy o utrzymanie obecnej koncentracji i konsekwencji — tabela potrzebuje czasu, aby w pełni odzwierciedlić ten postęp.\n\nZ wyrazami uznania,\nZarząd Klubu'
+  },
+  {
     id: 'board_watching_patience',
     type: MailType.BOARD,
     sender: 'Zarząd Klubu',

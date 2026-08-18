@@ -1838,7 +1838,9 @@ const boardConfidence = useMemo(() => {
                       onClick={() => setSelectedMail(mail)}
                       className={`group relative min-h-[84px] p-4 rounded-[22px] border transition-all cursor-pointer overflow-hidden shadow-lg
                         ${actionLabel
-                          ? 'bg-amber-400/[0.07] border-amber-400/30 hover:border-amber-300/55 hover:bg-amber-400/[0.11]'
+                          ? mail.isRead
+                            ? 'bg-violet-400/[0.045] border-violet-300/20 opacity-75 hover:opacity-90 hover:border-violet-300/35 hover:bg-violet-400/[0.075]'
+                            : 'bg-amber-400/[0.07] border-amber-400/30 hover:border-amber-300/55 hover:bg-amber-400/[0.11]'
                           : mail.isRead
                             ? 'bg-white/[0.025] border-white/[0.05] opacity-65'
                             : 'bg-white/[0.055] border-white/[0.10] hover:border-white/20 hover:bg-white/[0.085]'}
@@ -1862,7 +1864,11 @@ const boardConfidence = useMemo(() => {
                                      {mail.sender.toUpperCase()}
                                   </span>
                                   {actionLabel && (
-                                    <span className="shrink-0 rounded-full border border-amber-300/35 bg-amber-400/15 px-2 py-0.5 text-[8px] text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.12)] font-black italic uppercase tracking-tighter">
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-black italic uppercase tracking-tighter ${
+                                      mail.isRead
+                                        ? 'border border-violet-300/30 bg-violet-400/10 text-violet-200 shadow-[0_0_10px_rgba(167,139,250,0.10)]'
+                                        : 'border border-amber-300/35 bg-amber-400/15 text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.12)]'
+                                    }`}>
                                       {actionLabel}
                                     </span>
                                   )}

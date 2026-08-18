@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { PlayerPosition, ViewState } from '../../types';
+import { NegotiationStatus, PlayerPosition, ViewState } from '../../types';
 import { FreeAgentNegotiationService } from '../../services/FreeAgentNegotiationService';
 import { FinanceService } from '@/services/FinanceService';
 import { BoardBudgetRequestService, BoardRequestResult } from '../../services/BoardBudgetRequestService';
@@ -110,8 +110,22 @@ export const FreeAgentNegotiationView: React.FC = () => {
     setCleanSheetBonus(agentDemands.cleanSheetBonus ?? 0);
   }, [player?.id, myClub?.id, agentDemands?.salary, agentDemands?.bonus, agentDemands?.years]);
 
+  const isAlreadyNegotiating = useMemo(() => {
+    if (!player || !myClub) return false;
+    return pendingNegotiations.some(negotiation =>
+      negotiation.playerId === player.id &&
+      negotiation.clubId === myClub.id &&
+      negotiation.status === NegotiationStatus.PENDING
+    );
+  }, [pendingNegotiations, player?.id, myClub?.id]);
+
   const agentInterest = useMemo(() => {
     if (!player || !myClub) return { interested: true, message: '' };
+    /*
+     * Po przyjęciu oferty do analizy zainteresowanie zostało już potwierdzone.
+     * Nie wolno ponownie losować bramki wejścia do rozmów przy otwarciu widoku,
+     * bo prowadziło to do jednoczesnego pokazania odmowy i oczekującej oferty.
+     */
     if (player.transferPendingClubId) {
       const destination = clubs.find(club => club.id === player.transferPendingClubId);
       return {
@@ -119,13 +133,9 @@ export const FreeAgentNegotiationView: React.FC = () => {
         message: `Zawodnik podpisał już umowę z klubem ${destination?.name ?? 'inny klub'}.`,
       };
     }
+    if (isAlreadyNegotiating) return { interested: true, message: '' };
     return FreeAgentNegotiationService.evaluateInitialInterest(player, myClub, mySquad, managerProfile);
-  }, [player, myClub, mySquad, managerProfile, clubs]);
-
-  const isAlreadyNegotiating = useMemo(() => {
-    if (!player) return false;
-    return pendingNegotiations.some(n => n.playerId === player.id);
-  }, [pendingNegotiations, player?.id]);
+  }, [player, myClub, mySquad, managerProfile, clubs, isAlreadyNegotiating]);
 
   const activeClubLockoutUntil = useMemo(() => {
     if (!player) return null;
@@ -722,23 +732,29 @@ export const FreeAgentNegotiationView: React.FC = () => {
         )}
 
         <button
-          onClick={isOfferWithinBudget ? handleConfirm : handleBoardRequest}
-          disabled={isSending || !isInterested || isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard)}
+          onClick={!isInterested
+            ? () => navigateTo(ViewState.JOB_MARKET)
+            : isOfferWithinBudget
+              ? handleConfirm
+              : handleBoardRequest}
+          disabled={isSending || (isInterested && (isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard)))}
           className={`w-full py-4 rounded-[24px] font-black italic uppercase tracking-tighter text-xl transition-all shadow-2xl border-b-[6px] active:scale-95 ${
-            (!isInterested || isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard))
+            !isInterested
+              ? 'bg-slate-700 hover:bg-slate-600 border-slate-900 text-white'
+              : (isAlreadyNegotiating || (!isOfferWithinBudget && !canRequestBoard))
               ? 'bg-slate-800 border-slate-900 text-slate-500 cursor-not-allowed'
               : !isOfferWithinBudget
                 ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-800'
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-800'
           }`}
         >
-          {isSending
+          {!isInterested
+            ? 'WYJDŹ Z NEGOCJACJI'
+            : isSending
             ? 'PRZESYŁANIE OFERTY...'
             : isAlreadyNegotiating
               ? 'OFERTA W ANALIZIE...'
-              : !isInterested
-                ? 'BRAK ZAINTERESOWANIA'
-                : !isOfferWithinBudget
+              : !isOfferWithinBudget
                   ? canRequestBoard
                     ? (
                       <>
@@ -759,7 +775,7 @@ export const FreeAgentNegotiationView: React.FC = () => {
                   : 'WYŚLIJ OFERTĘ DO AGENTA'}
         </button>
 
-        {isAlreadyNegotiating && (
+        {isInterested && isAlreadyNegotiating && (
           <p className="text-center text-amber-500 text-[11px] font-black uppercase tracking-widest animate-pulse mt-2">
             "Zapoznajemy sie z otrzymana oferta. Skontaktujemy sie z Panstwem w ciagu kilku dni."
           </p>

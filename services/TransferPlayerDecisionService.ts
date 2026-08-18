@@ -68,6 +68,49 @@ const getPolishLeagueTier = (club: Club): 1 | 2 | 3 | 4 | null => {
   return null;
 };
 
+const getPolishSportingUpgradeStrength = (currentClub: Club, targetClub: Club): number => {
+  const currentTier = getPolishLeagueTier(currentClub);
+  const targetTier = getPolishLeagueTier(targetClub);
+  if (currentTier === null || targetTier === null) return 0;
+
+  const leagueStep = Math.max(0, currentTier - targetTier);
+  const reputationStep = Math.max(0, targetClub.reputation - currentClub.reputation);
+  if (leagueStep === 0 && reputationStep === 0) return 0;
+
+  return leagueStep * 2 + reputationStep;
+};
+
+/**
+ * Absolutny filtr prestiżu nadal ogranicza pierwsze wejście klasowego zawodnika
+ * do Polski. Jeżeli jednak zawodnik już gra w polskim klubie, kolejny krajowy
+ * transfer powinien być oceniany względem jego aktualnej sytuacji. Przejście do
+ * wyższej ligi lub klubu o większej reputacji jest wtedy realnym awansem
+ * sportowym, a nie ponowną próbą przekonania go do całego polskiego rynku.
+ */
+export const getContextualPrestigeAssessment = (
+  player: Player,
+  currentClub: Club | null,
+  targetClub: Club,
+) => {
+  const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+  if (!currentClub) return assessment;
+
+  const upgradeStrength = getPolishSportingUpgradeStrength(currentClub, targetClub);
+  if (upgradeStrength <= 0) return assessment;
+
+  const chanceCap = clamp(0.80 + upgradeStrength * 0.035, 0.80, 0.97);
+  return {
+    ...assessment,
+    band: 'NATURAL' as const,
+    chanceCap,
+    salaryPremium: 0,
+    bonusPremium: 0,
+    scorePenalty: 0,
+    blocksNegotiation: false,
+    reason: 'Mój klient postrzega ten kierunek jako awans sportowy w ramach polskich rozgrywek i jest gotowy rozpocząć rozmowy.',
+  };
+};
+
 const getPolishClubPrestigeProgression = (club: Club): { topPlayerMultiplier: number; globalIconCap: number } => {
   const reputation = clamp(club.reputation ?? 0, 0, 20);
   if (reputation >= 20) return { topPlayerMultiplier: 5, globalIconCap: 0.03 };
@@ -123,7 +166,7 @@ export const getScoutTalkOpeningChance = (
 ): number => {
   const scoutPower = getScoutNegotiationPower(scout);
   if (scoutPower <= 0) return 0;
-  const band = PrestigeTransferGuardService.evaluateDestination(player, targetClub).band;
+  const band = getContextualPrestigeAssessment(player, currentClub, targetClub).band;
   const eliteChance =
     band === 'NATURAL' ? 0.45 :
     band === 'STRETCH' ? 0.64 :
@@ -146,7 +189,7 @@ export const getScoutAdjustedAcceptanceChanceCap = (
   targetClub: Club,
   scout?: TransferScoutNegotiationInfluence,
 ): number => {
-  const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+  const assessment = getContextualPrestigeAssessment(player, currentClub, targetClub);
   const scoutPower = getScoutNegotiationPower(scout);
   const scoutLift =
     assessment.band === 'NATURAL' ? 0 :
@@ -248,7 +291,11 @@ const getLowAppealAcceptanceCap = (player: Player, targetClub: Club): number | n
 };
 
 const getLoyaltyResistance = (player: Player, currentClub: Club, targetClub: Club): number => {
-  if (isLoyaltySoftenedForTransfer(player) || isMajorReputationStepUp(currentClub, targetClub)) {
+  if (
+    isLoyaltySoftenedForTransfer(player) ||
+    isMajorReputationStepUp(currentClub, targetClub) ||
+    getPolishSportingUpgradeStrength(currentClub, targetClub) > 0
+  ) {
     return 0;
   }
 
@@ -341,7 +388,7 @@ export const TransferPlayerDecisionService = {
       (new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000
     );
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
-    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+    const prestigeAssessment = getContextualPrestigeAssessment(player, currentClub, targetClub);
 
     if (prestigeAssessment.blocksNegotiation) {
       return {
@@ -484,7 +531,7 @@ export const TransferPlayerDecisionService = {
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
     const lowAppealDestinationPenalty = getLowAppealDestinationPenalty(player, targetClub);
     const lowAppealAcceptanceCap = getLowAppealAcceptanceCap(player, targetClub);
-    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+    const prestigeAssessment = getContextualPrestigeAssessment(player, currentClub, targetClub);
 
     let effectiveDesiredSalary = negotiationPlan.desiredSalary;
     let transferListSalaryDiscountApplied = false;

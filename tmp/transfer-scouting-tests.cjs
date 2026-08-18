@@ -15014,6 +15014,32 @@ var getPolishLeagueTier = (club) => {
   if (club.leagueId === "L_PL_4") return 4;
   return null;
 };
+var getPolishSportingUpgradeStrength = (currentClub, targetClub) => {
+  const currentTier = getPolishLeagueTier(currentClub);
+  const targetTier = getPolishLeagueTier(targetClub);
+  if (currentTier === null || targetTier === null) return 0;
+  const leagueStep = Math.max(0, currentTier - targetTier);
+  const reputationStep = Math.max(0, targetClub.reputation - currentClub.reputation);
+  if (leagueStep === 0 && reputationStep === 0) return 0;
+  return leagueStep * 2 + reputationStep;
+};
+var getContextualPrestigeAssessment = (player, currentClub, targetClub) => {
+  const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+  if (!currentClub) return assessment;
+  const upgradeStrength = getPolishSportingUpgradeStrength(currentClub, targetClub);
+  if (upgradeStrength <= 0) return assessment;
+  const chanceCap = clamp5(0.8 + upgradeStrength * 0.035, 0.8, 0.97);
+  return {
+    ...assessment,
+    band: "NATURAL",
+    chanceCap,
+    salaryPremium: 0,
+    bonusPremium: 0,
+    scorePenalty: 0,
+    blocksNegotiation: false,
+    reason: "M\xF3j klient postrzega ten kierunek jako awans sportowy w ramach polskich rozgrywek i jest gotowy rozpocz\u0105\u0107 rozmowy."
+  };
+};
 var getPolishClubPrestigeProgression = (club) => {
   const reputation = clamp5(club.reputation ?? 0, 0, 20);
   if (reputation >= 20) return { topPlayerMultiplier: 5, globalIconCap: 0.03 };
@@ -15054,7 +15080,7 @@ var getTopMarketPolandChanceCap = (player, currentClub, targetClub, scoutPower) 
 var getScoutTalkOpeningChance = (player, currentClub, targetClub, scout) => {
   const scoutPower = getScoutNegotiationPower(scout);
   if (scoutPower <= 0) return 0;
-  const band = PrestigeTransferGuardService.evaluateDestination(player, targetClub).band;
+  const band = getContextualPrestigeAssessment(player, currentClub, targetClub).band;
   const eliteChance = band === "NATURAL" ? 0.45 : band === "STRETCH" ? 0.64 : band === "LONG_SHOT" ? 0.56 : band === "EXTREME" ? 0.46 : 0.36;
   const chance = 0.01 + (eliteChance - 0.01) * Math.pow(scoutPower, 1.65);
   const topMarketCap = getTopMarketPolandChanceCap(player, currentClub, targetClub, scoutPower);
@@ -15062,7 +15088,7 @@ var getScoutTalkOpeningChance = (player, currentClub, targetClub, scout) => {
   return talkCap === null ? chance : Math.min(chance, talkCap);
 };
 var getScoutAdjustedAcceptanceChanceCap = (player, currentClub, targetClub, scout) => {
-  const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+  const assessment = getContextualPrestigeAssessment(player, currentClub, targetClub);
   const scoutPower = getScoutNegotiationPower(scout);
   const scoutLift = assessment.band === "NATURAL" ? 0 : assessment.band === "STRETCH" ? 0.36 * Math.pow(scoutPower, 1.45) : assessment.band === "LONG_SHOT" ? 0.42 * Math.pow(scoutPower, 1.45) : assessment.band === "EXTREME" ? 0.38 * Math.pow(scoutPower, 1.65) : 0.3 * Math.pow(scoutPower, 1.8);
   const generalCap = assessment.band === "BLOCKED" ? scoutLift : clamp5(assessment.chanceCap + scoutLift, 0, assessment.band === "STRETCH" ? 0.72 : 1);
@@ -15137,7 +15163,7 @@ var getLowAppealAcceptanceCap = (player, targetClub) => {
   return 0.04 + veteranSoftener;
 };
 var getLoyaltyResistance = (player, currentClub, targetClub) => {
-  if (isLoyaltySoftenedForTransfer(player) || isMajorReputationStepUp(currentClub, targetClub)) {
+  if (isLoyaltySoftenedForTransfer(player) || isMajorReputationStepUp(currentClub, targetClub) || getPolishSportingUpgradeStrength(currentClub, targetClub) > 0) {
     return 0;
   }
   return clamp5((getPlayerLoyalty(player) - 50) / 49, 0, 1);
@@ -15209,7 +15235,7 @@ var TransferPlayerDecisionService = {
       (new Date(player.contractEndDate).getTime() - currentDate2.getTime()) / 864e5
     );
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
-    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+    const prestigeAssessment = getContextualPrestigeAssessment(player, currentClub, targetClub);
     if (prestigeAssessment.blocksNegotiation) {
       return {
         willingToTalk: false,
@@ -15325,7 +15351,7 @@ var TransferPlayerDecisionService = {
     const loyaltyResistance = getLoyaltyResistance(player, currentClub, targetClub);
     const lowAppealDestinationPenalty = getLowAppealDestinationPenalty(player, targetClub);
     const lowAppealAcceptanceCap = getLowAppealAcceptanceCap(player, targetClub);
-    const prestigeAssessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
+    const prestigeAssessment = getContextualPrestigeAssessment(player, currentClub, targetClub);
     let effectiveDesiredSalary = negotiationPlan.desiredSalary;
     let transferListSalaryDiscountApplied = false;
     if (player.isOnTransferList && offer.salary < currentSalaryBase * 0.9) {
@@ -16253,4 +16279,61 @@ var regularStarCaps = elitePolishClubReputations.map((reputation) => getScoutAdj
   eliteInfluence
 ));
 assert(regularStarCaps[3] > regularStarCaps[0], "Polski klub o reputacji 20 powinien mie\u0107 wyra\u017Anie wi\u0119ksz\u0105 szans\u0119 na zwyk\u0142\u0105 gwiazd\u0119 ni\u017C klub o reputacji 17.");
+var domesticLeagueStar = {
+  ...renownedPlayer,
+  id: "DOMESTIC_LEAGUE_STAR",
+  clubId: "WARTA_LIKE_CLUB",
+  nationality: "IBERIA" /* IBERIA */,
+  overallRating: 81,
+  reputacja: 82
+};
+var wartaLikeClub = {
+  id: "WARTA_LIKE_CLUB",
+  name: "Klub z 1. Ligi",
+  country: "POL",
+  leagueId: "L_PL_2",
+  reputation: 4
+};
+var wislaLikeClub = {
+  id: "WISLA_LIKE_CLUB",
+  name: "Klub z Ekstraklasy",
+  country: "POL",
+  leagueId: "L_PL_1",
+  reputation: 6
+};
+var domesticUpgradeAssessment = getContextualPrestigeAssessment(
+  domesticLeagueStar,
+  wartaLikeClub,
+  wislaLikeClub
+);
+assert(!domesticUpgradeAssessment.blocksNegotiation, "Zawodnik graj\u0105cy ju\u017C w Polsce nie mo\u017Ce odrzuca\u0107 rozm\xF3w z klubem z wy\u017Cszej ligi jako zbyt s\u0142abym kierunkiem.");
+assert(domesticUpgradeAssessment.band === "NATURAL", "Przej\u015Bcie do wy\u017Cszej polskiej ligi i klubu o lepszej reputacji powinno by\u0107 traktowane jako naturalny awans sportowy.");
+assert(domesticUpgradeAssessment.chanceCap >= 0.9, "Wyra\u017Any krajowy awans sportowy powinien dawa\u0107 wysok\u0105, ale nie gwarantowan\u0105 szans\u0119 na porozumienie.");
+assert(
+  getScoutAdjustedAcceptanceChanceCap(domesticLeagueStar, wartaLikeClub, wislaLikeClub) >= 0.9,
+  "Ko\u0144cowy limit akceptacji nie mo\u017Ce ponownie blokowa\u0107 krajowego awansu sportowego."
+);
+assert(
+  TransferPlayerDecisionService.buildNegotiationPlan(
+    domesticLeagueStar,
+    wartaLikeClub,
+    wislaLikeClub,
+    [domesticLeagueStar],
+    [],
+    currentDate
+  ).willingToTalk,
+  "Przy krajowym awansie sportowym zawodnik powinien przedstawi\u0107 warunki kontraktu zamiast natychmiast odmawia\u0107 rozm\xF3w."
+);
+var entryFromPortugalAssessment = getContextualPrestigeAssessment(
+  domesticLeagueStar,
+  { ...topMarketClub, id: "PORTUGUESE_CLUB", country: "POR" },
+  wislaLikeClub
+);
+assert(entryFromPortugalAssessment.band !== "NATURAL", "Wyj\u0105tek dla krajowego awansu nie mo\u017Ce u\u0142atwia\u0107 pierwszego transferu klasowego zawodnika z zagranicy do Polski.");
+var domesticDowngradeAssessment = getContextualPrestigeAssessment(
+  domesticLeagueStar,
+  wislaLikeClub,
+  wartaLikeClub
+);
+assert(domesticDowngradeAssessment.band !== "NATURAL", "Przej\u015Bcie do ni\u017Cszej polskiej ligi i s\u0142abszego klubu nadal powinno podlega\u0107 normalnemu filtrowi presti\u017Cu.");
 console.log("TransferScoutingTests: OK");

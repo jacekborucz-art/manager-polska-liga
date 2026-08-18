@@ -82,6 +82,94 @@ const getDayDifference = (from: Date, to: Date): number =>
 const getYearMonthKey = (date: Date): string =>
   `${date.getFullYear()}_${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+export interface ManagerLeagueFormTrend {
+  matchesManaged: number;
+  recentMatches: number;
+  recentPoints: number;
+  recentWins: number;
+  recentLosses: number;
+  currentWinStreak: number;
+  currentUnbeatenStreak: number;
+  isClearRecovery: boolean;
+}
+
+const getFixturePointsForClub = (fixture: Fixture, clubId: string): number => {
+  const isHome = fixture.homeTeamId === clubId;
+  const goalsFor = isHome ? fixture.homeScore : fixture.awayScore;
+  const goalsAgainst = isHome ? fixture.awayScore : fixture.homeScore;
+  if (goalsFor == null || goalsAgainst == null) return 0;
+  if (goalsFor > goalsAgainst) return 3;
+  if (goalsFor === goalsAgainst) return 1;
+  return 0;
+};
+
+/**
+ * Zarząd ocenia odbudowę zespołu wyłącznie na podstawie meczów ligowych
+ * rozegranych przez aktualnego trenera. Dzięki temu słaby dorobek poprzednika
+ * nie przesłania serii dobrych wyników po przejęciu klubu.
+ */
+export const getManagerLeagueFormTrend = (
+  managerContract: ManagerContract | null | undefined,
+  club: Club,
+  fixtures: Fixture[],
+  currentDate: Date,
+): ManagerLeagueFormTrend => {
+  const emptyTrend: ManagerLeagueFormTrend = {
+    matchesManaged: 0,
+    recentMatches: 0,
+    recentPoints: 0,
+    recentWins: 0,
+    recentLosses: 0,
+    currentWinStreak: 0,
+    currentUnbeatenStreak: 0,
+    isClearRecovery: false,
+  };
+  if (!managerContract || managerContract.clubId !== club.id) return emptyTrend;
+
+  const contractStart = startOfDay(new Date(managerContract.signedAt || managerContract.terms.startDate));
+  const currentDay = startOfDay(currentDate);
+  if (!Number.isFinite(contractStart) || !Number.isFinite(currentDay)) return emptyTrend;
+
+  const managedFixtures = fixtures
+    .filter(fixture =>
+      fixture.status === MatchStatus.FINISHED &&
+      fixture.leagueId === club.leagueId &&
+      (fixture.homeTeamId === club.id || fixture.awayTeamId === club.id) &&
+      startOfDay(fixture.date) >= contractStart &&
+      startOfDay(fixture.date) <= currentDay
+    )
+    .sort((a, b) => startOfDay(a.date) - startOfDay(b.date));
+  if (managedFixtures.length === 0) return emptyTrend;
+
+  const points = managedFixtures.map(fixture => getFixturePointsForClub(fixture, club.id));
+  const recentPointsList = points.slice(-5);
+  const recentPoints = recentPointsList.reduce((sum, value) => sum + value, 0);
+  const recentWins = recentPointsList.filter(value => value === 3).length;
+  const recentLosses = recentPointsList.filter(value => value === 0).length;
+
+  let currentWinStreak = 0;
+  for (let index = points.length - 1; index >= 0 && points[index] === 3; index--) currentWinStreak++;
+
+  let currentUnbeatenStreak = 0;
+  for (let index = points.length - 1; index >= 0 && points[index] > 0; index--) currentUnbeatenStreak++;
+
+  const isClearRecovery =
+    currentWinStreak >= 3 ||
+    (recentPointsList.length >= 4 && recentPoints >= 10) ||
+    (recentPointsList.length >= 5 && recentWins >= 3 && recentLosses === 0);
+
+  return {
+    matchesManaged: managedFixtures.length,
+    recentMatches: recentPointsList.length,
+    recentPoints,
+    recentWins,
+    recentLosses,
+    currentWinStreak,
+    currentUnbeatenStreak,
+    isClearRecovery,
+  };
+};
+
 const STAR_INJURY_DRAMA_MIN_DAYS = 90;
 
 type VarControversyArticleContext = {
@@ -1096,11 +1184,18 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       'board_excellent_position',
       'board_bad_position',
       'board_watching_patience',
+      'board_recovery_progress',
     ]);
     const alreadySentBoardPositionThisMonth = existingMails.some(mail => {
       const mailDate = getMailDate(mail);
       if (!mailDate || getYearMonthKey(mailDate) !== boardPositionMonthKey) return false;
       return [...boardPositionTemplateIds].some(templateId => mail.id.includes(`_${templateId}_`));
+    });
+    const alreadySentRecoveryThisMonth = existingMails.some(mail => {
+      const mailDate = getMailDate(mail);
+      return !!mailDate &&
+        getYearMonthKey(mailDate) === boardPositionMonthKey &&
+        (mail.id.includes('_board_recovery_progress_') || mail.subject === 'Wyraźny postęp drużyny');
     });
     const alreadySentWinningStreakThisMonth = existingMails.some(mail => {
       const mailDate = getMailDate(mail);
@@ -1122,6 +1217,12 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
       allFixtures ?? [],
       currentDate,
     );
+    const managerFormTrend = getManagerLeagueFormTrend(
+      managerContract,
+      userClub,
+      allFixtures ?? [],
+      currentDate,
+    );
 
     if (played >= 3 && managerTenure.leagueMatchesManaged >= 3 && isBeforeLastLeagueMatch && !isWinterBreak) {
        // expectedRank: non-linear mapping so high-rep clubs (Legia, Lech) expect top 2,
@@ -1130,7 +1231,9 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
        const isHighRepClub = userClub.reputation >= 8;
        const isFirstHalf = played < 17;
 
-       if (!alreadySentBoardPositionThisMonth && rng < 0.15) {
+       if (!alreadySentRecoveryThisMonth && rank >= expectedRank + 4 && managerFormTrend.isClearRecovery) {
+          newMails.push(createMail('board_recovery_progress', { 'CLUB': userClub.name }));
+       } else if (!alreadySentBoardPositionThisMonth && rng < 0.15) {
           if (rank <= expectedRank - 3) {
              newMails.push(createMail('board_excellent_position', { 'CLUB': userClub.name }));
           } else if (rank >= expectedRank + 4 && managerTenure.pressureStage !== 'NONE') {
@@ -1144,14 +1247,19 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
        }
 
        const form = userClub.stats.form;
-       let currentWinStreak = 0;
-       for (let i = form.length - 1; i >= 0 && form[i] === 'W'; i--) currentWinStreak++;
+       const currentWinStreak = managerFormTrend.matchesManaged > 0
+         ? managerFormTrend.currentWinStreak
+         : (() => {
+             let streak = 0;
+             for (let i = form.length - 1; i >= 0 && form[i] === 'W'; i--) streak++;
+             return streak;
+           })();
        let currentLossStreak = 0;
        for (let i = form.length - 1; i >= 0 && form[i] === 'P'; i--) currentLossStreak++;
 
        if (managerTenure.pressureStage === 'FULL' && boardConfidence < 35 && rng < 0.2 && currentLossStreak >= 3) {
           newMails.push(createMail('board_losing_streak', { 'CLUB': userClub.name }));
-       } else if (boardConfidence > 85 && rng < 0.1 && currentWinStreak >= 3 && !alreadySentWinningStreakThisMonth) {
+       } else if (!managerFormTrend.isClearRecovery && boardConfidence > 85 && rng < 0.1 && currentWinStreak >= 3 && !alreadySentWinningStreakThisMonth) {
           newMails.push(createMail('board_winning_streak', { 'CLUB': userClub.name }));
        }
     }
@@ -1537,7 +1645,7 @@ generateSeasonTicketMail: (club: { name: string; stadiumName: string; stadiumCap
     }
 
     // --- TYGODNIOWY MAIL NACISKU ZARZĄDU (każdy poniedziałek) ---
-    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure && managerTenure.pressureStage !== 'NONE') {
+    if (currentDate.getDay() === 1 && userClub.leagueId !== 'NONE' && played > 0 && isBeforeLastLeagueMatch && canSendLateSeasonBoardPressure && managerTenure.pressureStage !== 'NONE' && !managerFormTrend.isClearRecovery) {
       const board = userClub.board;
       if (board) {
         const pressure = CoachService.getPerformancePressure(userClub, rank, managerExpPoints, managerExpectedRank);

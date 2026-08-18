@@ -1,5 +1,7 @@
 import { TransferScoutingService } from '../services/TransferScoutingService';
 import {
+  TransferPlayerDecisionService,
+  getContextualPrestigeAssessment,
   getScoutAdjustedAcceptanceChanceCap,
   getScoutNegotiationPower,
   getScoutTalkOpeningChance,
@@ -353,5 +355,65 @@ const regularStarCaps = elitePolishClubReputations.map(reputation => getScoutAdj
   eliteInfluence,
 ));
 assert(regularStarCaps[3] > regularStarCaps[0], 'Polski klub o reputacji 20 powinien mieć wyraźnie większą szansę na zwykłą gwiazdę niż klub o reputacji 17.');
+
+const domesticLeagueStar = {
+  ...renownedPlayer,
+  id: 'DOMESTIC_LEAGUE_STAR',
+  clubId: 'WARTA_LIKE_CLUB',
+  nationality: Region.IBERIA,
+  overallRating: 81,
+  reputacja: 82,
+} as Player;
+const wartaLikeClub = {
+  id: 'WARTA_LIKE_CLUB',
+  name: 'Klub z 1. Ligi',
+  country: 'POL',
+  leagueId: 'L_PL_2',
+  reputation: 4,
+} as Club;
+const wislaLikeClub = {
+  id: 'WISLA_LIKE_CLUB',
+  name: 'Klub z Ekstraklasy',
+  country: 'POL',
+  leagueId: 'L_PL_1',
+  reputation: 6,
+} as Club;
+const domesticUpgradeAssessment = getContextualPrestigeAssessment(
+  domesticLeagueStar,
+  wartaLikeClub,
+  wislaLikeClub,
+);
+assert(!domesticUpgradeAssessment.blocksNegotiation, 'Zawodnik grający już w Polsce nie może odrzucać rozmów z klubem z wyższej ligi jako zbyt słabym kierunkiem.');
+assert(domesticUpgradeAssessment.band === 'NATURAL', 'Przejście do wyższej polskiej ligi i klubu o lepszej reputacji powinno być traktowane jako naturalny awans sportowy.');
+assert(domesticUpgradeAssessment.chanceCap >= 0.90, 'Wyraźny krajowy awans sportowy powinien dawać wysoką, ale nie gwarantowaną szansę na porozumienie.');
+assert(
+  getScoutAdjustedAcceptanceChanceCap(domesticLeagueStar, wartaLikeClub, wislaLikeClub) >= 0.90,
+  'Końcowy limit akceptacji nie może ponownie blokować krajowego awansu sportowego.'
+);
+assert(
+  TransferPlayerDecisionService.buildNegotiationPlan(
+    domesticLeagueStar,
+    wartaLikeClub,
+    wislaLikeClub,
+    [domesticLeagueStar],
+    [],
+    currentDate,
+  ).willingToTalk,
+  'Przy krajowym awansie sportowym zawodnik powinien przedstawić warunki kontraktu zamiast natychmiast odmawiać rozmów.'
+);
+
+const entryFromPortugalAssessment = getContextualPrestigeAssessment(
+  domesticLeagueStar,
+  { ...topMarketClub, id: 'PORTUGUESE_CLUB', country: 'POR' } as Club,
+  wislaLikeClub,
+);
+assert(entryFromPortugalAssessment.band !== 'NATURAL', 'Wyjątek dla krajowego awansu nie może ułatwiać pierwszego transferu klasowego zawodnika z zagranicy do Polski.');
+
+const domesticDowngradeAssessment = getContextualPrestigeAssessment(
+  domesticLeagueStar,
+  wislaLikeClub,
+  wartaLikeClub,
+);
+assert(domesticDowngradeAssessment.band !== 'NATURAL', 'Przejście do niższej polskiej ligi i słabszego klubu nadal powinno podlegać normalnemu filtrowi prestiżu.');
 
 console.log('TransferScoutingTests: OK');

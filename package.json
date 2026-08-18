@@ -49,6 +49,7 @@
     "test:club-reputation": "esbuild tests/ClubReputationTests.ts --bundle --platform=node --format=cjs --outfile=tmp/club-reputation-tests.cjs && node tmp/club-reputation-tests.cjs",
     "test:reputation-balance": "esbuild tests/ReputationBalanceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/reputation-balance-tests.cjs && node tmp/reputation-balance-tests.cjs",
     "test:transfer-scouting": "esbuild tests/TransferScoutingTests.ts --bundle --platform=node --format=cjs --outfile=tmp/transfer-scouting-tests.cjs && node tmp/transfer-scouting-tests.cjs",
+    "test:board-mail-recovery": "esbuild tests/BoardMailRecoveryTests.ts --bundle --platform=node --format=cjs --outfile=tmp/board-mail-recovery-tests.cjs && node tmp/board-mail-recovery-tests.cjs",
     "test:user-coach-instructions": "esbuild tests/UserCoachInstructionServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-coach-instruction-tests.cjs && node tmp/user-coach-instruction-tests.cjs",
     "test:user-coach-shouts": "esbuild tests/UserCoachShoutServiceTests.ts --bundle --platform=node --format=cjs --outfile=tmp/user-coach-shout-tests.cjs && node tmp/user-coach-shout-tests.cjs",
     "test:live-match-goal-commit": "esbuild tests/LiveMatchGoalCommitTests.ts --bundle --platform=node --format=cjs --outfile=tmp/live-match-goal-commit-tests.cjs && node tmp/live-match-goal-commit-tests.cjs",
