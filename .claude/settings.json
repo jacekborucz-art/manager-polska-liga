@@ -15,7 +15,19 @@
       "Bash(python _debug.py)",
       "Bash(python _fix2.py)",
       "Bash(git check-ignore *)",
-      "Bash(SIM_MATCHES=300 node tmp/league-balance-sim.cjs)"
+      "Bash(SIM_MATCHES=300 node tmp/league-balance-sim.cjs)",
+      "Bash(npx tsc *)",
+      "Bash(tee /tmp/tsc_out.txt)",
+      "Read(//tmp/**)",
+      "Bash(cat /tmp/tsc_out.txt)",
+      "Bash(cd \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\" && find . -iname \"tsconfig*.json\" -not -path \"*/node_modules/*\" 2>&1; echo \"---parent dirs---\"; ls -la ../ 2>&1 | grep -i tsconfig; ls -la ../../ 2>&1 | grep -i tsconfig)",
+      "Read(//c/Users/Jack Cave/Documents/FM google studio/**)",
+      "Read(//c/Users/Jack Cave/Documents/**)",
+      "Bash(grep -i \"GameContext\" /tmp/strict_out.txt | wc -l *)",
+      "Bash(rm -f \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\\\\tsconfig.strict.temp.json\")",
+      "Bash(cat)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(cd \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\" && rm -f ./scratch_board_repro.ts *)"
     ]
   }
 }

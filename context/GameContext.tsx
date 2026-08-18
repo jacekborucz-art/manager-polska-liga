@@ -255,6 +255,20 @@ export interface ImportedSquadPlayer {
 const RESERVE_SQUAD_LIMIT = 30;
 const RESERVE_RELEASE_RESPONSE_DAYS = 7;
 
+// getDayDifference is used below (message-age checks) but was never defined or imported
+// in this file, which caused a runtime crash ("getDayDifference is not defined") wherever
+// it was called. Same private helper already exists in MailService.ts and
+// PlayerClubAdaptationService.ts, but neither exports it, so it's duplicated here rather
+// than changing another file's public API.
+const startOfDay = (date: Date): number => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized.getTime();
+};
+
+const getDayDifference = (from: Date, to: Date): number =>
+  Math.round((startOfDay(to) - startOfDay(from)) / 86400000);
+
 const getReserveAverageMatchRatingForBoard = (player: Player): number => {
   const stats = player.reserveStats;
   if (!stats?.matches) return 6.5;
@@ -1677,7 +1691,7 @@ const [reserveProgressHistory, setReserveProgressHistory] = useState<ReserveProg
   // Guard: zapobiega wielokrotnemu uruchomieniu processLeagueEvent dla tej samej daty
   const lastProcessedLeagueDateRef = React.useRef<string | null>(null);
   const celebrationAlreadyFiredRef = React.useRef(false);
-  const boardLevelScore = (level: Club['board'] extends infer B ? B extends undefined ? never : B[keyof B] : never): number => {
+  const boardLevelScore = (level?: Club['board'] extends infer B ? B extends undefined ? never : B[keyof B] : never): number => {
     if (level === 'bardzo_wysoka') return 4;
     if (level === 'wysoka') return 3;
     if (level === 'przecietna') return 2;
@@ -3182,7 +3196,13 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       c.seasonStats = [...(c.seasonStats || []).slice(-4), stat];
     });
 
-    let updatedClubs = clubs.map(club => {
+    // Without this `: Club[]` annotation, TypeScript infers updatedClubs' type from the
+    // shape of the object literal returned below (line ~3430) instead of from `Club`. In
+    // that literal `reserveBudget` is always a plain number (via Math.max), so TS treats it
+    // as required — stricter than Club.reserveBudget (types.ts), which is optional. That
+    // mismatch then breaks later reassignments like ReserveTeamFinanceService.allocateSeasonFunding(...)
+    // below, which correctly returns Club[] with an optional reserveBudget.
+    let updatedClubs: Club[] = clubs.map(club => {
       let newLeagueId = club.leagueId;
       let newReputation = club.reputation;
       const isUser = club.id === userTeamId;
@@ -5606,10 +5626,26 @@ setMessages(prev => [
                 negotiationLockoutUntil: lockoutDate.toISOString(),
                 transferLockoutUntil: lockoutDate.toISOString(),
               };
+              // MailMessage.priority (types.ts) is a required numeric field that drives inbox
+              // sort/attention order — it is NOT optional, so every mail object must set it.
+              // Within this file, MailType.SYSTEM mails sent directly from a player/agent about
+              // contract or transfer-list matters cluster in the ~80-98 range depending on how
+              // severe the consequence is (e.g. "chose another club" = 88, "withdrew transfer
+              // consent after manager inaction" = 90, "contract decision" = 95).
+              // This mail reports that the manager broke an explicit promise to the player,
+              // which immediately triggers a real gameplay penalty (max morale loss plus a
+              // 6-month negotiation/transfer lockout, see `reviewed` above) — a more serious,
+              // longer-lasting consequence than the 90-priority "withdrew consent" case, so it
+              // is placed just above it at 92 rather than reusing 88/90/95 verbatim.
               transferRequestMails.push({
                 id: `TRANSFER_LIST_REMOVAL_PROMISE_BROKEN_${reviewed.id}_${currentDate.toISOString().split('T')[0]}`,
-                date: currentDate.toISOString(),
+                // MailMessage.date expects a Date object, not a string — pass `currentDate`
+                // itself (a Date is only turned into a string above, for the id, via
+                // .toISOString()). Passing the string here would break any code that later
+                // calls Date methods (e.g. formatting/sorting) on this mail's date.
+                date: currentDate,
                 type: MailType.SYSTEM,
+                priority: 92,
                 subject: `Zerwane zaufanie: ${reviewed.lastName}`,
                 sender: `${reviewed.firstName} ${reviewed.lastName}`,
                 role: 'Zawodnik',
@@ -6608,7 +6644,11 @@ setMessages(prev => [
           startedDate: mission.startedDate,
           completionDate,
           cost: mission.cost,
-          status: 'CANCELLED',
+          // Without `as const` here, TypeScript widens this literal to plain `string` (the
+          // callback has two different `return` paths, so the object literal isn't
+          // contextually typed against AcademyScoutingHistoryEntry) — same fix already
+          // applied to the `reason` field elsewhere in this file.
+          status: 'CANCELLED' as const,
           foundCount: 0,
           isAnnualIntake: mission.isAnnualIntake,
         }, ...prev.scoutingHistory].slice(0, 100),
@@ -8367,11 +8407,20 @@ Asystent`,
           ...nextWcState,
           knockoutComplete: true,
           champion: completedFinalMatch.winner ?? undefined,
-          runnerUp: completedFinalMatch.winner === completedFinalMatch.home ? completedFinalMatch.away : completedFinalMatch.home,
+          // WCKnockoutMatch.home/away are typed `string | null` (types.ts), but
+          // WCState.runnerUp/fourthPlace expect `string | undefined` (no `null`) — same
+          // null-to-undefined conversion as champion/thirdPlace just above, via `?? undefined`.
+          runnerUp: (completedFinalMatch.winner === completedFinalMatch.home ? completedFinalMatch.away : completedFinalMatch.home) ?? undefined,
           thirdPlace: thirdMatch?.winner ?? undefined,
-          fourthPlace: thirdMatch?.winner === thirdMatch?.home ? thirdMatch?.away : thirdMatch?.home,
+          fourthPlace: (thirdMatch?.winner === thirdMatch?.home ? thirdMatch?.away : thirdMatch?.home) ?? undefined,
         };
-        applyWorldCupEffectsAndMail(nextWcState, wcYear);
+        // nextWcState is a `let` typed as WCState | null, but the object literal just
+        // assigned above is always non-null (it's built from ...nextWcState plus required
+        // fields, only reachable after the `nextWcState?.groupStageComplete` check on the
+        // line above). TypeScript's control-flow narrowing doesn't carry that guarantee
+        // through the reassignment, so it still sees WCState | null here — the `!` just
+        // tells the compiler what's already true at runtime; it changes no behavior.
+        applyWorldCupEffectsAndMail(nextWcState!, wcYear);
         wcChanged = true;
       }
 
@@ -8491,9 +8540,16 @@ Asystent`,
           ...nextEuroState,
           knockoutComplete: true,
           champion: completedFinalMatch.winner ?? undefined,
-          runnerUp: completedFinalMatch.winner === completedFinalMatch.home ? completedFinalMatch.away : completedFinalMatch.home,
+          // Same null-to-undefined conversion as the World Cup block above: WCKnockoutMatch.home/
+          // away are `string | null`, but WCState.runnerUp expects `string | undefined`.
+          runnerUp: (completedFinalMatch.winner === completedFinalMatch.home ? completedFinalMatch.away : completedFinalMatch.home) ?? undefined,
         };
-        applyEuroEffectsAndMail(nextEuroState, euroYear);
+        // Same situation as applyWorldCupEffectsAndMail(nextWcState!, ...) above: nextEuroState
+        // is always non-null here at runtime (fresh object built from ...nextEuroState right
+        // after a `nextEuroState?.groupStageComplete` check), but TypeScript's narrowing
+        // doesn't survive the reassignment, so it still sees WCState | null. The `!` reflects
+        // that runtime guarantee; it changes no behavior.
+        applyEuroEffectsAndMail(nextEuroState!, euroYear);
         euroChanged = true;
       }
 
@@ -10230,7 +10286,13 @@ Asystent`,
       const userClub = clubs.find(c => c.id === userTeamId);
       if (userClub?.winterCamp?.winterFriendlyFormPenaltyYear !== winterYear) {
         const winterFriendliesPlayed = allFixtures.filter(f => {
-          if (f.leagueId !== CompetitionType.FRIENDLY || f.status !== MatchStatus.PLAYED) return false;
+          // MatchStatus only has SCHEDULED and FINISHED (types.ts) — this used to compare
+          // against MatchStatus.PLAYED, which doesn't exist and is `undefined` at runtime.
+          // f.status is never undefined, so that comparison was always true, meaning this
+          // filter always excluded every fixture and winterFriendliesPlayed was always 0.
+          // In practice this made the winter-friendlies form penalty apply unconditionally,
+          // even when the player had played enough friendlies. Fixed to MatchStatus.FINISHED.
+          if (f.leagueId !== CompetitionType.FRIENDLY || f.status !== MatchStatus.FINISHED) return false;
           if (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId) return false;
           const fixtureDate = f.date instanceof Date ? f.date : new Date(f.date);
           return fixtureDate.getFullYear() === winterYear && fixtureDate.getMonth() === 0 && fixtureDate.getDate() >= 2 && fixtureDate.getDate() <= 18;
@@ -13264,7 +13326,7 @@ const finalResult: SimulationOutput = {
           )
         );
         const sellBehindCoachBack = IncomingTransferService.seededRandom(seed + 811) > askCoachChance;
-        const reason =
+        const reason: 'GREED' | 'FINANCES' | 'PREMIUM' =
           moneyPressure >= 0.34 ? 'FINANCES' :
           greedScore >= 3 ? 'GREED' :
           'PREMIUM';
@@ -16729,10 +16791,25 @@ const finalResult: SimulationOutput = {
             const responseDeadline = new Date(currentDate);
             responseDeadline.setDate(responseDeadline.getDate() + 14);
             const dateKey = currentDate.toISOString().split('T')[0];
+            // MailMessage.priority (types.ts) is a required numeric field that drives inbox
+            // sort/attention order — it is NOT optional, so every mail object must set it.
+            // This mail is only the START of a conversation: the player is objecting to being
+            // transfer-listed and is waiting `responseDeadline` days for the manager to reply,
+            // but nothing irreversible has happened yet (unlike the 92-priority "broken promise"
+            // mail above, which already applies a real morale/lockout penalty). That makes it
+            // slightly less urgent than the hard-consequence SYSTEM mails in this file (88-95),
+            // but still a direct player-relationship message needing a timely response, so it is
+            // set to 85 — the same tier already used for other "needs attention soon" SYSTEM
+            // mails here (see the friendly-cancelled notice a few hundred lines above).
             transferListObjectionMail = {
               id: `PLAYER_TRANSFER_LIST_OBJECTION_${player.id}_${dateKey}`,
-              date: currentDate.toISOString(),
+              // MailMessage.date expects a Date object, not a string — pass `currentDate`
+              // itself (it's only converted to a string above, for `dateKey`, via
+              // .toISOString()). Passing the string here would break any code that later
+              // calls Date methods (e.g. formatting/sorting) on this mail's date.
+              date: currentDate,
               type: MailType.SYSTEM,
+              priority: 85,
               subject: `Prośba o rozmowę po wystawieniu na listę: ${player.lastName}`,
               sender: `${player.firstName} ${player.lastName}`,
               role: 'Zawodnik',
