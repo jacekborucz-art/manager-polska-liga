@@ -257,6 +257,8 @@ export const TrainingService = {
       const attrKeys = getTrainableAttributesForPosition(player.position);
       const GK_COACHED_ATTRS: (keyof PlayerAttributes)[] = ['goalkeeping', 'positioning', 'mentality', 'passing'];
       const playerTalent = player.attributes.talent;
+      const playerMentality = player.attributes.mentality;
+      const noPlanStabilityMult = 1.3 - (playerMentality / 100) * 0.6;
       const gkCoachMultiplier = (() => {
         if (!isGkPlayer) return 1.0;
         if (!gkCoachQuality || gkCoachQuality <= 0) {
@@ -394,7 +396,7 @@ export const TrainingService = {
 
         let pRegress = 0;
 
-        if (!hasGeneralPlan) pRegress += 0.006;
+        if (!hasGeneralPlan) pRegress += 0.02;
         if (!player.trainingFocus) pRegress += 0.002;
         if (!playedThisRound && age >= 22) pRegress += 0.003;
 
@@ -439,9 +441,12 @@ export const TrainingService = {
         if (fitnessCoachQuality >= 10) return 0;
         return Math.random() < 0.06 ? 1 : 0;
       })();
-      const conditionDrift = (!hasGeneralPlan && Math.random() < 0.12 ? -1 : 0) + fitnessCondDrift;
-      const fatigueDrift = (!hasGeneralPlan && Math.random() < 0.10 ? 1 : 0) + fitnessFatigueDrift;
-      const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, effectiveIntensity);
+      const noPlanConditionPenalty = !hasGeneralPlan ? -Math.round((1 + Math.random() * 2) * noPlanStabilityMult) : 0;
+      const noPlanFatiguePenalty = !hasGeneralPlan ? Math.round((2 + Math.random() * 2) * noPlanStabilityMult) : 0;
+      const noPlanMoralePenalty = !hasGeneralPlan ? -Math.round((1 + Math.random() * 2) * noPlanStabilityMult) : 0;
+      const conditionDrift = noPlanConditionPenalty + fitnessCondDrift;
+      const fatigueDrift = noPlanFatiguePenalty + fitnessFatigueDrift;
+      const moraleDelta = PlayerMoraleService.applyTrainingMood(updated, effectiveIntensity) + noPlanMoralePenalty;
       const nextMorale = PlayerMoraleService.clamp((updated.morale ?? 50) + moraleDelta);
       const nextCondition = Math.max(1, Math.min(100, updated.condition + conditionDrift));
       const nextFatigueDebt = Math.max(0, Math.min(100, (updated.fatigueDebt ?? 0) + fatigueDrift));
@@ -467,7 +472,8 @@ export const TrainingService = {
         },
         marketValue: updatedMarketValue
       };
-      return PlayerFormService.withUpdatedForm(nextPlayer, PlayerFormService.getTrainingIntensityAdjustment(nextPlayer, effectiveIntensity));
+      const noPlanFormPenalty = !hasGeneralPlan ? -Math.round((3 + Math.random() * 2) * noPlanStabilityMult) : 0;
+      return PlayerFormService.withUpdatedForm(nextPlayer, PlayerFormService.getTrainingIntensityAdjustment(nextPlayer, effectiveIntensity) + noPlanFormPenalty);
     });
 
     return updatedMap;
