@@ -1,0 +1,121 @@
+INSTRUKCJA URUCHOMIENIA GRY NA macOS
+=====================================
+
+Ten folder zawiera wszystko, czego potrzebuje uzytkownik komputera Mac,
+aby uruchomic gre lokalnie - odpowiednik pliku START_GRY.bat dla Windows.
+
+Wymagania:
+ - macOS (Intel lub Apple Silicon / M1-M2-M3-M4)
+ - Zainstalowany Node.js w wersji 20.x
+
+--------------------------------------------------
+KROK 1. Sprawdz, czy Node.js jest juz zainstalowany
+--------------------------------------------------
+
+1. Otworz aplikacje Terminal (Launchpad -> wpisz "Terminal" -> Enter,
+   albo Finder -> Programy -> Uzytkowe -> Terminal).
+2. Wpisz w Terminalu:
+
+       node -v
+
+3. Jesli zobaczysz numer wersji, np. "v20.18.0" - Node.js jest juz
+   zainstalowany, mozesz przejsc od razu do KROKU 3.
+4. Jesli zobaczysz komunikat typu "command not found" - przejdz do
+   KROKU 2, aby zainstalowac Node.js.
+
+--------------------------------------------------
+KROK 2. Instalacja Node.js (jesli brak)
+--------------------------------------------------
+
+Opcja A - instalator ze strony (najprostsza):
+
+ 1. Wejdz na strone: https://nodejs.org
+ 2. Pobierz wersje oznaczona jako "LTS" (zalecana, stabilna).
+ 3. Otworz pobrany plik .pkg i przejdz przez instalacje klikajac
+    "Dalej/Kontynuuj" az do konca (jak zwykly instalator programu).
+ 4. Po zakonczeniu zamknij i otworz ponownie Terminal, po czym sprawdz
+    instalacje komenda: node -v
+
+Opcja B - przez Homebrew (dla bardziej zaawansowanych):
+
+ 1. Jesli nie masz Homebrew, zainstaluj go wedlug instrukcji na
+    stronie https://brew.sh
+ 2. W Terminalu wpisz:
+
+        brew install node@20
+
+ 3. Sprawdz instalacje komenda: node -v
+
+--------------------------------------------------
+KROK 3. Pierwsze uruchomienie gry (Gatekeeper)
+--------------------------------------------------
+
+macOS domyslnie blokuje uruchamianie skryptow pobranych spoza
+Mac App Store ("nieznany deweloper"). Dlatego za PIERWSZYM razem
+plik START_GRY.command trzeba otworzyc w specjalny sposob:
+
+ 1. W Finderze wejdz do folderu "mac" (ten, w ktorym jest ten plik).
+ 2. Kliknij PRAWYM przyciskiem myszy (albo Control+klik) na plik
+    START_GRY.command.
+ 3. Z menu wybierz "Otworz" (Open).
+ 4. Pojawi sie ostrzezenie systemowe - kliknij "Otworz" (Open) jeszcze
+    raz, aby potwierdzic.
+
+Od tego momentu plik jest oznaczony jako zaufany i przy kolejnych
+uruchomieniach wystarczy zwykly PODWOJNY KLIK na START_GRY.command.
+
+Jesli mimo to system nie pozwala uruchomic pliku, mozna nadac mu
+uprawnienia do wykonywania recznie w Terminalu:
+
+    cd sciezka/do/folderu/gry/mac
+    chmod +x START_GRY.command
+
+(wpisz "cd " ze spacja, po czym przeciagnij folder "mac" z Findera
+do okna Terminala, aby sciezka wpisala sie automatycznie, i nacisnij Enter,
+a nastepnie wpisz druga linie osobno)
+
+--------------------------------------------------
+KROK 4. Uruchomienie gry
+--------------------------------------------------
+
+1. Podwojny klik na START_GRY.command (w folderze "mac").
+2. Otworzy sie okno Terminala - poczekaj, az skrypt zbuduje najnowsza
+   wersje gry i uruchomi lokalny serwer (moze to potrwac do kilkudziesieciu
+   sekund przy pierwszym uruchomieniu).
+3. Gra powinna otworzyc sie automatycznie w przegladarce w trybie pelnoekranowym
+   (kiosk) - obslugiwane przegladarki to Google Chrome, Microsoft Edge,
+   Brave, Opera lub Firefox (jesli ktorakolwiek z nich jest zainstalowana).
+4. Jesli na komputerze nie ma zadnej z powyzszych przegladarek, gra
+   otworzy sie w domyslnej przegladarce systemowej (najczesciej Safari),
+   ale bez trybu pelnoekranowego - trzeba go wtedy wlaczyc recznie
+   (Control+Command+F w Safari).
+
+Aby zakonczyc gre, wystarczy zamknac okno przegladarki oraz okno
+Terminala z uruchomionym serwerem.
+
+--------------------------------------------------
+ROZWIAZYWANIE PROBLEMOW
+--------------------------------------------------
+
+- "Nie znaleziono Node.js na tym komputerze Mac"
+  -> Wroc do KROKU 2 i zainstaluj Node.js, nastepnie uruchom
+     START_GRY.command ponownie.
+
+- "Nie udalo sie zbudowac najnowszej wersji gry"
+  -> W oknie Terminala powyzej tego komunikatu pojawi sie dokladny
+     blad - warto go skopiowac i przekazac osobie odpowiedzialnej
+     za projekt.
+
+- "Nie udalo sie znalezc wolnego portu od 4173 do 4273"
+  -> Zamknij wszystkie inne okna Terminala/gry, ktore moga byc
+     uruchomione w tle, i sprobuj ponownie.
+
+- macOS pisze "nie mozna otworzyc, poniewaz pochodzi od
+  niezidentyfikowanego dewelopera"
+  -> Wroc do KROKU 3 (kliknij prawym przyciskiem -> Otworz, zamiast
+     zwyklego podwojnego kliku).
+
+- Przegladarka otwiera sie, ale gra nie dziala / biala strona
+  -> Sprawdz w oknie Terminala, czy pojawil sie napis
+     "Serwer gry dziala. Zamknij to okno, aby zakonczyc." - jesli
+     go nie ma, oznacza to, ze serwer sie nie uruchomil poprawnie.
