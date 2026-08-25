@@ -10,17 +10,19 @@ import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLe
 import { PostMatchPressConferenceModal } from '../modals/PostMatchPressConferenceModal';
 import type { PostMatchConferenceOutcome } from '../../services/PostMatchPressConferenceService';
 import { KitPreview } from '../common/KitPreview';
+import { ThirdLeagueRoundPanel } from './postmatch/ThirdLeagueRoundPanel';
 
 // Zwiększona przezroczystość paneli dla lepszej widoczności tła
 const GLASS_PANEL = "bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.6)]";
 
 export const PostMatchStudioView: React.FC = () => {
-  const { lastMatchSummary, navigateTo, roundResults, currentDate, advanceDay, clubs, players, managerProfile, userTeamId, coaches, leagueSchedules } = useGame();
+  const { lastMatchSummary, navigateTo, roundResults, currentDate, advanceDay, clubs, players, managerProfile, userTeamId, coaches, leagueSchedules, fourthLeagueState } = useGame();
   const [pageIndex, setPageIndex] = useState(1);
   const [showExpertModal, setShowExpertModal] = useState(false);
   const [reportMatchId, setReportMatchId] = useState<string | null>(null);
   const [showPostMatchPressConference, setShowPostMatchPressConference] = useState(false);
   const [postMatchConferenceOutcome, setPostMatchConferenceOutcome] = useState<PostMatchConferenceOutcome | null>(null);
+  const [showThirdLeagueRound, setShowThirdLeagueRound] = useState(false);
 
   if (!lastMatchSummary) return null;
 
@@ -233,6 +235,7 @@ export const PostMatchStudioView: React.FC = () => {
         playerName: getGoalFormattedName(g, side),
         varDisallowed: g.varDisallowed,
         isOwnGoal: g.isOwnGoal,
+        isPenaltyNoCall: false,
       }));
 
     const timelineEvents = timeline
@@ -621,13 +624,34 @@ export const PostMatchStudioView: React.FC = () => {
           >
             &larr; WRÓĆ DO ANALIZY
           </button>
-          <button
-            onClick={handleReturnToDashboard}
-            className="absolute right-6 px-6 py-2 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 font-black italic uppercase tracking-widest text-[10px] transition-all hover:bg-white/10 hover:text-white active:scale-95 active:translate-y-[2px]"
-            style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
-          >
-            ZAMKNIJ
-          </button>
+          <div className="absolute right-6 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowThirdLeagueRound(true)}
+              className="font-black italic uppercase tracking-tighter px-5 py-2 rounded-2xl bg-cyan-500/15 border-t border-x border-b border-t-cyan-300/30 border-x-cyan-400/20 border-b-black/60 text-cyan-200 text-[10px] transition-all hover:bg-cyan-500/25 active:scale-95 active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
+            >
+              3. Liga: wyniki i tabele
+            </button>
+            {fourthLeagueState && (
+              <button
+                type="button"
+                onClick={() => navigateTo(ViewState.FOURTH_LEAGUE)}
+                className="font-black italic uppercase tracking-tighter px-5 py-2 rounded-2xl bg-blue-500/15 border-t border-x border-b border-t-blue-300/30 border-x-blue-400/20 border-b-black/60 text-blue-200 text-[10px] transition-all hover:bg-blue-500/25 active:scale-95 active:translate-y-[2px]"
+                style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
+              >
+                4. Liga: wyniki i tabele
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleReturnToDashboard}
+              className="font-black italic uppercase tracking-tighter px-6 py-2 rounded-2xl bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 text-slate-400 text-[10px] transition-all hover:bg-white/10 hover:text-white active:scale-95 active:translate-y-[2px]"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)' }}
+            >
+              Zamknij
+            </button>
+          </div>
           <div className="text-center">
              <h2 className="text-5xl font-black italic uppercase tracking-tighter text-white leading-none">WYNIKI SPOTKAŃ</h2>
              <p className="text-blue-500 text-xs font-black uppercase tracking-[0.4em] mt-2">
@@ -642,6 +666,14 @@ export const PostMatchStudioView: React.FC = () => {
           {renderResultsSection("1. Liga", currentRoundResults?.league2Results || [], "#3b82f6", "L_PL_2")}
           {renderResultsSection("2. Liga", currentRoundResults?.league3Results || [], "#10b981", "L_PL_3")}
        </div>
+
+       {showThirdLeagueRound && (
+         <ThirdLeagueRoundPanel
+           currentRoundResults={currentRoundResults}
+           roundNumber={currentRoundNumber}
+           onClose={() => setShowThirdLeagueRound(false)}
+         />
+       )}
 
     </div>
   );

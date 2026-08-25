@@ -64,7 +64,7 @@ const getPolishLeagueTier = (club: Club): 1 | 2 | 3 | 4 | null => {
   if (club.leagueId === 'L_PL_1') return 1;
   if (club.leagueId === 'L_PL_2') return 2;
   if (club.leagueId === 'L_PL_3') return 3;
-  if (club.leagueId === 'L_PL_4') return 4;
+  if (club.leagueId === 'L_PL_4' || club.leagueId?.startsWith('L_PL_4_G')) return 4;
   return null;
 };
 

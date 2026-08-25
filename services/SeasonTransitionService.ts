@@ -183,6 +183,10 @@ const releasedPlayers: Player[] = [];  // ← NOWA LINIA
             condition: 100, // Pełna regeneracja na start sezonu
             suspensionMatches: 0, // Reset kar ligowych
             stats: PlayerCareerService.emptyStats(),
+            // Exact domestic competition buckets are seasonal by design. A new
+            // season must start with empty group rankings even when the player
+            // remains at the same club or moves to another III-liga group.
+            competitionStats: {},
             cupStats: PlayerCareerService.emptyStats(),
             euroStats: PlayerCareerService.emptyStats(),
             friendlyStats: PlayerCareerService.emptyStats(),

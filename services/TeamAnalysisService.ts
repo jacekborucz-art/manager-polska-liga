@@ -1,4 +1,16 @@
-import { Club, Player, PlayerAttributes, PlayerPosition, Tactic, HealthStatus } from '../types';
+import {
+  Club,
+  HealthStatus,
+  Lineup,
+  MatchEventType,
+  MatchHistoryEntry,
+  Player,
+  PlayerAttributes,
+  PlayerPosition,
+  StaffMember,
+  Tactic,
+  TrainingIntensity,
+} from '../types';
 import { TacticRepository } from '../resources/tactics_db';
 import { LineupService } from './LineupService';
 import { FinanceService } from './FinanceService';
@@ -87,47 +99,6 @@ const POSITION_TRAINING_KEYS: Record<PlayerPosition, Array<keyof PlayerAttribute
   [PlayerPosition.MID]: ['passing', 'vision', 'technique', 'dribbling', 'workRate'],
   [PlayerPosition.FWD]: ['finishing', 'attacking', 'technique', 'pace', 'heading'],
 };
-
-type SquadSentenceStyle = {
-  id: string;
-  name: string;
-  role: string;
-};
-
-const COMMENTARY_STYLES: SquadSentenceStyle[] = [
-  ['style_01', 'Analityk', 'ocena ogólna'],
-  ['style_02', 'Stary Trener', 'hierarchia i dyscyplina'],
-  ['style_03', 'Skaut Boiskowy', 'potencjał zawodników'],
-  ['style_04', 'Ekspert TV', 'obraz zespołu'],
-  ['style_05', 'Dyrektor Sportowy', 'decyzje kadrowe'],
-  ['style_06', 'Taktyk', 'ustawienie zespołu'],
-  ['style_07', 'Asystent Trenera', 'bieżąca forma'],
-  ['style_08', 'Komentator', 'mocne i słabe strony'],
-  ['style_09', 'Analityk Danych', 'liczby meczowe'],
-  ['style_10', 'Pragmatyk', 'użyteczność składu'],
-  ['style_11', 'Obserwator Klubu', 'stan kadry'],
-  ['style_12', 'Psycholog', 'pewność i rola'],
-  ['style_13', 'Łowca Talentów', 'rozwój młodych'],
-  ['style_14', 'Trener Defensywy', 'gra w tyłach'],
-  ['style_15', 'Trener Pressingu', 'intensywność gry'],
-  ['style_16', 'Trener Ofensywy', 'atak i szerokość'],
-  ['style_17', 'Trener Kontrataku', 'szybkie przejścia'],
-  ['style_18', 'Minimalista', 'proste wnioski'],
-  ['style_19', 'Doradca Zarządu', 'sport i kontrakty'],
-  ['style_20', 'Oldschoolowiec', 'solidność zespołu'],
-  ['style_21', 'Nowoczesny Taktyk', 'elastyczność'],
-  ['style_22', 'Głos Trybun', 'czytelność kadry'],
-  ['style_23', 'Analityk Video', 'powtarzalne schematy'],
-  ['style_24', 'Menedżer Kryzysowy', 'główne ryzyka'],
-  ['style_25', 'Ligowy Rzemieślnik', 'regularność'],
-  ['style_26', 'Mentor', 'prowadzenie zawodników'],
-  ['style_27', 'Inspektor Kontraktów', 'timing decyzji'],
-  ['style_28', 'Strateg Pucharowy', 'mecze pod presją'],
-  ['style_29', 'Architekt Środka', 'środek pola'],
-  ['style_30', 'Łowca Przewag', 'maksymalizacja atutów'],
-].map(([id, name, role]) => ({
-  id, name, role,
-}));
 
 export interface TeamAnalysisInsightPlayer {
   player: Player;
@@ -225,6 +196,106 @@ export interface TeamAnalysisAssistantLeaders {
   captains: TeamAnalysisSpecialist[];
 }
 
+export interface TeamAnalysisPlayerConcern {
+  player: Player;
+  score: number;
+  label: string;
+  detail: string;
+  action: string;
+}
+
+export interface TeamAnalysisFormRecord {
+  tacticId: string;
+  tacticName: string;
+  matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+}
+
+export interface TeamAnalysisForm {
+  sampleSize: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  cleanSheets: number;
+  averageRating: number | null;
+  pointsPerMatch: number;
+  shotsFor: number;
+  shotsAgainst: number;
+  recentForm: Array<'W' | 'D' | 'L'>;
+  tacticRecords: TeamAnalysisFormRecord[];
+  insights: string[];
+}
+
+export interface TeamAnalysisReadiness {
+  ready: number;
+  caution: number;
+  unavailable: number;
+  averageCondition: number;
+  averageFatigueDebt: number;
+  concerns: TeamAnalysisPlayerConcern[];
+  summary: string[];
+}
+
+export interface TeamAnalysisDressingRoom {
+  averageMorale: number;
+  averageAdaptation: number;
+  settledPlayers: number;
+  concerns: TeamAnalysisPlayerConcern[];
+  summary: string[];
+}
+
+export interface TeamAnalysisDevelopment {
+  activeTrainingName: string;
+  intensityLabel: string;
+  facilityLevel: number | null;
+  averageGrowth: number;
+  improvingPlayers: number;
+  decliningPlayers: number;
+  focusMismatches: TeamAnalysisPlayerConcern[];
+  summary: string[];
+}
+
+export interface TeamAnalysisTacticalProfile {
+  currentTacticId: string | null;
+  currentTacticName: string;
+  pressingFit: number;
+  counterAttackFit: number;
+  highLineFit: number;
+  notes: string[];
+}
+
+export interface TeamAnalysisExecutiveSummary {
+  strengths: string[];
+  risks: string[];
+  actions: string[];
+}
+
+export interface TeamAnalysisAssistantModel {
+  assistantId: string | null;
+  generatedForWeek: string;
+  /** Internal-only observation quality. The UI deliberately does not display reliability. */
+  qualityScore: number;
+  /** Internal-only seeded error; even the best assistant keeps the required 5% floor. */
+  uncertaintyPercent: number;
+}
+
+export interface TeamAnalysisInput {
+  club: Club;
+  players: Player[];
+  currentDate: Date;
+  assistant?: StaffMember | null;
+  lineup?: Lineup | null;
+  matchHistory?: MatchHistoryEntry[];
+  activeTrainingName?: string | null;
+  activeIntensity?: TrainingIntensity | null;
+}
+
 export interface TeamAnalysisReport {
   generatedAt: string;
   injuryRule: string;
@@ -242,6 +313,13 @@ export interface TeamAnalysisReport {
   tacticalRecommendation: TeamAnalysisTacticOption;
   alternativeTactics: TeamAnalysisTacticOption[];
   commentary: TeamAnalysisCommentary;
+  assistantModel: TeamAnalysisAssistantModel;
+  executiveSummary: TeamAnalysisExecutiveSummary;
+  formAnalysis: TeamAnalysisForm;
+  readinessAnalysis: TeamAnalysisReadiness;
+  dressingRoomAnalysis: TeamAnalysisDressingRoom;
+  developmentAnalysis: TeamAnalysisDevelopment;
+  tacticalProfile: TeamAnalysisTacticalProfile;
 }
 
 type Placement = TeamAnalysisTacticOption['projectedXI'][number];
@@ -261,6 +339,48 @@ const seededRange = (seed: string, min: number, max: number): number => min + se
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 const average = (values: number[]): number => values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 const formatPlayerName = (player: Player): string => `${player.firstName} ${player.lastName}`;
+
+const getWeekKey = (date: Date): string => {
+  const monday = new Date(date);
+  const weekday = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - weekday + 1);
+  return monday.toISOString().slice(0, 10);
+};
+
+/**
+ * Staff attributes use the 1-20 scale, while report quality uses 0-100. The
+ * weighting mirrors the assistant's actual responsibilities: tactical reading
+ * leads, but communication, motivation and dressing-room work remain meaningful.
+ */
+export const getTeamAssistantQuality = (assistant?: StaffMember | null): number => {
+  if (!assistant) return 20;
+  const attribute = (key: string, fallback = 8): number => assistant.attributes[key] ?? fallback;
+  const weighted =
+    attribute('offensiveTactics') * 0.18 +
+    attribute('defensiveTactics') * 0.18 +
+    attribute('opponentAnalysis') * 0.14 +
+    attribute('motivation') * 0.14 +
+    attribute('communication') * 0.13 +
+    attribute('dressingRoom') * 0.10 +
+    attribute('individualWork') * 0.07 +
+    attribute('experience') * 0.06;
+  return Math.round(clamp(weighted * 5, 0, 100));
+};
+
+export const getTeamAssistantUncertainty = (qualityScore: number): number =>
+  Math.round(clamp(28 - qualityScore * 0.23, 5, 28));
+
+type TeamPerceiver = (channel: string, value: number, min?: number, max?: number) => number;
+
+const makeTeamPerceiver = (
+  clubId: string,
+  weekKey: string,
+  assistantId: string,
+  uncertaintyPercent: number,
+): TeamPerceiver => (channel, value, min = 0, max = 100) => {
+  const swing = seededUnit(`${clubId}:${weekKey}:${assistantId}:${channel}`) * 2 - 1;
+  return clamp(value * (1 + swing * uncertaintyPercent / 100), min, max);
+};
 
 const joinLabels = (labels: string[]): string => {
   if (labels.length === 0) return '';
@@ -1185,6 +1305,493 @@ const analyzeAssistantLeaders = (players: Player[]): TeamAnalysisAssistantLeader
   };
 };
 
+const perceiveAndSortSpecialists = (
+  entries: TeamAnalysisSpecialist[],
+  channel: string,
+  perceive: TeamPerceiver,
+): TeamAnalysisSpecialist[] => entries
+  .map(entry => ({
+    ...entry,
+    score: Math.round(perceive(`${channel}:${entry.player.id}`, entry.score, 1, 100)),
+  }))
+  .sort((left, right) => right.score - left.score);
+
+/**
+ * Factual values (goals, dates, salaries and injuries) are never changed by RNG.
+ * Only conclusions which belong to the assistant are perceived and reordered.
+ * This keeps the simulation honest while allowing staff quality to matter.
+ */
+const applyAssistantPerception = (
+  report: {
+    tactics: TeamAnalysisTacticOption[];
+    keyPlayers: TeamAnalysisInsightPlayer[];
+    exitCandidates: TeamAnalysisExitCandidate[];
+    contractCases: TeamAnalysisContractCase[];
+    talents: TeamAnalysisTalent[];
+    assistantLeaders: TeamAnalysisAssistantLeaders;
+  },
+  perceive: TeamPerceiver,
+) => {
+  const tactics = report.tactics
+    .map(option => ({
+      ...option,
+      score: Math.round(perceive(`tactic:${option.tacticId}`, option.score, 0, 10_000)),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  return {
+    tactics,
+    keyPlayers: report.keyPlayers
+      .map(entry => ({
+        ...entry,
+        score: Math.round(perceive(`key:${entry.player.id}`, entry.score, 1, 100)),
+      }))
+      .sort((left, right) => right.score - left.score),
+    exitCandidates: report.exitCandidates
+      .map(entry => ({
+        ...entry,
+        probability: Math.round(perceive(`exit:${entry.player.id}`, entry.probability, 5, 95)),
+      }))
+      .sort((left, right) => right.probability - left.probability),
+    contractCases: report.contractCases
+      .map(entry => ({
+        ...entry,
+        urgency: Math.round(perceive(`contract:${entry.player.id}`, entry.urgency, 5, 95)),
+      }))
+      .sort((left, right) => right.urgency - left.urgency),
+    talents: report.talents
+      .map(entry => ({
+        ...entry,
+        score: Math.round(perceive(`talent:${entry.player.id}`, entry.score, 1, 160)),
+      }))
+      .sort((left, right) => right.score - left.score),
+    assistantLeaders: {
+      penalties: perceiveAndSortSpecialists(report.assistantLeaders.penalties, 'penalties', perceive),
+      freeKicks: perceiveAndSortSpecialists(report.assistantLeaders.freeKicks, 'free-kicks', perceive),
+      captains: perceiveAndSortSpecialists(report.assistantLeaders.captains, 'captains', perceive),
+    },
+  };
+};
+
+const analyzeRecentForm = (
+  club: Club,
+  matches: MatchHistoryEntry[],
+  currentDate: Date,
+): TeamAnalysisForm => {
+  const recentMatches = matches
+    .filter(match => (
+      (match.homeTeamId === club.id || match.awayTeamId === club.id) &&
+      new Date(match.date).getTime() <= currentDate.getTime()
+    ))
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+    .slice(0, 10)
+    .reverse();
+
+  let wins = 0;
+  let draws = 0;
+  let losses = 0;
+  let goalsFor = 0;
+  let goalsAgainst = 0;
+  let cleanSheets = 0;
+  let shotsFor = 0;
+  let shotsAgainst = 0;
+  const ratings: number[] = [];
+  const recentForm: Array<'W' | 'D' | 'L'> = [];
+  const tacticMap = new Map<string, TeamAnalysisFormRecord>();
+
+  recentMatches.forEach(match => {
+    const isHome = match.homeTeamId === club.id;
+    const ownGoals = isHome ? match.homeScore : match.awayScore;
+    const opponentGoals = isHome ? match.awayScore : match.homeScore;
+    const result: 'W' | 'D' | 'L' = ownGoals > opponentGoals ? 'W' : ownGoals === opponentGoals ? 'D' : 'L';
+    if (result === 'W') wins += 1;
+    else if (result === 'D') draws += 1;
+    else losses += 1;
+    recentForm.push(result);
+    goalsFor += ownGoals;
+    goalsAgainst += opponentGoals;
+    if (opponentGoals === 0) cleanSheets += 1;
+
+    const ownSide = isHome ? 'HOME' : 'AWAY';
+    const shotTypes = new Set([
+      MatchEventType.SHOT,
+      MatchEventType.SHOT_ON_TARGET,
+      MatchEventType.SHOT_POST,
+      MatchEventType.SHOT_BAR,
+      MatchEventType.ONE_ON_ONE_MISS,
+      MatchEventType.ONE_ON_ONE_SAVE,
+    ]);
+    (match.timeline ?? []).forEach(event => {
+      if (!shotTypes.has(event.type as MatchEventType)) return;
+      if (event.teamSide === ownSide) shotsFor += 1;
+      else shotsAgainst += 1;
+    });
+
+    const ownLineup = (isHome ? match.homeLineup : match.awayLineup) ?? [];
+    ownLineup.forEach(playerId => {
+      const rating = match.ratings?.[playerId];
+      if (Number.isFinite(rating)) ratings.push(rating!);
+    });
+
+    const tacticId = (isHome ? match.homeStartingTacticId : match.awayStartingTacticId)
+      ?? (isHome ? match.homeTacticId : match.awayTacticId)
+      ?? 'UNKNOWN';
+    const existing = tacticMap.get(tacticId) ?? {
+      tacticId,
+      tacticName: TacticRepository.getById(tacticId)?.name ?? 'Brak danych',
+      matches: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+    };
+    existing.matches += 1;
+    existing.goalsFor += ownGoals;
+    existing.goalsAgainst += opponentGoals;
+    if (result === 'W') existing.wins += 1;
+    else if (result === 'D') existing.draws += 1;
+    else existing.losses += 1;
+    tacticMap.set(tacticId, existing);
+  });
+
+  const sampleSize = recentMatches.length;
+  const pointsPerMatch = sampleSize > 0 ? Math.round(((wins * 3 + draws) / sampleSize) * 100) / 100 : 0;
+  const insights: string[] = [];
+  if (sampleSize === 0) {
+    insights.push('Brakuje jeszcze rozegranych spotkań, dlatego forma zespołu nie może zostać oceniona.');
+  } else {
+    insights.push(`Ostatnie ${sampleSize} spotkań dało ${wins} zwycięstw, ${draws} remisów i ${losses} porażek.`);
+    insights.push(goalsFor > goalsAgainst
+      ? `Bilans bramek ${goalsFor}:${goalsAgainst} potwierdza przewagę zespołu w analizowanym okresie.`
+      : `Bilans bramek ${goalsFor}:${goalsAgainst} pokazuje, że zespół traci co najmniej tyle, ile strzela.`);
+    if (shotsFor + shotsAgainst > 0) {
+      insights.push(`Z zapisanych zdarzeń meczowych wynika ${shotsFor} prób zespołu przy ${shotsAgainst} próbach rywali.`);
+    }
+  }
+
+  return {
+    sampleSize,
+    wins,
+    draws,
+    losses,
+    goalsFor,
+    goalsAgainst,
+    cleanSheets,
+    averageRating: ratings.length > 0 ? Math.round(average(ratings) * 100) / 100 : null,
+    pointsPerMatch,
+    shotsFor,
+    shotsAgainst,
+    recentForm,
+    tacticRecords: [...tacticMap.values()].sort((left, right) => right.matches - left.matches),
+    insights,
+  };
+};
+
+const analyzeReadiness = (players: Player[], perceive: TeamPerceiver): TeamAnalysisReadiness => {
+  let ready = 0;
+  let caution = 0;
+  let unavailable = 0;
+
+  const concerns = players.map(player => {
+    const injuryDays = getInjuryDays(player);
+    const isUnavailable = (player.suspensionMatches ?? 0) > 0 || injuryDays > TACTIC_INJURY_LIMIT_DAYS;
+    const needsCaution = !isUnavailable && (
+      injuryDays > 0 || player.condition < 75 || (player.fatigueDebt ?? 0) >= 28
+    );
+    if (isUnavailable) unavailable += 1;
+    else if (needsCaution) caution += 1;
+    else ready += 1;
+
+    const rawRisk = clamp(
+      (100 - player.condition) * 0.6 +
+      (player.fatigueDebt ?? 0) * 0.8 +
+      injuryDays * 1.8 +
+      (player.suspensionMatches ?? 0) * 35,
+      0,
+      100,
+    );
+    if (rawRisk < 24) return null;
+
+    const detail = (player.suspensionMatches ?? 0) > 0
+      ? `Zawieszenie na ${player.suspensionMatches} mecz(e).`
+      : injuryDays > 0
+        ? `Uraz: ${injuryDays} dni, kondycja ${Math.round(player.condition)}%.`
+        : `Kondycja ${Math.round(player.condition)}%, dług zmęczenia ${Math.round(player.fatigueDebt ?? 0)}.`;
+    return {
+      player,
+      score: Math.round(perceive(`readiness:${player.id}`, rawRisk)),
+      label: isUnavailable ? 'Niedostępny' : 'Ryzyko przeciążenia',
+      detail,
+      action: isUnavailable ? 'Przygotuj zastępstwo' : 'Ogranicz minuty lub zastosuj rotację',
+    } satisfies TeamAnalysisPlayerConcern;
+  }).filter(Boolean) as TeamAnalysisPlayerConcern[];
+
+  const averageCondition = players.length > 0 ? Math.round(average(players.map(player => player.condition))) : 0;
+  const averageFatigueDebt = players.length > 0
+    ? Math.round(average(players.map(player => player.fatigueDebt ?? 0)) * 10) / 10
+    : 0;
+
+  return {
+    ready,
+    caution,
+    unavailable,
+    averageCondition,
+    averageFatigueDebt,
+    concerns: concerns.sort((left, right) => right.score - left.score).slice(0, 6),
+    summary: [
+      `${ready} zawodników jest gotowych, ${caution} wymaga ostrożności, a ${unavailable} jest niedostępnych.`,
+      averageFatigueDebt >= 28
+        ? 'Obciążenie zespołu jest wysokie i przed kolejnym meczem potrzebna jest rotacja lub regeneracja.'
+        : 'Ogólne obciążenie kadry pozwala utrzymać normalny rytm pracy.',
+    ],
+  };
+};
+
+const analyzeDressingRoom = (players: Player[], perceive: TeamPerceiver): TeamAnalysisDressingRoom => {
+  const moraleValues = players.map(player => player.morale ?? 70);
+  const adaptationValues = players.map(player => player.clubAdaptation?.level ?? 100);
+  const concerns = players.map(player => {
+    const mindset = player.playerMindset;
+    const morale = player.morale ?? 70;
+    const adaptation = player.clubAdaptation?.level ?? 100;
+    const conflict = mindset?.conflictLevel ?? 0;
+    const transferOpenness = mindset?.transferOpenness ?? 0;
+    const playingTime = mindset?.playingTimeSatisfaction ?? 70;
+    const roleClarity = mindset?.roleClarity ?? 70;
+    const belonging = mindset?.squadBelonging ?? 70;
+    const rawRisk = clamp(
+      (60 - morale) * 0.8 +
+      (65 - adaptation) * 0.35 +
+      conflict * 0.65 +
+      transferOpenness * 0.25 +
+      (55 - playingTime) * 0.35 +
+      (55 - roleClarity) * 0.25 +
+      (55 - belonging) * 0.2,
+      0,
+      100,
+    );
+    if (rawRisk < 22) return null;
+
+    const causes: string[] = [];
+    if (morale < 55) causes.push('niskie morale');
+    if (adaptation < 60) causes.push('trwająca aklimatyzacja');
+    if (playingTime < 50) causes.push('niezadowolenie z minut');
+    if (roleClarity < 50) causes.push('niejasna rola');
+    if (conflict >= 35) causes.push('narastający konflikt');
+    if (transferOpenness >= 60) causes.push('otwartość na odejście');
+
+    return {
+      player,
+      score: Math.round(perceive(`dressing:${player.id}`, rawRisk)),
+      label: conflict >= 50 ? 'Pilna rozmowa' : 'Obserwuj sytuację',
+      detail: causes.length > 0 ? `Sygnały: ${causes.join(', ')}.` : 'Zawodnik wysyła kilka słabszych sygnałów dotyczących swojej sytuacji.',
+      action: playingTime < 50 ? 'Wyjaśnij rolę i plan minut' : 'Przeprowadź rozmowę indywidualną',
+    } satisfies TeamAnalysisPlayerConcern;
+  }).filter(Boolean) as TeamAnalysisPlayerConcern[];
+
+  const averageMorale = moraleValues.length > 0 ? Math.round(average(moraleValues)) : 0;
+  const averageAdaptation = adaptationValues.length > 0 ? Math.round(average(adaptationValues)) : 0;
+  const settledPlayers = players.filter(player => (
+    (player.morale ?? 70) >= 60 &&
+    (player.clubAdaptation?.level ?? 100) >= 65 &&
+    (player.playerMindset?.conflictLevel ?? 0) < 35
+  )).length;
+
+  return {
+    averageMorale,
+    averageAdaptation,
+    settledPlayers,
+    concerns: concerns.sort((left, right) => right.score - left.score).slice(0, 6),
+    summary: [
+      `Średnie morale wynosi ${averageMorale}/100, a średnia aklimatyzacja ${averageAdaptation}/100.`,
+      concerns.length > 0
+        ? `${concerns.length} zawodników wymaga obserwacji albo rozmowy dotyczącej roli, minut lub sytuacji w klubie.`
+        : 'Nie widać obecnie poważnego napięcia w szatni.',
+    ],
+  };
+};
+
+const getPlayerDevelopmentTrend = (player: Player): number => {
+  const important = POSITION_TRAINING_KEYS[player.position];
+  const changes = player.stats.seasonalChanges ?? {};
+  return Math.round(important.reduce((sum, key) => sum + (changes[key] ?? 0), 0) * 10) / 10;
+};
+
+const analyzeDevelopment = (
+  club: Club,
+  players: Player[],
+  activeTrainingName: string | null | undefined,
+  activeIntensity: TrainingIntensity | null | undefined,
+  perceive: TeamPerceiver,
+): TeamAnalysisDevelopment => {
+  const trends = players.map(player => getPlayerDevelopmentTrend(player));
+  const intensityLabel = activeIntensity === TrainingIntensity.HEAVY
+    ? 'Wysoka'
+    : activeIntensity === TrainingIntensity.LIGHT
+      ? 'Lekka'
+      : 'Normalna';
+
+  const focusMismatches = players.map(player => {
+    const focus = player.trainingFocus;
+    const expected = POSITION_TRAINING_KEYS[player.position];
+    const developmentTrend = getPlayerDevelopmentTrend(player);
+    const youngWithoutFocus = player.age <= 21 && !focus;
+    const unrelatedFocus = !!focus && !expected.includes(focus);
+    const overload = activeIntensity === TrainingIntensity.HEAVY && (
+      player.condition < 72 || (player.fatigueDebt ?? 0) >= 30
+    );
+    if (!youngWithoutFocus && !unrelatedFocus && !overload && developmentTrend >= 0) return null;
+
+    const rawRisk = clamp(
+      (youngWithoutFocus ? 38 : 0) +
+      (unrelatedFocus ? 32 : 0) +
+      (overload ? 42 : 0) +
+      (developmentTrend < 0 ? Math.abs(developmentTrend) * 9 : 0),
+      0,
+      100,
+    );
+    const detail = overload
+      ? `Wysokie obciążenie przy kondycji ${Math.round(player.condition)}% i długu zmęczenia ${Math.round(player.fatigueDebt ?? 0)}.`
+      : youngWithoutFocus
+        ? 'Młody zawodnik nie ma ustawionego indywidualnego celu treningowego.'
+        : unrelatedFocus
+          ? `Cel „${focus ? ATTRIBUTE_LABELS[focus] : 'brak'}” słabo odpowiada jego podstawowej pozycji.`
+          : `Rozwój kluczowych atrybutów wynosi ${developmentTrend}.`;
+    return {
+      player,
+      score: Math.round(perceive(`development:${player.id}`, rawRisk)),
+      label: overload ? 'Ryzyko przeciążenia' : 'Plan do korekty',
+      detail,
+      action: overload ? 'Zmniejsz intensywność lub zaplanuj regenerację' : 'Ustaw właściwy cel indywidualny',
+    } satisfies TeamAnalysisPlayerConcern;
+  }).filter(Boolean) as TeamAnalysisPlayerConcern[];
+
+  const averageGrowth = trends.length > 0 ? Math.round(average(trends) * 10) / 10 : 0;
+  return {
+    activeTrainingName: activeTrainingName ?? 'Brak wybranego cyklu',
+    intensityLabel,
+    facilityLevel: club.trainingFacilityLevel ?? null,
+    averageGrowth,
+    improvingPlayers: trends.filter(value => value > 0).length,
+    decliningPlayers: trends.filter(value => value < 0).length,
+    focusMismatches: focusMismatches.sort((left, right) => right.score - left.score).slice(0, 6),
+    summary: [
+      `Aktywny plan: ${activeTrainingName ?? 'brak wybranego cyklu'}, intensywność: ${intensityLabel.toLowerCase()}.`,
+      averageGrowth > 0
+        ? `Kluczowe atrybuty rosną średnio o ${averageGrowth}; ${trends.filter(value => value > 0).length} zawodników zanotowało postęp.`
+        : 'Na razie nie widać wyraźnego wzrostu kluczowych atrybutów całej kadry.',
+    ],
+  };
+};
+
+const analyzeTacticalProfile = (
+  players: Player[],
+  lineup: Lineup | null | undefined,
+  recommendation: TeamAnalysisTacticOption,
+  perceive: TeamPerceiver,
+): TeamAnalysisTacticalProfile => {
+  const starters = lineup
+    ? lineup.startingXI.map(id => players.find(player => player.id === id)).filter(Boolean) as Player[]
+    : recommendation.projectedXI.map(slot => slot.player).filter(Boolean) as Player[];
+  const sample = starters.length > 0 ? starters : [...players].sort((a, b) => b.overallRating - a.overallRating).slice(0, 11);
+  const defenders = sample.filter(player => player.position === PlayerPosition.DEF);
+  const pressingRaw = average(sample.map(player => average([
+    player.attributes.stamina,
+    player.attributes.workRate,
+    player.attributes.pace,
+    player.attributes.mentality,
+  ])));
+  const counterRaw = average(sample.map(player => average([
+    player.attributes.pace,
+    player.attributes.attacking,
+    player.attributes.passing,
+    player.attributes.vision,
+  ])));
+  const highLineRaw = defenders.length > 0 ? average(defenders.map(player => average([
+    player.attributes.pace,
+    player.attributes.positioning,
+    player.attributes.defending,
+  ]))) : 0;
+  const pressingFit = Math.round(perceive('profile:pressing', pressingRaw, 1, 99));
+  const counterAttackFit = Math.round(perceive('profile:counter', counterRaw, 1, 99));
+  const highLineFit = Math.round(perceive('profile:high-line', highLineRaw, 1, 99));
+  const currentTactic = lineup ? TacticRepository.getById(lineup.tacticId) : null;
+  const notes = [
+    pressingFit >= 70
+      ? 'Kadra ma wytrzymałość i pracowitość potrzebną do regularnego pressingu.'
+      : 'Stały wysoki pressing może zbyt szybko obciążać obecną jedenastkę.',
+    counterAttackFit >= 70
+      ? 'Szybkość, wizja i jakość podań pozwalają skutecznie grać z kontrataku.'
+      : 'Kontratak nie powinien być jedynym planem, ponieważ przejście do ataku nie daje wyraźnej przewagi.',
+    highLineFit >= 68
+      ? 'Obrońcy mają profil pozwalający bezpieczniej ustawiać linię wyżej.'
+      : 'Wysoka linia obrony zwiększa ryzyko podań za plecy defensorów.',
+    currentTactic && currentTactic.id !== recommendation.tacticId
+      ? `Aktualne ustawienie ${currentTactic.name} warto porównać z rekomendowanym ${recommendation.tacticName}.`
+      : `Aktualne ustawienie jest zgodne z rekomendacją: ${recommendation.tacticName}.`,
+  ];
+
+  return {
+    currentTacticId: lineup?.tacticId ?? null,
+    currentTacticName: currentTactic?.name ?? 'Brak zapisanego ustawienia',
+    pressingFit,
+    counterAttackFit,
+    highLineFit,
+    notes,
+  };
+};
+
+const buildExecutiveSummary = (
+  report: {
+    form: TeamAnalysisForm;
+    readiness: TeamAnalysisReadiness;
+    dressingRoom: TeamAnalysisDressingRoom;
+    development: TeamAnalysisDevelopment;
+    tactical: TeamAnalysisTacticalProfile;
+    tactic: TeamAnalysisTacticOption;
+    contracts: TeamAnalysisContractCase[];
+  },
+): TeamAnalysisExecutiveSummary => {
+  const strengths = [
+    report.form.sampleSize > 0 && report.form.pointsPerMatch >= 1.8
+      ? `Forma zespołu daje ${report.form.pointsPerMatch} pkt na mecz w analizowanym okresie.`
+      : null,
+    report.tactical.pressingFit >= 70 ? 'Profil podstawowej jedenastki dobrze wspiera pressing.' : null,
+    report.tactical.counterAttackFit >= 70 ? 'Kadra ma dobre warunki do szybkiego kontrataku.' : null,
+    report.dressingRoom.averageMorale >= 68 ? 'Morale i stabilność szatni są obecnie atutem.' : null,
+    report.readiness.ready >= 18 ? 'Większość kadry jest gotowa do gry.' : null,
+  ].filter(Boolean) as string[];
+
+  const risks = [
+    report.readiness.unavailable > 0 ? `${report.readiness.unavailable} zawodników jest obecnie niedostępnych.` : null,
+    report.readiness.averageFatigueDebt >= 28 ? 'Narasta zmęczenie wymagające rotacji.' : null,
+    report.dressingRoom.concerns[0] ? `${formatPlayerName(report.dressingRoom.concerns[0].player)} wymaga uwagi w szatni.` : null,
+    report.tactical.highLineFit < 60 ? 'Wysoka linia obrony jest ryzykowna dla obecnego profilu defensorów.' : null,
+    report.form.sampleSize > 0 && report.form.goalsAgainst > report.form.goalsFor ? 'Ostatni bilans bramek wskazuje problem z równowagą zespołu.' : null,
+  ].filter(Boolean) as string[];
+
+  const actions = [
+    report.readiness.concerns[0]
+      ? `${report.readiness.concerns[0].action}: ${formatPlayerName(report.readiness.concerns[0].player)}.`
+      : `Utrzymaj podstawę ustawienia ${report.tactic.tacticName}.`,
+    report.dressingRoom.concerns[0]
+      ? `${report.dressingRoom.concerns[0].action}: ${formatPlayerName(report.dressingRoom.concerns[0].player)}.`
+      : 'Utrzymaj obecny porządek ról w szatni.',
+    report.development.focusMismatches[0]
+      ? `${report.development.focusMismatches[0].action}: ${formatPlayerName(report.development.focusMismatches[0].player)}.`
+      : report.contracts[0]
+        ? `${report.contracts[0].actionLabel}: ${formatPlayerName(report.contracts[0].player)}.`
+        : 'Kontynuuj aktywny plan treningowy i ocenę po kolejnych meczach.',
+  ];
+
+  return {
+    strengths: strengths.slice(0, 3).length > 0 ? strengths.slice(0, 3) : ['Najmocniejsze ogniwa kadry pozwalają zbudować pełną podstawową jedenastkę.'],
+    risks: risks.slice(0, 3).length > 0 ? risks.slice(0, 3) : ['Brak pilnego zagrożenia; potrzebna jest dalsza obserwacja formy i obciążeń.'],
+    actions,
+  };
+};
+
 const joinNames = (players: Player[]): string => {
   const names = players.map(player => formatPlayerName(player));
   if (names.length === 0) return 'brakuje wyraźnych nazwisk';
@@ -1330,9 +1937,18 @@ const buildAnalystNotes = (
 const buildCommentary = (
   club: Club,
   report: Omit<TeamAnalysisReport, 'commentary' | 'analystNotes'>,
-  currentDate: Date
+  assistant: StaffMember | null | undefined,
+  weekKey: string,
 ): TeamAnalysisCommentary => {
-  const style = COMMENTARY_STYLES[hashString(`${club.id}_${currentDate.toISOString().slice(0, 10)}`) % COMMENTARY_STYLES.length];
+  // The voice now belongs to the hired assistant. It no longer changes between
+  // unrelated TV-expert/psychologist personas whenever the calendar advances.
+  const assistantName = assistant ? `${assistant.firstName} ${assistant.lastName}` : 'Asystent zespołu';
+  const style = {
+    id: assistant?.id ?? 'assistant_default',
+    name: assistantName,
+    role: 'analiza drużyny',
+  };
+  const commentarySeed = `${club.id}_${style.id}_${weekKey}`;
   const topKeyPlayers = report.keyPlayers.slice(0, 3).map(entry => entry.player);
   const keyPlayersStatement = buildKeyPlayersStatement(topKeyPlayers);
   const weakPlayersSummary = buildWeakPlayersSummary(report.exitCandidates);
@@ -1347,20 +1963,20 @@ const buildCommentary = (
   const technicalAreaTwo = report.trainingAnalysis.weakestTechnicalAreas[1]?.label ?? 'podanie';
   const topExit = report.exitCandidates[0];
   const topTalent = report.talents[0];
-  const opening = pickVariant(`${club.id}_${style.id}_opening`, [
+  const opening = pickVariant(`${commentarySeed}_opening`, [
     'Trenerze, skład nie jest zły, ale są 2-3 problemy, które trzeba ogarnąć teraz.',
     'Trenerze, ta kadra daje radę, ale nie na każdej pozycji wygląda dobrze.',
     'Ta drużyna jest wystarczająco silna, żeby wygrywać mecze, ale ma kilka słabych pozycji, które obniżają jej poziom.',
     'Widzę w tej drużynie kilka mocnych punktów, ale są też pozycje, które ciągną zespół w dół.',
   ]);
 
-  const keyPlayersLine = pickVariant(`${club.id}_${style.id}_leaders`, [
+  const keyPlayersLine = pickVariant(`${commentarySeed}_leaders`, [
     `Najlepiej wygląda dziś ${POSITION_LABELS[bestPosition]}, a najsłabiej ${POSITION_LABELS[weakestPos]}. ${keyPlayersStatement}`,
     `Patrząc na skład, najmocniejsi jesteśmy dziś w ${POSITION_LABELS[bestPosition]}, a najwięcej problemów mamy w ${POSITION_LABELS[weakestPos]}. ${keyPlayersStatement}`,
     `Największa siła jest dziś w ${POSITION_LABELS[bestPosition]}, a najsłabsze miejsce mamy w ${POSITION_LABELS[weakestPos]}. ${keyPlayersStatement}`,
   ]);
 
-  const squadShapeLine = pickVariant(`${club.id}_${style.id}_shape`, [
+  const squadShapeLine = pickVariant(`${commentarySeed}_shape`, [
     `Średni poziom kadry to ${averageOverall} OVR. To wystarczy do normalnej gry, ale różnice między pozycjami są duże.`,
     `Średni poziom zespołu wynosi ${averageOverall} OVR. Nie jest źle, ale nie wszędzie mamy dobrych zmienników.`,
     `Przy średniej ${averageOverall} OVR ta drużyna może być stabilna, ale nie każda formacja trzyma ten sam poziom.`,
@@ -1375,20 +1991,20 @@ const buildCommentary = (
     : '';
 
   const talentLine = topTalent
-    ? seededUnit(`${club.id}_${style.id}_talent`) > 0.5
+    ? seededUnit(`${commentarySeed}_talent`) > 0.5
       ? `${formatPlayerName(topTalent.player)} to dziś najciekawszy młody zawodnik w kadrze. Powinien grać regularnie, ale nie trzeba go od razu wystawiać do pierwszego składu w każdym meczu.`
       : `Najciekawszym zawodnikiem do rozwoju jest ${talentName}. Warto dawać mu minuty i sprawdzać, jak szybko idzie do przodu.`
     : '';
 
-  const trainingLine = `Patrzac na treningi, druzyna najslabiej wyglada dzis w takich elementach jak ${technicalAreaOne} i ${technicalAreaTwo}. W najblizszych tygodniach trzeba na to zwrocic najwieksza uwage.`;
+  const trainingLine = `Patrząc na treningi, drużyna najsłabiej wygląda dziś w takich elementach jak ${technicalAreaOne} i ${technicalAreaTwo}. W najbliższych tygodniach trzeba na to zwrócić największą uwagę.`;
 
-  const tacticLine = pickVariant(`${club.id}_${style.id}_tactic`, [
+  const tacticLine = pickVariant(`${commentarySeed}_tactic`, [
     `Jeśli chodzi o ustawienie, najlepiej wygląda dziś ${bestTactic}. W tym systemie najłatwiej zmieścić najlepszych zdrowych zawodników. Drugą opcją jest ${altTactic}.`,
     `Na teraz postawiłbym na ${bestTactic}, bo w tym ustawieniu najlepiej wykorzystamy najmocniejszych i najbardziej gotowych do gry zawodników. Drugi wybór to ${altTactic}.`,
     `Moim zdaniem najlepszym wyborem na dziś jest ${bestTactic}. Ten system po prostu najlepiej pasuje do obecnej kadry. Jako druga opcja zostaje ${altTactic}.`,
   ]);
 
-  const closeLine = pickVariant(`${club.id}_${style.id}_close`, [
+  const closeLine = pickVariant(`${commentarySeed}_close`, [
     'Podsumowując, oparłbym zespół na najlepszych zawodnikach, uporządkował skład i podjął potrzebne decyzje kontraktowe.',
     'Na dziś najważniejsze jest wybrać jedno główne ustawienie i jasno ustalić, kto ma w nim grać.',
     'Mówiąc prosto: ten zespół może dawać wyniki, jeśli będziemy grać najmocniejszym składem i nie przegapimy ważnych decyzji.',
@@ -1410,10 +2026,58 @@ const buildCommentary = (
 };
 
 export const TeamAnalysisService = {
-  analyzeSquad: (club: Club, players: Player[], currentDate: Date): TeamAnalysisReport => {
+  analyzeSquad: ({
+    club,
+    players,
+    currentDate,
+    assistant,
+    lineup,
+    matchHistory = [],
+    activeTrainingName,
+    activeIntensity,
+  }: TeamAnalysisInput): TeamAnalysisReport => {
+    const weekKey = getWeekKey(currentDate);
+    const qualityScore = getTeamAssistantQuality(assistant);
+    const uncertaintyPercent = getTeamAssistantUncertainty(qualityScore);
+    const perceive = makeTeamPerceiver(
+      club.id,
+      weekKey,
+      assistant?.id ?? 'NO_ASSISTANT',
+      uncertaintyPercent,
+    );
     const squadAverageOverall = average(players.map(player => player.overallRating));
-    const { best, alternatives, availableCounts } = analyzeTactics(club, players);
-    const { candidates: exitCandidates, note: exitCandidatesNote } = analyzeExitCandidates(players, club, best, squadAverageOverall);
+    const { best: rawBest, alternatives: rawAlternatives, availableCounts } = analyzeTactics(club, players);
+    const { candidates: rawExitCandidates, note: exitCandidatesNote } = analyzeExitCandidates(players, club, rawBest, squadAverageOverall);
+    const perceived = applyAssistantPerception({
+      tactics: [rawBest, ...rawAlternatives],
+      keyPlayers: analyzeKeyPlayers(players),
+      exitCandidates: rawExitCandidates,
+      contractCases: analyzeContractCases(players, currentDate, squadAverageOverall),
+      talents: analyzeTalents(players, currentDate, squadAverageOverall),
+      assistantLeaders: analyzeAssistantLeaders(players),
+    }, perceive);
+    const tacticalRecommendation = perceived.tactics[0];
+    const alternativeTactics = perceived.tactics.slice(1, 4);
+    const formAnalysis = analyzeRecentForm(club, matchHistory, currentDate);
+    const readinessAnalysis = analyzeReadiness(players, perceive);
+    const dressingRoomAnalysis = analyzeDressingRoom(players, perceive);
+    const developmentAnalysis = analyzeDevelopment(
+      club,
+      players,
+      activeTrainingName,
+      activeIntensity,
+      perceive,
+    );
+    const tacticalProfile = analyzeTacticalProfile(players, lineup, tacticalRecommendation, perceive);
+    const executiveSummary = buildExecutiveSummary({
+      form: formAnalysis,
+      readiness: readinessAnalysis,
+      dressingRoom: dressingRoomAnalysis,
+      development: developmentAnalysis,
+      tactical: tacticalProfile,
+      tactic: tacticalRecommendation,
+      contracts: perceived.contractCases,
+    });
     const baseReport = {
       generatedAt: currentDate.toISOString(),
       injuryRule: `Analiza jest tworzona na danych zawodników zdrowych lub z urazem do ${TACTIC_INJURY_LIMIT_DAYS} dni oraz z kondycją co najmniej ${MIN_TACTIC_CONDITION}%.`,
@@ -1421,20 +2085,32 @@ export const TeamAnalysisService = {
       squadAverageOverall: Math.round(squadAverageOverall * 10) / 10,
       availableCounts,
       trainingAnalysis: analyzeTraining(players),
-      assistantLeaders: analyzeAssistantLeaders(players),
-      keyPlayers: analyzeKeyPlayers(players),
-      exitCandidates,
+      assistantLeaders: perceived.assistantLeaders,
+      keyPlayers: perceived.keyPlayers,
+      exitCandidates: perceived.exitCandidates,
       exitCandidatesNote,
-      contractCases: analyzeContractCases(players, currentDate, squadAverageOverall),
-      talents: analyzeTalents(players, currentDate, squadAverageOverall),
-      tacticalRecommendation: best,
-      alternativeTactics: alternatives,
+      contractCases: perceived.contractCases,
+      talents: perceived.talents,
+      tacticalRecommendation,
+      alternativeTactics,
+      assistantModel: {
+        assistantId: assistant?.id ?? null,
+        generatedForWeek: weekKey,
+        qualityScore,
+        uncertaintyPercent,
+      },
+      executiveSummary,
+      formAnalysis,
+      readinessAnalysis,
+      dressingRoomAnalysis,
+      developmentAnalysis,
+      tacticalProfile,
     };
 
     return {
       ...baseReport,
       analystNotes: buildAnalystNotes(baseReport),
-      commentary: buildCommentary(club, baseReport, currentDate),
+      commentary: buildCommentary(club, baseReport, assistant, weekKey),
     };
   },
 };

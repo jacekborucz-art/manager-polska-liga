@@ -18,6 +18,7 @@ export enum ViewState {
   REFEREE_CARD = 'REFEREE_CARD',
   REFEREE_LIST = 'REFEREE_LIST',
   HIDDEN_LEAGUE = 'HIDDEN_LEAGUE',
+  FOURTH_LEAGUE = 'FOURTH_LEAGUE',
   TRANSFER_WINDOW = 'TRANSFER_WINDOW',
   PRE_MATCH_STUDIO = 'PRE_MATCH_STUDIO',
   MATCH_LIVE = 'MATCH_LIVE',
@@ -209,8 +210,8 @@ export interface RelegationPlayoffPenalties {
 
 // Wyniki 1. meczów (26 maja) — przechowywane w stanie gry do obliczenia agregatu
 export interface RelegationPlayoffFirstLegResults {
-  pair0: RelegationPlayoffLegResult; // 13. miejsce 2.Ligi vs los. 3.Liga
-  pair1: RelegationPlayoffLegResult; // 14. miejsce 2.Ligi vs los. 3.Liga
+  pair0: RelegationPlayoffLegResult; // zwycięzca I etapu III ligi vs 13. miejsce II ligi
+  pair1: RelegationPlayoffLegResult; // zwycięzca I etapu III ligi vs 14. miejsce II ligi
 }
 
 // Pełny wynik jednej pary (po obu meczach)
@@ -950,6 +951,24 @@ export interface PlayerStats {
   ratingHistory: number[]; 
 }
 
+export type PolishVoivodeship =
+  | 'dolnośląskie'
+  | 'kujawsko-pomorskie'
+  | 'lubelskie'
+  | 'lubuskie'
+  | 'łódzkie'
+  | 'małopolskie'
+  | 'mazowieckie'
+  | 'opolskie'
+  | 'podkarpackie'
+  | 'podlaskie'
+  | 'pomorskie'
+  | 'śląskie'
+  | 'świętokrzyskie'
+  | 'warmińsko-mazurskie'
+  | 'wielkopolskie'
+  | 'zachodniopomorskie';
+
 export interface PlayerClubAdaptation {
   /** Klub, którego dotyczy bieżący proces adaptacji. */
   clubId: string;
@@ -1520,6 +1539,15 @@ export interface Player {
   overallRating: number;
   attributes: PlayerAttributes;
   stats: PlayerStats;
+  /**
+   * Domestic league statistics split by an exact competition id.
+   *
+   * The legacy `stats` object remains the season-wide domestic aggregate because
+   * development, contracts and historical screens still consume it. This map is
+   * the authoritative source for competition tables: a mid-season transfer from
+   * one III-liga group to another must not move the player's old goals with him.
+   */
+  competitionStats?: Record<string, PlayerStats>;
   health: {
     status: HealthStatus;
     injury?: {
@@ -2015,6 +2043,8 @@ export interface Club {
   stadiumCapacity: number;
   reputation: number;
   country?: string;
+  /** Exact Polish administrative region used when II-liga relegations are routed to a III-liga group. */
+  polishVoivodeship?: PolishVoivodeship;
   isDefaultActive: boolean;
   colorPrimary?: string;
   colorSecondary?: string;
@@ -3165,6 +3195,8 @@ export interface LeagueRoundResults {
   league1Results: MatchResult[];
   league2Results: MatchResult[];
   league3Results: MatchResult[];
+  /** Optional because saves created before the 2026/27 III-liga expansion are not migrated. */
+  thirdLeagueResults?: Record<string, MatchResult[]>;
 }
 
 /**

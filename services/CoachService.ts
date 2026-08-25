@@ -42,7 +42,7 @@ const getLeagueSalaryMultiplier = (leagueId: string): number => {
   if (leagueId === 'L_PL_1') return 1.00;
   if (leagueId === 'L_PL_2') return 0.55;
   if (leagueId === 'L_PL_3') return 0.32;
-  if (leagueId === 'L_PL_4') return 0.18;
+  if (leagueId === 'L_PL_4' || leagueId?.startsWith('L_PL_4_G')) return 0.18;
   if (leagueId === 'L_SA') return 1.05;
   if (leagueId === 'L_ASIA') return 0.90;
   if (leagueId === 'L_NA') return 0.80;

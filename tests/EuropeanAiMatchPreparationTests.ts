@@ -251,6 +251,10 @@ assert.equal(report.homeTacticId, '4-3-3', 'raport nie może odziedziczyć stare
 assert.equal(report.awayTacticId, '5-4-1', 'raport nie może odziedziczyć starego globalnego 4-4-2 gości');
 assert.equal(report.homeLineup?.length, 11, 'raport ma zawierać pełny skład gospodarzy');
 assert.equal(report.awayLineup?.length, 11, 'raport ma zawierać pełny skład gości');
+const validHomeGoals = report.goals?.filter(goal => goal.teamId === strongClub.id && !goal.varDisallowed).length ?? 0;
+const validAwayGoals = report.goals?.filter(goal => goal.teamId === weakClub.id && !goal.varDisallowed).length ?? 0;
+assert.equal(validHomeGoals, report.homeScore, 'każda bramka gospodarzy musi mieć strzelca w raporcie');
+assert.equal(validAwayGoals, report.awayScore, 'każda bramka gości musi mieć strzelca w raporcie');
 
 const superCupFixture: Fixture = {
   ...fixture,

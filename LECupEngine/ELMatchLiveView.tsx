@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useGame } from '../context/GameContext';
+import { usePostMatchStudioProcessing } from '../components/ui/usePostMatchStudioProcessing';
 import {
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType,
   MatchEventType, SubstitutionRecord, MatchLogEntry, InjurySeverity,
@@ -182,6 +183,7 @@ export const ELMatchLiveView = () => {
     roundResults, sessionSeed,
     activeMatchState: matchState, setActiveMatchState: setMatchState, pressConferenceEffects
   } = useGame();
+  const { isPreparingStudio, openPostMatchStudio } = usePostMatchStudioProcessing();
 
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
   const [openTacticalSelect, setOpenTacticalSelect] = useState<string | null>(null);
@@ -2406,7 +2408,7 @@ return {
     const fixtureDateKey = ctx.fixture.date.toDateString();
     const bgFromAdvanceDay = roundResults[fixtureDateKey];
     const bgFromProcessor = simResult.roundResults;
-    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [] };
+    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [], thirdLeagueResults: {} };
 
     DebugLoggerService.separator('handleFinishMatch');
     DebugLoggerService.log('FINISH', `fixtureDateKey=${fixtureDateKey} | currentDate=${currentDate.toDateString()}`);
@@ -2423,6 +2425,7 @@ return {
       league1Results: [...bgSource.league1Results],
       league2Results: [...bgSource.league2Results],
       league3Results: [...bgSource.league3Results],
+      thirdLeagueResults: bgSource.thirdLeagueResults,
     };
     const userMatchResult: MatchResult = { homeTeamName: ctx.homeClub.name, awayTeamName: ctx.awayClub.name, homeScore: matchState.homeScore, awayScore: matchState.awayScore, homeColors: ctx.homeClub.colorsHex, awayColors: ctx.awayClub.colorsHex };
     const lid = ctx.fixture.leagueId;
@@ -3834,7 +3837,8 @@ const hasScored = matchState.homeGoals.some(g => g.playerName === p.lastName && 
         HISTORIA
       </button>
       <button
-        onClick={handleFinishMatch}
+        onClick={() => openPostMatchStudio(handleFinishMatch)}
+        disabled={isPreparingStudio}
         className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
       >
         <span>STUDIO POMECZOWE</span>

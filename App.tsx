@@ -13,6 +13,7 @@ import { PreMatchStudioView } from './components/views/PreMatchStudioView';
 import { SquadView } from './components/views/SquadView';
 import { ClubDetails } from './components/views/ClubDetails';
 import { HiddenLeagueViewer } from './components/views/HiddenLeagueViewer';
+import { FourthLeagueViewer } from './components/views/FourthLeagueViewer';
 import { PlayerCard } from './components/views/PlayerCard';
 import { RefereeCard } from './components/views/RefereeCard';
 import { RefereeListView } from './components/views/RefereeListView';
@@ -460,6 +461,8 @@ case ViewState.POLISH_CUP_BRACKET:
         );
       case ViewState.HIDDEN_LEAGUE:
         return <HiddenLeagueViewer />;
+      case ViewState.FOURTH_LEAGUE:
+        return <FourthLeagueViewer />;
       case ViewState.CUP_DRAW:
         return <CupDrawView />;
               case ViewState.CL_DRAW:

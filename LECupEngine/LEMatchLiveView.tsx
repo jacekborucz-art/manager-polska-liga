@@ -1658,7 +1658,7 @@ return {
     const fixtureDateKey = ctx.fixture.date.toDateString();
     const bgFromAdvanceDay = roundResults[fixtureDateKey];
     const bgFromProcessor = simResult.roundResults;
-    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [] };
+    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [], thirdLeagueResults: {} };
 
     DebugLoggerService.separator('handleFinishMatch');
     DebugLoggerService.log('FINISH', `fixtureDateKey=${fixtureDateKey} | currentDate=${currentDate.toDateString()}`);
@@ -1675,6 +1675,7 @@ return {
       league1Results: [...bgSource.league1Results],
       league2Results: [...bgSource.league2Results],
       league3Results: [...bgSource.league3Results],
+      thirdLeagueResults: bgSource.thirdLeagueResults,
     };
     const userMatchResult: MatchResult = { homeTeamName: ctx.homeClub.name, awayTeamName: ctx.awayClub.name, homeScore: matchState.homeScore, awayScore: matchState.awayScore, homeColors: ctx.homeClub.colorsHex, awayColors: ctx.awayClub.colorsHex };
     const lid = ctx.fixture.leagueId;

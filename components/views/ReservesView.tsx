@@ -10,6 +10,8 @@ import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
 import { ManagedReserveTeamService } from '../../services/ManagedReserveTeamService';
 import { MatchHistoryService } from '../../services/MatchHistoryService';
+import { ReserveCoachAnalysisService } from '../../services/ReserveCoachAnalysisService';
+import { ReserveCoachAnalysisModal } from '../modals/ReserveCoachAnalysisModal';
 
 const POSITION_LABEL: Record<PlayerPosition, string> = {
   [PlayerPosition.GK]: 'BR',
@@ -145,81 +147,6 @@ const getReadableBadgeTextColor = (colors: string[]): string => {
   const avgLuminance = parsed.reduce((sum, [r, g, b]) => sum + (0.2126 * r + 0.7152 * g + 0.0722 * b), 0) / parsed.length;
   return avgLuminance > 168 ? '#0f172a' : '#ffffff';
 };
-
-const POS_PRAISE: Record<PlayerPosition, string[]> = {
-  [PlayerPosition.GK]: [
-    'Dobry refleks, pewny na przedpolu.',
-    'Spokojny pod presją, komenderuje obroną.',
-    'Świetne wyjścia z bramki, nie boi się konfrontacji.',
-    'Bardzo dobra gra na linii.',
-    'Czyta grę rywalów lepiej niż większość zawodników w jego wieku.',
-  ],
-  [PlayerPosition.DEF]: [
-    'Silny w powietrzu i dominuje przy stałych fragmentach.',
-    'Dobra praca nóg, wychodzi z pressingu bez strat.',
-    'Dobry timing przy wślizgach, rzadko popełnia błędy pozycyjne.',
-    'Mocny fizycznie, bardzo szybki',
-    'Bardzo dobry stoper',
-    'Potrafi bardzo dobrze uwolnić się spod pressingu.',
-  ],
-  [PlayerPosition.MID]: [
-    'Świetna wizja gry. Widzi więcej niż inni.',
-    'Technicznie wyróżniający się w ciasnych sytuacjach.',
-    'Mocno pracuje przez całe spotkanie, nie odpuszcza żadnej piłki.',
-    'Aktywny w pressingu, odzyskuje cenne piłki.',
-    'Kreatywny i trudny do przewidzenia, potrafi zaskoczyć rywala.',
-    'Inteligentne poruszanie bez piłki, zawsze dostępny do podania.',
-  ],
-  [PlayerPosition.FWD]: [
-    'Instynkt strzeleck, dobrze potrafi odnaleźć się w polu karnym.',
-    'Szybki w akcjach 1 na 1, trudny do zatrzymania.',
-    'Dobra gra głową, groźny przy dośrodkowaniach.',
-    'Potrafi utrzymać piłkę i wciągnąć obrońców.',
-    'Nieprzewidywalny w polu karnym, zawsze szuka wykończenia.',
-    'Świetna gra bez piłki.',
-  ],
-};
-
-const POS_CONCERN: Record<PlayerPosition, string[]> = {
-  [PlayerPosition.GK]: [
-    'Niepewny przy wyjściach.',
-    'Słaba gra nogami, rywal może to wykorzystać.',
-  ],
-  [PlayerPosition.DEF]: [
-    'Problemy z powrotami po akcjach ofensywnych.',
-    'Za słaby w powietrzu jak na tę pozycję.',
-  ],
-  [PlayerPosition.MID]: [
-    'Słaba gra bez piłki.',
-    'Słabe pressing, nie wraca wystarczająco szybko.',
-  ],
-  [PlayerPosition.FWD]: [
-    'Wykończenie wymaga dużej pracy, gdyż marnuje zbyt wiele okazji.',
-    'Niepewny w kluczowych momentach meczu.',
-  ],
-};
-
-const COACH_INTROS = [
-  'Przejrzałem dokładnie kadrę. Oto moje obserwacje z ostatnich tygodni:',
-  'Obserwowałem chłopaków na treningach i meczach sparingowych. Mam kilka uwag:',
-  'To ciekawy zespół, są tu zawodnicy z potencjałem, ale też tacy wymagający pracy:',
-  'Będąc obiektywnym widzę, że:',
-  'Po ostatnim miesiącu intensywnych treningów mogę przedstawić moje spostrzeżenia:',
-  'Obserwuję ich uważnie od jakiegoś czasu i mam konkretne wnioski:',
-];
-
-interface ReportEntry {
-  player: Player;
-  perceivedTalent: number;
-  note: string;
-  tier: 'gem' | 'solid' | 'concern';
-}
-
-interface CoachReport {
-  intro: string;
-  highlights: ReportEntry[];
-  concerns: ReportEntry[];
-}
 
 interface NormalizedReserveProgressPoint {
   date: string;
@@ -430,53 +357,6 @@ const aggregateReserveProgressPoints = (
   });
 };
 
-function seededRand(seed: number) {
-  let s = seed;
-  return () => {
-    s |= 0; s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function generateCoachReport(players: Player[], seed: number): CoachReport {
-  const rng = seededRand(seed);
-  const rand = <T,>(arr: T[]): T => arr[Math.floor(rng() * arr.length)];
-
-  const evaluated = players.map(p => {
-    // Bias: 0.35–1.65 — trener może mocno niedocenić lub przecenić zawodnika
-    const bias = 0.35 + rng() * 1.3;
-    const perceivedTalent = Math.round(Math.min(99, Math.max(1, p.attributes.talent * bias)));
-    return { player: p, perceivedTalent };
-  });
-
-  evaluated.sort((a, b) => b.perceivedTalent - a.perceivedTalent);
-
-  const topCount = 3 + Math.floor(rng() * 3); // 3–5
-  const highlights: ReportEntry[] = evaluated.slice(0, topCount).map(e => ({
-    player: e.player,
-    perceivedTalent: e.perceivedTalent,
-    note: rand(POS_PRAISE[e.player.position]),
-    tier: e.perceivedTalent >= 68 ? 'gem' : 'solid',
-  }));
-
-  const concerns: ReportEntry[] = evaluated
-    .filter(e => {
-      const keyAttrs = POSITION_KEY_ATTRS[e.player.position];
-      return keyAttrs.some(attr => e.player.attributes[attr] <= WEAK_THRESHOLD);
-    })
-    .slice(0, 2)
-    .map(e => ({
-      player: e.player,
-      perceivedTalent: e.perceivedTalent,
-      note: rand(POS_CONCERN[e.player.position]),
-      tier: 'concern' as const,
-    }));
-
-  return { intro: rand(COACH_INTROS), highlights, concerns };
-}
-
 export const ReservesView: React.FC = () => {
   const { reserves, navigateTo, viewPlayerDetails, userTeamId, clubs, setClubs, currentDate, seasonNumber,
           players, setPlayers, setReserves, lineups, updateLineup,
@@ -611,16 +491,6 @@ export const ReservesView: React.FC = () => {
     }
   };
 
-  const weekKey = useMemo(
-    () => Math.floor(currentDate.getTime() / (7 * 24 * 3600 * 1000)) + seasonNumber * 1000,
-    [currentDate, seasonNumber]
-  );
-
-  const weeklyReport = useMemo(
-    () => reserves.length > 0 ? generateCoachReport(reserves, weekKey) : null,
-    [reserves, weekKey]
-  );
-
   const sortedReserves = useMemo(() => {
     return [...reserves].sort((a, b) => {
       const posA = POSITION_ORDER.indexOf(a.position);
@@ -684,6 +554,17 @@ export const ReservesView: React.FC = () => {
   ), [clubs, fixtures, managedReserveClubId, seasonNumber]);
   const displayedReserveFixtures = officialSchedule?.fixtures ?? reserveFixtures;
   const displayedReserveResults = officialSchedule?.results ?? reserveMatchResults;
+
+  const reserveCoachAnalysisReport = useMemo(() => (
+    reserves.length > 0
+      ? ReserveCoachAnalysisService.createReport({
+          players: reserves,
+          coach: reserveCoach,
+          currentDate,
+          matchResults: displayedReserveResults,
+        })
+      : null
+  ), [currentDate, displayedReserveResults, reserveCoach, reserves]);
 
   const seasonReserveFixtures = useMemo(() => (
     displayedReserveFixtures.filter(fixture => {
@@ -1717,102 +1598,19 @@ export const ReservesView: React.FC = () => {
       <ReserveScheduleModal onClose={() => setShowScheduleModal(false)} />
     )}
 
-    {showReport && weeklyReport && (
-      <div
-        className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80"
-        onClick={() => setShowReport(false)}
-      >
-        <div
-          className="relative w-full max-w-2xl mx-4 bg-slate-900 border border-white/10 rounded-[32px] shadow-[0_50px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col max-h-[85vh]"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* gradient top bar */}
-          <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/60 to-transparent" />
-
-          {/* header */}
-          <div className="flex items-center justify-between px-7 pt-7 pb-4 border-b border-white/5 shrink-0">
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-[0.45em] text-amber-500 mb-1">📋 Raport tygodniowy</p>
-              <h2 className="text-xl font-black italic uppercase tracking-tighter text-white leading-none">Trener Rezerw</h2>
-            </div>
-            <button
-              onClick={() => setShowReport(false)}
-              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors text-sm font-black"
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* scrollable body */}
-          <div className="overflow-y-auto px-7 py-5 space-y-6">
-            {/* intro */}
-            <p className="text-[13px] text-slate-300 italic leading-relaxed border-l-2 border-slate-600 pl-4">
-              {weeklyReport.intro}
-            </p>
-
-            {/* highlights */}
-            {weeklyReport.highlights.length > 0 && (
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.4em] text-amber-500 mb-3">◆ Na uwagę zasługują</p>
-                <div className="space-y-3">
-                  {weeklyReport.highlights.map(e => (
-                    <div
-                      key={e.player.id}
-                      className="bg-slate-800/60 rounded-2xl px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors border border-white/5"
-                      onClick={() => { viewPlayerDetails(e.player.id); setShowReport(false); }}
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-center text-[7px] font-black italic leading-none ${POSITION_BADGE_STYLE[e.player.position]}`}>
-                          {POSITION_LABEL[e.player.position]}
-                        </div>
-                        <span className={`text-sm font-black italic uppercase tracking-tight ${e.tier === 'gem' ? 'text-amber-300' : 'text-white'}`}>
-                          {e.player.firstName} {e.player.lastName}
-                        </span>
-                        {e.tier === 'gem' && (
-                          <span className="text-[7px] font-black uppercase tracking-widest text-amber-500 border border-amber-700/50 rounded px-1.5 py-0.5">★ TALENT</span>
-                        )}
-                        <span className="text-[9px] text-slate-500 ml-auto">{e.player.age} lat</span>
-                      </div>
-                      <p className="text-[12px] text-slate-300 leading-relaxed">
-                        Myślę, że na uwagę zasługuje <span className={`font-bold ${e.tier === 'gem' ? 'text-amber-300' : 'text-white'}`}>{e.player.firstName} {e.player.lastName}</span>, ponieważ <span className="italic text-slate-400">{e.note}</span>
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* concerns */}
-            {weeklyReport.concerns.length > 0 && (
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.4em] text-red-500 mb-3">⚠ Niepokoi mnie</p>
-                <div className="space-y-3">
-                  {weeklyReport.concerns.map(e => (
-                    <div
-                      key={e.player.id}
-                      className="bg-red-950/30 rounded-2xl px-4 py-3 cursor-pointer hover:bg-red-950/50 transition-colors border border-red-900/30"
-                      onClick={() => { viewPlayerDetails(e.player.id); setShowReport(false); }}
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-center text-[7px] font-black italic leading-none ${POSITION_BADGE_STYLE[e.player.position]}`}>
-                          {POSITION_LABEL[e.player.position]}
-                        </div>
-                        <span className="text-sm font-black italic uppercase tracking-tight text-red-300">
-                          {e.player.firstName} {e.player.lastName}
-                        </span>
-                        <span className="text-[9px] text-slate-500 ml-auto">{e.player.age} lat</span>
-                      </div>
-                      <p className="text-[12px] text-slate-300 leading-relaxed">
-                        Martwi mnie <span className="font-bold text-red-300">{e.player.firstName} {e.player.lastName}</span> — <span className="italic text-slate-400">{e.note}</span>
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+    {showReport && reserveCoachAnalysisReport && (
+      <ReserveCoachAnalysisModal
+        report={reserveCoachAnalysisReport}
+        coach={reserveCoach}
+        clubId={reserveDisplayClub?.id}
+        clubName={reserveDisplayClub?.name ?? 'Rezerwy'}
+        clubColors={reserveDisplayClub?.colorsHex}
+        onClose={() => setShowReport(false)}
+        onOpenPlayer={playerId => {
+          setShowReport(false);
+          viewPlayerDetails(playerId);
+        }}
+      />
     )}
     </>
   );

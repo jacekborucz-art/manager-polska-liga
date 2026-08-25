@@ -17,10 +17,10 @@ import { buildMatchPressureContext } from './MatchPressureService';
 import { SeasonTransitionService } from './SeasonTransitionService';
 import { PlayerMoraleService } from './PlayerMoraleService';
 import { PlayerFormService } from './PlayerFormService';
-import { ThirdLeagueBackgroundService } from './ThirdLeagueBackgroundService';
 import { SquadGeneratorService } from './SquadGeneratorService';
 import { ReserveTeamFinanceService } from './ReserveTeamFinanceService';
 import { ReserveTeamSquadMovementService } from './ReserveTeamSquadMovementService';
+import { PolishThirdLeagueService, THIRD_LEAGUE_GROUP_IDS } from './PolishThirdLeagueService';
 
 const formatPlayerReportName = (player: Pick<Player, 'firstName' | 'lastName'>): string => {
   const lastName = player.lastName.trim();
@@ -379,7 +379,7 @@ const ensureFourthLeagueSquads = (
   const allIdsInUse = new Set(Object.values(playersMap).flat().map(player => player.id));
 
   clubs
-    .filter(club => club.leagueId === 'L_PL_4' && club.isDefaultActive && club.id !== userTeamId)
+    .filter(club => PolishThirdLeagueService.isThirdLeagueId(club.leagueId) && club.isDefaultActive && club.id !== userTeamId)
     .forEach(club => {
       const squad = nextPlayers[club.id] || [];
       if (squad.length >= 18) return;
@@ -651,21 +651,19 @@ if (todayFixtures.length === 0) {
     // 2. Generujemy pogodę dla całego dnia meczowego
     const weather = PolandWeatherService.getWeather(currentDate, currentDate.toDateString());
     
-    currentPlayers = ThirdLeagueBackgroundService.simulateMatchday(
-      currentDate,
-      currentClubs,
-      currentPlayers,
-      newLineups,
-      coaches,
-      weather,
-      sessionSeed
-    );
+    // III liga is no longer paired ad hoc on every Polish matchday. Its four
+    // persisted schedules are already part of `fixtures`, so the normal loop
+    // below simulates each official fixture exactly once and updates its table.
 
     const roundResults: LeagueRoundResults = {
       dateKey: dateStr,
       league1Results: [],
       league2Results: [],
-      league3Results: []
+      league3Results: [],
+      // Keep the lightweight III-liga score cards with the same matchday
+      // report used by the three playable divisions. The post-match studio can
+      // therefore reveal them on demand without creating detailed reports.
+      thirdLeagueResults: Object.fromEntries(THIRD_LEAGUE_GROUP_IDS.map(groupId => [groupId, []]))
     };
 
     todayFixtures.forEach(fixture => {
@@ -715,6 +713,7 @@ if (todayFixtures.length === 0) {
       // Obliczamy miejsce gospodarza w tabeli
       const homeRank = leagueStandings.findIndex(c => c.id === home.id) + 1 || 10; 
       const attendance = AttendanceService.calculate(home, homeRank, weather, away);
+      const isLightweightThirdLeagueMatch = PolishThirdLeagueService.isThirdLeagueId(String(fixture.leagueId));
 
       MatchHistoryService.logMatch({
         season: seasonNumber,
@@ -725,9 +724,14 @@ if (todayFixtures.length === 0) {
         awayTeamId: away.id,
         homeScore: result.homeScore,
         awayScore: result.awayScore,
+        // III-liga matches still run through the complete event engine below,
+        // and every event updates player/club state. Only the redundant report
+        // payload is discarded: 1,224 detailed background reports per season
+        // would otherwise inflate saves without exposing extra gameplay.
+        archived: isLightweightThirdLeagueMatch || undefined,
         attendance: attendance,
         refereeName: `${assignedRef.firstName} ${assignedRef.lastName}`,
-        goals: result.scorers.map(s => {
+        goals: isLightweightThirdLeagueMatch ? [] : result.scorers.map(s => {
           const p = (currentPlayers[home.id].concat(currentPlayers[away.id])).find(x => x.id === s.playerId);
           return {
             playerId: s.playerId,
@@ -739,7 +743,7 @@ if (todayFixtures.length === 0) {
             varDisallowed: s.varDisallowed
           };
         }),
-        cards: (() => {
+        cards: isLightweightThirdLeagueMatch ? [] : (() => {
    // Logika filtrowania kartek: Jeśli zawodnik ma dostać drugą żółtą, raportujemy tylko Czerwoną (Stage 1 PRO)
           const playerMatchCards: Record<string, string[]> = {};
           const finalCards: any[] = [];
@@ -766,13 +770,13 @@ if (todayFixtures.length === 0) {
           return finalCards;
         })(),
         venue: home.stadiumName,
-        weather: weather,
-        homeLineup: hInitialXI,
-        awayLineup: aInitialXI,
-        ratings: result.ratings,
-        homeTacticId: hLineup.tacticId,
-        awayTacticId: aLineup.tacticId,
-        substitutions: result.substitutions.map(s => {
+        weather: isLightweightThirdLeagueMatch ? undefined : weather,
+        homeLineup: isLightweightThirdLeagueMatch ? undefined : hInitialXI,
+        awayLineup: isLightweightThirdLeagueMatch ? undefined : aInitialXI,
+        ratings: isLightweightThirdLeagueMatch ? undefined : result.ratings,
+        homeTacticId: isLightweightThirdLeagueMatch ? undefined : hLineup.tacticId,
+        awayTacticId: isLightweightThirdLeagueMatch ? undefined : aLineup.tacticId,
+        substitutions: isLightweightThirdLeagueMatch ? undefined : result.substitutions.map(s => {
           const allP = currentPlayers[home.id].concat(currentPlayers[away.id]);
           const pOut = allP.find(x => x.id === s.playerOutId);
           const pIn  = allP.find(x => x.id === s.playerInId);
@@ -785,7 +789,7 @@ if (todayFixtures.length === 0) {
             teamId: s.isHome ? home.id : away.id
           };
         }),
-        injuries: result.injuries.map(inj => {
+        injuries: isLightweightThirdLeagueMatch ? undefined : result.injuries.map(inj => {
           const allP = currentPlayers[home.id].concat(currentPlayers[away.id]);
           const p = allP.find(x => x.id === inj.playerId);
           return {
@@ -822,6 +826,9 @@ if (todayFixtures.length === 0) {
       if (fixture.leagueId === 'L_PL_1') roundResults.league1Results.push(matchResult);
       else if (fixture.leagueId === 'L_PL_2') roundResults.league2Results.push(matchResult);
       else if (fixture.leagueId === 'L_PL_3') roundResults.league3Results.push(matchResult);
+      else if (PolishThirdLeagueService.isThirdLeagueId(String(fixture.leagueId))) {
+        roundResults.thirdLeagueResults?.[String(fixture.leagueId)]?.push(matchResult);
+      }
       currentClubs = currentClubs.map(c => {
         if (c.id === home.id || c.id === away.id) {
           const isHome = c.id === home.id;
@@ -1006,15 +1013,41 @@ if (todayFixtures.length === 0) {
       // Aktualizacja statystyk zawodników
     // Uwzględnienie rezerwowych w statystykach meczowych
  
-      currentPlayers = PlayerStatsService.processMatchDayEndForClub(currentPlayers, home.id, result.playedPlayerIds.filter(id => hPlayers.some(p => p.id === id)));
-      currentPlayers = PlayerStatsService.processMatchDayEndForClub(currentPlayers, away.id, result.playedPlayerIds.filter(id => aPlayers.some(p => p.id === id)));
+      const competitionId = String(fixture.leagueId);
+      const minutesByPlayer: Record<string, number> = Object.fromEntries(
+        result.playedPlayerIds.map(playerId => [playerId, 90])
+      );
+      result.substitutions.forEach(substitution => {
+        minutesByPlayer[substitution.playerOutId] = Math.min(minutesByPlayer[substitution.playerOutId] ?? 90, substitution.minute);
+        minutesByPlayer[substitution.playerInId] = Math.max(1, 90 - substitution.minute);
+      });
+      result.cards
+        .filter(card => card.type === MatchEventType.RED_CARD)
+        .forEach(card => {
+          minutesByPlayer[card.playerId] = Math.min(minutesByPlayer[card.playerId] ?? 90, card.minute);
+        });
+
+      currentPlayers = PlayerStatsService.processMatchDayEndForClub(
+        currentPlayers,
+        home.id,
+        result.playedPlayerIds.filter(id => hPlayers.some(p => p.id === id)),
+        competitionId,
+        minutesByPlayer
+      );
+      currentPlayers = PlayerStatsService.processMatchDayEndForClub(
+        currentPlayers,
+        away.id,
+        result.playedPlayerIds.filter(id => aPlayers.some(p => p.id === id)),
+        competitionId,
+        minutesByPlayer
+      );
       
-      result.scorers.forEach(s => {
-        currentPlayers = PlayerStatsService.applyGoal(currentPlayers, s.playerId, s.assistId);
+      result.scorers.filter(s => !s.isMiss && !s.varDisallowed).forEach(s => {
+        currentPlayers = PlayerStatsService.applyGoal(currentPlayers, s.playerId, s.assistId, competitionId);
       });
 
       result.cards.forEach(card => {
-        currentPlayers = PlayerStatsService.applyCard(currentPlayers, card.playerId, card.type);
+        currentPlayers = PlayerStatsService.applyCard(currentPlayers, card.playerId, card.type, competitionId);
       });
 
       const homeResultChar: 'W' | 'R' | 'P' = result.homeScore > result.awayScore ? 'W' : result.homeScore === result.awayScore ? 'R' : 'P';
@@ -1050,11 +1083,11 @@ if (todayFixtures.length === 0) {
 
       if (result.awayScore === 0) {
         const homeGKs = hPlayers.filter(p => p.position === 'GK' && result.playedPlayerIds.includes(p.id)).map(p => p.id);
-        if (homeGKs.length > 0) currentPlayers = PlayerStatsService.applyCleanSheet(currentPlayers, home.id, homeGKs);
+        if (homeGKs.length > 0) currentPlayers = PlayerStatsService.applyCleanSheet(currentPlayers, home.id, homeGKs, competitionId);
       }
       if (result.homeScore === 0) {
         const awayGKs = aPlayers.filter(p => p.position === 'GK' && result.playedPlayerIds.includes(p.id)).map(p => p.id);
-        if (awayGKs.length > 0) currentPlayers = PlayerStatsService.applyCleanSheet(currentPlayers, away.id, awayGKs);
+        if (awayGKs.length > 0) currentPlayers = PlayerStatsService.applyCleanSheet(currentPlayers, away.id, awayGKs, competitionId);
       }
 
 
@@ -1076,6 +1109,16 @@ if (todayFixtures.length === 0) {
    if (result.ratings && result.ratings[p.id]) {
                  if (!updatedP.stats.ratingHistory) updatedP.stats.ratingHistory = [];
                  updatedP.stats.ratingHistory.push(result.ratings[p.id]);
+                 const competitionStats = updatedP.competitionStats?.[competitionId];
+                 if (competitionStats) {
+                   updatedP.competitionStats = {
+                     ...updatedP.competitionStats,
+                     [competitionId]: {
+                       ...competitionStats,
+                       ratingHistory: [...competitionStats.ratingHistory, result.ratings[p.id]],
+                     },
+                   };
+                 }
                  updatedP = PlayerFormService.withUpdatedForm(updatedP);
               }
 

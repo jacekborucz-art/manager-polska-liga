@@ -150,7 +150,12 @@ export const STATIC_LEAGUES: League[] = [
   { id: 'L_PL_1', name: 'Ekstraklasa', level: LeagueLevel.TIER_1, teamIds: [] },
   { id: 'L_PL_2', name: '1. Liga', level: LeagueLevel.TIER_2, teamIds: [] },
   { id: 'L_PL_3', name: '2. Liga', level: LeagueLevel.TIER_3, teamIds: [] },
-  { id: 'L_PL_4', name: 'Liga Regionalna', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_4', name: 'Liga Regionalna (starsze kariery)', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_4_G1', name: 'Betclic 3. Liga – Grupa 1', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_4_G2', name: 'Betclic 3. Liga – Grupa 2', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_4_G3', name: 'Betclic 3. Liga – Grupa 3', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_4_G4', name: 'Betclic 3. Liga – Grupa 4', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
+  { id: 'L_PL_5', name: 'Regionalna pula IV lig', level: LeagueLevel.TIER_4_HIDDEN, teamIds: [] },
   { id: 'L_CL', name: 'UEFA Champions League', level: LeagueLevel.EUROPEAN, teamIds: [] },
   { id: 'L_EL', name: 'UEFA Europa League', level: LeagueLevel.EUROPEAN, teamIds: [] },
   { id: 'L_CONF', name: 'UEFA Conference League', level: LeagueLevel.EUROPEAN, teamIds: [] },
@@ -256,7 +261,10 @@ form: []
 const clubsTier1 = loadClubsForTier(1, 'L_PL_1', 18);
 const clubsTier2 = loadClubsForTier(2, 'L_PL_2', 18);
 const clubsTier3 = loadClubsForTier(3, 'L_PL_3', 18);
-const clubsTier4 = loadClubsForTier(4, 'L_PL_4', 100);
+// Tier-four source clubs are assigned to an exact III-liga group by
+// PolishLeagueSeasonService. Clubs outside the 72-team membership remain in a
+// lightweight IV-liga feeder pool and therefore never receive a full schedule.
+const clubsTier4 = loadClubsForTier(4, 'L_PL_5', 100);
 
 export const STATIC_CLUBS: Club[] = [
   ...clubsTier1,

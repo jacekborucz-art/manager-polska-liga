@@ -447,7 +447,7 @@ export const ClubDetails: React.FC = () => {
   const handleBack = () => {
     if (previousViewState === ViewState.MATCH_HISTORY_BROWSER) {
       navigateTo(ViewState.MATCH_HISTORY_BROWSER);
-    } else if (club.leagueId === 'L_PL_4') {
+    } else if (club.leagueId === 'L_PL_4' || club.leagueId.startsWith('L_PL_4_G')) {
       navigateTo(ViewState.HIDDEN_LEAGUE);
     } else if (club.leagueId === 'L_SA' || club.leagueId === 'L_CL' || club.leagueId === 'L_EL' || club.leagueId === 'L_CONF' || club.leagueId === 'L_AFRICA' || club.leagueId === 'L_ASIA' || club.leagueId === 'L_NA' || previousViewState === ViewState.EUROPEAN_CLUBS) {
       navigateTo(ViewState.EUROPEAN_CLUBS);

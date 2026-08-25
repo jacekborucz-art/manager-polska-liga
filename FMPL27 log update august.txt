@@ -1,0 +1,209 @@
+FMPL27 – LOG AKTUALIZACJI – SIERPIEŃ 2026
+==========================================
+
+Aktualizacja: Betclic 3. Liga 2026/2027
+
+- Dodano cztery grupy Betclic 3. Ligi, po 18 drużyn w każdej grupie.
+- Dodano pełne sezony III ligi rozgrywane w tle: 34 kolejki i mecze każdy z każdym u siebie oraz na wyjeździe.
+- Uzupełniono składy grup zgodnie z sezonem 2026/2027 i dodano brakujące kluby.
+- Drużyny III ligi otrzymały pełne kadry potrzebne do rozgrywania spotkań.
+- Wyniki spotkań zależą między innymi od siły pierwszego składu, rezerwowych, zmęczenia, kartek i kontuzji.
+- Mecze w tle uwzględniają gole, asysty, zmiany, kartki, kontuzje, minuty gry i oceny zawodników.
+- Dodano osobne tabele dla wszystkich czterech grup.
+- Dodano rankingi strzelców, asystentów, występów, minut, kartek, czystych kont i średnich ocen.
+- Statystyki zawodnika są liczone osobno dla każdej grupy, również po transferze do innego klubu.
+
+Awans do Betclic 2. Ligi
+
+- Mistrz każdej grupy awansuje bezpośrednio do Betclic 2. Ligi.
+- W barażach biorą udział wyłącznie prawdziwi wicemistrzowie czterech grup.
+- Wicemistrzowie są losowani do dwóch par i rozgrywają po jednym meczu.
+- Zwycięzcy pierwszego etapu grają dwumecze z drużynami z miejsc 13 i 14 Betclic 2. Ligi.
+- Pierwszy mecz dwumeczu odbywa się na stadionie trzecioligowca, a rewanż na stadionie drużyny z Betclic 2. Ligi.
+- Wynik barażu rozegranego przez gracza jest zawsze ważniejszy od wyniku symulowanego w tle.
+- Usunięto wcześniejsze wybieranie przypadkowych drużyn III ligi do baraży.
+
+Spadki i podział regionalny
+
+- Drużyny z miejsc 15–18 Betclic 2. Ligi spadają bezpośrednio do III ligi.
+- Przegrani baraży z miejsc 13–14 również mogą spaść do III ligi.
+- Każdy spadkowicz trafia do właściwej grupy według województwa, w którym znajduje się klub.
+- Liczba spadkowiczów z danej grupy III ligi zmienia się zależnie od liczby klubów przychodzących z Betclic 2. Ligi i wyników baraży.
+- Po zakończeniu wszystkich awansów i spadków każda grupa ponownie ma dokładnie 18 drużyn.
+- Do każdej grupy awansuje pięć klubów z niższych lig regionalnych.
+- Jeżeli drużyna rezerwowa nie może awansować, wolne miejsce otrzymuje najlepszy kolejny uprawniony klub, bez przypadkowego wyboru.
+- Drużyna rezerwowa nie może grać na tym samym poziomie co pierwszy zespół swojego klubu.
+
+Podgląd rozgrywek
+
+- Dodano osobny ekran Betclic 3. Ligi z tabelami, terminarzami, wynikami i statystykami zawodników.
+- W widoku tabel ligowych dodano przycisk „3 Liga”, który otwiera tabele, mecze i statystyki wszystkich czterech grup.
+- Zmniejszono odstępy w tabelach III ligi, aby wszystkie 18 drużyn wraz z legendą mieściło się na ekranie 1920×1080.
+- Dodano herby przed nazwami drużyn w tabelach, wynikach spotkań i statystykach III ligi.
+- Miejsca bezpośredniego awansu, baraży i spadku otrzymały wyraźne kolorowe tło pod nazwą drużyny.
+- Dodano nową oprawę graficzną III ligi z tłem SVG, światłami stadionowymi, motywem boiska i półprzezroczystymi panelami.
+- W nagłówku tabel, meczów i statystyk umieszczono oficjalne logo Betclic 3. Ligi.
+- Logo Betclic 3. Ligi dodano również jako delikatny znak wodny w tle rozgrywek.
+- Poszerzono miejsce na nazwy drużyn, dzięki czemu pełne nazwy nie są już ucinane na końcach.
+- Przycisk „Wyjdź” otrzymał nowy wygląd z gradientem, poświatą i delikatnym efektem po najechaniu. Usunięto z niego strzałkę.
+- Cały widok III ligi, razem z nagłówkiem, zakładkami i tabelą, został wyśrodkowany na ekranie.
+- W studio pomeczowym dodano opcjonalny przycisk „3. Liga: wyniki i tabele”.
+- Przycisk otwiera podgląd wyników aktualnej kolejki i bieżącej tabeli wybranej grupy bez opuszczania studia pomeczowego.
+- Podstawowy ekran wyników Ekstraklasy, 1. Ligi i 2. Ligi pozostał bez zmian, dopóki gracz sam nie otworzy podglądu III ligi.
+- Tabele pokazują aktualne miejsce, mecze, zwycięstwa, remisy, porażki, bramki, bilans, punkty i ostatnią formę.
+- Oznaczono miejsca bezpośredniego awansu, baraży oraz spadku.
+
+Raport asystenta
+
+- Ujednolicono raport zawodnika dostępny w panelach Kadra i Trening.
+- Oba miejsca pokazują teraz tę samą analizę formy, gotowości do gry, zachowania na boisku, aklimatyzacji i dalszej kariery.
+- Raport uwzględnia wyniki i oceny meczowe, bramki, asysty, kartki, rozegrane minuty, postępy treningowe, kondycję, zmęczenie, morale oraz sytuację zawodnika w zespole.
+- Dodano jasną podpowiedź, czy zawodnika rozwijać, wypożyczyć, rotować, regenerować, pozostawić w zespole lub rozważyć jego sprzedaż.
+- Poprawiono ocenianie jakości członków sztabu, dzięki czemu lepszy asystent przygotowuje dokładniejsze raporty.
+- Każdy raport zawiera element niepewności. Im lepszy asystent, tym jest ona mniejsza, ale nigdy nie spada poniżej 5%.
+- Panel Kadra uwzględnia teraz również aktualny program i intensywność treningu, tak samo jak panel Trening.
+
+Raport przedmeczowy o przeciwniku
+
+- Rozbudowano raport przedmeczowy o przewidywany sposób gry przeciwnika.
+- Raport pokazuje teraz tempo, nastawienie, intensywność, rodzaj podań, pressing, kontratak i sposób krycia rywala.
+- Dodano zalecany plan rozpoczęcia meczu obejmujący te same ustawienia taktyczne.
+- Zalecenia uwzględniają ustawienie obu drużyn, cechy zawodników, szybkość, technikę i kondycję wyjściowej jedenastki.
+- Przy zaleceniach dodano krótkie wyjaśnienia oraz ostrzeżenia o ryzyku zmęczenia, kartek, kontuzji i kontrataków.
+- Raport wyraźnie informuje, że sposób gry rywala jest prognozą i może zmieniać się wraz z przebiegiem spotkania.
+- Jakość analizy zależy od umiejętności sztabu. Nawet najlepszy analityk zachowuje co najmniej 5% niepewności.
+- Zachowano wszystkie wcześniejsze informacje o formie, składzie, kluczowych zawodnikach, brakach kadrowych, tabeli i ocenie szans.
+
+Pozostałe poprawki
+
+- Poprawiono herby drużyn rezerwowych – rezerwy korzystają teraz z tego samego herbu co ich pierwszy zespół.
+- Terminarze, wyniki, tabele i statystyki III ligi są zapisywane razem z nową karierą.
+- Aktualizacja działa dla nowych karier rozpoczynanych w sezonie 2026/2027.
+- Starsze zapisy gry nie muszą obsługiwać nowych rozgrywek III ligi.
+- Zachowano pełną liczbę 128 uczestników Pucharu Polski po dodaniu czterech grup III ligi.
+- Sprawdzono wszystkie możliwe wyniki dwóch finałowych baraży – po każdym wariancie liczba drużyn w ligach pozostaje prawidłowa.
+
+Aktualizacja: wojewódzkie IV ligi 2026/2027
+
+- Dodano 16 osobnych IV lig, po jednej dla każdego województwa.
+- Uzupełniono składy lig na sezon 2026/2027.
+- Ligi mają od 14 do 18 drużyn, zgodnie z liczbą klubów w danym regionie.
+- Każda liga rozgrywa pełny sezon w tle, mecz i rewanż.
+- Wyniki zależą od siły drużyn, przewagi własnego boiska i elementu losowego.
+- Dodano proste statystyki: gole, asysty, występy, kartki i oceny.
+- Dodano opcjonalny podgląd tabel, wyników kolejek i statystyk wszystkich województw.
+- Podgląd IV ligi jest dostępny z tabel ligowych, ekranu III ligi i studia pomeczowego.
+- Mistrz każdej IV ligi awansuje bezpośrednio do właściwej grupy III ligi.
+- Wicemistrzowie czterech lig przypisanych do tej samej grupy III ligi grają baraże o dodatkowe miejsce.
+- Usunięto wybieranie przypadkowych drużyn z jednej wspólnej puli regionalnej.
+- Spadkowicz z III ligi trafia do IV ligi właściwej dla województwa swojego klubu.
+- Drużyny rezerwowe nie mogą awansować na poziom zajmowany przez swój pierwszy zespół.
+- Po zmianie sezonu wolne miejsca uzupełniają drużyny z niższych lig tego samego województwa.
+- IV liga działa w lekkiej formie, bez rozbudowanych raportów meczowych i bez niepotrzebnego obciążania gry setkami pełnych kadr.
+- Terminarze, wyniki, tabele i statystyki IV lig są zapisywane w nowej karierze.
+- Datapack może poprawić dane klubów, ale nie zmienia zasad regionalnego awansu i spadku.
+- Ligi z 14 i 16 drużynami rozpoczynają sezon później i kończą rozgrywki 15 maja.
+- Dodano osobną pulę 18 klubów dla każdego województwa, z której wybierani są beniaminkowie IV ligi.
+- Co sezon z każdej puli awansują cztery kluby. Na wybór wpływa siła drużyny oraz element losowy.
+- Spadkowicze z IV ligi trafiają wyłącznie do puli swojego województwa.
+- Liczba spadkowiczów z IV ligi dostosowuje się do liczby klubów przychodzących z III ligi, dzięki czemu żadna liga nie traci prawidłowej liczby uczestników.
+- Po każdej wymianie pula wojewódzka jest ponownie uzupełniana do 18 klubów.
+- Kluby dodane przez datapack mogą trafić do właściwej puli, jeżeli mają przypisane województwo.
+- Drużyna rezerwowa nie może awansować z puli, jeżeli jej pierwszy zespół gra już w tej samej IV lidze.
+- Dodano rozszerzony test wszystkich 35 możliwych rozkładów czterech spadkowiczów z II ligi pomiędzy grupy III ligi.
+- Test sprawdza różne zestawy spadkowiczów z III ligi, ich województwa, wpływ na spadki z IV ligi oraz końcową liczebność lig i pul.
+
+Superpuchar Polski 2026
+
+- Poprawiono uczestników Superpucharu Polski po rozpoczęciu kariery 2026/2027 z datapackiem.
+- W meczu grają teraz Lech Poznań i Górnik Zabrze.
+- Kolejność klubów w datapacku ani pusta tabela na początku sezonu nie wpływają już na wybór uczestników.
+- W kolejnych sezonach uczestnicy nadal wynikają z rezultatów osiągniętych w grze.
+
+Oznaczenia lig w Pucharze Polski
+
+- Dodano brakujące oznaczenie 4L przy drużynach z wojewódzkich IV lig.
+- Oznaczenie jest widoczne zarówno przy gospodarzu, jak i przy drużynie gości.
+- Poprawiono również oznaczenia czterech grup III ligi, aby zamiast znaku zapytania wyświetlały 3L.
+- Te same oznaczenia są teraz stosowane w wynikach rundy i podczas losowania par.
+
+Czytelność podglądu wyników III ligi
+
+- Usunięto nadmierną przezroczystość podglądu wyników i tabel III ligi w studiu pomeczowym.
+- Tło studia pomeczowego nie przebija już przez wyniki III ligi.
+- Zwiększono kontrast panelu wyników, tabeli, nagłówków i pól z rezultatami spotkań.
+
+Profesjonalna analiza trenera rezerw
+
+- Całkowicie przebudowano tygodniowy raport trenera rezerw.
+- Dodano ranking najważniejszych talentów wraz z oceną potencjału i gotowości do pierwszego zespołu.
+- Raport uwzględnia występy, gole, asysty, kartki, oceny meczowe, formę, rozwój, kondycję, zmęczenie, morale i aklimatyzację.
+- Dodano rekomendowany kierunek treningu oraz plan dalszej kariery każdego wyróżnionego zawodnika.
+- Dodano mapę boiska pokazującą pozycje talentów i sugerowane kierunki ich poruszania.
+- Dodano wykres dyspozycji meczowej, prognozę rozwoju na 12 miesięcy oraz zestawienie pozycji w kadrze.
+- Dokładność raportu zależy od doświadczenia, decyzji, motywacji i umiejętności treningowych trenera rezerw.
+- Nawet najlepszy trener zachowuje co najmniej 5% niepewności oceny.
+- Raport pozostaje taki sam po ponownym otwarciu w tym samym tygodniu, a w kolejnym tygodniu trener może zaktualizować swoje wnioski.
+
+Drobne poprawki analizy trenera rezerw
+
+- Na mapie boiska wyświetlany jest teraz wyłącznie zawodnik wybrany z rankingu talentów.
+- Strzałka na boisku pokazuje sugerowany ruch tylko dla aktualnie wybranego zawodnika.
+- Usunięto dodatkowe tło i obramowanie otaczające boisko, dzięki czemu widok jest prostszy i czytelniejszy.
+- Usunięto informację o wiarygodności raportu z nagłówka analizy trenera rezerw.
+- Boisko w analizie trenera rezerw ma teraz proste narożniki, a jego zewnętrzna ramka została dopasowana kolorystycznie do murawy.
+- Usunięto podpis dotyczący sugerowanego ruchu, a bramkarze nie mają już wyświetlanej strzałki poruszania się po boisku.
+- Poprawiono czytelność analizy trenera rezerw: zastosowano prostszą czcionkę, normalne odstępy między literami oraz jaśniejsze kolory opisów bez zmiany rozmiaru okna.
+- Pod całą analizą trenera rezerw dodano subtelne tło SVG wykorzystujące barwy zespołu oraz duży herb klubu w formie znaku wodnego.
+
+Odświeżona analiza pierwszej drużyny
+
+- Przebudowano wygląd analizy pierwszej drużyny bez usuwania dotychczasowych informacji.
+- Białe ramki zastąpiono subtelnymi obramowaniami i ciemnymi kartami sztabu.
+- Dodano klubowe tło SVG wykorzystujące herb i barwy prowadzonego zespołu.
+- Dodano owalne wykresy SVG pokazujące wielkość kadry, średnią ocenę, poziom techniczny, obsadę składu i siłę poszczególnych formacji.
+- Rekomendacje wykonawców stałych fragmentów oraz kandydatów na kapitana otrzymały wygląd profesjonalnych kart trenerskich.
+- Rozjaśniono teksty i zastosowano czytelniejszą, prostą czcionkę.
+- Rozmiar okna analizy pozostał bez zmian.
+
+Rozszerzony raport asystenta pierwszej drużyny
+
+- Raport asystenta korzysta teraz z aktualnej kadry, ustawionej jedenastki, historii spotkań, treningu i sytuacji w szatni.
+- Umiejętności zatrudnionego asystenta wpływają na trafność jego ocen i kolejność rekomendacji.
+- Nawet najlepszy asystent może popełnić niewielki błąd, ale gole, wyniki, urazy, kontrakty i inne fakty pozostają zawsze prawdziwe.
+- Raport pozostaje taki sam po ponownym otwarciu w tym samym tygodniu i może zmienić ocenę po rozpoczęciu kolejnego tygodnia.
+- Dodano krótkie podsumowanie najważniejszych mocnych stron, zagrożeń i działań zalecanych trenerowi.
+- Dodano analizę ostatnich spotkań, bilansu bramek, średnich ocen, formy i wyników osiąganych przy poszczególnych ustawieniach.
+- Dodano ocenę dopasowania kadry do pressingu, kontrataku i gry wysoką linią obrony.
+- Dodano analizę gotowości meczowej, kondycji, zmęczenia, urazów, zawieszeń i potrzeby rotacji.
+- Dodano analizę morale, aklimatyzacji, zadowolenia z minut, roli w drużynie, konfliktów oraz chęci odejścia.
+- Dodano ocenę aktywnego planu treningowego, intensywności, rozwoju atrybutów i indywidualnych celów wymagających poprawy.
+- Najważniejsze zalecenia zawierają teraz konkretną obserwację, przyczynę problemu i proponowane działanie.
+- Rozmiar okna analizy nie został zwiększony; nowe informacje umieszczono w czytelnych, przewijanych sekcjach.
+
+Realistyczniejsze wyniki Ligi Europy i Ligi Konferencji
+
+- Przebudowano losowanie wyników meczów Ligi Europy i Ligi Konferencji rozgrywanych w tle.
+- Usunięto efekt, przez który wyniki zbyt często zatrzymywały się na czterech bramkach jednej drużyny.
+- Od czasu do czasu mogą teraz wystąpić wyniki 5:0, 6:1, 7:0 lub inne wysokie rezultaty.
+- Dodano możliwość niespodziewanego zwycięstwa słabszej drużyny wynikającego z jej dobrej dyspozycji oraz słabszego dnia faworyta.
+- Wynik nadal przede wszystkim zależy od siły składów, formy, trenerów, ustawienia, kartek, kontuzji i zmian.
+- Kwalifikacje mają większą zmienność niż faza ligowa i końcowe rundy pucharowe.
+- Pierwsze mecze fazy pucharowej są nieco ostrożniejsze, natomiast w rewanżu drużyna odrabiająca straty podejmuje większe ryzyko.
+- Zachowano dotychczasowy sposób działania dobrze zbalansowanych meczów Ligi Mistrzów.
+- Przetestowano 240 tysięcy wariantów spotkań, w tym mecze równych drużyn, wyraźnych faworytów oraz duże różnice poziomu w kwalifikacjach.
+
+Podpowiedzi podczas otwierania studia pomeczowego
+
+- Po wybraniu studia pomeczowego gra od razu pokazuje ekran oczekiwania z losową podpowiedzią piłkarską.
+- Ekran pozostaje widoczny podczas aktualizowania wyników, tabel, statystyk zawodników i historii spotkania.
+- Dodano informację, że przy dłuższym przeliczaniu należy poczekać na zakończenie pracy gry.
+- Zabezpieczono przycisk przed wielokrotnym kliknięciem i przypadkowym ponownym zapisaniem tego samego meczu.
+- Rozwiązanie działa w lidze, sparingach, Pucharze Polski, barażach oraz europejskich pucharach.
+
+Opcjonalna diagnostyka gry
+
+- Wewnętrzne zapisy diagnostyczne są teraz domyślnie wyłączone i nie obciążają zwykłej rozgrywki.
+- Diagnostykę można włączyć lub wyłączyć skrótem Ctrl+Alt+D.
+- Po użyciu skrótu gra pokazuje krótkie potwierdzenie aktualnego stanu diagnostyki.
+- Włączona diagnostyka pozostaje aktywna po przeładowaniu strony w tej samej sesji przeglądarki, aby ułatwić sprawdzanie awarii.

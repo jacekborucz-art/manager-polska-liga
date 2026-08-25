@@ -1156,7 +1156,20 @@ var FinanceService = {
   calculateCurrentWageBill: (squad) => {
     return squad.reduce((sum, p) => sum + (p.annualSalary || 0), 0);
   },
-  // Oblicza rynkową wartość pensji dla danego OVR (punkt odniesienia dla Zarządu)
+  /**
+   * Full guaranteed value used to compare the offer with the agent's expectations.
+   * Contract length belongs here because a longer deal is genuinely worth more to
+   * the player, even though the club does not prepay every future season at signing.
+   */
+  calculateFreeAgentContractCommitment: (annualSalary, years, signingBonus) => Math.max(0, annualSalary) * Math.max(1, years) + Math.max(0, signingBonus),
+  /**
+   * Immediate charge against the current season's transfer/contract budget.
+   * Future annual salaries are funded from future season budgets, so only the first
+   * annual salary and the one-time signing bonus are reserved when the deal is signed.
+   */
+  calculateFreeAgentCurrentSeasonCost: (annualSalary, signingBonus) => Math.max(0, annualSalary) + Math.max(0, signingBonus),
+  calculateRemainingContractBudget: (availableBudget, annualSalary, _years, signingBonus) => Math.max(0, availableBudget - FinanceService.calculateFreeAgentCurrentSeasonCost(annualSalary, signingBonus)),
+  // Orientacyjna wartość używana przez agentów i symulację rynku; nie jest limitem zarządu.
   getFairMarketSalary: (ovr) => {
     const base = Math.pow(ovr / 50, 4) * 125e3;
     const step = base >= 1e6 ? 1e5 : base >= 1e5 ? 1e4 : 5e3;
@@ -1170,28 +1183,41 @@ var FinanceService = {
     return Math.floor(anchor * (1 + repTax) * chaos);
   },
   evaluateFASigningBoardDecision: (player, proposedSalary, proposedBonus, squad, club) => {
-    const salaryCap = club.budget * 0.25;
-    if (proposedSalary > salaryCap) {
-      return { approved: false, reason: `DYREKTOR FINANSOWY: Proponowana pensja przekracza 25% naszego bud\u017Cetu transferowego (limit: ${Math.floor(salaryCap).toLocaleString()} PLN).` };
-    }
-    const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
-    if (proposedSalary > highestSalary * 2 && highestSalary > 0 && player.overallRating < 82) {
+    const tier = FinanceService.getClubTier(club);
+    const wageBill = FinanceService.calculateTotalSalaries(squad);
+    const projectedWageBill = wageBill + Math.max(0, proposedSalary);
+    const liquiditySalaryCap = club.budget * (tier >= 3 ? 0.35 : 0.3);
+    const projectedWagePressure = projectedWageBill / Math.max(1, club.budget);
+    if (proposedSalary > liquiditySalaryCap || projectedWagePressure > 0.82) {
       return {
         approved: false,
-        reason: `PREZES: Ta oferta zniszczy nasz\u0105 hierarchi\u0119 w szatni! Nie damy nowemu graczowi dwa razy wi\u0119cej ni\u017C zarabia nasz najlepszy zawodnik (${highestSalary.toLocaleString()} PLN).`
+        reason: "Dyrektor finansowy ocenia, \u017Ce ten kontrakt zbyt mocno obci\u0105\u017Cy roczne finanse klubu i ograniczy mo\u017Cliwo\u015B\u0107 wykonania kolejnych ruch\xF3w kadrowych.",
+        reasonCode: "LIQUIDITY",
+        appealable: true
       };
     }
-    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
-    const overpayRatio = proposedSalary / fairSalary;
-    const allowedOverpay = 1.2 + (10 - club.boardStrictness) / 10;
-    if (overpayRatio > allowedOverpay) {
+    const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
+    const averageOverall = squad.length > 0 ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length : player.overallRating;
+    const bestSamePositionOverall = squad.filter((squadPlayer) => squadPlayer.position === player.position).reduce((best, squadPlayer) => Math.max(best, squadPlayer.overallRating), 0);
+    const isClearSportingUpgrade = player.overallRating >= averageOverall + 4 || player.overallRating >= bestSamePositionOverall + 2;
+    const hierarchyMultiplier = isClearSportingUpgrade ? tier >= 3 ? 3.5 : 3.1 : player.overallRating >= averageOverall ? tier >= 3 ? 2.75 : 2.55 : tier >= 3 ? 2.4 : 2.25;
+    const financialStructureFloor = club.budget * (tier === 1 ? 0.045 : tier === 2 ? 0.035 : tier === 3 ? 0.025 : 0.02);
+    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, financialStructureFloor);
+    if (highestSalary > 0 && proposedSalary > hierarchySalaryCap) {
       return {
         approved: false,
-        reason: `ZARZ\u0104D: Ta kwota to absurd! Sugerowana pensja rynkowa dla OVR ${player.overallRating} to ok. ${fairSalary.toLocaleString()} PLN. Nie pozwolimy na tak\u0105 niegospodarno\u015B\u0107.`
+        reason: `Prezes uwa\u017Ca, \u017Ce proponowana pensja zbyt gwa\u0142townie zmieni obecn\u0105 hierarchi\u0119 wynagrodze\u0144. Najwy\u017Csza pensja w kadrze wynosi obecnie ${highestSalary.toLocaleString("pl-PL")} PLN, dlatego zarz\u0105d oczekuje dodatkowego uzasadnienia dla ustanowienia nowego poziomu p\u0142ac.`,
+        reasonCode: "WAGE_STRUCTURE",
+        appealable: true
       };
     }
     if (proposedBonus > club.budget * 0.5) {
-      return { approved: false, reason: "ZARZ\u0104D: Bonus za podpis jest zbyt wysoki w stosunku do wolnej got\xF3wki w klubie." };
+      return {
+        approved: false,
+        reason: "Zarz\u0105d uwa\u017Ca, \u017Ce jednorazowy bonus za podpis jest zbyt wysoki w stosunku do wolnych \u015Brodk\xF3w klubu.",
+        reasonCode: "SIGNING_BONUS",
+        appealable: true
+      };
     }
     return { approved: true, reason: "" };
   },
@@ -2516,6 +2542,7 @@ function normalizeSaveState(data) {
       reserveSquadLastEmergencyMoveDate: typeof club.reserveSquadLastEmergencyMoveDate === "string" ? club.reserveSquadLastEmergencyMoveDate : void 0,
       boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
       boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
+      boardApprovedFreeAgentContract: club.boardApprovedFreeAgentContract ?? null,
       boardBudgetMonitorState: club.boardBudgetMonitorState ?? "NORMAL",
       signingBonusPool: club.signingBonusPool ?? 0,
       financeHistory: asArray(club.financeHistory),
@@ -2537,6 +2564,20 @@ function normalizeSaveState(data) {
           clubAdaptation: normalizePlayerClubAdaptation(player.clubAdaptation, playerClubId),
           secondaryPosition,
           secondaryPositionRating: secondaryPosition ? asClampedRating(player.secondaryPositionRating) : void 0,
+          // Save files keep the complete per-competition map. Normalizing every
+          // bucket here prevents malformed optional arrays from breaking the III
+          // liga ranking screen after a mid-season save/load cycle.
+          competitionStats: Object.fromEntries(
+            Object.entries(asRecord(player.competitionStats)).map(([competitionId, rawStats]) => [
+              competitionId,
+              {
+                ...emptyPlayerStats(),
+                ...asRecord(rawStats),
+                seasonalChanges: asRecord(asRecord(rawStats).seasonalChanges),
+                ratingHistory: asArray(asRecord(rawStats).ratingHistory)
+              }
+            ])
+          ),
           friendlyStats: player.friendlyStats ?? {
             goals: 0,
             assists: 0,
@@ -2598,6 +2639,7 @@ function normalizeSaveState(data) {
     savedAt: asDateString(data.savedAt, (/* @__PURE__ */ new Date()).toISOString()),
     currentDate: asDate(data.currentDate),
     sessionSeed: Number.isFinite(data.sessionSeed) ? data.sessionSeed : Date.now(),
+    datapackCareerStartYear: Number.isInteger(data.datapackCareerStartYear) ? data.datapackCareerStartYear : null,
     clubs: normalizedClubs,
     leagues: asArray(data.leagues),
     players: normalizedPlayers,
@@ -2624,6 +2666,8 @@ function normalizeSaveState(data) {
     roundResults: asRecord(data.roundResults),
     managerProfile: ManagerExperienceService.ensureManagerExperience(data.managerProfile),
     managerJobOffers: asArray(data.managerJobOffers),
+    activeManagerContract: data.activeManagerContract ?? null,
+    managerContractNegotiation: data.managerContractNegotiation ?? null,
     seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
     messages: migrateWelcomeMailSignatories(normalizeMessages(data.messages), normalizedClubs, data.userTeamId ?? null),
     activeTrainingId: typeof data.activeTrainingId === "string" ? data.activeTrainingId : null,

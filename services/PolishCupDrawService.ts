@@ -1,4 +1,5 @@
 import { Club, Fixture, MatchStatus, CompetitionType } from '../types';
+import { PolishThirdLeagueService } from './PolishThirdLeagueService';
 
 const createSeededRandom = (seedText: string): (() => number) => {
   let hash = 0;
@@ -31,7 +32,9 @@ export const PolishCupDrawService = {
     const tier1 = clubs.filter(c => c.leagueId === 'L_PL_1').map(c => c.id);
     const tier2 = clubs.filter(c => c.leagueId === 'L_PL_2').map(c => c.id);
     const tier3 = clubs.filter(c => c.leagueId === 'L_PL_3').map(c => c.id);
-    const tier4Pool = clubs.filter(c => c.leagueId === 'L_PL_4');
+    const tier4Pool = clubs.filter(c =>
+      PolishThirdLeagueService.isThirdLeagueId(c.leagueId) || c.leagueId === 'L_PL_4'
+    );
 
     // Wszystkie kluby trzech najwyższych lig mają gwarantowane miejsce.
     // Pozostałe miejsca do 128 są losowane z całej puli L_PL_4. Ziarno kariery

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { getClubLogo } from '../resources/ClubLogoAssets';
 import { useGame } from '../context/GameContext';
+import { usePostMatchStudioProcessing } from '../components/ui/usePostMatchStudioProcessing';
 import {
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType,
   MatchEventType, SubstitutionRecord, MatchLogEntry, InjurySeverity,
@@ -1421,6 +1422,7 @@ export const MatchLiveViewPolishCupV2 = () => {
     activeMatchState: matchState, setActiveMatchState: setMatchState,
     pendingMatchKits, pressConferenceEffects
   } = useGame();
+  const { isPreparingStudio, openPostMatchStudio } = usePostMatchStudioProcessing();
 
   // PRZENIESIONE Z PUCHARU: tryb barażowy — ten sam komponent obsługuje zarówno mecze pucharowe,
   // jak i baraże o awans/spadek, budując ctx z activePlayoffMatch zamiast z fixtures.
@@ -7514,7 +7516,8 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
         HISTORIA
       </button>
       <button
-        onClick={handleFinishMatch}
+        onClick={() => openPostMatchStudio(handleFinishMatch)}
+        disabled={isPreparingStudio}
         className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:translate-y-[2px] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
         style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
       >

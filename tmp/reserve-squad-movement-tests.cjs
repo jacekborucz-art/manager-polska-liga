@@ -143,7 +143,41 @@ var RAW_PL_CLUBS = [
   { name: "KTS Wesz\u0142o Warszawa", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski", capacity: 1200, reputation: 1 },
   { name: "Sok\xF3\u0142 Ostr\xF3da", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Ostr\xF3dzie", capacity: 3e3, reputation: 2 },
   { name: "Mazovia Mi\u0144sk Mazowiecki", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Mi\u0144sku Mazowieckim", capacity: 1500, reputation: 1 },
-  { name: "Polonia Bydgoszcz", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion im. Bronis\u0142awa Malinowskiego", capacity: 2500, reputation: 2 }
+  { name: "Polonia Bydgoszcz", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion im. Bronis\u0142awa Malinowskiego", capacity: 2500, reputation: 2 },
+  // 2026/27 III-liga expansion -------------------------------------------------
+  // These records complete the official four-group membership used by a new
+  // 2026/27 career. They intentionally live in the normal Polish club database:
+  // the regular squad, finance, transfer and injury systems can then treat them
+  // exactly like every other AI club instead of relying on special placeholders.
+  { name: "Widzew \u0141\xF3d\u017A II", tier: 4, colors: ["#C8102E", "#FFFFFF"], stadium: "O\u015Brodek Treningowy Widzewa", capacity: 1e3, reputation: 2 },
+  { name: "Pelikan \u0141owicz", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w \u0141owiczu", capacity: 2100, reputation: 2 },
+  { name: "Wis\u0142a P\u0142ock II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Wis\u0142y II", capacity: 1e3, reputation: 2 },
+  { name: "Jagiellonia Bia\u0142ystok II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "O\u015Brodek Treningowy Jagiellonii", capacity: 1e3, reputation: 2 },
+  { name: "Polonia Lidzbark Warmi\u0144ski", tier: 4, colors: ["#000000", "#FFFFFF", "#D71920"], stadium: "Stadion Miejski w Lidzbarku Warmi\u0144skim", capacity: 1200, reputation: 1 },
+  { name: "Wik\u0119d Luzino", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Gminny w Luzinie", capacity: 1e3, reputation: 1 },
+  { name: "Lech Pozna\u0144 II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Akademii Lecha", capacity: 1500, reputation: 3 },
+  { name: "Gedania Gda\u0144sk", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Gedanii", capacity: 1e3, reputation: 1 },
+  { name: "Chemik Bydgoszcz", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion im. Czes\u0142awa Kobusa", capacity: 1500, reputation: 1 },
+  { name: "Ba\u0142tyk Koszalin", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Ba\u0142tyku", capacity: 1500, reputation: 1 },
+  { name: "Grom Nowy Staw", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w Nowym Stawie", capacity: 800, reputation: 1 },
+  { name: "Kotwica K\xF3rnik", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w K\xF3rniku", capacity: 1e3, reputation: 1 },
+  { name: "Odra Bytom Odrza\u0144ski", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Bytomiu Odrza\u0144skim", capacity: 1e3, reputation: 1 },
+  { name: "Zag\u0142\u0119bie Lubin II", tier: 4, colors: ["#F58220", "#FFFFFF", "#00843D"], stadium: "Akademia Zag\u0142\u0119bia Lubin", capacity: 1e3, reputation: 3 },
+  { name: "Barycz Su\u0142\xF3w", tier: 4, colors: ["#000000", "#FFFFFF"], stadium: "Stadion w Su\u0142owie", capacity: 800, reputation: 1 },
+  { name: "ROW Rybnik", tier: 4, colors: ["#00843D", "#000000"], stadium: "Stadion Miejski w Rybniku", capacity: 1e4, reputation: 3 },
+  { name: "Stal Brzeg", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Brzegu", capacity: 2500, reputation: 2 },
+  { name: "Stilon Gorz\xF3w", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion OSiR w Gorzowie Wielkopolskim", capacity: 5e3, reputation: 3 },
+  { name: "Mied\u017A Legnica II", tier: 4, colors: ["#00843D", "#D71920", "#0057B8"], stadium: "Akademia Miedzi Legnica", capacity: 1e3, reputation: 2 },
+  { name: "Rak\xF3w Cz\u0119stochowa II", tier: 4, colors: ["#0057B8", "#D71920"], stadium: "Centrum Treningowe Rakowa", capacity: 1e3, reputation: 3 },
+  { name: "Wi\u015Blanie Skawina", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Miejski w Skawinie", capacity: 1e3, reputation: 1 },
+  { name: "Wis\u0142a Krak\xF3w II", tier: 4, colors: ["#D71920", "#0057B8", "#FFFFFF"], stadium: "Baza Treningowa Wis\u0142y", capacity: 1e3, reputation: 3 },
+  { name: "Wieczysta Krak\xF3w II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Stadion Pr\u0105dniczanki", capacity: 1e3, reputation: 2 },
+  { name: "JKS Jaros\u0142aw", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Jaros\u0142awiu", capacity: 2500, reputation: 2 },
+  { name: "Hetman Zamo\u015B\u0107", tier: 4, colors: ["#00843D", "#D71920", "#FFFFFF"], stadium: "Stadion OSiR w Zamo\u015Bciu", capacity: 16e3, reputation: 3 },
+  { name: "Moravia Morawica", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Morawicy", capacity: 1e3, reputation: 1 },
+  { name: "AKS 1947 Busko-Zdr\xF3j", tier: 4, colors: ["#D71920", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Busku-Zdroju", capacity: 1500, reputation: 1 },
+  { name: "Korona Kielce II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Centrum Treningowe Korony", capacity: 1e3, reputation: 2 },
+  { name: "Wis\u0142a Pu\u0142awy", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion MOSiR w Pu\u0142awach", capacity: 4418, reputation: 3 }
 ];
 
 // resources/static_db/clubs/ChampionsLeagueTeams.tsx
@@ -3513,7 +3547,12 @@ var STATIC_LEAGUES = [
   { id: "L_PL_1", name: "Ekstraklasa", level: "TIER_1" /* TIER_1 */, teamIds: [] },
   { id: "L_PL_2", name: "1. Liga", level: "TIER_2" /* TIER_2 */, teamIds: [] },
   { id: "L_PL_3", name: "2. Liga", level: "TIER_3" /* TIER_3 */, teamIds: [] },
-  { id: "L_PL_4", name: "Liga Regionalna", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4", name: "Liga Regionalna (starsze kariery)", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G1", name: "Betclic 3. Liga \u2013 Grupa 1", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G2", name: "Betclic 3. Liga \u2013 Grupa 2", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G3", name: "Betclic 3. Liga \u2013 Grupa 3", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G4", name: "Betclic 3. Liga \u2013 Grupa 4", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_5", name: "Regionalna pula IV lig", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
   { id: "L_CL", name: "UEFA Champions League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] },
   { id: "L_EL", name: "UEFA Europa League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] },
   { id: "L_CONF", name: "UEFA Conference League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] }
@@ -3618,7 +3657,7 @@ var loadClubsForTier = (tier, leagueId, limit) => {
 var clubsTier1 = loadClubsForTier(1, "L_PL_1", 18);
 var clubsTier2 = loadClubsForTier(2, "L_PL_2", 18);
 var clubsTier3 = loadClubsForTier(3, "L_PL_3", 18);
-var clubsTier4 = loadClubsForTier(4, "L_PL_4", 100);
+var clubsTier4 = loadClubsForTier(4, "L_PL_5", 100);
 var STATIC_CLUBS = [
   ...clubsTier1,
   ...clubsTier2,
@@ -3755,6 +3794,55 @@ STATIC_LEAGUES.forEach((l) => {
   l.teamIds = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS].filter((c) => c.leagueId === l.id && c.isDefaultActive).map((c) => c.id);
 });
 
+// services/PolishThirdLeagueService.ts
+var THIRD_LEAGUE_GROUP_IDS = [
+  "L_PL_4_G1",
+  "L_PL_4_G2",
+  "L_PL_4_G3",
+  "L_PL_4_G4"
+];
+var GROUP_BY_VOIVODESHIP = {
+  "\u0142\xF3dzkie": "L_PL_4_G1",
+  "mazowieckie": "L_PL_4_G1",
+  "podlaskie": "L_PL_4_G1",
+  "warmi\u0144sko-mazurskie": "L_PL_4_G1",
+  "kujawsko-pomorskie": "L_PL_4_G2",
+  "pomorskie": "L_PL_4_G2",
+  "wielkopolskie": "L_PL_4_G2",
+  "zachodniopomorskie": "L_PL_4_G2",
+  "dolno\u015Bl\u0105skie": "L_PL_4_G3",
+  "lubuskie": "L_PL_4_G3",
+  "opolskie": "L_PL_4_G3",
+  "\u015Bl\u0105skie": "L_PL_4_G3",
+  "lubelskie": "L_PL_4_G4",
+  "ma\u0142opolskie": "L_PL_4_G4",
+  "podkarpackie": "L_PL_4_G4",
+  "\u015Bwi\u0119tokrzyskie": "L_PL_4_G4"
+};
+var PolishThirdLeagueService = {
+  isThirdLeagueId(leagueId) {
+    return THIRD_LEAGUE_GROUP_IDS.includes(leagueId);
+  },
+  isThirdLeagueClub(club) {
+    return this.isThirdLeagueId(club.leagueId);
+  },
+  getGroupForVoivodeship(voivodeship) {
+    return GROUP_BY_VOIVODESHIP[voivodeship];
+  },
+  getGroupForClub(club) {
+    if (!club.polishVoivodeship) {
+      throw new Error(`Club ${club.id} cannot be routed to III liga: polishVoivodeship is missing.`);
+    }
+    return GROUP_BY_VOIVODESHIP[club.polishVoivodeship];
+  },
+  getPolishTier(leagueId) {
+    if (this.isThirdLeagueId(leagueId) || leagueId === "L_PL_4") return 4;
+    if (leagueId === "L_PL_5") return 5;
+    const match = /^L_PL_([1-3])$/.exec(leagueId ?? "");
+    return match ? Number(match[1]) : null;
+  }
+};
+
 // services/PolishLeagueSeasonService.ts
 var SEASON_2025_26 = {
   L_PL_1: [
@@ -3878,13 +3966,188 @@ var SEASON_2026_27 = {
     "PL_SWIT_SZCZECIN",
     "PL_CHOJNICZANKA_CHOJNICE",
     "PL_RESOVIA"
+  ],
+  L_PL_4_G1: [
+    "PL_KTS_WESZLO_WARSZAWA",
+    "PL_WIDZEW_LODZ_II",
+    "PL_MAZOVIA_MINSK_MAZOWIECKI",
+    "PL_PELIKAN_LOWICZ",
+    "PL_LECHIA_TOMASZOW_MAZOWIECKI",
+    "PL_WIGRY_SUWALKI",
+    "PL_OLIMPIA_ZAMBROW",
+    "PL_SWIT_NOWY_DWOR_MAZOWIECKI",
+    "PL_WISLA_PLOCK_II",
+    "PL_JAGIELLONIA_BIALYSTOK_II",
+    "PL_OLIMPIA_ELBLAG",
+    "PL_WARTA_SIERADZ",
+    "PL_ZABKOVIA_ZABKI",
+    "PL_MLAWIANKA_MLAWA",
+    "PL_LKS_LOMZA",
+    "PL_POLONIA_LIDZBARK_WARMINSKI",
+    "PL_KS_CK_TROSZYN",
+    "PL_LKS_II_LODZ"
+  ],
+  L_PL_4_G2: [
+    "PL_POLONIA_SRODA_WIELKOPOLSKA",
+    "PL_WDA_SWIECIE",
+    "PL_WIKED_LUZINO",
+    "PL_MKS_FLOTA_SWINOUJSCIE",
+    "PL_LECH_POZNAN_II",
+    "PL_ZKS_KLUCZEVIA_STARGARD",
+    "PL_NOTEC_CZARNKOW",
+    "PL_KKS_1925_KALISZ",
+    "PL_BLEKITNI_STARGARD",
+    "PL_GEDANIA_GDANSK",
+    "PL_SKS_UNIA_SWARZEDZ",
+    "PL_ELANA_TORUN",
+    "PL_CHEMIK_BYDGOSZCZ",
+    "PL_BALTYK_KOSZALIN",
+    "PL_GROM_NOWY_STAW",
+    "PL_MKS_VIKTORIA_WRZESNIA",
+    "PL_KS_LIPNO_STESZEW",
+    "PL_KOTWICA_KORNIK"
+  ],
+  L_PL_4_G3: [
+    "PL_ODRA_BYTOM_ODRZANSKI",
+    "PL_ZAGLEBIE_LUBIN_II",
+    "PL_ZAGLEBIE_SOSNOWIEC",
+    "PL_BARYCZ_SULOW",
+    "PL_BKS_SPARTA_KATOWICE",
+    "PL_ROW_RYBNIK",
+    "PL_STAL_BRZEG",
+    "PL_KARKONOSZE_JELENIA_GORA",
+    "PL_GORNIK_POLKOWICE",
+    "PL_WARTA_GORZOW_WIELKOPOLSKI",
+    "PL_STILON_GORZOW",
+    "PL_MKS_KLUCZBORK",
+    "PL_POLONIA_NYSA",
+    "PL_LKS_GOCZALKOWICE_ZDROJ",
+    "PL_MKP_CARINA_GUBIN",
+    "PL_SLEZA_WROCLAW",
+    "PL_MIEDZ_LEGNICA_II",
+    "PL_RAKOW_CZESTOCHOWA_II"
+  ],
+  L_PL_4_G4: [
+    "PL_CHELMIANKA_CHELM",
+    "PL_WISLANIE_SKAWINA",
+    "PL_KSZO_OSTROWIEC",
+    "PL_WISLA_KRAKOW_II",
+    "PL_MKS_CZARNI_POLANIEC",
+    "PL_WIECZYSTA_KRAKOW_II",
+    "PL_JKS_JAROSLAW",
+    "PL_WISLOKA_DEBICA",
+    "PL_MKS_PODLASIE_BIALA_PODLASKA",
+    "PL_HETMAN_ZAMOSC",
+    "PL_MORAVIA_MORAWICA",
+    "PL_KS_NAPRZOD_JEDRZEJOW",
+    "PL_SOKOL_KOLBUSZOWA_DOLNA",
+    "PL_AKS_1947_BUSKO_ZDROJ",
+    "PL_STAR_STARACHOWICE",
+    "PL_SIARKA_TARNOBRZEG",
+    "PL_KORONA_KIELCE_II",
+    "PL_POGON_SOKOL_LUBACZOW"
   ]
 };
 var MEMBERSHIPS_BY_START_YEAR = {
   2025: SEASON_2025_26,
   2026: SEASON_2026_27
 };
-var leagueTier = (leagueId) => Number(leagueId.slice(-1));
+var leagueTier = (leagueId) => THIRD_LEAGUE_GROUP_IDS.includes(leagueId) ? 4 : Number(leagueId.slice(-1));
+var DEFAULT_GROUP_VOIVODESHIP = {
+  L_PL_4_G1: "mazowieckie",
+  L_PL_4_G2: "wielkopolskie",
+  L_PL_4_G3: "\u015Bl\u0105skie",
+  L_PL_4_G4: "ma\u0142opolskie"
+};
+var CLUB_VOIVODESHIPS = {
+  PL_LEGIA_WARSZAWA: "mazowieckie",
+  PL_POLONIA_WARSZAWA: "mazowieckie",
+  PL_RADOMIAK_RADOM: "mazowieckie",
+  PL_POGON_GRODZISK_MAZOWIECKI: "mazowieckie",
+  PL_POGON_SIEDLCE: "mazowieckie",
+  PL_ZNICZ_PRUSZKOW: "mazowieckie",
+  PL_LEGIA_WARSZAWA_II: "mazowieckie",
+  PL_LECH_POZNAN: "wielkopolskie",
+  PL_WARTA_POZNAN: "wielkopolskie",
+  PL_SOKOL_KLECZEW: "wielkopolskie",
+  PL_KKS_1925_KALISZ: "wielkopolskie",
+  PL_UNIA_SKIERNIEWICE: "\u0142\xF3dzkie",
+  PL_WIDZEW_LODZ: "\u0142\xF3dzkie",
+  PL_LKS_LODZ: "\u0142\xF3dzkie",
+  PL_LKS_II_LODZ: "\u0142\xF3dzkie",
+  PL_JAGIELLONIA_BIALYSTOK: "podlaskie",
+  PL_WISLA_PLOCK: "mazowieckie",
+  PL_ARKA_GDYNIA: "pomorskie",
+  PL_LECHIA_GDANSK: "pomorskie",
+  PL_CHOJNICZANKA_CHOJNICE: "pomorskie",
+  PL_OLIMPIA_GRUDZIADZ: "kujawsko-pomorskie",
+  PL_ZAWISZA_BYDGOSZCZ: "kujawsko-pomorskie",
+  PL_POGON_SZCZECIN: "zachodniopomorskie",
+  PL_SWIT_SZCZECIN: "zachodniopomorskie",
+  PL_SLASK_WROCLAW: "dolno\u015Bl\u0105skie",
+  PL_SLASK_WROCLAW_II: "dolno\u015Bl\u0105skie",
+  PL_ZAGLEBIE_LUBIN: "dolno\u015Bl\u0105skie",
+  PL_MIEDZ_LEGNICA: "dolno\u015Bl\u0105skie",
+  PL_CHROBRY_GLOGOW: "dolno\u015Bl\u0105skie",
+  PL_LECHIA_ZIELONA_GORA: "lubuskie",
+  PL_ODRA_OPOLE: "opolskie",
+  PL_GORNIK_ZABRZE: "\u015Bl\u0105skie",
+  PL_GKS_KATOWICE: "\u015Bl\u0105skie",
+  PL_GKS_TYCHY: "\u015Bl\u0105skie",
+  PL_PIAST_GLIWICE: "\u015Bl\u0105skie",
+  PL_RUCH_CHORZOW: "\u015Bl\u0105skie",
+  PL_REKORD_BIELSKO_BIALA: "\u015Bl\u0105skie",
+  PL_PODBESKIDZIE_BIELSKO_BIALA: "\u015Bl\u0105skie",
+  PL_POLONIA_BYTOM: "\u015Bl\u0105skie",
+  PL_CRACOVIA: "ma\u0142opolskie",
+  PL_WISLA_KRAKOW: "ma\u0142opolskie",
+  PL_WIECZYSTA_KRAKOW: "ma\u0142opolskie",
+  PL_TERMALICA_NIECIECZA: "ma\u0142opolskie",
+  PL_PUSZCZA_NIEPOLOMICE: "ma\u0142opolskie",
+  PL_HUTNIK_KRAKOW: "ma\u0142opolskie",
+  PL_SANDECJA_NOWY_SACZ: "ma\u0142opolskie",
+  PL_PODHALE_NOWY_TARG: "ma\u0142opolskie",
+  PL_RAKOW_CZESTOCHOWA: "\u015Bl\u0105skie",
+  PL_MOTOR_LUBLIN: "lubelskie",
+  PL_GORNIK_LECZNA: "lubelskie",
+  PL_AVIA_SWIDNIK: "lubelskie",
+  PL_STAL_RZESZOW: "podkarpackie",
+  PL_STAL_MIELEC: "podkarpackie",
+  PL_STAL_STALOWA_WOLA: "podkarpackie",
+  PL_RESOVIA: "podkarpackie",
+  PL_KORONA_KIELCE: "\u015Bwi\u0119tokrzyskie",
+  PL_GKS_BELCHATOW: "\u0142\xF3dzkie",
+  PL_BRON_RADOM: "mazowieckie",
+  PL_WIKIELEC: "warmi\u0144sko-mazurskie",
+  PL_STOMIL_OLSZTYN: "warmi\u0144sko-mazurskie",
+  PL_SOKOL_OSTRODA: "warmi\u0144sko-mazurskie",
+  PL_KS_WASILKOW: "podlaskie",
+  PL_MLKS_ZNICZ_BIALA_PISKA: "warmi\u0144sko-mazurskie",
+  PL_CARTUSIA_KARTUZY: "pomorskie",
+  PL_POGON_NOWE_SKALMIERZYCE: "wielkopolskie",
+  PL_GZS_TLUCHOVIA_TLUCHOWO: "kujawsko-pomorskie",
+  PL_LKS_WYBRZEZE_REWALSKIE_REWAL: "zachodniopomorskie",
+  PL_GWARDIA_KOSZALIN: "zachodniopomorskie",
+  PL_BALTYK_GDYNIA: "pomorskie",
+  PL_VINETA_WOLIN: "zachodniopomorskie",
+  PL_CHEMIK_POLICE: "zachodniopomorskie",
+  PL_UNIA_JANIKOWO: "kujawsko-pomorskie",
+  PL_POLONIA_BYDGOSZCZ: "kujawsko-pomorskie",
+  PL_SKRA_CZESTOCHOWA: "\u015Bl\u0105skie",
+  PL_SLOWIANIN_WOLIBORZ: "dolno\u015Bl\u0105skie",
+  PL_PNIOWEK_PAWLOWICE_SLASKIE: "\u015Bl\u0105skie",
+  PL_LZS_STAROWICE: "opolskie",
+  PL_MKS_STAL_JASIEN: "lubuskie",
+  PL_LECHIA_DZIERZONIOW: "dolno\u015Bl\u0105skie",
+  PL_FOTO_HIGIENA_GAC: "dolno\u015Bl\u0105skie",
+  PL_WLOKNIARZ_CZESTOCHOWA: "\u015Bl\u0105skie",
+  PL_VICTORIA_CZESTOCHOWA: "\u015Bl\u0105skie",
+  PL_FKS_STAL_KRASNIK: "lubelskie",
+  PL_SWIDNICZANKA_SWIDNIK: "lubelskie",
+  PL_SPARTA_KAZIMIERZA_WIELKA: "\u015Bwi\u0119tokrzyskie",
+  PL_WISLANIE_JASKOWICE: "ma\u0142opolskie",
+  PL_WISLA_PULAWY: "lubelskie"
+};
 var PolishLeagueSeasonService = {
   getMembership(startYear) {
     return MEMBERSHIPS_BY_START_YEAR[startYear] ?? null;
@@ -3893,7 +4156,7 @@ var PolishLeagueSeasonService = {
     const membership = this.getMembership(startYear);
     if (!membership) return sourceClubs.map((club) => ({ ...club }));
     const clubById = new Map(sourceClubs.map((club) => [club.id, club]));
-    const configuredIds = Object.values(membership).flat();
+    const configuredIds = Object.values(membership).flatMap((clubIds) => clubIds ?? []);
     const uniqueConfiguredIds = new Set(configuredIds);
     if (uniqueConfiguredIds.size !== configuredIds.length) {
       throw new Error(`Konfiguracja polskich lig ${startYear}/${startYear + 1} zawiera powt\xF3rzone kluby.`);
@@ -3902,16 +4165,24 @@ var PolishLeagueSeasonService = {
     if (missingIds.length > 0) {
       throw new Error(`Brak klub\xF3w wymaganych dla sezonu ${startYear}/${startYear + 1}: ${missingIds.join(", ")}`);
     }
-    const configuredClubs = Object.entries(membership).flatMap(([leagueId, clubIds]) => clubIds.map((clubId) => ({
-      ...clubById.get(clubId),
-      leagueId,
-      tier: leagueTier(leagueId),
-      isDefaultActive: true
-    })));
+    const configuredClubs = Object.entries(membership).flatMap(([leagueId, clubIds]) => clubIds.map((clubId) => {
+      const groupFallback = THIRD_LEAGUE_GROUP_IDS.includes(leagueId) ? DEFAULT_GROUP_VOIVODESHIP[leagueId] : void 0;
+      return {
+        ...clubById.get(clubId),
+        leagueId,
+        tier: leagueTier(leagueId),
+        polishVoivodeship: CLUB_VOIVODESHIPS[clubId] ?? clubById.get(clubId).polishVoivodeship ?? groupFallback,
+        isDefaultActive: true
+      };
+    }));
     const remainingClubs = sourceClubs.filter((club) => !uniqueConfiguredIds.has(club.id)).map((club) => ({
       ...club,
-      leagueId: "L_PL_4",
-      tier: 4,
+      polishVoivodeship: CLUB_VOIVODESHIPS[club.id] ?? club.polishVoivodeship,
+      // Only the 72 configured clubs receive a full III-liga schedule in a
+      // 2026/27 career. Every other regional club is retained as a transfer
+      // and future-promotion candidate in the lightweight feeder pool.
+      leagueId: startYear >= 2026 ? "L_PL_5" : "L_PL_4",
+      tier: startYear >= 2026 ? 5 : 4,
       isDefaultActive: true
     }));
     return [...configuredClubs, ...remainingClubs];
@@ -4063,12 +4334,23 @@ var PlayerCareerService = {
 var RESERVE_PARENT_CLUB_BY_ID = {
   PL_LEGIA_WARSZAWA_II: "PL_LEGIA_WARSZAWA",
   PL_SLASK_WROCLAW_II: "PL_SLASK_WROCLAW",
-  PL_LKS_II_LODZ: "PL_LKS_LODZ"
+  PL_LKS_II_LODZ: "PL_LKS_LODZ",
+  PL_WIDZEW_LODZ_II: "PL_WIDZEW_LODZ",
+  PL_WISLA_PLOCK_II: "PL_WISLA_PLOCK",
+  PL_JAGIELLONIA_BIALYSTOK_II: "PL_JAGIELLONIA_BIALYSTOK",
+  PL_LECH_POZNAN_II: "PL_LECH_POZNAN",
+  PL_ZAGLEBIE_LUBIN_II: "PL_ZAGLEBIE_LUBIN",
+  PL_MIEDZ_LEGNICA_II: "PL_MIEDZ_LEGNICA",
+  PL_RAKOW_CZESTOCHOWA_II: "PL_RAKOW_CZESTOCHOWA",
+  PL_WISLA_KRAKOW_II: "PL_WISLA_KRAKOW",
+  PL_WIECZYSTA_KRAKOW_II: "PL_WIECZYSTA_KRAKOW",
+  PL_KORONA_KIELCE_II: "PL_KORONA_KIELCE"
 };
 var PLAYABLE_POLISH_LEAGUE_IDS = /* @__PURE__ */ new Set([
   "L_PL_1",
   "L_PL_2",
-  "L_PL_3"
+  "L_PL_3",
+  ...THIRD_LEAGUE_GROUP_IDS
 ]);
 var getLeagueId = (clubId, clubs, projectedLeagueByClubId) => projectedLeagueByClubId?.get(clubId) ?? clubs.find((club) => club.id === clubId)?.leagueId;
 var ReserveTeamLeagueService = {
@@ -4102,8 +4384,8 @@ var ReserveTeamLeagueService = {
    * runtime check against the supplied clubs rather than a static season list:
    * promotions and relegations can make the answer change in later seasons.
    *
-   * When the configured reserve club is missing or currently sits in L_PL_4,
-   * null instructs GameContext to keep using the generated reserve squad. A
+   * When the configured reserve club is missing or sits only in the L_PL_5
+   * feeder pool, null instructs GameContext to keep using generated reserves. A
    * club with no configured database reserve side, such as Polonia Warszawa,
    * naturally follows the same fallback path.
    */
@@ -4172,7 +4454,8 @@ var ReserveTeamLeagueService = {
     const parentClubId = this.getParentClubId(clubId);
     if (!parentClubId) return true;
     if (targetLeagueId === "L_PL_1") return false;
-    return getLeagueId(parentClubId, clubs, projectedLeagueByClubId) !== targetLeagueId;
+    const parentLeagueId = getLeagueId(parentClubId, clubs, projectedLeagueByClubId);
+    return PolishThirdLeagueService.getPolishTier(parentLeagueId) !== PolishThirdLeagueService.getPolishTier(targetLeagueId);
   },
   selectPromotionPlaces(standings, targetLeagueId, clubs, directPlaceCount = 2, playoffPlaceCount = 4, projectedLeagueByClubId) {
     const eligible = this.getEligibleCandidates(standings, targetLeagueId, clubs, projectedLeagueByClubId);
@@ -4188,7 +4471,9 @@ var ReserveTeamLeagueService = {
     return Object.entries(RESERVE_PARENT_CLUB_BY_ID).flatMap(([reserveClubId, parentClubId]) => {
       const reserveLeagueId = getLeagueId(reserveClubId, clubs, projectedLeagueByClubId);
       const parentLeagueId = getLeagueId(parentClubId, clubs, projectedLeagueByClubId);
-      if (!reserveLeagueId || reserveLeagueId !== parentLeagueId || !["L_PL_1", "L_PL_2", "L_PL_3"].includes(reserveLeagueId)) {
+      const reserveTier = PolishThirdLeagueService.getPolishTier(reserveLeagueId);
+      const parentTier = PolishThirdLeagueService.getPolishTier(parentLeagueId);
+      if (!reserveLeagueId || reserveTier === null || reserveTier !== parentTier || reserveTier > 4) {
         return [];
       }
       return [{ reserveClubId, parentClubId, leagueId: reserveLeagueId }];

@@ -55,7 +55,7 @@ const reserveId = 'PL_LEGIA_WARSZAWA_II';
 const clubs2025 = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, 2025);
 const clubs2026 = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, 2026);
 assert.equal(ReserveTeamLeagueService.getReserveClubId(parentId), reserveId);
-assert.equal(ReserveTeamLeagueService.getReserveClubId('PL_LECH_POZNAN'), null);
+assert.equal(ReserveTeamLeagueService.getReserveClubId('PL_LECH_POZNAN'), 'PL_LECH_POZNAN_II');
 assert.equal(ReserveTeamLeagueService.canBeSelectedAsUserClub(parentId), true);
 assert.equal(ReserveTeamLeagueService.canBeSelectedAsUserClub(reserveId), false);
 
@@ -73,7 +73,10 @@ assert.equal(
   'PL_SLASK_WROCLAW_II'
 );
 assert.equal(ReserveTeamLeagueService.getPlayableReserveClubId(parentId, clubs2026), reserveId);
-assert.equal(ReserveTeamLeagueService.getPlayableReserveClubId('PL_LKS_LODZ', clubs2026), null);
+assert.equal(
+  ReserveTeamLeagueService.getPlayableReserveClubId('PL_LKS_LODZ', clubs2026),
+  'PL_LKS_II_LODZ'
+);
 assert.equal(
   ReserveTeamLeagueService.getPlayableReserveClubId('PL_SLASK_WROCLAW', clubs2026),
   'PL_SLASK_WROCLAW_II'

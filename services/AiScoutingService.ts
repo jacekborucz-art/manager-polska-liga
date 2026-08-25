@@ -2,6 +2,7 @@ import { Club, Player, Lineup, HealthStatus, InjurySeverity, PlayerPosition } fr
 import { TacticRepository } from '../resources/tactics_db';
 import { FinanceService } from './FinanceService';
 import { ReserveTeamLeagueService } from './ReserveTeamLeagueService';
+import { PolishThirdLeagueService } from './PolishThirdLeagueService';
 
 /**
  * Squad arrays are immutable snapshots throughout the transfer-interest pass.
@@ -186,7 +187,7 @@ export const AiScoutingService = {
      * cost without relaxing transfer, quality, budget or reserve-team rules.
      */
     const clubById = new Map(clubs.map(club => [club.id, club]));
-    const tier4ClubIds = new Set(clubs.filter(club => club.leagueId === 'L_PL_4').map(club => club.id));
+    const tier4ClubIds = new Set(clubs.filter(club => PolishThirdLeagueService.isThirdLeagueId(club.leagueId)).map(club => club.id));
     const playersByPosition = new Map<PlayerPosition, Player[]>([
       [PlayerPosition.GK, []],
       [PlayerPosition.DEF, []],

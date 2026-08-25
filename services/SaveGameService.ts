@@ -36,6 +36,8 @@ export interface SaveState {
   userTeamId: string | null;
   seasonTemplate: any;
   leagueSchedules: Record<any, any>;
+  /** Lightweight 16-region IV-liga schedules, tables and generated statistics. */
+  fourthLeagueState?: import('./PolishFourthLeagueService').PolishFourthLeagueState | null;
   lastRecoveryDate: Date;
   coaches: Record<string, any>;
   staffMembers: Record<string, any>;
@@ -724,6 +726,20 @@ export function normalizeSaveState(data: SaveState): SaveState {
           clubAdaptation: normalizePlayerClubAdaptation(player.clubAdaptation, playerClubId),
           secondaryPosition,
           secondaryPositionRating: secondaryPosition ? asClampedRating(player.secondaryPositionRating) : undefined,
+          // Save files keep the complete per-competition map. Normalizing every
+          // bucket here prevents malformed optional arrays from breaking the III
+          // liga ranking screen after a mid-season save/load cycle.
+          competitionStats: Object.fromEntries(
+            Object.entries(asRecord<any>(player.competitionStats)).map(([competitionId, rawStats]) => [
+              competitionId,
+              {
+                ...emptyPlayerStats(),
+                ...asRecord(rawStats),
+                seasonalChanges: asRecord(asRecord(rawStats).seasonalChanges),
+                ratingHistory: asArray<number>(asRecord(rawStats).ratingHistory),
+              },
+            ])
+          ),
           friendlyStats: player.friendlyStats ?? {
             goals: 0,
             assists: 0,
@@ -816,6 +832,7 @@ export function normalizeSaveState(data: SaveState): SaveState {
     lineups: asRecord(data.lineups),
     seasonTemplate: normalizeSeasonTemplate(data.seasonTemplate),
     leagueSchedules: normalizeLeagueSchedules(data.leagueSchedules),
+    fourthLeagueState: (data as any).fourthLeagueState ?? null,
     lastRecoveryDate: asDate(data.lastRecoveryDate),
     coaches: asRecord(data.coaches),
     staffMembers: asRecord(data.staffMembers),

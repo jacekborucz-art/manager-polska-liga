@@ -8,7 +8,7 @@ import { Card } from '../ui/Card';
 import { TacticRepository } from '../../resources/tactics_db';
 import { LineupService } from '../../services/LineupService';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
-import { TeamAnalysisService } from '../../services/TeamAnalysisService';
+import { getTeamAssistantQuality, TeamAnalysisService } from '../../services/TeamAnalysisService';
 import szatnia from '../../Graphic/themes/szatnia.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { TeamAnalysisModal } from './TeamAnalysisModal';
@@ -26,6 +26,8 @@ import { generatePlayerReport } from '../../services/TrainingAssistantService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 import { ManagerExperienceService } from '../../services/ManagerExperienceService';
 import { PlayerFormLevel, PlayerFormService } from '../../services/PlayerFormService';
+import { findTeamTrainingCycle } from '../../services/TrainingProgramRules';
+import { AssistantReportExtendedAnalysis } from './AssistantReportExtendedAnalysis';
 
 const NATIONALITY_FLAG_MAP: Record<string, string> = {
   'Albania': '🇦🇱', 'Andora': '🇦🇩', 'Austria': '🇦🇹', 'Belgia': '🇧🇪',
@@ -553,7 +555,7 @@ export const SquadView: React.FC = () => {
           reserves, setReserves, setPlayers, applyWeeklyMotivation, sessionSeed, nationalTeams, fixtures, leagues,
           coaches, staffMembers, managerProfile, fireStaffMember, extendStaffContract, negotiateStaffContract,
           toggleTransferList, toggleLoanAvailability, terminateLoanEarly, toggleUntouchable, setSquadRole, setPendingOpenTalk, seasonNumber, viewCoachDetails, setMessages,
-          managedReserveClubId, activeManagerContract } = useGame();
+          managedReserveClubId, activeManagerContract, activeTrainingId, activeIntensity } = useGame();
   
   const myClub = useMemo(() => clubs.find(c => c.id === userTeamId), [clubs, userTeamId]);
   const myPlayers = userTeamId ? players[userTeamId] : [];
@@ -614,13 +616,18 @@ export const SquadView: React.FC = () => {
       goalkeeperExists: (myClub?.staffIds ?? []).some(id => staffMembers[id]?.role === StaffRole.GOALKEEPER_COACH),
       goalkeeperAvg: getStaffQ(StaffRole.GOALKEEPER_COACH, ['gkTechnique', 'positioning', 'footwork'])
     };
-    return generatePlayerReport(reportPlayer, myPlayers, allLeaguePlayers, staffQuality);
-  }, [reportPlayer, myClub, staffMembers, myPlayers, allLeaguePlayers]);
+    const activeTeamCycle = findTeamTrainingCycle(activeTrainingId);
+    return generatePlayerReport(reportPlayer, myPlayers, allLeaguePlayers, staffQuality, {
+      activeTrainingName: activeTeamCycle?.name ?? null,
+      intensity: activeIntensity,
+    });
+  }, [reportPlayer, myClub, staffMembers, myPlayers, allLeaguePlayers, activeTrainingId, activeIntensity]);
 
   const assistants = useMemo(() =>
     (myClub?.staffIds ?? [])
       .map(id => staffMembers[id])
-      .filter(s => !!s && s.role === StaffRole.ASSISTANT_COACH),
+      .filter(s => !!s && s.role === StaffRole.ASSISTANT_COACH)
+      .sort((left, right) => getTeamAssistantQuality(right) - getTeamAssistantQuality(left)),
     [myClub, staffMembers]
   );
   const hasAssistant = assistants.length > 0;
@@ -1184,8 +1191,18 @@ export const SquadView: React.FC = () => {
 
   const teamAnalysisReport = useMemo(() => {
     if (!myClub || myPlayers.length === 0) return null;
-    return TeamAnalysisService.analyzeSquad(myClub, myPlayers, currentDate);
-  }, [myClub, myPlayers, currentDate]);
+    const activeTeamCycle = findTeamTrainingCycle(activeTrainingId);
+    return TeamAnalysisService.analyzeSquad({
+      club: myClub,
+      players: myPlayers,
+      currentDate,
+      assistant: assistants[0] ?? null,
+      lineup: myLineup,
+      matchHistory: allMatchHistory,
+      activeTrainingName: activeTeamCycle?.name ?? null,
+      activeIntensity,
+    });
+  }, [myClub, myPlayers, currentDate, assistants, myLineup, allMatchHistory, activeTrainingId, activeIntensity]);
 
   if (!myLineup || !userTeamId || !myClub) return null;
 
@@ -2939,7 +2956,7 @@ export const SquadView: React.FC = () => {
               </div>
 
               {/* BODY — 4 kolumny */}
-              <div className="report-rise relative z-10 flex-1 grid grid-cols-[360px_minmax(0,1.35fr)_minmax(0,1.35fr)_330px] gap-5 p-6 overflow-hidden min-h-0" style={{ animationDelay: '120ms' }}>
+              <div className="report-rise relative z-10 flex-1 grid grid-cols-[360px_minmax(0,1.35fr)_minmax(0,1.35fr)_330px] auto-rows-min gap-5 p-6 overflow-y-auto overflow-x-hidden custom-scrollbar min-h-0" style={{ animationDelay: '120ms' }}>
 
                 {/* KOL 1: Statystyki + Słabe/Mocne */}
                 <div className="report-soft-panels flex flex-col gap-3 min-h-0 overflow-y-auto custom-scrollbar pr-1">
@@ -3171,6 +3188,8 @@ export const SquadView: React.FC = () => {
                     <p className="relative text-[11px] font-normal italic uppercase tracking-tighter text-amber-200 leading-relaxed">{report.investmentText}</p>
                   </div>
                 </div>
+
+                <AssistantReportExtendedAnalysis report={report} className="col-span-4" />
 
               </div>
             </div>

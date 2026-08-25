@@ -1,6 +1,21 @@
-import { Club, Player, Lineup, MailMessage, MailType, HealthStatus } from '../types';
+import {
+  Club,
+  Player,
+  Lineup,
+  MailMessage,
+  MailType,
+  HealthStatus,
+  InstructionCounterAttack,
+  InstructionIntensity,
+  InstructionMarking,
+  InstructionMindset,
+  InstructionPassing,
+  InstructionPressing,
+  InstructionTempo,
+} from '../types';
 import { MatchHistoryService } from './MatchHistoryService';
 import { TacticRepository } from '../resources/tactics_db';
+import { TacticalInstructionMatrixService } from './TacticalInstructionMatrixService';
 
 const ERROR_RATE_LOW = 0.10;
 const ERROR_RATE_MID = 0.15;
@@ -11,11 +26,13 @@ function maybeDistort(errorRate: number): boolean {
 }
 
 function getErrorMultiplier(quality: number): number {
-  if (quality >= 17) return 0.30 + (20 - quality) / 3 * 0.20;
-  if (quality >= 14) return 0.50 + (17 - quality) / 3 * 0.20;
-  if (quality >= 10) return 0.70 + (14 - quality) / 4 * 0.30;
-  if (quality >= 5)  return 1.00 + (10 - quality) / 5 * 0.50;
-  return Math.min(2.00, 1.50 + (5 - quality) / 4 * 0.50);
+  const normalizedQuality = Math.max(1, Math.min(20, quality));
+  // ERROR_RATE_LOW is the smallest base error used anywhere in this report. A 0.50 multiplier at
+  // quality 20 therefore produces the required 5% uncertainty floor; weaker staff scale smoothly
+  // toward the previous 20-40% error range instead of crossing discontinuous quality brackets.
+  if (normalizedQuality >= 10) return 0.50 + (20 - normalizedQuality) * 0.05;
+  if (normalizedQuality >= 5) return 1.00 + (10 - normalizedQuality) * 0.10;
+  return Math.min(2.00, 1.50 + (5 - normalizedQuality) * 0.125);
 }
 
 // --- MODUŁ 1: Forma przeciwnika ---
@@ -69,6 +86,201 @@ function analyzeOpponentForm(
   }
 
   return { label: labels[index], wins, draws, losses, hasEnoughData, matchesAnalyzed: allHistory.length, last5, yellowCards: totalYellow, redCards: totalRed, brutalityLabel, brutalityColor };
+}
+
+type ScoutInstructionSnapshot = {
+  tempo: InstructionTempo;
+  mindset: InstructionMindset;
+  intensity: InstructionIntensity;
+  passing: InstructionPassing;
+  pressing: InstructionPressing;
+  counterAttack: InstructionCounterAttack;
+  marking: InstructionMarking;
+};
+
+export interface ScoutTacticalAnalysis {
+  opponent: ScoutInstructionSnapshot;
+  recommendation: ScoutInstructionSnapshot;
+  opponentSummary: string;
+  recommendationReason: string;
+  markingReason: string;
+  warnings: string[];
+  confidencePercent: number;
+  uncertaintyPercent: number;
+}
+
+const average = (values: number[], fallback: number): number =>
+  values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
+
+/**
+ * Converts a formation's persistent biases into the live instruction language used by the match engine.
+ * Lineup saves do not persist an AI team's minute-by-minute commands, so the pre-match report must label
+ * this result as a prediction. Using the same tactic properties as the engine keeps that prediction useful
+ * without pretending that the analyst can see decisions the opposing coach has not made yet.
+ */
+function inferInstructionsFromTactic(tacticId: string): ScoutInstructionSnapshot {
+  const tactic = TacticRepository.getById(tacticId);
+  const isCounterSystem = tactic.category === 'Counter' || tactic.category === 'Park Bus';
+  const isPossessionSystem = tactic.category === 'Possession' || tactic.category === 'Technical';
+  const isClearlyAttacking = tactic.attackBias - tactic.defenseBias >= 15;
+  const isClearlyDefensive = tactic.defenseBias - tactic.attackBias >= 15;
+
+  return {
+    tempo: isClearlyAttacking ? 'FAST' : isClearlyDefensive ? 'SLOW' : 'NORMAL',
+    mindset: isClearlyAttacking ? 'OFFENSIVE' : isClearlyDefensive ? 'DEFENSIVE' : 'NEUTRAL',
+    intensity: tactic.pressingIntensity >= 75 ? 'AGGRESSIVE' : tactic.pressingIntensity <= 35 ? 'CAUTIOUS' : 'NORMAL',
+    passing: isPossessionSystem ? 'SHORT' : isCounterSystem || tactic.defenseBias >= 80 ? 'LONG' : 'MIXED',
+    pressing: tactic.pressingIntensity >= 70 ? 'PRESSING' : 'NORMAL',
+    counterAttack: isCounterSystem || (tactic.defenseBias >= 75 && tactic.attackBias <= 55) ? 'COUNTER' : 'NORMAL',
+    marking: tactic.pressingIntensity >= 75 ? 'MAN' : tactic.defenseBias >= 65 ? 'ZONE' : 'NONE',
+  };
+}
+
+const distortInstructionPrediction = (
+  profile: ScoutInstructionSnapshot,
+  uncertaintyPercent: number,
+  random: () => number
+): ScoutInstructionSnapshot => {
+  if (random() >= uncertaintyPercent / 100) return profile;
+
+  const distorted = { ...profile };
+  const fields: Array<keyof ScoutInstructionSnapshot> = [
+    'tempo', 'mindset', 'intensity', 'passing', 'pressing', 'counterAttack', 'marking',
+  ];
+  const field = fields[Math.min(fields.length - 1, Math.floor(random() * fields.length))];
+  const alternatives: { [K in keyof ScoutInstructionSnapshot]: ScoutInstructionSnapshot[K][] } = {
+    tempo: ['SLOW', 'NORMAL', 'FAST'],
+    mindset: ['DEFENSIVE', 'NEUTRAL', 'OFFENSIVE'],
+    intensity: ['CAUTIOUS', 'NORMAL', 'AGGRESSIVE'],
+    passing: ['SHORT', 'MIXED', 'LONG'],
+    pressing: ['NORMAL', 'PRESSING'],
+    counterAttack: ['NORMAL', 'COUNTER'],
+    marking: ['ZONE', 'MAN', 'NONE'],
+  };
+  const otherValues = alternatives[field].filter(value => value !== distorted[field]);
+  const picked = otherValues[Math.min(otherValues.length - 1, Math.floor(random() * otherValues.length))];
+  (distorted[field] as ScoutInstructionSnapshot[typeof field]) = picked;
+  return distorted;
+};
+
+/**
+ * Builds the tactical part of the scout report from the same instruction matrix used by AI coaches.
+ * Staff quality controls only the scouting uncertainty. Even an elite analyst keeps a 5% uncertainty
+ * floor, matching the game's rule that reports can never reveal the opponent's plan with certainty.
+ */
+export function buildScoutTacticalAnalysis(params: {
+  opponentLineup: Lineup;
+  opponentPlayers: Player[];
+  userLineup: Lineup;
+  userPlayers: Player[];
+  analysisQuality?: number;
+  random?: () => number;
+}): ScoutTacticalAnalysis {
+  const {
+    opponentLineup,
+    opponentPlayers,
+    userLineup,
+    userPlayers,
+    analysisQuality = 10,
+    random = Math.random,
+  } = params;
+  const quality = Math.max(1, Math.min(20, analysisQuality));
+  const uncertaintyPercent = Math.round(30 - ((quality - 1) / 19) * 25);
+  const rawOpponentProfile = inferInstructionsFromTactic(opponentLineup.tacticId);
+  const opponent = distortInstructionPrediction(rawOpponentProfile, uncertaintyPercent, random);
+  const userBase = inferInstructionsFromTactic(userLineup.tacticId);
+
+  const userXi = userLineup.startingXI
+    .map(id => userPlayers.find(player => player.id === id))
+    .filter(Boolean) as Player[];
+  const opponentXi = opponentLineup.startingXI
+    .map(id => opponentPlayers.find(player => player.id === id))
+    .filter(Boolean) as Player[];
+  const outfield = (players: Player[]) => players.filter(player => player.attributes.goalkeeping < 60);
+  const userOutfield = outfield(userXi);
+  const opponentOutfield = outfield(opponentXi);
+  const avgAttribute = (players: Player[], keys: Array<keyof Player['attributes']>) => average(
+    players.map(player => average(keys.map(key => player.attributes[key] ?? 0), 50)),
+    50
+  );
+  const paceGap = avgAttribute(userOutfield, ['pace']) - avgAttribute(opponentOutfield, ['pace']);
+  const techGap = avgAttribute(userOutfield, ['passing', 'technique', 'vision'])
+    - avgAttribute(opponentOutfield, ['passing', 'technique', 'vision']);
+  const avgCondition = average(userXi.map(player => player.condition), 100);
+  const lowestCondition = userXi.length > 0 ? Math.min(...userXi.map(player => player.condition)) : 100;
+
+  const matrix = TacticalInstructionMatrixService.getMatrixRecommendation({
+    aiTacticId: userLineup.tacticId,
+    opponentTacticId: opponentLineup.tacticId,
+    opponentTempo: opponent.tempo,
+    opponentMindset: opponent.mindset,
+    intendedTempo: userBase.tempo,
+    intendedMindset: userBase.mindset,
+    intendedIntensity: userBase.intensity,
+    aiScoreDiff: 0,
+    aiMomentum: 0,
+    aiAvgFatigue: avgCondition,
+    aiLowestFatigue: lowestCondition,
+    paceGap,
+    techGap,
+    minute: 0,
+    pressureDrama: 0,
+  });
+
+  // Zonal marking is the safe answer against transitions because it preserves the block. Man marking is
+  // reserved for attack-heavy opponents when the starting XI has enough energy to absorb its fatigue cost.
+  const marking: InstructionMarking = opponent.counterAttack === 'COUNTER'
+    ? 'ZONE'
+    : TacticRepository.getById(opponentLineup.tacticId).attackBias >= 68 && avgCondition >= 72
+      ? 'MAN'
+      : 'ZONE';
+  const recommendation: ScoutInstructionSnapshot = {
+    tempo: matrix.tempo,
+    mindset: matrix.mindset,
+    intensity: matrix.intensity,
+    passing: matrix.passing,
+    pressing: matrix.pressing,
+    counterAttack: matrix.counterAttack,
+    marking,
+  };
+
+  const reasonByMatrix: Record<typeof matrix.reason, string> = {
+    counter_overcommit: 'Rywal zostawia przestrzeń po atakach, dlatego najlepiej zabezpieczyć środek i szybko przechodzić do kontry.',
+    press_slow_attack: 'Rywal buduje akcje wolno, więc można utrudnić mu wyprowadzenie piłki aktywnym pressingiem.',
+    control_neutral: 'Układ sił jest wyrównany, dlatego plan zachowuje równowagę między kontrolą piłki i bezpieczeństwem.',
+    break_low_block: 'Rywal prawdopodobnie ustawi niski blok; potrzebna jest cierpliwa gra piłką i większa liczba zawodników w ataku.',
+    protect_lead: 'Plan jest przygotowany do ochrony korzystnego wyniku.',
+    chase_game: 'Plan zakłada zwiększenie ryzyka podczas odrabiania strat.',
+    fatigue_safety: 'Kondycja wyjściowej jedenastki wymaga ograniczenia tempa, intensywności i pressingu.',
+    base_matrix: 'To najbezpieczniejszy punkt wyjścia dla zestawienia obu formacji i profili zawodników.',
+  };
+  const opponentTactic = TacticRepository.getById(opponentLineup.tacticId);
+  const opponentSummary = opponent.counterAttack === 'COUNTER'
+    ? 'Rywal może bronić niżej i szukać szybkiego wyjścia po odbiorze piłki.'
+    : opponent.pressing === 'PRESSING'
+      ? 'Rywal prawdopodobnie spróbuje odzyskiwać piłkę wysoko i narzucić intensywne tempo.'
+      : opponent.mindset === 'OFFENSIVE'
+        ? 'Rywal powinien przejąć inicjatywę i angażować wielu zawodników w atak.'
+        : 'Rywal prawdopodobnie rozpocznie mecz w zrównoważony sposób i będzie reagował na jego przebieg.';
+  const markingReason = marking === 'MAN'
+    ? 'Krycie indywidualne ograniczy najgroźniejszych zawodników, ale zwiększy zmęczenie i może otworzyć przestrzeń po przegranym pojedynku.'
+    : 'Krycie strefowe utrzyma strukturę zespołu i lepiej zabezpieczy przestrzeń po stracie piłki.';
+  const warnings: string[] = [];
+  if (recommendation.pressing === 'PRESSING') warnings.push('Pressing zwiększy zużycie kondycji; kontroluj zmęczenie po przerwie.');
+  if (recommendation.intensity === 'AGGRESSIVE') warnings.push('Agresywna intensywność podnosi ryzyko fauli, kartek i kontuzji.');
+  if (opponent.counterAttack === 'COUNTER') warnings.push('Po stracie piłki nie wysyłaj obu bocznych obrońców jednocześnie do ataku.');
+  if (warnings.length === 0) warnings.push('Plan jest bezpieczny na początek, ale powinien być zmieniany zgodnie z wynikiem i przebiegiem meczu.');
+
+  return {
+    opponent,
+    recommendation,
+    opponentSummary: `${opponentSummary} Bazowa taktyka: ${opponentTactic.name}.`,
+    recommendationReason: reasonByMatrix[matrix.reason],
+    markingReason,
+    warnings,
+    confidencePercent: 100 - uncertaintyPercent,
+    uncertaintyPercent,
+  };
 }
 
 // --- MODUŁ 2: Kluczowi zawodnicy przeciwnika ---
@@ -222,6 +434,7 @@ function generateWrittenReport(params: {
   form: ReturnType<typeof analyzeOpponentForm>;
   keyPlayers: ReturnType<typeof analyzeKeyPlayers>;
   tactic: ReturnType<typeof analyzeOpponentTactic>;
+  tacticalAnalysis: ScoutTacticalAnalysis;
   approach: ReturnType<typeof recommendTacticStyle>;
   opponentPlayers: Player[];
   opponentLineup: Lineup;
@@ -231,7 +444,7 @@ function generateWrittenReport(params: {
   opponentAvgRating: number;
   errorMult?: number;
 }): Array<{ icon: string; title: string; text: string; color: string }> {
-  const { opponentName, form, keyPlayers, tactic, approach, opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, errorMult = 1.0 } = params;
+  const { opponentName, form, keyPlayers, tactic, tacticalAnalysis, approach, opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, errorMult = 1.0 } = params;
   const err = () => maybeDistort(ERROR_RATE_HIGH * errorMult);
   const sections: Array<{ icon: string; title: string; text: string; color: string }> = [];
 
@@ -364,6 +577,16 @@ function generateWrittenReport(params: {
     `Rywal gra systemem ${tactic.currentTactic} — formacja wymagająca, ale przewidywalna. ${tactic.hasCadreProblems ? `Z powodu kontuzji i zawieszeń możliwe przestawienie na ${tactic.predictedTactic}.` : 'Kadra pełna, więc nie oczekujemy improwiazji.'}`,
   ];
   sections.push({ icon: '🗂️', title: 'Analiza Taktyczna', text: tacticPools[Math.floor(Math.random() * tacticPools.length)], color: '#a78bfa' });
+
+  // The detailed narrative repeats the most actionable conclusion from the visual instruction card.
+  // This keeps the advice available when the mail view collapses or reflows cards on narrower screens.
+  const tacticalWarnings = tacticalAnalysis.warnings.map(warning => `⚠️ ${warning}`).join('<br>');
+  sections.push({
+    icon: '🧠',
+    title: 'Plan Na Mecz',
+    text: `${tacticalAnalysis.opponentSummary}<br><br><b>Zalecenie:</b> ${tacticalAnalysis.recommendationReason}<br><b>Krycie:</b> ${tacticalAnalysis.markingReason}<br><br>${tacticalWarnings}`,
+    color: '#22d3ee',
+  });
 
   // === D: PORÓWNANIE SIŁ — SYSTEM PUNKTOWY ATRYBUT PO ATRYBUCIE ===
   const userXi = userLineup.startingXI.map(id => userPlayers.find(p => p.id === id)).filter(Boolean) as Player[];
@@ -707,6 +930,7 @@ function buildMailBody(params: {
   form: ReturnType<typeof analyzeOpponentForm>;
   keyPlayers: ReturnType<typeof analyzeKeyPlayers>;
   tactic: ReturnType<typeof analyzeOpponentTactic>;
+  tacticalAnalysis: ScoutTacticalAnalysis;
   approach: ReturnType<typeof recommendTacticStyle>;
   rotation: ReturnType<typeof suggestRotation>;
   opponentLeaguePosition: number;
@@ -729,7 +953,7 @@ function buildMailBody(params: {
   isFriendly?: boolean;
   errorMult?: number;
 }): string {
-  const { opponentName, managerName, form, keyPlayers, tactic, approach, rotation,
+  const { opponentName, managerName, form, keyPlayers, tactic, tacticalAnalysis, approach, rotation,
     opponentLeaguePosition, opponentLeaguePlayed = 0, opponentLeaguePoints, opponentLeagueGoalDiff, leagueName,
     opponentPrimaryColor, opponentSecondaryColor, clubs, userClubId, opponentClubId,
     opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating, isHome, isFriendly = false, errorMult = 1.0 } = params;
@@ -923,9 +1147,55 @@ function buildMailBody(params: {
      ${renderFormation(tactic.currentTactic, opponentPrimaryColor, opponentSecondaryColor)}
   `, 'flex:none;width:320px;height:560px;overflow:hidden;box-sizing:border-box;');
 
+  // These labels deliberately mirror the live tactical panel. The left column is a scouting forecast,
+  // while the right column is a recommended starting state, not an automatic change to the user's tactic.
+  const tempoLabels: Record<InstructionTempo, string> = { SLOW: 'Wolne', NORMAL: 'Normalne', FAST: 'Szybkie' };
+  const mindsetLabels: Record<InstructionMindset, string> = { DEFENSIVE: 'Defensywne', NEUTRAL: 'Neutralne', OFFENSIVE: 'Ofensywne' };
+  const intensityLabels: Record<InstructionIntensity, string> = { CAUTIOUS: 'Ostrożna', NORMAL: 'Normalna', AGGRESSIVE: 'Agresywna' };
+  const passingLabels: Record<InstructionPassing, string> = { SHORT: 'Krótkie', MIXED: 'Mieszane', LONG: 'Długie' };
+  const pressingLabels: Record<InstructionPressing, string> = { NORMAL: 'Normalny', PRESSING: 'Pressing' };
+  const counterLabels: Record<InstructionCounterAttack, string> = { NORMAL: 'Nie', COUNTER: 'Tak' };
+  const markingLabels: Record<InstructionMarking, string> = { ZONE: 'Strefowe', MAN: '1 na 1', NONE: 'Bez instrukcji' };
+  const renderInstructionRows = (instructions: ScoutInstructionSnapshot, valueColor: string) => [
+    ['Tempo', tempoLabels[instructions.tempo]],
+    ['Nastawienie', mindsetLabels[instructions.mindset]],
+    ['Intensywność', intensityLabels[instructions.intensity]],
+    ['Podania', passingLabels[instructions.passing]],
+    ['Pressing', pressingLabels[instructions.pressing]],
+    ['Kontratak', counterLabels[instructions.counterAttack]],
+    ['Krycie', markingLabels[instructions.marking]],
+  ].map(([rowLabel, value]) => statRow(rowLabel, value, valueColor)).join('');
+
+  const tacticalPlanCard = card('#22d3ee', '🧠 PROFIL TAKTYCZNY I PLAN STARTOWY',
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:24px;">
+       <div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.18);border-radius:18px;padding:18px 22px;">
+         <span style="${label('#a78bfa')}margin-bottom:6px;">PROGNOZA DLA RYWALA</span>
+         <p style="font-family:${FONT};color:#94a3b8;font-size:13px;font-weight:600;line-height:1.6;text-transform:none;font-style:normal;margin:0 0 10px;">${tacticalAnalysis.opponentSummary}</p>
+         ${renderInstructionRows(tacticalAnalysis.opponent, '#c4b5fd')}
+       </div>
+       <div style="background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.18);border-radius:18px;padding:18px 22px;">
+         <span style="${label('#22d3ee')}margin-bottom:6px;">ZALECENIA DLA NASZEGO ZESPOŁU</span>
+         <p style="font-family:${FONT};color:#94a3b8;font-size:13px;font-weight:600;line-height:1.6;text-transform:none;font-style:normal;margin:0 0 10px;">${tacticalAnalysis.recommendationReason}</p>
+         ${renderInstructionRows(tacticalAnalysis.recommendation, '#67e8f9')}
+       </div>
+     </div>
+     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px;margin-top:16px;">
+       <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:12px;padding:13px 16px;font-family:${FONT};color:#94a3b8;font-size:12px;font-weight:600;line-height:1.6;text-transform:none;font-style:normal;">
+         <b style="color:#60a5fa;">Krycie:</b> ${tacticalAnalysis.markingReason}
+       </div>
+       <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:13px 16px;font-family:${FONT};color:#94a3b8;font-size:12px;font-weight:600;line-height:1.6;text-transform:none;font-style:normal;">
+         ${tacticalAnalysis.warnings.map(warning => `<div>⚠️ ${warning}</div>`).join('')}
+       </div>
+     </div>
+     <div style="font-family:${FONT};color:#475569;font-size:11px;font-weight:700;font-style:italic;text-transform:uppercase;letter-spacing:0.08em;margin-top:14px;text-align:right;">
+       PEWNOŚĆ ANALIZY ${tacticalAnalysis.confidencePercent}% · MARGINES NIEPEWNOŚCI ${tacticalAnalysis.uncertaintyPercent}% · DECYZJE RYWALA MOGĄ ZMIENIĆ SIĘ W TRAKCIE MECZU
+     </div>`,
+    'width:100%;box-sizing:border-box;padding:24px 26px;'
+  );
+
   // ── RAPORT PISEMNY ─────────────────────────────────────────────────────────
   const reportSections = generateWrittenReport({
-    opponentName, form, keyPlayers, tactic, approach,
+    opponentName, form, keyPlayers, tactic, tacticalAnalysis, approach,
     opponentPlayers, opponentLineup, userPlayers, userLineup, userAvgRating, opponentAvgRating,
     errorMult,
   });
@@ -1175,7 +1445,12 @@ function buildMailBody(params: {
       </div>
     </div>
 
-    <!-- ROW 2: Raport szczegółowy -->
+    <!-- ROW 2: Full live-instruction analysis -->
+    <div style="margin-bottom:20px;">
+      ${tacticalPlanCard}
+    </div>
+
+    <!-- ROW 3: Raport szczegółowy -->
     <div style="margin-bottom:20px;">
       ${reportCard}
     </div>
@@ -1229,6 +1504,13 @@ export const ScoutAssistantService = {
     const form = analyzeOpponentForm(opponentClub.id, clubs, errorMult, seasonNumber);
     const keyPlayers = analyzeKeyPlayers(opponentClub.id, opponentPlayers, opponentLineup, errorMult);
     const tactic = analyzeOpponentTactic(opponentClub, opponentPlayers, opponentLineup, errorMult);
+    const tacticalAnalysis = buildScoutTacticalAnalysis({
+      opponentLineup,
+      opponentPlayers,
+      userLineup,
+      userPlayers,
+      analysisQuality,
+    });
     const approach = recommendTacticStyle(userAvgRating, opponentAvgRating, errorMult);
     const rotation = suggestRotation(userPlayers, userLineup, errorMult);
 
@@ -1238,6 +1520,7 @@ export const ScoutAssistantService = {
       form,
       keyPlayers,
       tactic,
+      tacticalAnalysis,
       approach,
       rotation,
       opponentLeaguePosition,

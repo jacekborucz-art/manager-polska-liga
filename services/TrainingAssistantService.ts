@@ -1,7 +1,9 @@
 import { TRAINING_CYCLES } from '../data/training_definitions_pl';
-import { Player, PlayerAttributes, PlayerPosition, TrainingCycle, TrainingIntensity } from '../types';
+import { HealthStatus, Player, PlayerAttributes, PlayerPosition, PlayerStats, TrainingCycle, TrainingIntensity } from '../types';
 import { getTeamTrainingCycles } from './TrainingProgramRules';
 import { PlayerDevelopmentService } from './PlayerDevelopmentService';
+import { PlayerClubAdaptationService } from './PlayerClubAdaptationService';
+import { PlayerFormService } from './PlayerFormService';
 
 type TrainableAttribute = Exclude<keyof PlayerAttributes, 'talent'>;
 
@@ -18,6 +20,21 @@ export interface TrainingAssistantPlan {
 export interface PlayerReportContext {
   activeTrainingName?: string | null;
   intensity?: TrainingIntensity;
+}
+
+export type AssistantCareerDecision =
+  | 'ROZWIJAĆ'
+  | 'WYPOŻYCZYĆ'
+  | 'ROTOWAĆ'
+  | 'UTRZYMAĆ'
+  | 'REGENEROWAĆ'
+  | 'ROZWAŻYĆ SPRZEDAŻ';
+
+export interface AssistantAnalysisSection {
+  score: number;
+  label: string;
+  assessment: string;
+  recommendation: string;
 }
 
 export interface PlayerDevelopmentAdviceItem {
@@ -302,6 +319,31 @@ export interface PlayerReport {
   developmentAdvice: {
     summary: string;
     items: PlayerDevelopmentAdviceItem[];
+  };
+  analysisMeta: {
+    assistantQuality: number;
+    uncertaintyPercent: number;
+    confidenceLabel: string;
+    note: string;
+  };
+  formAnalysis: AssistantAnalysisSection & {
+    recentAverage: number | null;
+    trend: 'ROSNĄCA' | 'STABILNA' | 'SPADAJĄCA' | 'BRAK DANYCH';
+  };
+  matchBehavior: AssistantAnalysisSection & {
+    cardsPer90: number;
+    contributionsPer90: number;
+  };
+  adaptationAnalysis: AssistantAnalysisSection & {
+    active: boolean;
+    adaptationLevel: number;
+  };
+  readinessAnalysis: AssistantAnalysisSection;
+  careerPlan: {
+    decision: AssistantCareerDecision;
+    horizon: string;
+    assessment: string;
+    nextSteps: string[];
   };
   staffProgressReport: {
     assistantCoach: { hasCoach: boolean; quality: number; observations: string; formAssessment: string; recommendations: string };
@@ -1112,6 +1154,252 @@ const buildGoalkeeperProgressReport = (
   };
 };
 
+// Staff attributes are stored on a 1-20 scale, while the report's diagnostic
+// thresholds use percentages. Older call sites sometimes already pass a 0-100
+// value, so this normalizer accepts both formats and prevents a world-class
+// assistant from being treated as a low-quality observer.
+const normalizeReportStaffQuality = (value: number | undefined, exists: boolean): number => {
+  if (!exists) return 0;
+  const safeValue = Number.isFinite(value) ? Number(value) : 10;
+  return clamp(Math.round(safeValue <= 20 ? safeValue * 5 : safeValue), 0, 100);
+};
+
+const reportHashUnit = (seed: string): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0x1_0000_0000;
+};
+
+interface AssistantPerception {
+  uncertaintyPercent: number;
+  perceive: (value: number, channel: string, min?: number, max?: number) => number;
+  rng: () => number;
+}
+
+// Assistant reports intentionally never become perfectly deterministic. Better
+// staff reduce the maximum observation error from 25% to 5%, but the requested
+// five-percent RNG floor remains even for an assistant rated 100/100. Stable
+// hashes keep a report consistent while it is reopened for the same player.
+const buildAssistantPerception = (playerId: string, assistantQuality: number): AssistantPerception => {
+  const uncertaintyPercent = Math.round(clamp(25 - assistantQuality * 0.20, 5, 25));
+  let sequence = 0;
+  return {
+    uncertaintyPercent,
+    perceive: (value, channel, min = 0, max = 100) => {
+      const swing = (reportHashUnit(`${playerId}:${assistantQuality}:${channel}`) * 2) - 1;
+      return clamp(value * (1 + swing * uncertaintyPercent / 100), min, max);
+    },
+    rng: () => {
+      sequence += 1;
+      return reportHashUnit(`${playerId}:${assistantQuality}:cycle:${sequence}`);
+    },
+  };
+};
+
+const combinedPlayerStats = (player: Player): PlayerStats => {
+  const sources = [player.stats, player.cupStats, player.euroStats, player.friendlyStats, player.nationalStats]
+    .filter((stats): stats is PlayerStats => !!stats);
+  return sources.reduce<PlayerStats>((total, stats) => ({
+    goals: total.goals + (stats.goals ?? 0),
+    assists: total.assists + (stats.assists ?? 0),
+    yellowCards: total.yellowCards + (stats.yellowCards ?? 0),
+    redCards: total.redCards + (stats.redCards ?? 0),
+    cleanSheets: total.cleanSheets + (stats.cleanSheets ?? 0),
+    matchesPlayed: total.matchesPlayed + (stats.matchesPlayed ?? 0),
+    minutesPlayed: total.minutesPlayed + (stats.minutesPlayed ?? 0),
+    seasonalChanges: player.stats.seasonalChanges ?? {},
+    seasonalGrowthPoints: player.stats.seasonalGrowthPoints,
+    ratingHistory: [...total.ratingHistory, ...(stats.ratingHistory ?? [])],
+  }), {
+    goals: 0,
+    assists: 0,
+    yellowCards: 0,
+    redCards: 0,
+    cleanSheets: 0,
+    matchesPlayed: 0,
+    minutesPlayed: 0,
+    seasonalChanges: {},
+    ratingHistory: [],
+  });
+};
+
+const buildFormAnalysis = (player: Player, perception: AssistantPerception): PlayerReport['formAnalysis'] => {
+  const form = PlayerFormService.calculate(player);
+  const stats = combinedPlayerStats(player);
+  const recent = stats.ratingHistory.slice(-5);
+  const previous = stats.ratingHistory.slice(-10, -5);
+  const recentAverage = recent.length > 0 ? average(recent) : null;
+  const previousAverage = previous.length > 0 ? average(previous) : null;
+  const trendDifference = recentAverage !== null && previousAverage !== null ? recentAverage - previousAverage : 0;
+  const trend: PlayerReport['formAnalysis']['trend'] = recentAverage === null
+    ? 'BRAK DANYCH'
+    : trendDifference > 0.3
+      ? 'ROSNĄCA'
+      : trendDifference < -0.3
+        ? 'SPADAJĄCA'
+        : 'STABILNA';
+  const perceivedScore = Math.round(perception.perceive(form.score, 'form'));
+  const perceivedLabel = PlayerFormService.getInfo(perceivedScore).label;
+
+  return {
+    score: perceivedScore,
+    label: perceivedLabel,
+    recentAverage,
+    trend,
+    assessment: recentAverage === null
+      ? 'Brakuje ocen meczowych, dlatego wnioski opierają się głównie na treningu, kondycji i morale.'
+      : `Ostatnie występy dają średnią ${recentAverage.toFixed(2)}, a trend formy jest ${trend.toLowerCase()}.`,
+    recommendation: perceivedScore < 40
+      ? 'Ograniczyć presję, sprawdzić obciążenie i odbudować zawodnika minutami dopasowanymi do jego gotowości.'
+      : trend === 'SPADAJĄCA'
+        ? 'Obserwować kolejne dwa występy i rozważyć lżejszy tydzień lub zmianę roli meczowej.'
+        : 'Utrzymać rytm meczowy i obecny kierunek pracy.',
+  };
+};
+
+const buildMatchBehaviorAnalysis = (player: Player, perception: AssistantPerception): PlayerReport['matchBehavior'] => {
+  const stats = combinedPlayerStats(player);
+  const minutes = Math.max(1, stats.minutesPlayed);
+  const cardsPer90 = ((stats.yellowCards ?? 0) + (stats.redCards ?? 0) * 2) * 90 / minutes;
+  const contributionsPer90 = ((stats.goals ?? 0) + (stats.assists ?? 0)) * 90 / minutes;
+  const disciplineBase = clamp(
+    100 - cardsPer90 * 75 - (stats.redCards ?? 0) * 7 - Math.max(0, (player.attributes.aggression ?? 50) - 70) * 0.45,
+    0,
+    100
+  );
+  const behaviorBase = average([
+    disciplineBase,
+    player.attributes.workRate ?? 50,
+    player.attributes.mentality ?? 50,
+    player.attributes.leadership ?? 50,
+  ]);
+  const score = Math.round(perception.perceive(behaviorBase, 'match-behavior'));
+  const label = score >= 75 ? 'DOJRZAŁE' : score >= 55 ? 'STABILNE' : score >= 35 ? 'RYZYKOWNE' : 'PROBLEMATYCZNE';
+  const cardText = stats.minutesPlayed <= 0
+    ? 'Nie rozegrał jeszcze minut pozwalających ocenić dyscyplinę meczową.'
+    : `Wskaźnik kartek wynosi ${cardsPer90.toFixed(2)} na 90 minut, a udział przy golach ${contributionsPer90.toFixed(2)} na 90 minut.`;
+
+  return {
+    score,
+    label,
+    cardsPer90,
+    contributionsPer90,
+    assessment: `${cardText} Profil zachowania uwzględnia agresję, pracowitość, mentalność i przywództwo.`,
+    recommendation: disciplineBase < 55
+      ? 'Pracować nad ustawianiem i kontrolą agresji; przy wysokim ryzyku kartek unikać roli wymagającej ciągłych spóźnionych pojedynków.'
+      : (player.attributes.workRate ?? 50) < 55
+        ? 'Zwiększać wymagania dotyczące pracy bez piłki i konsekwencji w realizacji zadań.'
+        : 'Nie ma potrzeby zmiany podejścia; zachowanie na boisku wspiera zespół.',
+  };
+};
+
+const buildAdaptationAnalysis = (player: Player, perception: AssistantPerception): PlayerReport['adaptationAnalysis'] => {
+  const active = !!player.clubAdaptation && player.clubAdaptation.clubId === player.clubId && player.clubAdaptation.level < 100;
+  const adaptationLevel = Math.round(PlayerClubAdaptationService.getLevel(player));
+  const defaultMindset = active ? 55 : 82;
+  const belonging = player.playerMindset?.squadBelonging ?? defaultMindset;
+  const happiness = player.playerMindset?.clubHappiness ?? (player.morale ?? defaultMindset);
+  const trust = player.playerMindset?.coachTrust ?? defaultMindset;
+  const conflict = player.playerMindset?.conflictLevel ?? 0;
+  const integrationBase = adaptationLevel * 0.48 + belonging * 0.22 + happiness * 0.16 + trust * 0.14 - conflict * 0.18;
+  const score = Math.round(perception.perceive(clamp(integrationBase, 0, 100), 'adaptation'));
+  const label = score >= 82 ? 'PEŁNA' : score >= 65 ? 'DOBRA' : score >= 45 ? 'W TOKU' : 'TRUDNA';
+
+  return {
+    score,
+    label,
+    active,
+    adaptationLevel,
+    assessment: active
+      ? `Adaptacja klubowa wynosi ${adaptationLevel}%. Poczucie przynależności: ${Math.round(belonging)}, zadowolenie w klubie: ${Math.round(happiness)}, zaufanie do trenera: ${Math.round(trust)}.`
+      : `Zawodnik zakończył formalny okres adaptacji. Poczucie przynależności: ${Math.round(belonging)}, zadowolenie w klubie: ${Math.round(happiness)}, poziom konfliktu: ${Math.round(conflict)}.`,
+    recommendation: score < 45
+      ? 'Zapewnić jasną rolę, regularny kontakt i rozsądne minuty; sprawdzić obietnice oraz nastroje w szatni.'
+      : score < 65
+        ? 'Kontynuować wprowadzanie do zespołu i unikać gwałtownych zmian roli lub obciążenia.'
+        : 'Aklimatyzacja nie wymaga szczególnej interwencji.',
+  };
+};
+
+const buildReadinessAnalysis = (player: Player, perception: AssistantPerception): PlayerReport['readinessAnalysis'] => {
+  const condition = clamp(player.condition ?? 100, 0, 100);
+  const fatigueDebt = clamp(player.fatigueDebt ?? 0, 0, 100);
+  const morale = clamp(player.morale ?? 50, 0, 100);
+  const injuryPenalty = player.health.status === HealthStatus.HEALTHY ? 0 : 45;
+  const readinessBase = clamp(condition * 0.58 + (100 - fatigueDebt) * 0.27 + morale * 0.15 - injuryPenalty, 0, 100);
+  const score = Math.round(perception.perceive(readinessBase, 'readiness'));
+  const label = score >= 80 ? 'GOTOWY' : score >= 62 ? 'DOBRA' : score >= 42 ? 'OSTROŻNIE' : 'NIEGOTOWY';
+
+  return {
+    score,
+    label,
+    assessment: `Kondycja ${Math.round(condition)}, dług zmęczeniowy ${Math.round(fatigueDebt)}, morale ${Math.round(morale)}${player.health.status === HealthStatus.HEALTHY ? '.' : ', dodatkowo zawodnik pozostaje poza pełną dyspozycją zdrowotną.'}`,
+    recommendation: player.health.status !== HealthStatus.HEALTHY
+      ? 'Najpierw zakończyć leczenie i stopniowo odbudować obciążenie treningowe.'
+      : fatigueDebt > 55 || condition < 65
+        ? 'Zmniejszyć obciążenie, zaplanować regenerację i ograniczyć pełne występy do czasu poprawy parametrów.'
+        : 'Może realizować normalny plan treningowy i meczowy.',
+  };
+};
+
+const buildCareerPlan = (
+  player: Player,
+  valueForTeam: PlayerReport['valueForTeam'],
+  developmentPotential: PlayerReport['developmentPotential'],
+  formAnalysis: PlayerReport['formAnalysis'],
+  readinessAnalysis: PlayerReport['readinessAnalysis'],
+  recommendedFocusLabel: string,
+  recommendedCycleName: string,
+  context?: PlayerReportContext
+): PlayerReport['careerPlan'] => {
+  const minutes = combinedPlayerStats(player).minutesPlayed;
+  const talentGap = (player.attributes.talent ?? player.overallRating) - player.overallRating;
+  const netSeasonChange = Object.values(player.stats.seasonalChanges ?? {}).reduce((sum, change) => sum + change, 0);
+  let decision: AssistantCareerDecision;
+  let horizon: string;
+
+  if (readinessAnalysis.score < 40 || player.health.status !== HealthStatus.HEALTHY) {
+    decision = 'REGENEROWAĆ';
+    horizon = 'najbliższe 2–4 tygodnie';
+  } else if (player.age <= 22 && talentGap >= 10 && minutes < 450 && valueForTeam !== 'WYSOKA') {
+    decision = 'WYPOŻYCZYĆ';
+    horizon = 'najbliższe okno transferowe';
+  } else if (developmentPotential === 'WYSOKI' || (player.age <= 25 && talentGap >= 7)) {
+    decision = 'ROZWIJAĆ';
+    horizon = '6–18 miesięcy';
+  } else if (player.age >= 31 && netSeasonChange < 0 && valueForTeam === 'NISKA') {
+    decision = 'ROZWAŻYĆ SPRZEDAŻ';
+    horizon = 'do końca sezonu';
+  } else if (formAnalysis.score < 42 || valueForTeam === 'NISKA') {
+    decision = 'ROTOWAĆ';
+    horizon = 'najbliższe 4–6 spotkań';
+  } else {
+    decision = 'UTRZYMAĆ';
+    horizon = 'bieżący sezon';
+  }
+
+  const nextSteps = [
+    `Ustawić lub utrzymać fokus indywidualny: ${recommendedFocusLabel}.`,
+    context?.activeTrainingName
+      ? `Porównać aktywny program „${context.activeTrainingName}” z rekomendowanym „${recommendedCycleName}”.`
+      : `Rozważyć program drużynowy „${recommendedCycleName}”.`,
+  ];
+  if (decision === 'WYPOŻYCZYĆ') nextSteps.push('Szukać klubu gwarantującego regularne minuty na odpowiednim poziomie.');
+  else if (decision === 'REGENEROWAĆ') nextSteps.push('Wrócić do pełnych minut dopiero po odbudowaniu kondycji i ograniczeniu zmęczenia.');
+  else if (decision === 'ROTOWAĆ') nextSteps.push('Dać serię kontrolowanych występów i ponownie ocenić formę po 4–6 meczach.');
+  else nextSteps.push('Zweryfikować postęp po kolejnych czterech tygodniach treningu.');
+
+  return {
+    decision,
+    horizon,
+    assessment: `Rekomendacja łączy wiek, talent, poziom sportowy, minuty, trend atrybutów, formę i aktualną gotowość zawodnika.`,
+    nextSteps,
+  };
+};
+
 export const generatePlayerReport = (
   player: Player,
   teamPlayers: Player[],
@@ -1121,10 +1409,17 @@ export const generatePlayerReport = (
 ): PlayerReport => {
   const keyAttrs = POSITION_KEY_ATTRS[player.position];
   const talent = player.attributes.talent;
-
-  // Szum deterministyczny.hash z ID gracza, symuluje tolerancję błędu asystenta (±3)
+  const reportStaffQuality = {
+    assistantExists: staffQuality?.assistantExists ?? false,
+    assistantAvg: normalizeReportStaffQuality(staffQuality?.assistantAvg, staffQuality?.assistantExists ?? false),
+    fitnessExists: staffQuality?.fitnessExists ?? false,
+    fitnessAvg: normalizeReportStaffQuality(staffQuality?.fitnessAvg, staffQuality?.fitnessExists ?? false),
+    goalkeeperExists: staffQuality?.goalkeeperExists ?? false,
+    goalkeeperAvg: normalizeReportStaffQuality(staffQuality?.goalkeeperAvg, staffQuality?.goalkeeperExists ?? false),
+  };
+  const perception = buildAssistantPerception(player.id, reportStaffQuality.assistantAvg);
   const seed = player.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const noise = (seed % 7) - 3;
+  const noise = Math.round(perception.perceive(70, 'general-observation', 35, 105) - 70);
 
   // Kontekst drużynowy
   const samePos = teamPlayers.filter(p => p.position === player.position && p.id !== player.id);
@@ -1134,7 +1429,7 @@ export const generatePlayerReport = (
     ? average(keyAttrs.map(attr => average(samePos.map(p => p.attributes[attr] ?? 0))))
     : average(keyAttrs.map(attr => player.attributes[attr] ?? 0));
 
-  const effectiveOvr = player.overallRating + noise;
+  const effectiveOvr = perception.perceive(player.overallRating, 'overall-rating', 1, 99);
   const relToPos = effectiveOvr - posAvgOvr;
   const relToTeam = effectiveOvr - teamAvgOvr;
 
@@ -1144,8 +1439,9 @@ export const generatePlayerReport = (
     attr,
     label: ATTR_LABELS_REP[attr] || attr,
     value: player.attributes[attr] ?? 0,
-    need: (Math.max(0, 80 - (player.attributes[attr] ?? 0))) * (importanceMap[attr] ?? 1.0),
-    strength: ((player.attributes[attr] ?? 0)) * (importanceMap[attr] ?? 1.0)
+    perceivedValue: perception.perceive(player.attributes[attr] ?? 0, `attribute:${attr}`),
+    need: (Math.max(0, 80 - perception.perceive(player.attributes[attr] ?? 0, `attribute:${attr}`))) * (importanceMap[attr] ?? 1.0),
+    strength: perception.perceive(player.attributes[attr] ?? 0, `attribute:${attr}`) * (importanceMap[attr] ?? 1.0)
   })).sort((a, b) => b.need - a.need);
 
   // Średnia ligowa per atrybut dla zawodników na tej samej pozycji
@@ -1156,21 +1452,21 @@ export const generatePlayerReport = (
   // Słaby: poniżej średniej ligowej dla tej cechy (z małą tolerancją ±noise)
   // Mocny: powyżej średniej ligowej dla tej cechy
   const weakAttributes = scored
-    .filter(a => a.value < leagueAttrAvg(a.attr as TrainableAttribute) + noise - 2)
+    .filter(a => a.perceivedValue < leagueAttrAvg(a.attr as TrainableAttribute) + noise - 2)
     .slice(0, 3)
     .map(({ attr, label, value }) => ({ attr, label, value }));
 
   const weakAttrsSet = new Set(weakAttributes.map(a => a.attr));
 
   const strongAttributes = [...scored]
-    .filter(a => a.value > leagueAttrAvg(a.attr as TrainableAttribute) + noise + 2 && !weakAttrsSet.has(a.attr))
+    .filter(a => a.perceivedValue > leagueAttrAvg(a.attr as TrainableAttribute) + noise + 2 && !weakAttrsSet.has(a.attr))
     .sort((a, b) => b.strength - a.strength)
     .slice(0, 3)
     .map(({ attr, label, value }) => ({ attr, label, value }));
 
   const posEff = average(keyAttrs.map(a => player.attributes[a] ?? 0));
   const posEffRelative = posEff - posAvgKeyAttrs;
-  const positionEffectivenessScore = Math.round(posEff);
+  const positionEffectivenessScore = Math.round(perception.perceive(posEff, 'position-effectiveness'));
   const positionEffectivenessText = buildPositionEffectivenessText(posEffRelative, posEff, player.position, samePos.length);
 
   const isTeamTopOvr = !teamPlayers.find(p => p.id !== player.id && p.overallRating > player.overallRating);
@@ -1181,14 +1477,14 @@ export const generatePlayerReport = (
 
   const recommendedFocus = scored[0].attr as TrainableAttribute;
   const recommendedFocusLabel = scored[0].label;
-  const bestCycle = chooseCycleForPosition(player, Math.random);
+  const bestCycle = chooseCycleForPosition(player, perception.rng);
   const developmentAdvice = buildDevelopmentAdvice(
     player,
     recommendedFocus,
     recommendedFocusLabel,
     bestCycle.name,
     context,
-    staffQuality
+    reportStaffQuality
   );
 
   // Wartość dla drużyny.relatywna do kolegów na pozycji
@@ -1225,6 +1521,27 @@ export const generatePlayerReport = (
     isTeamTopOvr, isTopGoalscorer, isTopAssist,
     seed, traitsNarrative, weakText
   );
+  const formAnalysis = buildFormAnalysis(player, perception);
+  const matchBehavior = buildMatchBehaviorAnalysis(player, perception);
+  const adaptationAnalysis = buildAdaptationAnalysis(player, perception);
+  const readinessAnalysis = buildReadinessAnalysis(player, perception);
+  const careerPlan = buildCareerPlan(
+    player,
+    valueForTeam,
+    developmentPotential,
+    formAnalysis,
+    readinessAnalysis,
+    recommendedFocusLabel,
+    bestCycle.name,
+    context
+  );
+  const confidenceLabel = reportStaffQuality.assistantAvg >= 85
+    ? 'BARDZO WYSOKA'
+    : reportStaffQuality.assistantAvg >= 65
+      ? 'WYSOKA'
+      : reportStaffQuality.assistantAvg >= 40
+        ? 'UMIARKOWANA'
+        : 'NISKA';
 
   return {
     overallAssessment,
@@ -1243,10 +1560,21 @@ export const generatePlayerReport = (
     positionEffectivenessText,
     positionEffectivenessScore,
     developmentAdvice,
+    analysisMeta: {
+      assistantQuality: reportStaffQuality.assistantAvg,
+      uncertaintyPercent: perception.uncertaintyPercent,
+      confidenceLabel,
+      note: `Ocena asystenta zawiera ${perception.uncertaintyPercent}% marginesu obserwacyjnego. Nawet najlepszy asystent zachowuje minimum 5% niepewności.`,
+    },
+    formAnalysis,
+    matchBehavior,
+    adaptationAnalysis,
+    readinessAnalysis,
+    careerPlan,
     staffProgressReport: {
-      assistantCoach: { hasCoach: staffQuality?.assistantExists ?? false, quality: staffQuality?.assistantAvg ?? 0, ...buildAssistantProgressReport(player, staffQuality?.assistantExists ?? false, staffQuality?.assistantAvg ?? 0) },
-      fitnessCoach: { hasCoach: staffQuality?.fitnessExists ?? false, quality: staffQuality?.fitnessAvg ?? 0, ...buildFitnessProgressReport(player, staffQuality?.fitnessExists ?? false, staffQuality?.fitnessAvg ?? 0) },
-      goalkeeperCoach: { hasCoach: staffQuality?.goalkeeperExists ?? false, quality: staffQuality?.goalkeeperAvg ?? 0, ...buildGoalkeeperProgressReport(player, staffQuality?.goalkeeperExists ?? false, staffQuality?.goalkeeperAvg ?? 0) }
+      assistantCoach: { hasCoach: reportStaffQuality.assistantExists, quality: reportStaffQuality.assistantAvg, ...buildAssistantProgressReport(player, reportStaffQuality.assistantExists, reportStaffQuality.assistantAvg) },
+      fitnessCoach: { hasCoach: reportStaffQuality.fitnessExists, quality: reportStaffQuality.fitnessAvg, ...buildFitnessProgressReport(player, reportStaffQuality.fitnessExists, reportStaffQuality.fitnessAvg) },
+      goalkeeperCoach: { hasCoach: reportStaffQuality.goalkeeperExists, quality: reportStaffQuality.goalkeeperAvg, ...buildGoalkeeperProgressReport(player, reportStaffQuality.goalkeeperExists, reportStaffQuality.goalkeeperAvg) }
     }
   };
 };

@@ -163,4 +163,43 @@ export const RAW_PL_CLUBS: RawClubData[] = [
   { name: "Sokół Ostróda", tier: 4, colors: ['#0000FF', '#FFFFFF', '#FF0000'], stadium: "Stadion Miejski w Ostródzie", capacity: 3000, reputation: 2 },
   { name: "Mazovia Mińsk Mazowiecki", tier: 4, colors: ['#FF0000', '#FFFFFF', '#0000FF'], stadium: "Stadion Miejski w Mińsku Mazowieckim", capacity: 1500, reputation: 1 },
   { name: "Polonia Bydgoszcz", tier: 4, colors: ['#000000', '#FFFFFF', '#FF0000'], stadium: "Stadion im. Bronisława Malinowskiego", capacity: 2500, reputation: 2 },
+
+  // 2026/27 III-liga expansion -------------------------------------------------
+  // These records complete the official four-group membership used by a new
+  // 2026/27 career. They intentionally live in the normal Polish club database:
+  // the regular squad, finance, transfer and injury systems can then treat them
+  // exactly like every other AI club instead of relying on special placeholders.
+  // Reserve teams deliberately reuse their parent club's logo file. Some screens
+  // render Club.logoFile directly instead of calling the shared getClubLogo()
+  // helper, so keeping this relationship in the database guarantees the same
+  // crest in tables, match studios, club details and editor/datapack exports.
+  { name: "Widzew Łódź II", tier: 4, colors: ['#C8102E', '#FFFFFF'], stadium: "Ośrodek Treningowy Widzewa", capacity: 1000, reputation: 2, logoFile: 'widzew-lodz.png' },
+  { name: "Pelikan Łowicz", tier: 4, colors: ['#00843D', '#FFFFFF'], stadium: "Stadion Miejski w Łowiczu", capacity: 2100, reputation: 2 },
+  { name: "Wisła Płock II", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Wisły II", capacity: 1000, reputation: 2, logoFile: 'wisla-plock-2006-logo.png' },
+  { name: "Jagiellonia Białystok II", tier: 4, colors: ['#F5D000', '#D71920'], stadium: "Ośrodek Treningowy Jagiellonii", capacity: 1000, reputation: 2, logoFile: 'jagiellonia-bialystok-2024-logo.png' },
+  { name: "Polonia Lidzbark Warmiński", tier: 4, colors: ['#000000', '#FFFFFF', '#D71920'], stadium: "Stadion Miejski w Lidzbarku Warmińskim", capacity: 1200, reputation: 1 },
+  { name: "Wikęd Luzino", tier: 4, colors: ['#D71920', '#FFFFFF'], stadium: "Stadion Gminny w Luzinie", capacity: 1000, reputation: 1 },
+  { name: "Lech Poznań II", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Akademii Lecha", capacity: 1500, reputation: 3, logoFile: 'lech-poznan-2022-logo.png' },
+  { name: "Gedania Gdańsk", tier: 4, colors: ['#D71920', '#FFFFFF'], stadium: "Stadion Gedanii", capacity: 1000, reputation: 1 },
+  { name: "Chemik Bydgoszcz", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion im. Czesława Kobusa", capacity: 1500, reputation: 1 },
+  { name: "Bałtyk Koszalin", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Bałtyku", capacity: 1500, reputation: 1 },
+  { name: "Grom Nowy Staw", tier: 4, colors: ['#00843D', '#FFFFFF'], stadium: "Stadion Miejski w Nowym Stawie", capacity: 800, reputation: 1 },
+  { name: "Kotwica Kórnik", tier: 4, colors: ['#00843D', '#FFFFFF'], stadium: "Stadion Miejski w Kórniku", capacity: 1000, reputation: 1 },
+  { name: "Odra Bytom Odrzański", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Miejski w Bytomiu Odrzańskim", capacity: 1000, reputation: 1 },
+  { name: "Zagłębie Lubin II", tier: 4, colors: ['#F58220', '#FFFFFF', '#00843D'], stadium: "Akademia Zagłębia Lubin", capacity: 1000, reputation: 3, logoFile: 'zaglebie-lubin-2022-logo.png' },
+  { name: "Barycz Sułów", tier: 4, colors: ['#000000', '#FFFFFF'], stadium: "Stadion w Sułowie", capacity: 800, reputation: 1 },
+  { name: "ROW Rybnik", tier: 4, colors: ['#00843D', '#000000'], stadium: "Stadion Miejski w Rybniku", capacity: 10000, reputation: 3 },
+  { name: "Stal Brzeg", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Miejski w Brzegu", capacity: 2500, reputation: 2 },
+  { name: "Stilon Gorzów", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion OSiR w Gorzowie Wielkopolskim", capacity: 5000, reputation: 3 },
+  { name: "Miedź Legnica II", tier: 4, colors: ['#00843D', '#D71920', '#0057B8'], stadium: "Akademia Miedzi Legnica", capacity: 1000, reputation: 2, logoFile: 'miedz-legnica-2022-logo.png' },
+  { name: "Raków Częstochowa II", tier: 4, colors: ['#0057B8', '#D71920'], stadium: "Centrum Treningowe Rakowa", capacity: 1000, reputation: 3, logoFile: 'rakow-czestochowa-2014-logo.png' },
+  { name: "Wiślanie Skawina", tier: 4, colors: ['#D71920', '#FFFFFF'], stadium: "Stadion Miejski w Skawinie", capacity: 1000, reputation: 1 },
+  { name: "Wisła Kraków II", tier: 4, colors: ['#D71920', '#0057B8', '#FFFFFF'], stadium: "Baza Treningowa Wisły", capacity: 1000, reputation: 3, logoFile: 'wisla-krakow-logo.png' },
+  { name: "Wieczysta Kraków II", tier: 4, colors: ['#F5D000', '#D71920'], stadium: "Stadion Prądniczanki", capacity: 1000, reputation: 2, logoFile: 'wieczysta-krakow-logo.png' },
+  { name: "JKS Jarosław", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Miejski w Jarosławiu", capacity: 2500, reputation: 2 },
+  { name: "Hetman Zamość", tier: 4, colors: ['#00843D', '#D71920', '#FFFFFF'], stadium: "Stadion OSiR w Zamościu", capacity: 16000, reputation: 3 },
+  { name: "Moravia Morawica", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion Miejski w Morawicy", capacity: 1000, reputation: 1 },
+  { name: "AKS 1947 Busko-Zdrój", tier: 4, colors: ['#D71920', '#FFFFFF', '#000000'], stadium: "Stadion Miejski w Busku-Zdroju", capacity: 1500, reputation: 1 },
+  { name: "Korona Kielce II", tier: 4, colors: ['#F5D000', '#D71920'], stadium: "Centrum Treningowe Korony", capacity: 1000, reputation: 2, logoFile: 'korona-kielce-2024-logo.png' },
+  { name: "Wisła Puławy", tier: 4, colors: ['#0057B8', '#FFFFFF'], stadium: "Stadion MOSiR w Puławach", capacity: 4418, reputation: 3 },
 ];

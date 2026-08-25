@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { STATIC_CLUBS } from '../constants';
 import { DatapackClubService } from '../services/DatapackClubService';
+import { FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP } from '../services/PolishFourthLeagueService';
 
 const legia = STATIC_CLUBS.find(club => club.id === 'PL_LEGIA_WARSZAWA')!;
 const importedLegia = {
@@ -20,6 +21,13 @@ const customClub = {
   leagueId: 'L_PL_1',
   tier: 1,
   rosterIds: [],
+};
+const regionalCustomClub = {
+  ...customClub,
+  id: 'PL_CUSTOM_KLUB_MAZOWIECKI',
+  name: 'Datapack Mazowsze',
+  shortName: 'DMA',
+  polishVoivodeship: 'mazowieckie' as const,
 };
 
 const preparedClubs = DatapackClubService.applyCareerStartStructure(
@@ -41,7 +49,7 @@ assert.equal(preparedCustomClub.tier, 4, 'nowy polski klub nie może sam przypis
 
 const preparedClubs2026 = DatapackClubService.applyCareerStartStructure(
   STATIC_CLUBS,
-  [importedLegia, customClub],
+  [importedLegia, customClub, regionalCustomClub],
   2026
 );
 assert.equal(
@@ -56,8 +64,18 @@ assert.equal(
 );
 assert.equal(
   preparedClubs2026.find(club => club.id === customClub.id)?.leagueId,
-  'L_PL_4',
-  'niestandardowy klub z datapacka musi pozostać w puli także po zmianie sezonu'
+  'L_PL_5',
+  'niestandardowy klub z datapacka bez województwa musi pozostać w zapasowej puli regionalnej'
+);
+assert.equal(
+  preparedClubs2026.find(club => club.id === regionalCustomClub.id)?.leagueId,
+  FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP.mazowieckie,
+  'klub z datapacka musi trafić do puli swojego województwa'
+);
+assert.equal(
+  preparedClubs2026.filter(club => club.leagueId === FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP.mazowieckie).length,
+  18,
+  'datapack nie może zmienić rozmiaru wojewódzkiej puli awansowej'
 );
 
 (['L_PL_1', 'L_PL_2', 'L_PL_3'] as const).forEach(leagueId => {

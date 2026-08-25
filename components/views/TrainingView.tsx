@@ -10,6 +10,7 @@ import { getFocusDaysCount, isFocusReady } from '../../services/MatchPrepFocusSe
 import { getTrainableAttributesForPosition } from '../../services/TrainingAttributeRules';
 import { findTeamTrainingCycle, getTeamTrainingCycles, isTeamTrainingCycleId } from '../../services/TrainingProgramRules';
 import { KitPreview } from '../common/KitPreview';
+import { AssistantReportExtendedAnalysis } from './AssistantReportExtendedAnalysis';
 
 const MAX_ASSISTANT_TRAINING_SUGGESTIONS_PER_WEEK = 3;
 
@@ -1937,6 +1938,8 @@ export const TrainingView: React.FC = () => {
                       </div>
                       </div>
                     </section>
+
+                    <AssistantReportExtendedAnalysis report={report} className="col-span-3" />
 
                   </main>
 

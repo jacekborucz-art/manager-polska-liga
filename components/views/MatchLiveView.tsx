@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
 import { useGame } from '../../context/GameContext';
+import { usePostMatchStudioProcessing } from '../ui/usePostMatchStudioProcessing';
 import { 
   ViewState, MatchLiveState, MatchContext, PlayerPosition, CompetitionType, 
   MatchEventType, SubstitutionRecord, MatchLogEntry, InjurySeverity, 
@@ -812,6 +813,7 @@ export const MatchLiveView = () => {
     activeMatchState: matchState, setActiveMatchState: setMatchState,
     pendingMatchKits, pressConferenceEffects
   } = useGame();
+  const { isPreparingStudio, openPostMatchStudio } = usePostMatchStudioProcessing();
   
   const [isTacticsOpen, setIsTacticsOpen] = useState(false);
   const [openTacticalSelect, setOpenTacticalSelect] = useState<string | null>(null);
@@ -5268,7 +5270,7 @@ return {
     const fixtureDateKey = ctx.fixture.date.toDateString();
     const bgFromAdvanceDay = roundResults[fixtureDateKey];
     const bgFromProcessor = simResult.roundResults;
-    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [] };
+    const bgSource = bgFromAdvanceDay || bgFromProcessor || { dateKey: currentDate.toDateString(), league1Results: [], league2Results: [], league3Results: [], thirdLeagueResults: {} };
 
     DebugLoggerService.separator('handleFinishMatch');
     DebugLoggerService.log('FINISH', `fixtureDateKey=${fixtureDateKey} | currentDate=${currentDate.toDateString()}`);
@@ -5285,6 +5287,7 @@ return {
       league1Results: [...bgSource.league1Results],
       league2Results: [...bgSource.league2Results],
       league3Results: [...bgSource.league3Results],
+      thirdLeagueResults: bgSource.thirdLeagueResults,
     };
     const userMatchResult: MatchResult = { homeTeamName: ctx.homeClub.name, awayTeamName: ctx.awayClub.name, homeScore: matchState.homeScore, awayScore: matchState.awayScore, homeColors: ctx.homeClub.colorsHex, awayColors: ctx.awayClub.colorsHex };
     const lid = ctx.fixture.leagueId;
@@ -5303,8 +5306,36 @@ return {
 
     const playedIdsHome = getPlayedIds(matchState.homeLineup, matchState.homeSubsHistory);
     const playedIdsAway = getPlayedIds(matchState.awayLineup, matchState.awaySubsHistory);
-    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(updatedPlayers, ctx.homeClub.id, Array.from(playedIdsHome) as string[]);
-    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(updatedPlayers, ctx.awayClub.id, Array.from(playedIdsAway) as string[]);
+    const liveCompetitionId = String(ctx.fixture.leagueId);
+    // Keep the exact competition bucket in sync for user-controlled matches as
+    // well as background matches. Without this, a mid-season signing would
+    // retain the old club's bucket but never enter the new league leaderboard.
+    const homeMinutesByPlayer = PlayerClubAdaptationService.buildMinutesByPlayerId(
+      matchState.homeLineup.startingXI,
+      matchState.homeSubsHistory,
+      90,
+      PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.homePlayers, 'HOME')
+    );
+    const awayMinutesByPlayer = PlayerClubAdaptationService.buildMinutesByPlayerId(
+      matchState.awayLineup.startingXI,
+      matchState.awaySubsHistory,
+      90,
+      PlayerClubAdaptationService.buildSentOffExitMinutes(matchState.sentOffIds, matchState.logs, ctx.awayPlayers, 'AWAY')
+    );
+    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(
+      updatedPlayers,
+      ctx.homeClub.id,
+      Array.from(playedIdsHome) as string[],
+      liveCompetitionId,
+      homeMinutesByPlayer
+    );
+    updatedPlayers = PlayerStatsService.processMatchDayEndForClub(
+      updatedPlayers,
+      ctx.awayClub.id,
+      Array.from(playedIdsAway) as string[],
+      liveCompetitionId,
+      awayMinutesByPlayer
+    );
 
   const applyFatigueDebtToSquad = (squad: Player[], playedIds: Set<string>) => {
       return squad.map(p => {
@@ -5326,19 +5357,19 @@ return {
        const pFound = g.scorerId
          ? ctx.homePlayers.find(px => px.id === g.scorerId)
          : ctx.homePlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
+       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId, liveCompetitionId);
     });
     matchState.awayGoals.filter(g => !g.varDisallowed && !g.isOwnGoal).forEach(g => {
        const pFound = g.scorerId
          ? ctx.awayPlayers.find(px => px.id === g.scorerId)
          : ctx.awayPlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId);
+       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId, liveCompetitionId);
     });
 
     Object.entries(matchState.playerYellowCards).forEach(([pId, count]) => {
-       for (let i = 0; i < (count as number); i++) updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.YELLOW_CARD);
+       for (let i = 0; i < (count as number); i++) updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.YELLOW_CARD, liveCompetitionId);
     });
-    matchState.sentOffIds.forEach(pId => updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.RED_CARD));
+    matchState.sentOffIds.forEach(pId => updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.RED_CARD, liveCompetitionId));
 
     const applyInjuriesToSquad = (squad: Player[], sideInjuries: Record<string, InjurySeverity>, sideInMins: Record<string, number>) => {
       return squad.map(p => {
@@ -7056,7 +7087,8 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
         HISTORIA
       </button>
       <button
-        onClick={handleFinishMatch}
+        onClick={() => openPostMatchStudio(handleFinishMatch)}
+        disabled={isPreparingStudio}
         className="min-w-[160px] py-3 px-10 rounded-2xl bg-emerald-600/20 border-t border-x border-b border-t-emerald-400/40 border-x-emerald-500/20 border-b-black/60 text-emerald-400 font-black italic uppercase tracking-tighter text-base transition-all hover:scale-105 active:translate-y-[2px] hover:bg-emerald-600/30 flex items-center justify-center gap-3 group"
         style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
       >

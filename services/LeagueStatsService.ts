@@ -23,6 +23,16 @@ const getStatsForLeagueId = (player: Player, leagueId?: string): PlayerStats => 
     return player.euroStats ?? EMPTY_STATS;
   }
 
+  // Exact domestic competition statistics take precedence. This is essential
+  // for the four parallel III-liga groups and also fixes leaderboards after a
+  // player transfers between domestic competitions during the same season.
+  if (leagueId && player.competitionStats) {
+    return player.competitionStats[leagueId] ?? EMPTY_STATS;
+  }
+  if (leagueId?.startsWith('L_PL_4_G')) {
+    return EMPTY_STATS;
+  }
+
   return player.stats ?? EMPTY_STATS;
 };
 
@@ -139,5 +149,45 @@ export const LeagueStatsService = {
         return daysA - daysB;
       })
       .slice(0, limit);
-  }
+  },
+
+  getAppearancesList: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] =>
+    [...rows]
+      .filter(row => getStatsForLeagueId(row.player, leagueId).matchesPlayed > 0)
+      .sort((a, b) =>
+        getStatsForLeagueId(b.player, leagueId).matchesPlayed - getStatsForLeagueId(a.player, leagueId).matchesPlayed ||
+        getStatsForLeagueId(b.player, leagueId).minutesPlayed - getStatsForLeagueId(a.player, leagueId).minutesPlayed ||
+        a.player.lastName.localeCompare(b.player.lastName)
+      )
+      .slice(0, limit),
+
+  getMinutesList: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] =>
+    [...rows]
+      .filter(row => getStatsForLeagueId(row.player, leagueId).minutesPlayed > 0)
+      .sort((a, b) =>
+        getStatsForLeagueId(b.player, leagueId).minutesPlayed - getStatsForLeagueId(a.player, leagueId).minutesPlayed ||
+        a.player.lastName.localeCompare(b.player.lastName)
+      )
+      .slice(0, limit),
+
+  getCleanSheetsList: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] =>
+    [...rows]
+      .filter(row => getStatsForLeagueId(row.player, leagueId).cleanSheets > 0)
+      .sort((a, b) =>
+        getStatsForLeagueId(b.player, leagueId).cleanSheets - getStatsForLeagueId(a.player, leagueId).cleanSheets ||
+        getStatsForLeagueId(a.player, leagueId).matchesPlayed - getStatsForLeagueId(b.player, leagueId).matchesPlayed
+      )
+      .slice(0, limit),
+
+  getAverageRatingList: (rows: StatRow[], limit = 50, leagueId?: string): StatRow[] =>
+    [...rows]
+      .filter(row => getStatsForLeagueId(row.player, leagueId).ratingHistory.length > 0)
+      .sort((a, b) => {
+        const average = (row: StatRow) => {
+          const ratings = getStatsForLeagueId(row.player, leagueId).ratingHistory;
+          return ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+        };
+        return average(b) - average(a) || a.player.lastName.localeCompare(b.player.lastName);
+      })
+      .slice(0, limit),
 };

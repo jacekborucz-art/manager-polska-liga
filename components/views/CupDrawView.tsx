@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import PucharPolskiBg from '../../Graphic/themes/PucharPolski.png';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
+import { PolishFourthLeagueService } from '../../services/PolishFourthLeagueService';
+import { PolishThirdLeagueService } from '../../services/PolishThirdLeagueService';
+import { getPolishLeagueTierBadge } from '../../services/PolishLeagueTierBadgeService';
 
 const withAlpha = (color: string | undefined, alpha: number): string => {
   if (!color) return `rgba(148,163,184,${alpha})`;
@@ -58,23 +61,20 @@ const getPairBackground = (homeColors: string[], awayColors: string[], isUserPai
 };
 
 const getLeagueTag = (leagueId?: string): string => {
-  switch (leagueId) {
-    case 'L_PL_1':
-      return 'EKS';
-    case 'L_PL_2':
-      return '1L';
-    case 'L_PL_3':
-      return '2L';
-    case 'L_PL_4':
-      return '3L';
-    default: {
-      const tier = leagueId?.split('_')[2];
-      return tier ? `${tier}L` : 'LIGA';
-    }
-  }
+  return getPolishLeagueTierBadge(leagueId).label;
 };
 
 const getLeagueTagClassName = (leagueId?: string): string => {
+  // Regional league IDs need explicit checks because their numeric ID is one
+  // level higher than the public league name shown to the player.
+  if (PolishThirdLeagueService.isThirdLeagueId(leagueId) || leagueId === 'L_PL_4') {
+    return 'border-emerald-300/25 bg-gradient-to-r from-emerald-400/20 to-lime-500/20 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.16)]';
+  }
+
+  if (PolishFourthLeagueService.isFourthLeagueId(leagueId)) {
+    return 'border-cyan-300/25 bg-gradient-to-r from-cyan-400/20 to-sky-500/20 text-cyan-100 shadow-[0_0_12px_rgba(34,211,238,0.16)]';
+  }
+
   switch (leagueId) {
     case 'L_PL_1':
       return 'border-amber-300/25 bg-gradient-to-r from-amber-300/20 to-yellow-500/20 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.14)]';
@@ -82,8 +82,6 @@ const getLeagueTagClassName = (leagueId?: string): string => {
       return 'border-rose-200/25 bg-gradient-to-r from-white/20 to-red-500/20 text-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.16)]';
     case 'L_PL_3':
       return 'border-sky-300/25 bg-gradient-to-r from-sky-400/20 to-blue-500/20 text-sky-100 shadow-[0_0_12px_rgba(59,130,246,0.16)]';
-    case 'L_PL_4':
-      return 'border-emerald-300/25 bg-gradient-to-r from-emerald-400/20 to-lime-500/20 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.16)]';
     default:
       return 'border-white/15 bg-white/10 text-slate-200 shadow-[0_0_12px_rgba(255,255,255,0.08)]';
   }
@@ -203,7 +201,7 @@ export const CupDrawView: React.FC = () => {
                         <span className={`block text-[13px] font-black uppercase italic truncate tracking-tight transition-colors ${isUserPair ? 'text-emerald-400' : 'text-white group-hover:text-rose-400'}`}>
                            {home.name}
                         </span>
-                        <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.25em] ${homeLeagueTagClass}`}>
+                        <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black italic uppercase tracking-tighter ${homeLeagueTagClass}`}>
                           {homeLeagueTag}
                         </span>
                      </div>
@@ -220,7 +218,7 @@ export const CupDrawView: React.FC = () => {
                         <span className={`block text-[13px] font-black uppercase italic truncate tracking-tight transition-colors ${isUserPair ? 'text-emerald-400' : 'text-white group-hover:text-rose-400'}`}>
                            {away.name}
                         </span>
-                        <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.25em] ${awayLeagueTagClass}`}>
+                        <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[8px] font-black italic uppercase tracking-tighter ${awayLeagueTagClass}`}>
                           {awayLeagueTag}
                         </span>
                      </div>

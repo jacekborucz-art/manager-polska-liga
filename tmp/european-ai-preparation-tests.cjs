@@ -1571,7 +1571,7 @@ var FinanceService = {
    */
   calculateFreeAgentCurrentSeasonCost: (annualSalary, signingBonus) => Math.max(0, annualSalary) + Math.max(0, signingBonus),
   calculateRemainingContractBudget: (availableBudget, annualSalary, _years, signingBonus) => Math.max(0, availableBudget - FinanceService.calculateFreeAgentCurrentSeasonCost(annualSalary, signingBonus)),
-  // Oblicza rynkową wartość pensji dla danego OVR (punkt odniesienia dla Zarządu)
+  // Orientacyjna wartość używana przez agentów i symulację rynku; nie jest limitem zarządu.
   getFairMarketSalary: (ovr) => {
     const base = Math.pow(ovr / 50, 4) * 125e3;
     const step = base >= 1e6 ? 1e5 : base >= 1e5 ? 1e4 : 5e3;
@@ -1585,13 +1585,17 @@ var FinanceService = {
     return Math.floor(anchor * (1 + repTax) * chaos);
   },
   evaluateFASigningBoardDecision: (player, proposedSalary, proposedBonus, squad, club) => {
-    const fairSalary = FinanceService.getFairMarketSalary(player.overallRating);
     const tier = FinanceService.getClubTier(club);
+    const wageBill = FinanceService.calculateTotalSalaries(squad);
+    const projectedWageBill = wageBill + Math.max(0, proposedSalary);
     const liquiditySalaryCap = club.budget * (tier >= 3 ? 0.35 : 0.3);
-    if (proposedSalary > liquiditySalaryCap && proposedSalary > fairSalary * 1.15) {
+    const projectedWagePressure = projectedWageBill / Math.max(1, club.budget);
+    if (proposedSalary > liquiditySalaryCap || projectedWagePressure > 0.82) {
       return {
         approved: false,
-        reason: `DYREKTOR FINANSOWY: Ta pensja jest zbyt du\u017Cym obci\u0105\u017Ceniem dla got\xF3wki klubu. Przy obecnych finansach zarz\u0105d nie zaakceptuje kwoty powy\u017Cej oko\u0142o ${Math.floor(liquiditySalaryCap / 1e4) * 1e4} PLN rocznie.`
+        reason: "Dyrektor finansowy ocenia, \u017Ce ten kontrakt zbyt mocno obci\u0105\u017Cy roczne finanse klubu i ograniczy mo\u017Cliwo\u015B\u0107 wykonania kolejnych ruch\xF3w kadrowych.",
+        reasonCode: "LIQUIDITY",
+        appealable: true
       };
     }
     const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
@@ -1599,24 +1603,23 @@ var FinanceService = {
     const bestSamePositionOverall = squad.filter((squadPlayer) => squadPlayer.position === player.position).reduce((best, squadPlayer) => Math.max(best, squadPlayer.overallRating), 0);
     const isClearSportingUpgrade = player.overallRating >= averageOverall + 4 || player.overallRating >= bestSamePositionOverall + 2;
     const hierarchyMultiplier = isClearSportingUpgrade ? tier >= 3 ? 3.5 : 3.1 : player.overallRating >= averageOverall ? tier >= 3 ? 2.75 : 2.55 : tier >= 3 ? 2.4 : 2.25;
-    const marketBasedHierarchyFloor = fairSalary * (tier >= 3 ? 0.72 : 0.68);
-    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, marketBasedHierarchyFloor);
+    const financialStructureFloor = club.budget * (tier === 1 ? 0.045 : tier === 2 ? 0.035 : tier === 3 ? 0.025 : 0.02);
+    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, financialStructureFloor);
     if (highestSalary > 0 && proposedSalary > hierarchySalaryCap) {
       return {
         approved: false,
-        reason: `PREZES: Mo\u017Cemy zgodzi\u0107 si\u0119 na najlepiej op\u0142acanego zawodnika w zespole, ale ta kwota zbyt mocno odbiega od poziomu sportowego i obecnej hierarchii p\u0142ac. Najwy\u017Csza pensja w kadrze wynosi ${highestSalary.toLocaleString("pl-PL")} PLN.`
-      };
-    }
-    const overpayRatio = proposedSalary / fairSalary;
-    const allowedOverpay = 1.2 + (10 - club.boardStrictness) / 10;
-    if (overpayRatio > allowedOverpay) {
-      return {
-        approved: false,
-        reason: `ZARZ\u0104D: Ta kwota to absurd! Sugerowana pensja rynkowa dla OVR ${player.overallRating} to ok. ${fairSalary.toLocaleString()} PLN. Nie pozwolimy na tak\u0105 niegospodarno\u015B\u0107.`
+        reason: `Prezes uwa\u017Ca, \u017Ce proponowana pensja zbyt gwa\u0142townie zmieni obecn\u0105 hierarchi\u0119 wynagrodze\u0144. Najwy\u017Csza pensja w kadrze wynosi obecnie ${highestSalary.toLocaleString("pl-PL")} PLN, dlatego zarz\u0105d oczekuje dodatkowego uzasadnienia dla ustanowienia nowego poziomu p\u0142ac.`,
+        reasonCode: "WAGE_STRUCTURE",
+        appealable: true
       };
     }
     if (proposedBonus > club.budget * 0.5) {
-      return { approved: false, reason: "ZARZ\u0104D: Bonus za podpis jest zbyt wysoki w stosunku do wolnej got\xF3wki w klubie." };
+      return {
+        approved: false,
+        reason: "Zarz\u0105d uwa\u017Ca, \u017Ce jednorazowy bonus za podpis jest zbyt wysoki w stosunku do wolnych \u015Brodk\xF3w klubu.",
+        reasonCode: "SIGNING_BONUS",
+        appealable: true
+      };
     }
     return { approved: true, reason: "" };
   },
@@ -4895,19 +4898,23 @@ var getTeamForm = (players, lineup) => {
   const benchForm = average2(bench.map(getPlayerForm), starterForm);
   return starterForm * 0.88 + benchForm * 0.12;
 };
-var adjustForQualityGap = (ownMultiplier, ownQuality, opponentQuality) => {
+var adjustForQualityGap = (ownMultiplier, ownQuality, opponentQuality, options = {}) => {
   const qualityGap = Math.abs(ownQuality - opponentQuality);
   const isUnderdog = ownQuality < opponentQuality;
   const isFavorite = ownQuality > opponentQuality;
   if (qualityGap <= 12) return ownMultiplier;
   if (isUnderdog && ownMultiplier > 1) {
     const boost = ownMultiplier - 1;
-    const boostFactor = qualityGap <= 25 ? 1 - (qualityGap - 12) / 13 * 0.45 : 0.35;
+    const minimumBoostFactor = options.preserveUnderdogForm ? 0.72 : 0.35;
+    const reductionAtTwentyFive = options.preserveUnderdogForm ? 0.28 : 0.45;
+    const boostFactor = qualityGap <= 25 ? 1 - (qualityGap - 12) / 13 * reductionAtTwentyFive : minimumBoostFactor;
     return 1 + boost * boostFactor;
   }
   if (isFavorite && ownMultiplier < 1) {
     const penalty = 1 - ownMultiplier;
-    const penaltyFactor = qualityGap <= 25 ? 1 - (qualityGap - 12) / 13 * 0.2 : 0.72;
+    const minimumPenaltyFactor = options.preserveUnderdogForm ? 0.88 : 0.72;
+    const reductionAtTwentyFive = options.preserveUnderdogForm ? 0.12 : 0.2;
+    const penaltyFactor = qualityGap <= 25 ? 1 - (qualityGap - 12) / 13 * reductionAtTwentyFive : minimumPenaltyFactor;
     return 1 - penalty * penaltyFactor;
   }
   return ownMultiplier;
@@ -4924,13 +4931,13 @@ var TeamFormImpactService = {
     const weight = 7 + awareness * 7;
     return clamp5((form - 50) / 50 * weight, -14, 14);
   },
-  calculateMatchImpact(homePlayers, awayPlayers, homeLineup, awayLineup) {
+  calculateMatchImpact(homePlayers, awayPlayers, homeLineup, awayLineup, options = {}) {
     const homeQuality = getTeamQuality(homePlayers, homeLineup);
     const awayQuality = getTeamQuality(awayPlayers, awayLineup);
     const homeForm = getTeamForm(homePlayers, homeLineup);
     const awayForm = getTeamForm(awayPlayers, awayLineup);
-    const homePerformance = adjustForQualityGap(getBaseFormMultiplier(homeForm), homeQuality, awayQuality);
-    const awayPerformance = adjustForQualityGap(getBaseFormMultiplier(awayForm), awayQuality, homeQuality);
+    const homePerformance = adjustForQualityGap(getBaseFormMultiplier(homeForm), homeQuality, awayQuality, options);
+    const awayPerformance = adjustForQualityGap(getBaseFormMultiplier(awayForm), awayQuality, homeQuality, options);
     const homeGoalChanceMultiplier = clamp5(homePerformance * getDefenseLeakMultiplier(awayPerformance), 0.72, 1.32);
     const awayGoalChanceMultiplier = clamp5(awayPerformance * getDefenseLeakMultiplier(homePerformance), 0.72, 1.32);
     return {
@@ -21027,6 +21034,78 @@ var makeSeededRng = (seed) => (offset) => {
   const x = Math.sin(seed + offset) * 1e4;
   return x - Math.floor(x);
 };
+var getEuropeanBackgroundProfile = (competitionId) => {
+  const id = String(competitionId);
+  const family = id.startsWith("CONF_") ? "CONF" : id.startsWith("EL_") ? "EL" : "CL";
+  const stage = /_R[12]Q(?:_|$)/.test(id) ? "QUALIFYING" : id.includes("_GROUP_STAGE") ? "LEAGUE" : id.endsWith("_FINAL") ? "FINAL" : "KNOCKOUT";
+  const isReturnLeg = id.endsWith("_RETURN");
+  if (family === "CL") {
+    return {
+      family,
+      stage,
+      isReturnLeg,
+      useLegacyChampionsLeagueModel: true,
+      individualVariance: 0,
+      quietMatchChance: 0,
+      quietMatchMultiplier: 1,
+      openMatchChance: 0,
+      openMatchMultiplier: 1,
+      upsetWindowChance: 0,
+      collapseChance: 0,
+      expectedGoalsCap: 3.8
+    };
+  }
+  const isConference = family === "CONF";
+  const stageSettings = {
+    QUALIFYING: {
+      individualVariance: isConference ? 0.24 : 0.21,
+      quietMatchChance: 0.09,
+      quietMatchMultiplier: 0.62,
+      openMatchChance: isConference ? 0.075 : 0.065,
+      openMatchMultiplier: isConference ? 1.44 : 1.4,
+      upsetWindowChance: isConference ? 0.078 : 0.066,
+      collapseChance: isConference ? 0.04 : 0.034,
+      expectedGoalsCap: isConference ? 5.4 : 5.1
+    },
+    LEAGUE: {
+      individualVariance: isConference ? 0.2 : 0.17,
+      quietMatchChance: 0.1,
+      quietMatchMultiplier: 0.64,
+      openMatchChance: isConference ? 0.062 : 0.05,
+      openMatchMultiplier: isConference ? 1.4 : 1.36,
+      upsetWindowChance: isConference ? 0.066 : 0.055,
+      collapseChance: isConference ? 0.03 : 0.023,
+      expectedGoalsCap: isConference ? 4.9 : 4.6
+    },
+    KNOCKOUT: {
+      individualVariance: isConference ? 0.17 : 0.15,
+      quietMatchChance: 0.12,
+      quietMatchMultiplier: 0.61,
+      openMatchChance: isConference ? 0.05 : 0.04,
+      openMatchMultiplier: isConference ? 1.36 : 1.32,
+      upsetWindowChance: isConference ? 0.055 : 0.045,
+      collapseChance: isConference ? 0.023 : 0.018,
+      expectedGoalsCap: isConference ? 4.6 : 4.4
+    },
+    FINAL: {
+      individualVariance: isConference ? 0.16 : 0.14,
+      quietMatchChance: 0.13,
+      quietMatchMultiplier: 0.6,
+      openMatchChance: isConference ? 0.045 : 0.035,
+      openMatchMultiplier: isConference ? 1.34 : 1.3,
+      upsetWindowChance: isConference ? 0.05 : 0.04,
+      collapseChance: isConference ? 0.02 : 0.015,
+      expectedGoalsCap: isConference ? 4.4 : 4.2
+    }
+  };
+  return {
+    family,
+    stage,
+    isReturnLeg,
+    useLegacyChampionsLeagueModel: false,
+    ...stageSettings[stage]
+  };
+};
 var TACTIC_CLASH_MATRIX = {
   "4-4-2": { "4-4-2": 4, "4-3-3": 3, "5-4-1": 2, "4-2-3-1": 4, "3-5-2": 5, "3-4-3": 3, "5-3-2": 3, "4-5-1": 4, "4-4-2-DIAMOND": 6 },
   "4-3-3": { "4-4-2": 5, "4-3-3": 4, "5-4-1": 2, "4-2-3-1": 5, "3-5-2": 4, "3-4-3": 6, "5-3-2": 2, "4-5-1": 3, "4-4-2-DIAMOND": 5 },
@@ -21104,6 +21183,99 @@ var applyRareMismatchRout = (homeScore, awayScore, homeClub, awayClub, xgHome, x
   const cap = underdogScore === 0 ? 7 : 6;
   if (homeFavorite) return { homeScore: Math.min(cap, homeScore + extraGoals), awayScore };
   return { homeScore, awayScore: Math.min(cap, awayScore + extraGoals) };
+};
+var sampleEuropeanBackgroundGoals = (expectedGoals, rng, offset) => {
+  const lambda = Math.max(0.01, expectedGoals);
+  const roll = rng(offset);
+  let goals = 0;
+  let probability = Math.exp(-lambda);
+  let cumulative = probability;
+  while (roll > cumulative && probability > Number.EPSILON) {
+    goals++;
+    probability *= lambda / goals;
+    cumulative += probability;
+  }
+  return goals;
+};
+var simulateEuropeanBackgroundScore = (input) => {
+  const profile = getEuropeanBackgroundProfile(input.competitionId);
+  const rng = makeSeededRng(input.seed);
+  let homeXg = Math.max(0.04, input.homeExpectedGoals);
+  let awayXg = Math.max(0.04, input.awayExpectedGoals);
+  const homeDayMultiplier = 1 + (rng(40101) + rng(40102) - 1) * profile.individualVariance;
+  const awayDayMultiplier = 1 + (rng(40103) + rng(40104) - 1) * profile.individualVariance;
+  homeXg *= Math.max(0.62, Math.min(1.45, homeDayMultiplier));
+  awayXg *= Math.max(0.62, Math.min(1.45, awayDayMultiplier));
+  const tempoRoll = rng(40110);
+  const isQuietMatch = tempoRoll < profile.quietMatchChance;
+  const isOpenMatch = !isQuietMatch && tempoRoll < profile.quietMatchChance + profile.openMatchChance;
+  if (isQuietMatch) {
+    homeXg *= profile.quietMatchMultiplier;
+    awayXg *= profile.quietMatchMultiplier;
+  } else if (isOpenMatch) {
+    homeXg *= profile.openMatchMultiplier;
+    awayXg *= profile.openMatchMultiplier;
+  }
+  const strengthGap = input.homeStrength - input.awayStrength;
+  const absoluteStrengthGap = Math.abs(strengthGap);
+  let upsetWindowApplied = false;
+  if (absoluteStrengthGap >= 5) {
+    const extremeGapReduction = Math.min(0.35, Math.max(0, absoluteStrengthGap - 18) / 70);
+    const upsetChance = profile.upsetWindowChance * (1 - extremeGapReduction);
+    if (rng(40120) < upsetChance) {
+      upsetWindowApplied = true;
+      const underdogBoost = 1.25 + rng(40121) * 0.32;
+      const favoriteSlump = 0.72 + rng(40122) * 0.18;
+      if (strengthGap > 0) {
+        homeXg *= favoriteSlump;
+        awayXg *= underdogBoost;
+      } else {
+        homeXg *= underdogBoost;
+        awayXg *= favoriteSlump;
+      }
+    }
+  }
+  const gapRisk = Math.min(0.022, absoluteStrengthGap / 900);
+  const homeCollapseChance = profile.collapseChance + (strengthGap < 0 ? gapRisk : 0);
+  const awayCollapseChance = profile.collapseChance + (strengthGap > 0 ? gapRisk : 0);
+  const homeCollapsed = rng(40130) < homeCollapseChance;
+  const awayCollapsed = rng(40131) < awayCollapseChance;
+  if (homeCollapsed) {
+    homeXg *= 0.78 + rng(40132) * 0.1;
+    awayXg *= 1.42 + rng(40133) * 0.48;
+  }
+  if (awayCollapsed) {
+    awayXg *= 0.78 + rng(40134) * 0.1;
+    homeXg *= 1.42 + rng(40135) * 0.48;
+  }
+  if (profile.stage === "KNOCKOUT" && !profile.isReturnLeg) {
+    homeXg *= 0.94;
+    awayXg *= 0.94;
+  } else if (profile.isReturnLeg && input.leg1Diff !== void 0) {
+    const currentHomeAggregateDiff = -input.leg1Diff;
+    if (currentHomeAggregateDiff < 0) {
+      homeXg *= 1 + Math.min(0.24, Math.abs(currentHomeAggregateDiff) * 0.08);
+      awayXg *= 1.05;
+    } else if (currentHomeAggregateDiff > 0) {
+      awayXg *= 1 + Math.min(0.24, currentHomeAggregateDiff * 0.08);
+      homeXg *= 1.05;
+    }
+  } else if (profile.stage === "FINAL") {
+    homeXg *= 0.96;
+    awayXg *= 0.96;
+  }
+  homeXg = Math.max(0.04, Math.min(profile.expectedGoalsCap, homeXg));
+  awayXg = Math.max(0.04, Math.min(profile.expectedGoalsCap, awayXg));
+  return {
+    homeScore: sampleEuropeanBackgroundGoals(homeXg, rng, 40200),
+    awayScore: sampleEuropeanBackgroundGoals(awayXg, rng, 40201),
+    adjustedHomeExpectedGoals: homeXg,
+    adjustedAwayExpectedGoals: awayXg,
+    isOpenMatch,
+    upsetWindowApplied,
+    homeCollapsed,
+    awayCollapsed
+  };
 };
 var simulateSubs = (lineup, teamPlayers, sideOffset, rng) => {
   const subCount = Math.floor(3 + rng(sideOffset) * 3);
@@ -21412,8 +21584,9 @@ var simulateExtraTimeAndPenalties = (homeScore, awayScore, homeWinProb, xgHome90
   }
   return { homeScore: h, awayScore: a, penaltyHome, penaltyAway };
 };
-var simulateCLMatchFull = (homeClub, awayClub, homePlayersAll, awayPlayersAll, homeLineup, awayLineup, date, seed, referee, homeCoach, awayCoach, leg1Diff, isFinalMatch) => {
+var simulateCLMatchFull = (homeClub, awayClub, homePlayersAll, awayPlayersAll, homeLineup, awayLineup, date, seed, referee, homeCoach, awayCoach, competitionId, leg1Diff, isFinalMatch) => {
   const rng = makeSeededRng(seed);
+  const competitionProfile = getEuropeanBackgroundProfile(competitionId);
   const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
   const hTactic = TacticRepository.getById(homeLineup.tacticId);
   const aTactic = TacticRepository.getById(awayLineup.tacticId);
@@ -21430,9 +21603,9 @@ var simulateCLMatchFull = (homeClub, awayClub, homePlayersAll, awayPlayersAll, h
   const homeDailyForm = (rng(11) - 0.5) * 0.3;
   const awayDailyForm = (rng(12) - 0.5) * 0.3;
   const chaosRoll = rng(7);
-  const isChaosMatch = chaosRoll < 0.035;
+  let isChaosMatch = chaosRoll < 0.035;
   const isStaleMatch = chaosRoll > 0.94;
-  const volatilityMult = isChaosMatch ? 1.65 : isStaleMatch ? 0.5 : 1;
+  const volatilityMult = competitionProfile.useLegacyChampionsLeagueModel ? isChaosMatch ? 1.65 : isStaleMatch ? 0.5 : 1 : 1;
   const homeCountry = homeClub.country ?? "POL";
   const weatherMod = EuropeanWeatherService.getGoalModifier(homeCountry, date, rng(13));
   const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5e3, rng);
@@ -21453,7 +21626,13 @@ var simulateCLMatchFull = (homeClub, awayClub, homePlayersAll, awayPlayersAll, h
   let awayMinutesPlayedMap = awayTimeline.minutesPlayedMap;
   const homeShortHanded = calculateEuropeanRedCardImpact(homeRedExits);
   const awayShortHanded = calculateEuropeanRedCardImpact(awayRedExits);
-  const formImpact = TeamFormImpactService.calculateMatchImpact(homePlayersAll, awayPlayersAll, homeLineup, awayLineup);
+  const formImpact = TeamFormImpactService.calculateMatchImpact(
+    homePlayersAll,
+    awayPlayersAll,
+    homeLineup,
+    awayLineup,
+    { preserveUnderdogForm: !competitionProfile.useLegacyChampionsLeagueModel }
+  );
   const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeAllSubs, [...homeInjuryData.forcedExits, ...homeRedExits]);
   const aStr = getWeightedLineStrength(awayPlayersAll, awayLineup, awayAllSubs, [...awayInjuryData.forcedExits, ...awayRedExits]);
   const repDiff = homeClub.reputation - awayClub.reputation;
@@ -21466,20 +21645,39 @@ var simulateCLMatchFull = (homeClub, awayClub, homePlayersAll, awayPlayersAll, h
   if (xgAway > xgHome + 1.2) xgAway += 0.5;
   xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod * formImpact.homeGoalChanceMultiplier);
   xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod * formImpact.awayGoalChanceMultiplier);
-  let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
-  let awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
-  const routedScore90 = applyRareMismatchRout(
-    homeScore90,
-    awayScore90,
-    homeClub,
-    awayClub,
-    xgHome,
-    xgAway,
-    rng,
-    isChaosMatch
-  );
-  homeScore90 = routedScore90.homeScore;
-  awayScore90 = routedScore90.awayScore;
+  let homeScore90;
+  let awayScore90;
+  if (competitionProfile.useLegacyChampionsLeagueModel) {
+    homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
+    awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
+    const routedScore90 = applyRareMismatchRout(
+      homeScore90,
+      awayScore90,
+      homeClub,
+      awayClub,
+      xgHome,
+      xgAway,
+      rng,
+      isChaosMatch
+    );
+    homeScore90 = routedScore90.homeScore;
+    awayScore90 = routedScore90.awayScore;
+  } else {
+    const scoreModel = simulateEuropeanBackgroundScore({
+      competitionId,
+      homeExpectedGoals: xgHome,
+      awayExpectedGoals: xgAway,
+      homeStrength: formImpact.home.teamQuality + homeClub.reputation * 0.6,
+      awayStrength: formImpact.away.teamQuality + awayClub.reputation * 0.6,
+      seed,
+      leg1Diff
+    });
+    homeScore90 = scoreModel.homeScore;
+    awayScore90 = scoreModel.awayScore;
+    xgHome = scoreModel.adjustedHomeExpectedGoals;
+    xgAway = scoreModel.adjustedAwayExpectedGoals;
+    isChaosMatch = scoreModel.isOpenMatch || scoreModel.homeCollapsed || scoreModel.awayCollapsed;
+  }
   const penThreshold = referee.strictness / 300 * refExpFactor;
   const inMatchGoals = [];
   const tryPenalty = (side, rollOffset) => {
@@ -21789,6 +21987,7 @@ var BackgroundMatchProcessorCL = {
         referee,
         homeCoach,
         awayCoach,
+        fixture2.leagueId,
         leg1Diff,
         isFinal
       );
@@ -22815,6 +23014,10 @@ import_node_assert.strict.equal(report.homeTacticId, "4-3-3", "raport nie mo\u01
 import_node_assert.strict.equal(report.awayTacticId, "5-4-1", "raport nie mo\u017Ce odziedziczy\u0107 starego globalnego 4-4-2 go\u015Bci");
 import_node_assert.strict.equal(report.homeLineup?.length, 11, "raport ma zawiera\u0107 pe\u0142ny sk\u0142ad gospodarzy");
 import_node_assert.strict.equal(report.awayLineup?.length, 11, "raport ma zawiera\u0107 pe\u0142ny sk\u0142ad go\u015Bci");
+var validHomeGoals = report.goals?.filter((goal) => goal.teamId === strongClub.id && !goal.varDisallowed).length ?? 0;
+var validAwayGoals = report.goals?.filter((goal) => goal.teamId === weakClub.id && !goal.varDisallowed).length ?? 0;
+import_node_assert.strict.equal(validHomeGoals, report.homeScore, "ka\u017Cda bramka gospodarzy musi mie\u0107 strzelca w raporcie");
+import_node_assert.strict.equal(validAwayGoals, report.awayScore, "ka\u017Cda bramka go\u015Bci musi mie\u0107 strzelca w raporcie");
 var superCupFixture = {
   ...fixture,
   id: "UEFA_SUPER_CUP_TEST",

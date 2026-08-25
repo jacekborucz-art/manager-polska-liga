@@ -1,4 +1,5 @@
 import { Club } from '../types';
+import { PolishThirdLeagueService, THIRD_LEAGUE_GROUP_IDS } from './PolishThirdLeagueService';
 
 type PolishPlayableLeagueId = 'L_PL_1' | 'L_PL_2' | 'L_PL_3';
 
@@ -21,12 +22,22 @@ const RESERVE_PARENT_CLUB_BY_ID: Readonly<Record<string, string>> = {
   PL_LEGIA_WARSZAWA_II: 'PL_LEGIA_WARSZAWA',
   PL_SLASK_WROCLAW_II: 'PL_SLASK_WROCLAW',
   PL_LKS_II_LODZ: 'PL_LKS_LODZ',
+  PL_WIDZEW_LODZ_II: 'PL_WIDZEW_LODZ',
+  PL_WISLA_PLOCK_II: 'PL_WISLA_PLOCK',
+  PL_JAGIELLONIA_BIALYSTOK_II: 'PL_JAGIELLONIA_BIALYSTOK',
+  PL_LECH_POZNAN_II: 'PL_LECH_POZNAN',
+  PL_ZAGLEBIE_LUBIN_II: 'PL_ZAGLEBIE_LUBIN',
+  PL_MIEDZ_LEGNICA_II: 'PL_MIEDZ_LEGNICA',
+  PL_RAKOW_CZESTOCHOWA_II: 'PL_RAKOW_CZESTOCHOWA',
+  PL_WISLA_KRAKOW_II: 'PL_WISLA_KRAKOW',
+  PL_WIECZYSTA_KRAKOW_II: 'PL_WIECZYSTA_KRAKOW',
+  PL_KORONA_KIELCE_II: 'PL_KORONA_KIELCE',
 };
 
 /**
- * Only clubs assigned to one of the three simulated Polish league levels may
+ * Only clubs assigned to a fully simulated Polish competition may
  * replace the player's generated reserve squad. Season setup deliberately
- * moves database clubs which are absent from a selected season to L_PL_4, so
+ * moves database clubs which are absent from a selected season to L_PL_5, so
  * checking whether a Club record merely exists would incorrectly activate
  * teams such as Legia Warszawa II in the 2025/26 career start.
  */
@@ -34,6 +45,7 @@ const PLAYABLE_POLISH_LEAGUE_IDS: ReadonlySet<string> = new Set([
   'L_PL_1',
   'L_PL_2',
   'L_PL_3',
+  ...THIRD_LEAGUE_GROUP_IDS,
 ]);
 
 export interface ReserveParentClubPair {
@@ -87,8 +99,8 @@ export const ReserveTeamLeagueService = {
    * runtime check against the supplied clubs rather than a static season list:
    * promotions and relegations can make the answer change in later seasons.
    *
-   * When the configured reserve club is missing or currently sits in L_PL_4,
-   * null instructs GameContext to keep using the generated reserve squad. A
+   * When the configured reserve club is missing or sits only in the L_PL_5
+   * feeder pool, null instructs GameContext to keep using generated reserves. A
    * club with no configured database reserve side, such as Polonia Warszawa,
    * naturally follows the same fallback path.
    */
@@ -174,7 +186,8 @@ export const ReserveTeamLeagueService = {
     // A reserve team may never participate in the Ekstraklasa.
     if (targetLeagueId === 'L_PL_1') return false;
 
-    return getLeagueId(parentClubId, clubs, projectedLeagueByClubId) !== targetLeagueId;
+    const parentLeagueId = getLeagueId(parentClubId, clubs, projectedLeagueByClubId);
+    return PolishThirdLeagueService.getPolishTier(parentLeagueId) !== PolishThirdLeagueService.getPolishTier(targetLeagueId);
   },
 
   selectPromotionPlaces(
@@ -211,7 +224,9 @@ export const ReserveTeamLeagueService = {
     return Object.entries(RESERVE_PARENT_CLUB_BY_ID).flatMap(([reserveClubId, parentClubId]) => {
       const reserveLeagueId = getLeagueId(reserveClubId, clubs, projectedLeagueByClubId);
       const parentLeagueId = getLeagueId(parentClubId, clubs, projectedLeagueByClubId);
-      if (!reserveLeagueId || reserveLeagueId !== parentLeagueId || !['L_PL_1', 'L_PL_2', 'L_PL_3'].includes(reserveLeagueId)) {
+      const reserveTier = PolishThirdLeagueService.getPolishTier(reserveLeagueId);
+      const parentTier = PolishThirdLeagueService.getPolishTier(parentLeagueId);
+      if (!reserveLeagueId || reserveTier === null || reserveTier !== parentTier || reserveTier > 4) {
         return [];
       }
       return [{ reserveClubId, parentClubId, leagueId: reserveLeagueId }];

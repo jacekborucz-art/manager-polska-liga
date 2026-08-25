@@ -1,0 +1,247 @@
+PLAN IMPLEMENTACJI BETCLIC 3. LIGI 2026/2027
+============================================
+
+1. CEL I ZAKRES
+
+1.1. Dodać cztery niegrywalne, ale w pełni symulowane grupy Betclic 3. Ligi.
+1.2. Obsługiwać wyłącznie nowe kariery rozpoczynane w sezonie 2026/2027.
+1.3. Nie tworzyć migracji ani warstwy zgodności dla wcześniejszych zapisów gry.
+1.4. Każda grupa ma zawierać dokładnie 18 drużyn, 34 kolejki i 306 spotkań.
+1.5. Mecze mają być rozgrywane w tle bez rozbudowanego raportu dla gracza, ale z pełnymi danymi statystycznymi: składy, zmiany, gole, asysty, kartki, kontuzje, minuty, oceny i wynik.
+1.6. Kluby III ligi nie mogą być wybierane jako klub gracza.
+
+2. IDENTYFIKATORY I MODEL ROZGRYWEK
+
+2.1. Zastąpić wspólny identyfikator L_PL_4 czterema identyfikatorami:
+     - L_PL_4_G1 – Betclic 3. Liga, grupa 1,
+     - L_PL_4_G2 – Betclic 3. Liga, grupa 2,
+     - L_PL_4_G3 – Betclic 3. Liga, grupa 3,
+     - L_PL_4_G4 – Betclic 3. Liga, grupa 4.
+2.2. Zachować wspólny poziom rozgrywek równy 4, aby istniejąca logika reputacji, kontraktów, finansów i niedostępności dla gracza nadal rozpoznawała III ligę jako jeden poziom.
+2.3. Dodać stałe i funkcje pomocnicze rozpoznające dowolną grupę III ligi oraz normalizujące grupę do wspólnego poziomu.
+2.4. Rozszerzyć Club o opcjonalne pole polishVoivodeship, wykorzystywane do geograficznego przypisywania spadkowiczów.
+2.5. Rozszerzyć Player o competitionStats, czyli mapę statystyk kluczowaną identyfikatorem konkretnych rozgrywek. Statystyki ogólne pozostają dostępne dla zgodności z pozostałymi systemami.
+2.6. Rozszerzyć wspólny stan leagueSchedules o terminarze kluczowane pełnym identyfikatorem grupy oraz wykorzystać istniejący stan baraży do przechowania rozstrzygnięć III liga – II liga.
+
+3. SKŁADY GRUP 2026/2027
+
+3.1. Zapisać w PolishLeagueSeasonService oficjalny skład czterech grup na sezon 2026/2027 zgodny z dostarczonymi tabelami.
+3.2. W grupie 3 uwzględnić Polonię Nysa oraz Raków Częstochowa II.
+3.3. Zweryfikować unikalność wszystkich 72 identyfikatorów klubów.
+3.4. Zweryfikować obecność każdego klubu w bazie. Brakujące kluby dodać z podstawowymi danymi, herbem zastępczym, reputacją, stadionem, regionem i województwem.
+3.5. Ujednolicić aliasy nazw, aby istniejący klub nie został przypadkowo dodany ponownie pod drugim identyfikatorem.
+3.6. Wszystkie pozostałe polskie kluby poziomu regionalnego umieścić w ukrytej puli zaplecza L_PL_5, bez pełnego terminarza i tabeli.
+
+4. DRUŻYNY REZERWOWE
+
+4.1. Rozszerzyć ReserveTeamLeagueService o wszystkie drużyny rezerwowe występujące w grupach 2026/2027.
+4.2. Zachować relację klub pierwszy – rezerwy także po zmianach ligowych.
+4.3. Porównywać poziomy lig, a nie wyłącznie identyczne identyfikatory grup, aby pierwszy zespół i rezerwy nie mogły występować na tym samym poziomie.
+4.4. Zablokować awans rezerw do poziomu zajmowanego przez pierwszy zespół.
+4.5. Wymuszać spadek rezerw, gdy spadek pierwszego zespołu powoduje konflikt poziomów.
+4.6. Po każdym sezonie przypisywać rezerwy do geograficznie właściwej grupy.
+
+5. TERMINARZE
+
+5.1. Wykorzystać LeagueScheduleGenerator do utworzenia osobnego terminarza dla każdej grupy.
+5.2. Każdy terminarz ma zawierać 34 kolejki po 9 spotkań.
+5.3. Każda para klubów ma rozegrać dokładnie dwa mecze, po jednym u każdego gospodarza.
+5.4. Daty mają korzystać z ligowych slotów kalendarza 2026/2027.
+5.5. Losowanie kolejności ma być deterministyczne dla sessionSeed, aby powtórne wczytanie zapisu nie zmieniało terminarza.
+5.6. Terminarze i wyniki muszą być częścią zapisu gry.
+
+6. SYMULACJA MECZÓW W TLE
+
+6.1. Wyłączyć wywołanie losowego parowania wszystkich klubów L_PL_4 wykonywane przez dawny ThirdLeagueBackgroundService, aby żaden mecz nie został rozegrany podwójnie.
+6.2. Zaplanowane, nierozegrane spotkania przypadające na bieżącą datę mają być przetwarzane przez wspólny BackgroundMatchProcessor.
+6.3. Dla każdego klubu przygotować co najmniej 18-osobową kadrę meczową, nie odtwarzając identyfikatorów zawodników znajdujących się w innych klubach.
+6.4. Wybrać dostępną pierwszą jedenastkę i ławkę na podstawie pozycji, overallu, formy, kondycji, zawieszeń i kontuzji.
+6.5. Użyć LeagueBackgroundMatchEngineV2, ponieważ już uwzględnia siłę pierwszej jedenastki, ławkę, zmiany, zmęczenie, kartki, kontuzje, gole, asysty i oceny.
+6.6. Kartki czerwone i kontuzje mają wpływać na siłę drużyny w dalszej części meczu.
+6.7. Kontuzja może wymusić zmianę, a łączny limit zmian wynosi pięć.
+6.8. Po meczu utrwalić wynik, status PLAYED i lekkie zdarzenia statystyczne bez budowania rozbudowanego raportu narracyjnego.
+6.9. Zaktualizować tabelę klubów: mecze, zwycięstwa, remisy, porażki, bramki, różnica bramek, punkty i forma.
+6.10. Zaktualizować kondycję, zmęczenie, kontuzje, zawieszenia, formę i statystyki zawodników.
+6.11. Zagwarantować idempotencję: ponowne przetworzenie tej samej daty nie może rozegrać spotkania drugi raz.
+
+7. STATYSTYKI ZAWODNIKÓW
+
+7.1. Zapisywać osobno dla każdej grupy: występy, minuty, gole, asysty, żółte kartki, czerwone kartki, czyste konta oraz historię ocen.
+7.2. Nadal aktualizować zagregowane player.stats tam, gdzie jest to potrzebne przez istniejące moduły rozwoju i kontraktów.
+7.3. LeagueStatsService ma najpierw odczytywać competitionStats[leagueId], a dopiero później stosować zgodny fallback.
+7.4. Transfer między grupami nie może przenosić dorobku zawodnika do rankingu nowej grupy.
+7.5. Dodać sortowanie i rankingi: strzelcy, asysty, występy, minuty, żółte kartki, czerwone kartki, czyste konta i średnia ocen.
+
+8. TABELA I ZASADY KLASYFIKACJI
+
+8.1. Każda grupa ma własną tabelę budowaną wyłącznie z klubów tej grupy.
+8.2. Podstawowa kolejność: punkty, właściwe kryteria bezpośrednich spotkań po ich rozegraniu, różnica bramek, bramki zdobyte oraz deterministyczny ostatni warunek.
+8.3. Miejsce 1 oznaczyć jako bezpośredni awans.
+8.4. Miejsce 2 oznaczyć jako udział w barażach o awans.
+8.5. W trakcie sezonu oznaczać cztery bazowe miejsca spadkowe oraz dodatkową strefę warunkową zależną od spadkowiczów z II ligi i wyników baraży.
+8.6. Po zakończeniu baraży oznaczenia muszą pokazać ostateczną liczbę spadkowiczów.
+
+9. BARAŻE III LIGA – II LIGA
+
+9.1. Mistrzowie czterech grup awansują bezpośrednio do II ligi.
+9.2. Wicemistrzowie czterech grup są losowani do dwóch par pierwszej rundy.
+9.3. Pierwsza runda jest rozgrywana jako pojedynczy mecz; gospodarz wynika z deterministycznego losowania.
+9.4. Remis po 90 minutach wymaga dogrywki i rzutów karnych, aby zawsze wyłonić zwycięzcę.
+9.5. Dwaj zwycięzcy pierwszej rundy grają dwumecze odpowiednio z zespołami z miejsc 13 i 14 II ligi.
+9.6. Pierwszy mecz dwumeczu odbywa się na stadionie trzecioligowca.
+9.7. Zwycięzcę wyłania suma bramek; bez zasady bramek wyjazdowych. Remis po drugim meczu wymaga dogrywki i rzutów karnych.
+9.8. Wyniki baraży zapisać w stanie gry i wykorzystać podczas zmiany sezonu.
+9.9. Usunąć dawną ścieżkę Math.random wybierającą dowolne kluby L_PL_4; jedynymi uczestnikami pierwszego etapu są czterej faktyczni wicemistrzowie grup, a jedynymi uczestnikami drugiego etapu są dwaj zwycięzcy pierwszego etapu.
+9.10. Trzecioligowiec jest gospodarzem pierwszego meczu dwumeczu, a klub z miejsc 13–14 II ligi gospodarzem rewanżu.
+
+10. REGIONALNE SPADKI Z II LIGI
+
+10.1. Zespoły z miejsc 15–18 II ligi spadają bezpośrednio.
+10.2. Przegrani dwumeczów z miejsc 13–14 II ligi również spadają.
+10.3. Każdy spadkowicz jest kierowany do grupy według polishVoivodeship:
+      - grupa 1: łódzkie, mazowieckie, podlaskie, warmińsko-mazurskie,
+      - grupa 2: kujawsko-pomorskie, pomorskie, wielkopolskie, zachodniopomorskie,
+      - grupa 3: dolnośląskie, lubuskie, opolskie, śląskie,
+      - grupa 4: lubelskie, małopolskie, podkarpackie, świętokrzyskie.
+10.4. Brak województwa ma powodować czytelny błąd walidacyjny podczas tworzenia nowego sezonu, a nie losowe przypisanie.
+
+11. SPADKI Z III LIGI I DOPŁYW Z IV LIG
+
+11.1. Każda grupa otrzymuje pięciu beniaminków z ukrytej puli IV lig: czterech mistrzów wojewódzkich i jednego zwycięzcę barażu.
+11.2. [ZASTĄPIONE PRZEZ PUNKT 17] Awansujących wyłaniają pełne, uproszczone rozgrywki szesnastu wojewódzkich IV lig, a nie ranking wspólnej puli.
+11.3. Ostateczna liczba spadkowiczów z grupy jest liczona ogólnym wzorem:
+      5 + wszystkie kluby spadające z II ligi skierowane do grupy
+        - wszystkie kluby tej grupy faktycznie awansujące do II ligi.
+      Przy standardowym awansie mistrza jest to równoważne formule 4 + spadkowicze z II ligi - awansujący wicemistrz.
+11.4. Po wszystkich ruchach każda grupa musi ponownie liczyć dokładnie 18 drużyn.
+11.5. W przypadku konfliktów rezerwowych lub braku uprawnionego beniaminka wybrać kolejny kwalifikujący się klub z tego samego regionu.
+11.6. Zapisać raport rozliczenia sezonu zawierający awanse, spadki, przesunięcia regionalne i wymuszone ruchy rezerw.
+11.7. Jeśli konflikt rezerw lub brak uprawnienia mistrza tworzy dodatkowe wolne miejsce w II lidze, uzupełnić je najlepszym uprawnionym klubem III ligi według miejsca i parametrów tabeli, bez losowania.
+
+12. INTERFEJS
+
+12.1. Zastąpić prostą listę HiddenLeagueViewer widokiem czterech grup.
+12.2. Dodać wybór grupy, tabelę, terminarz, wyniki i rankingi zawodników.
+12.3. Pokazywać bilans, punkty, ostatnią formę oraz kolorowe oznaczenia awansu, baraży, spadku bazowego i spadku warunkowego.
+12.4. Nie udostępniać przycisku prowadzenia klubu ani ekranów zarządzania meczem.
+12.5. Wszystkie nowe polskie teksty zapisać bezpośrednio w UTF-8 i zastosować istniejące konwencje wizualne projektu.
+12.6. W studio pomeczowym, obok raportu wyników Ekstraklasy, 1. Ligi i 2. Ligi, dodać opcjonalny przycisk otwierający wyniki oraz aktualne tabele czterech grup III ligi w tym samym oknie.
+12.7. Panel III ligi ma pozostać domyślnie zamknięty i nie zajmować miejsca w podstawowym raporcie kolejki.
+
+13. ZAPIS I ODCZYT
+
+13.1. Dodać competitionStats do modelu zawodnika, a terminarze grup zapisywać w istniejącym leagueSchedules pod pełnymi identyfikatorami grup.
+13.2. Zapis ma obejmować terminarze, rozegrane wyniki, statystyki per rozgrywki i istniejący stan baraży; regionalne rozliczenie jest deterministycznie odtwarzane przy zmianie sezonu.
+13.3. Normalizacja zapisu ma zabezpieczać brakujące tablice i rekordy, ale nie musi migrować starej struktury L_PL_4.
+13.4. Nowa kariera 2026/2027 inicjalizuje wszystkie cztery grupy przed pierwszym dniem sezonu.
+
+14. TESTY I KRYTERIA ODBIORU
+
+14.1. Test danych: dokładnie 72 unikalne kluby, po 18 w grupie.
+14.2. Test terminarza: 34 kolejki, 9 meczów na kolejkę, 306 spotkań i dwumecz każdej pary.
+14.3. Test symulacji: każdy rozegrany mecz ma wynik, co najmniej 11 zawodników każdej drużyny oraz spójne zdarzenia.
+14.4. Test idempotencji: przetworzenie daty drugi raz nie zmienia tabeli ani statystyk.
+14.5. Test rankingów: suma goli strzelców zgadza się z golami meczowymi po uwzględnieniu goli samobójczych i technicznych wyjątków silnika.
+14.6. Test transferu: statystyki zdobyte w grupie 1 nie pojawiają się w rankingu grupy 2.
+14.7. Test baraży: czterech wicemistrzów, dwóch zwycięzców pierwszej rundy i dwa rozstrzygnięte dwumecze.
+14.8. Test regionalizacji: każdy spadkowicz z II ligi trafia do grupy zgodnej z województwem.
+14.9. Test bilansu: po zakończeniu sezonu każda grupa ma dokładnie 18 klubów.
+14.10. Test rezerw: pierwszy zespół i rezerwy nie występują na tym samym poziomie.
+14.11. Test zapisu: zapis i odczyt w połowie sezonu zachowuje identyczne tabele, wyniki i rankingi.
+14.12. Uruchomić TypeScript, istniejący zestaw testów regresyjnych oraz nowe testy III ligi.
+14.13. Test uczestników baraży: zmiana ziarna może zmienić pary i gospodarzy, ale nigdy nie może zmienić zbioru czterech faktycznych wicemistrzów.
+14.14. Test wszystkich czterech kombinacji wyników dwóch finałowych dwumeczów: po każdym wariancie każda grupa nadal liczy 18 klubów.
+
+15. KOLEJNOŚĆ REALIZACJI
+
+15.1. Stałe, typy, funkcje identyfikujące poziom i województwa.
+15.2. Składy czterech grup i brakujące dane klubów.
+15.3. Deterministyczne terminarze i trwały stan III ligi.
+15.4. Symulacja zaplanowanych spotkań i statystyki per rozgrywki.
+15.5. Tabele oraz rankingi w interfejsie.
+15.6. Baraże, regionalne spadki i ukryta pula IV ligi.
+15.7. Integracja SaveState/GameContext.
+15.8. Testy jednostkowe, integracyjne i pełna kompilacja.
+
+16. PODSTAWA REGULAMINOWA RESEARCHU
+
+16.1. Uchwała Zarządu PZPN nr VI/78 z 14 maja 2026 r. – regulamin 1., 2. i 3. ligi na sezon 2026/2027:
+      https://pzpn.pl/public/system/files/site_content/635/7380-Regulamin%201.%20Ligi%202.%20Ligi%20i%203.%20Ligi%20na%20sezon%202026-2027.pdf
+16.2. Art. 1 potwierdza 72 drużyny, cztery grupy po 18 klubów i dokładny podział województw między grupy.
+16.3. Art. 11 potwierdza: bezpośredni awans czterech mistrzów, baraże wicemistrzów, bezpośredni spadek miejsc 15–18 II ligi, baraże miejsc 13–14 II ligi oraz zmienną liczbę spadkowiczów z każdej grupy III ligi.
+16.4. Pierwszy etap baraży tworzą dwa pojedyncze mecze wylosowanych wicemistrzów; drugi etap to dwa dwumecze zwycięzców odpowiednio z miejscami 13 i 14 II ligi, przy czym pierwszy mecz odbywa się u trzecioligowca.
+16.5. Komunikat PZPN o zasadach awansu z IV ligi potwierdza czterech mistrzów właściwych grup IV ligi i jednego zwycięzcę baraży jako pięciu beniaminków każdej grupy III ligi:
+      https://www.pzpn.pl/federacja/aktualnosci/2024-06-13/komunikat-polskiego-zwiazku-pilki-noznej
+16.6. Oficjalny komunikat i załączniki terminarzy Betclic 3. Ligi 2026/2027 wykorzystano do potwierdzenia formatu 34 kolejek:
+      https://pzpn.pl/federacja/aktualnosci/2026-06-30/ramowy-terminarz-betclic-3-ligi-na-sezon-2026-2027
+
+17. ROZSZERZENIE: SZESNAŚCIE WOJEWÓDZKICH IV LIG
+
+17.1. Zastąpić uproszczoną wspólną pulę awansową pełnymi tabelami szesnastu IV lig:
+      dolnośląskiej, kujawsko-pomorskiej, lubelskiej, lubuskiej, łódzkiej,
+      małopolskiej, mazowieckiej, opolskiej, podkarpackiej, podlaskiej,
+      pomorskiej, śląskiej, świętokrzyskiej, warmińsko-mazurskiej,
+      wielkopolskiej i zachodniopomorskiej.
+17.2. Zapisać składy sezonu 2026/2027 osobno dla każdego województwa.
+17.3. Zachować rzeczywiste rozmiary rozgrywek: 14 klubów w lidze opolskiej,
+      po 16 klubów w ligach lubelskiej, podlaskiej, warmińsko-mazurskiej i
+      zachodniopomorskiej oraz po 18 klubów w pozostałych ligach.
+17.4. Dla każdej ligi utworzyć dwurundowy terminarz każdy z każdym, odpowiednio:
+      26, 30 albo 34 kolejki.
+17.5. Wynik obliczać lekkim algorytmem zależnym od siły klubu, przewagi własnego
+      boiska i deterministycznego RNG. Nie tworzyć pełnego raportu meczowego.
+17.6. Po każdym meczu aktualizować tabelę, formę oraz uproszczone rankingi goli,
+      asyst, występów, żółtych i czerwonych kartek oraz ocen.
+17.7. Zapisać cały stan IV lig w pliku kariery. Ponowne przetworzenie tej samej
+      daty nie może drugi raz naliczyć wyniku ani statystyk.
+17.8. Nie generować pełnych kadr, trenerów ani codziennej logiki transferowej dla
+      około 270 klubów IV ligi. Klub ma wejść do pełnego świata gry dopiero po awansie.
+17.9. Czterej mistrzowie wojewódzcy przypisani do danej grupy III ligi awansują
+      bezpośrednio. Czterej wicemistrzowie rozgrywają dwa półfinały i finał o
+      piąte miejsce premiowane awansem.
+17.10. Drużyna rezerwowa niespełniająca warunku rozdzielenia od pierwszego zespołu
+       jest pomijana, a jej miejsce zajmuje kolejny uprawniony klub z tej samej ligi.
+17.11. Spadkowicza z III ligi kierować bezpośrednio do IV ligi jego województwa,
+       nigdy do przypadkowej wspólnej puli.
+17.12. Po zmianie sezonu uzupełnić wakaty klubami z niższej puli tego samego
+       województwa. Przy nadmiarze klubów najniższe zespoły przesunąć do puli
+       okręgowej, tak aby regionalna liga zachowała ustalony rozmiar.
+17.13. Dodać osobny opcjonalny ekran IV ligi z wyborem województwa, tabelą,
+       wynikami kolejek i statystykami. Udostępnić go z tabel ligowych, widoku
+       III ligi oraz studia pomeczowego.
+17.14. Datapack może poprawiać dane istniejącego klubu (nazwa, herb, stadion,
+       siła), ale nie może zmieniać jego obowiązkowego przypisania wojewódzkiego
+       w nowej karierze 2026/2027. Klub dodatkowy bez województwa pozostaje w
+       bezpiecznej puli rezerwowej i nie jest losowo dopisywany do tabeli.
+17.15. Dodać testy liczebności, terminarzy, sumy bramek, powtarzalności symulacji,
+       kompletu dwudziestu awansujących i dwunastu spotkań barażowych IV ligi.
+
+17.16. Źródła składów i liczebności sezonu 2026/2027:
+       https://www.polskapilka.net/grupa/4-liga/
+       https://www.pomorskifutbol.pl/news_20331_Sklad-IV-ligi-pomorskiej-na-sezon-2026-2027.html
+       https://uwmfm.pl/maksymilian-rogalski-gosciem-magazynu-l4/
+
+17.17. Utworzyć szesnaście osobnych pul okręgowych, po jednej dla każdego
+       województwa. Każda pula ma zawsze zawierać dokładnie 18 klubów i nie
+       rozgrywa własnego pełnego terminarza.
+17.18. Przy tworzeniu nowej kariery najpierw wykorzystać kluby z bazy i datapacka,
+       które mają zapisane województwo. Braki uzupełnić lekkimi, deterministycznie
+       tworzonymi klubami regionalnymi, bez pełnych kadr i trenerów.
+17.19. Po każdym sezonie losować czterech beniaminków z każdej puli. Losowanie
+       ma w 70% zależeć od RNG i w 30% od reputacji klubu, dzięki czemu silniejszy
+       klub ma przewagę, ale awans słabszego nadal jest możliwy.
+17.20. Liczbę spadkowiczów z każdej IV ligi obliczać po rozliczeniu awansów i
+       spadków z III ligi. Po dodaniu czterech beniaminków relegować tyle najniżej
+       sklasyfikowanych drużyn, aby liga wróciła do docelowych 14, 16 lub 18 klubów.
+17.21. Spadkowiczów umieszczać wyłącznie w puli ich województwa. Po wymianie
+       uzupełnić lub zmniejszyć pulę ponownie do 18 klubów, a nadmiar zachować
+       w głębszej, niesymulowanej bazie regionalnej.
+17.22. Wykluczyć konflikt rezerw z pierwszą drużyną również przy awansie z puli
+       do IV ligi. Niedozwolona drużyna rezerwowa pozostaje w puli.
+17.23. Dodać test pełnego przejścia sezonu sprawdzający cztery regionalne awanse,
+       dokładne liczebności wszystkich IV lig i pul oraz powtarzalność losowania.
+17.24. Dodać macierz 35 możliwych rozkładów czterech spadkowiczów z II ligi
+       pomiędzy grupy III ligi. W każdym wariancie zmieniać również kluby na
+       miejscach spadkowych III ligi i ich rozkład wojewódzki, a następnie
+       sprawdzać trasę III–IV, liczbę spadków z IV ligi, cztery awanse z puli,
+       liczebność wszystkich lig oraz możliwość utworzenia nowego terminarza.

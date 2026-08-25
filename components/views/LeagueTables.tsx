@@ -5,6 +5,7 @@ import { useGame } from '../../context/GameContext';
 import { ViewState, LeagueLevel, Club } from '../../types';
 import { Button } from '../ui/Button';
 import InternationalView, { InternationalTournamentId } from './InternationalView';
+import { THIRD_LEAGUE_GROUP_IDS } from '../../services/PolishThirdLeagueService';
 
 const _persisted = {
   selectedLeagueId: 'L_PL_1' as string,
@@ -36,10 +37,13 @@ export const LeagueTables: React.FC<LeagueTablesProps> = ({
   initialViewMode,
   initialInternationalTournament,
 }) => {
-  const { leagues, clubs, leagueSchedules, navigateTo, viewClubDetails, userTeamId, seasonTemplate } = useGame();
+  const { leagues, clubs, leagueSchedules, fourthLeagueState, navigateTo, viewClubDetails, userTeamId, seasonTemplate } = useGame();
 
   const myClub = clubs.find(c => c.id === userTeamId);
   const displayLeagues = leagues.filter(l => l.level !== LeagueLevel.TIER_4_HIDDEN && l.level !== LeagueLevel.EUROPEAN);
+  const hasThirdLeague = THIRD_LEAGUE_GROUP_IDS.some(groupId =>
+    clubs.some(club => club.leagueId === groupId && club.isDefaultActive)
+  );
   
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>(_persisted.selectedLeagueId);
   const [viewMode, setViewMode] = useState<'TABLE' | 'SCHEDULE' | 'INTERNATIONAL'>(initialViewMode ?? _persisted.viewMode);
@@ -209,6 +213,24 @@ export const LeagueTables: React.FC<LeagueTablesProps> = ({
               {getTier(l.id) === 1 ? 'Ekstraklasa' : getTier(l.id) === 2 ? '1 Liga' : '2 Liga'}
             </button>
           ))}
+          {hasThirdLeague && (
+            <button
+              onClick={() => navigateTo(ViewState.HIDDEN_LEAGUE)}
+              className="font-black italic uppercase tracking-tighter px-8 py-3 rounded-2xl text-[10px] transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-black/20 text-slate-500 hover:text-slate-300 hover:bg-black/40"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+            >
+              3 Liga
+            </button>
+          )}
+          {fourthLeagueState && (
+            <button
+              onClick={() => navigateTo(ViewState.FOURTH_LEAGUE)}
+              className="font-black italic uppercase tracking-tighter px-8 py-3 rounded-2xl text-[10px] transition-all active:translate-y-[2px] border-t border-x border-b border-t-white/10 border-x-white/5 border-b-black/40 bg-black/20 text-slate-500 hover:text-slate-300 hover:bg-black/40"
+              style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+            >
+              4 Liga
+            </button>
+          )}
         </div>
       )}
 

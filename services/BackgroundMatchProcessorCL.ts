@@ -88,6 +88,117 @@ const makeSeededRng = (seed: number) => (offset: number): number => {
   return x - Math.floor(x);
 };
 
+export type EuropeanCompetitionFamily = 'CL' | 'EL' | 'CONF';
+export type EuropeanCompetitionStage = 'QUALIFYING' | 'LEAGUE' | 'KNOCKOUT' | 'FINAL';
+
+export interface EuropeanBackgroundProfile {
+  family: EuropeanCompetitionFamily;
+  stage: EuropeanCompetitionStage;
+  isReturnLeg: boolean;
+  useLegacyChampionsLeagueModel: boolean;
+  individualVariance: number;
+  quietMatchChance: number;
+  quietMatchMultiplier: number;
+  openMatchChance: number;
+  openMatchMultiplier: number;
+  upsetWindowChance: number;
+  collapseChance: number;
+  expectedGoalsCap: number;
+}
+
+/**
+ * Returns a competition-and-round-specific scoring profile.
+ *
+ * Champions League intentionally remains on the established legacy profile.
+ * Europa League and Conference League use progressively wider distributions,
+ * especially during qualifying where squad-strength differences are largest.
+ */
+export const getEuropeanBackgroundProfile = (competitionId: CompetitionType): EuropeanBackgroundProfile => {
+  const id = String(competitionId);
+  const family: EuropeanCompetitionFamily = id.startsWith('CONF_')
+    ? 'CONF'
+    : id.startsWith('EL_')
+      ? 'EL'
+      : 'CL';
+  const stage: EuropeanCompetitionStage = /_R[12]Q(?:_|$)/.test(id)
+    ? 'QUALIFYING'
+    : id.includes('_GROUP_STAGE')
+      ? 'LEAGUE'
+      : id.endsWith('_FINAL')
+        ? 'FINAL'
+        : 'KNOCKOUT';
+  const isReturnLeg = id.endsWith('_RETURN');
+
+  if (family === 'CL') {
+    return {
+      family,
+      stage,
+      isReturnLeg,
+      useLegacyChampionsLeagueModel: true,
+      individualVariance: 0,
+      quietMatchChance: 0,
+      quietMatchMultiplier: 1,
+      openMatchChance: 0,
+      openMatchMultiplier: 1,
+      upsetWindowChance: 0,
+      collapseChance: 0,
+      expectedGoalsCap: 3.8,
+    };
+  }
+
+  const isConference = family === 'CONF';
+  const stageSettings: Record<EuropeanCompetitionStage, Omit<EuropeanBackgroundProfile, 'family' | 'stage' | 'isReturnLeg' | 'useLegacyChampionsLeagueModel'>> = {
+    QUALIFYING: {
+      individualVariance: isConference ? 0.24 : 0.21,
+      quietMatchChance: 0.09,
+      quietMatchMultiplier: 0.62,
+      openMatchChance: isConference ? 0.075 : 0.065,
+      openMatchMultiplier: isConference ? 1.44 : 1.40,
+      upsetWindowChance: isConference ? 0.078 : 0.066,
+      collapseChance: isConference ? 0.040 : 0.034,
+      expectedGoalsCap: isConference ? 5.4 : 5.1,
+    },
+    LEAGUE: {
+      individualVariance: isConference ? 0.20 : 0.17,
+      quietMatchChance: 0.10,
+      quietMatchMultiplier: 0.64,
+      openMatchChance: isConference ? 0.062 : 0.050,
+      openMatchMultiplier: isConference ? 1.40 : 1.36,
+      upsetWindowChance: isConference ? 0.066 : 0.055,
+      collapseChance: isConference ? 0.030 : 0.023,
+      expectedGoalsCap: isConference ? 4.9 : 4.6,
+    },
+    KNOCKOUT: {
+      individualVariance: isConference ? 0.17 : 0.15,
+      quietMatchChance: 0.12,
+      quietMatchMultiplier: 0.61,
+      openMatchChance: isConference ? 0.050 : 0.040,
+      openMatchMultiplier: isConference ? 1.36 : 1.32,
+      upsetWindowChance: isConference ? 0.055 : 0.045,
+      collapseChance: isConference ? 0.023 : 0.018,
+      expectedGoalsCap: isConference ? 4.6 : 4.4,
+    },
+    FINAL: {
+      individualVariance: isConference ? 0.16 : 0.14,
+      quietMatchChance: 0.13,
+      quietMatchMultiplier: 0.60,
+      openMatchChance: isConference ? 0.045 : 0.035,
+      openMatchMultiplier: isConference ? 1.34 : 1.30,
+      upsetWindowChance: isConference ? 0.050 : 0.040,
+      collapseChance: isConference ? 0.020 : 0.015,
+      expectedGoalsCap: isConference ? 4.4 : 4.2,
+    },
+  };
+
+  return {
+    family,
+    stage,
+    isReturnLeg,
+    useLegacyChampionsLeagueModel: false,
+    ...stageSettings[stage],
+  };
+};
+
 // ============================================================
 //  TACTIC CLASH MATRIX (identyczna jak w LeagueBackgroundMatchEngine)
 // ============================================================
@@ -220,6 +331,169 @@ const applyRareMismatchRout = (
   const cap = underdogScore === 0 ? 7 : 6;
   if (homeFavorite) return { homeScore: Math.min(cap, homeScore + extraGoals), awayScore };
   return { homeScore, awayScore: Math.min(cap, awayScore + extraGoals) };
+};
+
+export interface EuropeanBackgroundScoreInput {
+  competitionId: CompetitionType;
+  homeExpectedGoals: number;
+  awayExpectedGoals: number;
+  homeStrength: number;
+  awayStrength: number;
+  seed: number;
+  /** Goal difference from the first match's home-team perspective. */
+  leg1Diff?: number;
+}
+
+export interface EuropeanBackgroundScoreResult {
+  homeScore: number;
+  awayScore: number;
+  adjustedHomeExpectedGoals: number;
+  adjustedAwayExpectedGoals: number;
+  isOpenMatch: boolean;
+  upsetWindowApplied: boolean;
+  homeCollapsed: boolean;
+  awayCollapsed: boolean;
+}
+
+/**
+ * Samples an actual Poisson distribution through its inverse CDF. Unlike the
+ * old goal-by-goal saturation loop, this does not make each successive goal
+ * artificially less likely and it has no hard score cap. Expected goals are
+ * capped before sampling to prevent broken database ratings from producing
+ * absurd lambdas, but a valid draw can still produce 5, 6, 7 or more goals.
+ */
+export const sampleEuropeanBackgroundGoals = (
+  expectedGoals: number,
+  rng: (offset: number) => number,
+  offset: number
+): number => {
+  const lambda = Math.max(0.01, expectedGoals);
+  const roll = rng(offset);
+  let goals = 0;
+  let probability = Math.exp(-lambda);
+  let cumulative = probability;
+
+  while (roll > cumulative && probability > Number.EPSILON) {
+    goals++;
+    probability *= lambda / goals;
+    cumulative += probability;
+  }
+
+  return goals;
+};
+
+/**
+ * Produces the score-only part of an EL/Conference League background match.
+ * The model is intentionally a mixture rather than a single flat random roll:
+ * most matches stay close to the squad-derived xG, while rare open games,
+ * favorite off-days and defensive collapses create the long tail seen in real
+ * football. Every branch uses the seeded RNG, so reloading the same save keeps
+ * the exact same result.
+ */
+export const simulateEuropeanBackgroundScore = (
+  input: EuropeanBackgroundScoreInput
+): EuropeanBackgroundScoreResult => {
+  const profile = getEuropeanBackgroundProfile(input.competitionId);
+  const rng = makeSeededRng(input.seed);
+  let homeXg = Math.max(0.04, input.homeExpectedGoals);
+  let awayXg = Math.max(0.04, input.awayExpectedGoals);
+
+  // A triangular, zero-centered match-day variation changes the two teams
+  // independently. It creates good and bad performances without changing the
+  // long-run average as much as a one-sided positive bonus would.
+  const homeDayMultiplier = 1 + (rng(40101) + rng(40102) - 1) * profile.individualVariance;
+  const awayDayMultiplier = 1 + (rng(40103) + rng(40104) - 1) * profile.individualVariance;
+  homeXg *= Math.max(0.62, Math.min(1.45, homeDayMultiplier));
+  awayXg *= Math.max(0.62, Math.min(1.45, awayDayMultiplier));
+
+  // Shared tempo keeps scorelines correlated: a cautious match suppresses both
+  // sides, while an open match raises transition frequency for both teams.
+  const tempoRoll = rng(40110);
+  const isQuietMatch = tempoRoll < profile.quietMatchChance;
+  const isOpenMatch = !isQuietMatch && tempoRoll < profile.quietMatchChance + profile.openMatchChance;
+  if (isQuietMatch) {
+    homeXg *= profile.quietMatchMultiplier;
+    awayXg *= profile.quietMatchMultiplier;
+  } else if (isOpenMatch) {
+    homeXg *= profile.openMatchMultiplier;
+    awayXg *= profile.openMatchMultiplier;
+  }
+
+  const strengthGap = input.homeStrength - input.awayStrength;
+  const absoluteStrengthGap = Math.abs(strengthGap);
+  let upsetWindowApplied = false;
+
+  // This is a window for an upset, not a forced upset. The underdog still has
+  // to convert its adjusted chances through the Poisson draw. Very extreme
+  // mismatches receive a slightly smaller window than ordinary underdogs.
+  if (absoluteStrengthGap >= 5) {
+    const extremeGapReduction = Math.min(0.35, Math.max(0, absoluteStrengthGap - 18) / 70);
+    const upsetChance = profile.upsetWindowChance * (1 - extremeGapReduction);
+    if (rng(40120) < upsetChance) {
+      upsetWindowApplied = true;
+      const underdogBoost = 1.25 + rng(40121) * 0.32;
+      const favoriteSlump = 0.72 + rng(40122) * 0.18;
+      if (strengthGap > 0) {
+        homeXg *= favoriteSlump;
+        awayXg *= underdogBoost;
+      } else {
+        homeXg *= underdogBoost;
+        awayXg *= favoriteSlump;
+      }
+    }
+  }
+
+  // Defensive collapse is separate from the upset window. It can affect a
+  // favorite too, and is therefore able to create both a routine 6:0 rout and
+  // a rare 1:5 shock. A weaker side faces a modest additional collapse risk.
+  const gapRisk = Math.min(0.022, absoluteStrengthGap / 900);
+  const homeCollapseChance = profile.collapseChance + (strengthGap < 0 ? gapRisk : 0);
+  const awayCollapseChance = profile.collapseChance + (strengthGap > 0 ? gapRisk : 0);
+  const homeCollapsed = rng(40130) < homeCollapseChance;
+  const awayCollapsed = rng(40131) < awayCollapseChance;
+  if (homeCollapsed) {
+    homeXg *= 0.78 + rng(40132) * 0.10;
+    awayXg *= 1.42 + rng(40133) * 0.48;
+  }
+  if (awayCollapsed) {
+    awayXg *= 0.78 + rng(40134) * 0.10;
+    homeXg *= 1.42 + rng(40135) * 0.48;
+  }
+
+  // First knockout legs are slightly more controlled. Return legs react to the
+  // aggregate: the trailing side attacks harder and accepts a small defensive
+  // exposure. leg1Diff is stored from the first-leg home-team perspective, so
+  // the current home side's aggregate difference is its negation.
+  if (profile.stage === 'KNOCKOUT' && !profile.isReturnLeg) {
+    homeXg *= 0.94;
+    awayXg *= 0.94;
+  } else if (profile.isReturnLeg && input.leg1Diff !== undefined) {
+    const currentHomeAggregateDiff = -input.leg1Diff;
+    if (currentHomeAggregateDiff < 0) {
+      homeXg *= 1 + Math.min(0.24, Math.abs(currentHomeAggregateDiff) * 0.08);
+      awayXg *= 1.05;
+    } else if (currentHomeAggregateDiff > 0) {
+      awayXg *= 1 + Math.min(0.24, currentHomeAggregateDiff * 0.08);
+      homeXg *= 1.05;
+    }
+  } else if (profile.stage === 'FINAL') {
+    homeXg *= 0.96;
+    awayXg *= 0.96;
+  }
+
+  homeXg = Math.max(0.04, Math.min(profile.expectedGoalsCap, homeXg));
+  awayXg = Math.max(0.04, Math.min(profile.expectedGoalsCap, awayXg));
+
+  return {
+    homeScore: sampleEuropeanBackgroundGoals(homeXg, rng, 40200),
+    awayScore: sampleEuropeanBackgroundGoals(awayXg, rng, 40201),
+    adjustedHomeExpectedGoals: homeXg,
+    adjustedAwayExpectedGoals: awayXg,
+    isOpenMatch,
+    upsetWindowApplied,
+    homeCollapsed,
+    awayCollapsed,
+  };
 };
 
 // ============================================================
@@ -758,10 +1032,12 @@ const simulateCLMatchFull = (
   referee: Referee,
   homeCoach: Coach,
   awayCoach: Coach,
+  competitionId: CompetitionType,
   leg1Diff?: number,
   isFinalMatch?: boolean
 ): CLMatchResult => {
   const rng = makeSeededRng(seed);
+  const competitionProfile = getEuropeanBackgroundProfile(competitionId);
 
   // ── Sędzia (Stage 2) ─────────────────────────────────────────────────
   const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
@@ -789,9 +1065,13 @@ const simulateCLMatchFull = (
 
   // ── Chaos / Stale factor ─────────────────────────────────────────────
   const chaosRoll = rng(7);
-  const isChaosMatch = chaosRoll < 0.035;
+  let isChaosMatch = chaosRoll < 0.035;
   const isStaleMatch = chaosRoll > 0.94;
-  const volatilityMult = isChaosMatch ? 1.65 : (isStaleMatch ? 0.50 : 1.0);
+  // Preserve the exact established CL volatility. EL and Conference League
+  // receive their tempo and long-tail variation in the new score model below.
+  const volatilityMult = competitionProfile.useLegacyChampionsLeagueModel
+    ? (isChaosMatch ? 1.65 : (isStaleMatch ? 0.50 : 1.0))
+    : 1.0;
 
   // ── Pogoda (klimat kraju gospodarza) ────────────────────────────────
   const homeCountry = homeClub.country ?? 'POL';
@@ -817,7 +1097,13 @@ const simulateCLMatchFull = (
   let awayMinutesPlayedMap = awayTimeline.minutesPlayedMap;
   const homeShortHanded = calculateEuropeanRedCardImpact(homeRedExits);
   const awayShortHanded = calculateEuropeanRedCardImpact(awayRedExits);
-  const formImpact = TeamFormImpactService.calculateMatchImpact(homePlayersAll, awayPlayersAll, homeLineup, awayLineup);
+  const formImpact = TeamFormImpactService.calculateMatchImpact(
+    homePlayersAll,
+    awayPlayersAll,
+    homeLineup,
+    awayLineup,
+    { preserveUnderdogForm: !competitionProfile.useLegacyChampionsLeagueModel }
+  );
 
   // ── Siła zawodników (ważona czasem gry) ──────────────────────────────
   const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeAllSubs, [...homeInjuryData.forcedExits, ...homeRedExits]);
@@ -850,21 +1136,44 @@ const simulateCLMatchFull = (
   xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod * formImpact.homeGoalChanceMultiplier);
   xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod * formImpact.awayGoalChanceMultiplier);
 
-  // ── Generowanie goli 90 min (Poisson z nasyceniem) ───────────────────
-  let homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
-  let awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
-  const routedScore90 = applyRareMismatchRout(
-    homeScore90,
-    awayScore90,
-    homeClub,
-    awayClub,
-    xgHome,
-    xgAway,
-    rng,
-    isChaosMatch
-  );
-  homeScore90 = routedScore90.homeScore;
-  awayScore90 = routedScore90.awayScore;
+  let homeScore90: number;
+  let awayScore90: number;
+
+  if (competitionProfile.useLegacyChampionsLeagueModel) {
+    // The Champions League path is deliberately unchanged because its current
+    // balance was accepted. This also isolates EL/Conference tuning from CL.
+    homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
+    awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
+    const routedScore90 = applyRareMismatchRout(
+      homeScore90,
+      awayScore90,
+      homeClub,
+      awayClub,
+      xgHome,
+      xgAway,
+      rng,
+      isChaosMatch
+    );
+    homeScore90 = routedScore90.homeScore;
+    awayScore90 = routedScore90.awayScore;
+  } else {
+    const scoreModel = simulateEuropeanBackgroundScore({
+      competitionId,
+      homeExpectedGoals: xgHome,
+      awayExpectedGoals: xgAway,
+      homeStrength: formImpact.home.teamQuality + homeClub.reputation * 0.60,
+      awayStrength: formImpact.away.teamQuality + awayClub.reputation * 0.60,
+      seed,
+      leg1Diff,
+    });
+    homeScore90 = scoreModel.homeScore;
+    awayScore90 = scoreModel.awayScore;
+    // Extra time should inherit the adjusted match tempo rather than reverting
+    // to the pre-match xG after an open game or defensive collapse.
+    xgHome = scoreModel.adjustedHomeExpectedGoals;
+    xgAway = scoreModel.adjustedAwayExpectedGoals;
+    isChaosMatch = scoreModel.isOpenMatch || scoreModel.homeCollapsed || scoreModel.awayCollapsed;
+  }
 
   // ── Karne w trakcie meczu (Stage 2 — zależne od sędziego) ───────────
   // Prawdopodobieństwo na mecz (suma ~95 minut): strictness/300 na drużynę
@@ -1296,7 +1605,10 @@ export const BackgroundMatchProcessorCL = {
       const result = simulateCLMatchFull(
         home, away, homePlayers, awayPlayers,
         homeLineup, awayLineup,
-        currentDate, seed, referee, homeCoach, awayCoach, leg1Diff, isFinal
+        currentDate, seed, referee, homeCoach, awayCoach,
+        fixture.leagueId as CompetitionType,
+        leg1Diff,
+        isFinal
       );
 
       // ── Aktualizacja fixtures ────────────────────────────────────────

@@ -7,7 +7,8 @@ export const LeagueScheduleGenerator = {
     clubs: Club[], 
     seasonTemplate: SeasonTemplate, 
     leagueTier: number,
-    leagueId: string
+    leagueId: string,
+    scheduleSeed?: number
   ): LeagueSchedule => {
     
     // 1. Validation of Clubs
@@ -32,10 +33,19 @@ export const LeagueScheduleGenerator = {
     const numRounds = n - 1; // 17 rounds per half-season
     const matchesPerRound = n / 2;
 
-    // Use a shuffled copy of IDs to ensure random seeding each season
-    // (Simple Fisher-Yates for seeding)
+    // A saved career must never receive a different calendar simply because a
+    // schedule was regenerated after reload. Callers which own a persistent
+    // session seed therefore get a deterministic Fisher-Yates shuffle; legacy
+    // callers can continue to omit the seed and retain their previous behavior.
+    let rngState = (scheduleSeed ?? 0) >>> 0;
+    const random = scheduleSeed === undefined
+      ? Math.random
+      : () => {
+          rngState = (rngState * 1664525 + 1013904223) >>> 0;
+          return rngState / 0x100000000;
+        };
     for (let i = n - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(random() * (i + 1));
         [ids[i], ids[j]] = [ids[j], ids[i]];
     }
 

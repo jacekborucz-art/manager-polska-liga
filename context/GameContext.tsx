@@ -107,6 +107,12 @@ import { WeeklyMotivationService } from '../services/WeeklyMotivationService';
 import { SeasonTransitionService } from '../services/SeasonTransitionService';
 import { PolishEuropeanQualificationService } from '../services/PolishEuropeanQualificationService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
+import { THIRD_LEAGUE_GROUP_IDS } from '../services/PolishThirdLeagueService';
+import { PolishThirdLeagueSeasonTransitionService } from '../services/PolishThirdLeagueSeasonTransitionService';
+import {
+  PolishFourthLeagueService,
+  PolishFourthLeagueState,
+} from '../services/PolishFourthLeagueService';
 import { DatapackClubService } from '../services/DatapackClubService';
 import { DatapackSeasonSquadRepairService } from '../services/DatapackSeasonSquadRepairService';
 import { EmergencyGoalkeeperService } from '../services/EmergencyGoalkeeperService';
@@ -1058,7 +1064,8 @@ interface GameContextType {
   fixtures: Fixture[];
   userTeamId: string | null;
   seasonTemplate: SeasonTemplate | null;
-  leagueSchedules: Record<number, LeagueSchedule>;
+  leagueSchedules: Record<string, LeagueSchedule>;
+  fourthLeagueState: PolishFourthLeagueState | null;
   nextEvent: PlayerNextEvent | null;
   viewedClubId: string | null;
   viewedPlayerId: string | null;
@@ -1549,7 +1556,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userTeamId,
   ]);
   const [seasonTemplate, setSeasonTemplate] = useState<SeasonTemplate | null>(null);
-  const [leagueSchedules, setLeagueSchedules] = useState<Record<number, LeagueSchedule>>({});
+  const [leagueSchedules, setLeagueSchedules] = useState<Record<string, LeagueSchedule>>({});
+  const [fourthLeagueState, setFourthLeagueState] = useState<PolishFourthLeagueState | null>(null);
   const [nextEvent, setNextEvent] = useState<PlayerNextEvent | null>(null);
   const [viewedClubId, setViewedClubId] = useState<string | null>(null);
   const [viewedPlayerId, setViewedPlayerId] = useState<string | null>(null);
@@ -2472,14 +2480,45 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     }
   }, [clubs, userTeamId]);
 
-  const generateSchedules = (template: SeasonTemplate, currentClubs: Club[]): Record<number, LeagueSchedule> => {
-    const schedules: Record<number, LeagueSchedule> = {};
+  const generateSchedules = (
+    template: SeasonTemplate,
+    currentClubs: Club[],
+    scheduleSeed = sessionSeed
+  ): Record<string, LeagueSchedule> => {
+    const schedules: Record<string, LeagueSchedule> = {};
     [1, 2, 3].forEach(tier => {
       const league = STATIC_LEAGUES.find(l => l.id === `L_PL_${tier}`);
       if (league) {
         const tierClubs = currentClubs.filter(c => c.leagueId === league.id);
-        schedules[tier] = LeagueScheduleGenerator.generate(tierClubs, template, tier, league.id);
+        schedules[String(tier)] = LeagueScheduleGenerator.generate(
+          tierClubs,
+          template,
+          tier,
+          league.id,
+          scheduleSeed + tier
+        );
       }
+    });
+
+    // III liga consists of four independent competitions on the same sporting
+    // tier. String keys prevent them from overwriting one another in the old
+    // tier-indexed schedule map, while Object.values(leagueSchedules) keeps the
+    // existing background processor and save pipeline working unchanged.
+    const hasConfiguredThirdLeague = THIRD_LEAGUE_GROUP_IDS.some(leagueId =>
+      currentClubs.some(club => club.leagueId === leagueId)
+    );
+    if (hasConfiguredThirdLeague) THIRD_LEAGUE_GROUP_IDS.forEach((leagueId, groupIndex) => {
+      const groupClubs = currentClubs.filter(club => club.leagueId === leagueId);
+      if (groupClubs.length !== 18) {
+        throw new Error(`${leagueId} requires exactly 18 clubs, received ${groupClubs.length}.`);
+      }
+      schedules[leagueId] = LeagueScheduleGenerator.generate(
+        groupClubs,
+        template,
+        4,
+        leagueId,
+        scheduleSeed + 400 + groupIndex
+      );
     });
     return schedules;
   };
@@ -2545,7 +2584,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setSessionSeed(newSessionSeed);
     setRuntimeSimulationSeed(newRuntimeSimulationSeed);
     const template = SeasonTemplateGenerator.generate(startYear);
-    const seasonPolishClubs = ReserveTeamFinanceService.allocateSeasonFunding(
+    let seasonPolishClubs = ReserveTeamFinanceService.allocateSeasonFunding(
       PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, startYear),
       {
         seasonStartYear: startYear,
@@ -2554,8 +2593,23 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         resetReserveBalances: true,
       }
     );
+    if (startYear === 2026) {
+      const fourthLeagueSeason = PolishFourthLeagueService.createSeason(
+        seasonPolishClubs,
+        template,
+        newSessionSeed
+      );
+      seasonPolishClubs = fourthLeagueSeason.clubs;
+      setFourthLeagueState(fourthLeagueSeason.state);
+    } else {
+      setFourthLeagueState(null);
+    }
     // -> tutaj wstaw kod
-    const coachData = CoachService.generateInitialCoaches([...seasonPolishClubs, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS, ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS]);
+    const coachData = CoachService.generateInitialCoaches([
+      ...seasonPolishClubs.filter(club => !PolishFourthLeagueService.isLightweightRegionalLeagueId(club.leagueId)),
+      ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS,
+      ...STATIC_SA_CLUBS, ...STATIC_ASIAN_CLUBS, ...STATIC_AFRICAN_CLUBS, ...STATIC_NA_CLUBS,
+    ]);
     setCoaches(coachData.coaches);
    
 
@@ -2566,7 +2620,7 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
     setSeasonTemplate(template);
     setSeasonNumber(1);
-    const initialSchedules = generateSchedules(template, seasonPolishClubs);
+    const initialSchedules = generateSchedules(template, seasonPolishClubs, newSessionSeed);
     setLeagueSchedules(initialSchedules);
 
  // Generuj składy dla klubów Ligi Mistrzów
@@ -2607,9 +2661,11 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     const { updatedTeams: teamsWithCoaches, updatedCoaches: assignedNtCoaches } =
       NationalTeamService.assignCoachesToNationalTeams(allNationalTeams, ntCoachList);
     const polishPlayers: Record<string, Player[]> = {};
-    seasonPolishClubs.forEach(club => {
+    seasonPolishClubs
+      .filter(club => !PolishFourthLeagueService.isLightweightRegionalLeagueId(club.leagueId))
+      .forEach(club => {
       polishPlayers[club.id] = withMoraleState(SquadGeneratorService.generateSquadForClub(club.id, club));
-    });
+      });
     setPlayers(prev => ({ ...prev, ...polishPlayers }));
 
     const allPlayersForNT: Record<string, Player[]> = {
@@ -2787,11 +2843,9 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     // 2. Logika awansów i spadków
     const standingsL2 = [...clubs].filter(c => c.leagueId === 'L_PL_2').sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
     const standingsL3 = [...clubs].filter(c => c.leagueId === 'L_PL_3').sort((a, b) => b.stats.points - a.stats.points || b.stats.goalDifference - a.stats.goalDifference);
-    const potentialL4 = clubs.filter(c => c.leagueId === 'L_PL_4');
 
     const relegatedTeamsL1 = standingsL1.slice(15, 18);
     const relegatedTeamsL2 = standingsL2.slice(15, 18);
-    const relegatedTeamsL3 = standingsL3.slice(14, 18); // miejsca 15-18 — automatyczny spadek
     const relegateFromL1Ids = relegatedTeamsL1.map(c => c.id);
     const relegateFromL2Ids = relegatedTeamsL2.map(c => c.id);
 
@@ -2865,61 +2919,44 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
       });
     ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, promoteFromL3Ids, 'L_PL_2');
 
-    const relegateFromL3Ids = [...new Set(relegatedTeamsL3.map(c => c.id))];
-    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, relegateFromL3Ids, 'L_PL_4');
-
-    // ── BARAŻE O UTRZYMANIE — integracja z awansami/spadkami ────────────────
-    // Wynik barażów (miejsca 13-14 w 2.Lidze vs los. drużyny 3.Ligi) jest znany po 29 maja.
-    // relegationPlayoffFinalResult.pair0/pair1.loserId = drużyna spadająca do L_PL_4 (lub zostająca w L_PL_3)
-    const playoffRelegatedL3Ids: string[] = [];  // kluby z L_PL_3 przegrywające baraże → L_PL_4
-    const playoffPromotedL4Ids: string[] = [];   // kluby z L_PL_4 wygrywające baraże → L_PL_3
-    const playoffL4ParticipantIds = new Set<string>();
-    if (relegationPlayoffFinalResult) {
-      [relegationPlayoffFinalResult.pair0, relegationPlayoffFinalResult.pair1].forEach(outcome => {
-        if (!outcome) return;
-        const loserClub = clubs.find(c => c.id === outcome.loserId);
-        const winnerClub = clubs.find(c => c.id === outcome.winnerId);
-        const eligibleL4Winner = winnerClub?.leagueId === 'L_PL_4' &&
-          ReserveTeamLeagueService.canEnterLeague(winnerClub.id, 'L_PL_3', clubs, projectedLeagueByClubId);
-        // Klub z L_PL_3 spada tylko wtedy, gdy zastępuje go uprawniony zwycięzca z L_PL_4.
-        if (loserClub?.leagueId === 'L_PL_3' && eligibleL4Winner) playoffRelegatedL3Ids.push(outcome.loserId);
-        if (loserClub?.leagueId === 'L_PL_4') playoffL4ParticipantIds.add(outcome.loserId);
-        // Jeśli wygrany to klub z L_PL_4 → awansuje do L_PL_3
-        if (winnerClub?.leagueId === 'L_PL_4') {
-          playoffL4ParticipantIds.add(outcome.winnerId);
-          if (eligibleL4Winner) playoffPromotedL4Ids.push(outcome.winnerId);
-        }
-      });
-    }
-
-    playoffRelegatedL3Ids.forEach(clubId => {
-      if (!relegateFromL3Ids.includes(clubId)) relegateFromL3Ids.push(clubId);
-    });
-    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, playoffRelegatedL3Ids, 'L_PL_4');
-    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, playoffPromotedL4Ids, 'L_PL_3');
-
-    const l3ConflictsBeforeLowerPromotions = ReserveTeamLeagueService
-      .findSameLeagueConflicts(clubs, projectedLeagueByClubId)
-      .filter(conflict => conflict.leagueId === 'L_PL_3');
-    let additionalL3Vacancies = 0;
-    l3ConflictsBeforeLowerPromotions.forEach(conflict => {
-      if (!relegateFromL3Ids.includes(conflict.reserveClubId)) {
-        relegateFromL3Ids.push(conflict.reserveClubId);
-        additionalL3Vacancies++;
-      }
-      ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, [conflict.reserveClubId], 'L_PL_4');
-    });
-
-    // Losowanie z L_PL_4: 4 automatyczne awanse + dodatkowi zwycięzcy baraży.
-    // Uczestnik barażu nie może dostać drugiej szansy przez zwykłe losowanie awansu.
-    const remainingL4Pool = potentialL4.filter(c =>
-      !playoffL4ParticipantIds.has(c.id) &&
-      ReserveTeamLeagueService.canEnterLeague(c.id, 'L_PL_3', clubs, projectedLeagueByClubId)
+    // This is the single authoritative lower-league transition. The previous
+    // L_PL_4 fallback selected clubs by Math.random and then had its result
+    // overwritten below; keeping that dead path made playoff correctness
+    // impossible to audit. Every participant now comes from a real final table.
+    const thirdLeagueResolution = PolishThirdLeagueSeasonTransitionService.resolve(
+      clubs,
+      players,
+      sessionSeed,
+      seasonNumber,
+      projectedLeagueByClubId,
+      {
+        challengerIds: activePlayoffDraw?.relegationPlayoffs.map(pair => pair.homeId).filter(Boolean),
+        finalOutcomes: relegationPlayoffFinalResult
+          ? [relegationPlayoffFinalResult.pair0, relegationPlayoffFinalResult.pair1]
+              .map(outcome => outcome ? { winnerId: outcome.winnerId, loserId: outcome.loserId } : undefined)
+          : undefined,
+      },
+      fourthLeagueState
     );
-    const randomPromotionsNeeded = 4 + additionalL3Vacancies;
-    const promotedFromL4Teams = [...remainingL4Pool].sort(() => Math.random() - 0.5).slice(0, randomPromotionsNeeded);
-    const promoteFromL4Ids = [...new Set([...promotedFromL4Teams.map(c => c.id), ...playoffPromotedL4Ids])]; // losowi + barażowi zwycięzcy
-    ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, promoteFromL4Ids, 'L_PL_3');
+    const relegateFromL3Ids = [...new Set(Object.values(thirdLeagueResolution.relegatedFromSecondLeagueByGroup).flat())];
+    const promoteFromL4Ids = [...thirdLeagueResolution.promotedToSecondLeagueIds];
+    thirdLeagueResolution.nextLeagueByClubId.forEach((targetLeagueId, clubId) => {
+      ReserveTeamLeagueService.applyLeagueProjection(projectedLeagueByClubId, [clubId], targetLeagueId);
+    });
+    thirdLeagueResolution.playoffMatches.forEach(match => {
+      MatchHistoryService.logMatch({
+        matchId: match.id,
+        date: new Date(currentDate.getFullYear(), 5, match.stage === 'SECOND_LEAGUE_SECOND_LEG' ? 4 : 1).toDateString(),
+        season: seasonNumber,
+        competition: 'L_PL_4_PLAYOFF',
+        homeTeamId: match.homeClubId,
+        awayTeamId: match.awayClubId,
+        homeScore: match.homeScore,
+        awayScore: match.awayScore,
+        goals: [],
+        cards: [],
+      });
+    });
 
     const unresolvedReserveConflicts = ReserveTeamLeagueService.findSameLeagueConflicts(clubs, projectedLeagueByClubId);
     if (unresolvedReserveConflicts.length > 0) {
@@ -3225,12 +3262,23 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
       }
       else if (relegateFromL3Ids.includes(club.id)) {
-        newLeagueId = 'L_PL_4'; newReputation = Math.max(1, newReputation - 1);
+        newLeagueId = thirdLeagueResolution.nextLeagueByClubId.get(club.id) ?? 'L_PL_5'; newReputation = Math.max(1, newReputation - 1);
         if (!isUser) adjustCoachIndividual(club.coachId, -1, -1, -2, 0);
       }
       else if (promoteFromL4Ids.includes(club.id)) {
         newLeagueId = 'L_PL_3'; newReputation = Math.min(10, newReputation + 1);
         if (!isUser) adjustCoachIndividual(club.coachId, 2, 1, 2, 1);
+      }
+      else if (thirdLeagueResolution.relegatedToFeederIds.includes(club.id)) {
+        newLeagueId = 'L_PL_5'; newReputation = Math.max(1, newReputation - 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, -1, 0, -1, 0);
+      }
+      else if (thirdLeagueResolution.nextLeagueByClubId.has(club.id)) {
+        // This remaining branch is a regional feeder champion entering one of
+        // the four III-liga groups. II-liga movements were handled above.
+        newLeagueId = thirdLeagueResolution.nextLeagueByClubId.get(club.id)!;
+        newReputation = Math.min(10, newReputation + 1);
+        if (!isUser) adjustCoachIndividual(club.coachId, 1, 0, 1, 0);
       }
 
       newReputation = ClubReputationService.calculateSeasonEndReputation(newReputation, {
@@ -3433,9 +3481,17 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
         });
       }
 
+      const entersFullLeagueEngine = !PolishFourthLeagueService.isFourthLeagueId(newLeagueId);
       return {
         ...club,
         leagueId: newLeagueId,
+        tier: PolishFourthLeagueService.isFourthLeagueId(newLeagueId)
+          ? 5
+          : newLeagueId.startsWith('L_PL_4_') ? 4 : club.tier,
+        // Regional IV-liga clubs are deliberately excluded from the expensive
+        // full-world simulation. Promotion activates them; relegation returns
+        // them to the dedicated lightweight engine.
+        isDefaultActive: entersFullLeagueEngine ? club.isDefaultActive || newLeagueId.startsWith('L_PL_4_') : false,
         reputation: newReputation,
         budget: club.budget + nextSeasonInjection - achievementBonusCost,
         reserveBudget: Math.max(
@@ -3499,6 +3555,24 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
     setSeasonNumber(prev => prev + 1);
     const newTemplate = SeasonTemplateGenerator.generate(newYear);
     setSeasonTemplate(newTemplate);
+    if (fourthLeagueState) {
+      // Membership has already been changed above: the five promoted clubs per
+      // III group left their voivodeship leagues, while relegated III-liga clubs
+      // entered the league matching polishVoivodeship. Rebuild only the compact
+      // regional schedules/statistics for the new season.
+      updatedClubs = PolishFourthLeagueService.rebalanceForNextSeason(
+        updatedClubs,
+        newYear,
+        sessionSeed + seasonNumber + 1
+      );
+      const nextFourthLeagueSeason = PolishFourthLeagueService.createSeason(
+        updatedClubs,
+        newTemplate,
+        sessionSeed + seasonNumber + 1
+      );
+      updatedClubs = nextFourthLeagueSeason.clubs;
+      setFourthLeagueState(nextFourthLeagueSeason.state);
+    }
     const newSchedules = generateSchedules(newTemplate, updatedClubs);
     setLeagueSchedules(newSchedules);
 
@@ -3828,7 +3902,7 @@ if (userTeamId) {
         tone: 'info',
       });
     }
-  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, sessionSeed, showGameNotification]);
+  }, [clubs, players, userTeamId, allFixtures, coaches, relegationPlayoffFinalResult, promotionPlayoffFinalResults, managerProfile, seasonNumber, sessionSeed, fourthLeagueState, showGameNotification]);
 
   // PERF/ROZMIAR ZAPISU (dodane 2026-08-01): przy KAŻDYM zapisie do pliku (nie tylko
   // co 5 sezonów jak automatyczna archiwizacja w startNextSeason powyżej) dane starsze
@@ -3878,6 +3952,7 @@ if (userTeamId) {
     userTeamId,
     seasonTemplate,
     leagueSchedules,
+    fourthLeagueState,
     lastRecoveryDate,
     coaches,
     staffMembers,
@@ -4276,6 +4351,7 @@ if (userTeamId) {
     setUserTeamId(data.userTeamId);
     setSeasonTemplate(data.seasonTemplate);
     setLeagueSchedules(data.leagueSchedules);
+    setFourthLeagueState(data.fourthLeagueState ?? null);
     setLastRecoveryDate(data.lastRecoveryDate);
     setCoaches(ensuredNationalCoachData.updatedCoaches);
     setStaffMembers(data.staffMembers ?? {});
@@ -4607,6 +4683,9 @@ if (userTeamId) {
       importedPlayers,
       new Set([
         UNEMPLOYED_MANAGER_CLUB_ID,
+        ...finalClubs
+          .filter(club => PolishFourthLeagueService.isLightweightRegionalLeagueId(club.leagueId))
+          .map(club => club.id),
         ...baseClubs
           .filter(baseClub => {
             const careerClub = finalClubs.find(club => club.id === baseClub.id);
@@ -4683,6 +4762,17 @@ if (userTeamId) {
     setSeasonTemplate(template);
     setSeasonNumber(1);
     setLeagueSchedules(generateSchedules(template, clubsWithSquads));
+    if (startYear === 2026) {
+      const fourthLeagueSeason = PolishFourthLeagueService.createSeason(
+        clubsWithSquads,
+        template,
+        sessionSeed
+      );
+      setClubs(fourthLeagueSeason.clubs);
+      setFourthLeagueState(fourthLeagueSeason.state);
+    } else {
+      setFourthLeagueState(null);
+    }
     setLastRecoveryDate(careerStartDate);
     setMessages([]);
     setMediaRelationships({});
@@ -4861,8 +4951,8 @@ const selectUserTeam = (clubId: string, signedContract?: ManagerContract) => {
     const selectedClub = { ...club, coachId: undefined, sportingDirector };
 
     // A configured relationship alone is insufficient here: season setup keeps
-    // non-participating database clubs in L_PL_4. Only an official reserve side
-    // currently assigned to L_PL_1/L_PL_2/L_PL_3 replaces generated reserves.
+    // non-participating database clubs in L_PL_5. Only an official reserve side
+    // currently assigned to a fully simulated league replaces generated reserves.
     const officialReserveClubId = ReserveTeamLeagueService.getPlayableReserveClubId(clubId, clubs);
     const leagueTier = club.leagueId === 'L_PL_1' ? 1 : club.leagueId === 'L_PL_2' ? 2 : club.leagueId === 'L_PL_3' ? 3 : 4;
     const generatedReserves = officialReserveClubId
@@ -5711,12 +5801,11 @@ setMessages(prev => [
     );
 
     setLeagueSchedules(prevSchedules => {
-      const updatedSchedules: Record<number, LeagueSchedule> = { ...prevSchedules };
+      const updatedSchedules: Record<string, LeagueSchedule> = { ...prevSchedules };
       Object.keys(updatedSchedules).forEach(tier => {
-        const t = parseInt(tier);
-        const sched = updatedSchedules[t];
+        const sched = updatedSchedules[tier];
         if (sched) {
-          updatedSchedules[t] = {
+          updatedSchedules[tier] = {
             ...sched,
             matchdays: sched.matchdays.map(md => ({
               ...md,
@@ -9345,11 +9434,22 @@ Asystent`,
           );
           const l2Playoffs = l2PromotionPlaces.playoffs;
           const l3Playoffs = l3PromotionPlaces.playoffs;
-          const l4Pool = [...clubs].filter(c =>
-            c.leagueId === 'L_PL_4' &&
-            ReserveTeamLeagueService.canEnterLeague(c.id, 'L_PL_3', clubs, playoffDrawProjection)
-          )
-            .sort(() => Math.random() - 0.5);
+          // Resolve the mandatory first stage between the four III-liga
+          // runners-up before building the existing interactive two-legged
+          // screen. Only its two winners may face II-liga places 13 and 14.
+          const thirdLeaguePreview = PolishThirdLeagueSeasonTransitionService.resolve(
+            clubs,
+            players,
+            sessionSeed,
+            seasonNumber,
+            playoffDrawProjection,
+            {},
+            fourthLeagueState
+          );
+          const l4Pool = thirdLeaguePreview.playoffMatches
+            .filter(match => match.stage === 'RUNNERS_UP')
+            .map(match => clubs.find(club => club.id === match.winnerClubId))
+            .filter((club): club is Club => Boolean(club));
           setActivePlayoffDraw({
             ekstraklasaPlayoffs: [
               { homeId: l2Playoffs[0]?.club.id || '', awayId: l2Playoffs[3]?.club.id || '', homePos: l2Playoffs[0]?.tablePosition || 0, awayPos: l2Playoffs[3]?.tablePosition || 0 },
@@ -9360,8 +9460,9 @@ Asystent`,
               { homeId: l3Playoffs[1]?.club.id || '', awayId: l3Playoffs[2]?.club.id || '', homePos: l3Playoffs[1]?.tablePosition || 0, awayPos: l3Playoffs[2]?.tablePosition || 0 },
             ],
             relegationPlayoffs: [
-              { homeId: sL3[12]?.id || '', awayId: l4Pool[0]?.id || '', homePos: 13, awayPos: 0 },
-              { homeId: sL3[13]?.id || '', awayId: l4Pool[1]?.id || '', homePos: 14, awayPos: 0 },
+              // PZPN requires the III-liga challenger to host the first leg.
+              { homeId: l4Pool[0]?.id || '', awayId: sL3[12]?.id || '', homePos: 2, awayPos: 13 },
+              { homeId: l4Pool[1]?.id || '', awayId: sL3[13]?.id || '', homePos: 2, awayPos: 14 },
             ],
           });
           setProcessedDrawIds(prev => [...prev, slot.id]);
@@ -9370,7 +9471,7 @@ Asystent`,
         }
 
         // ── BARAŻE O UTRZYMANIE — 1. MECZE (26 maja) ────────────────────────────
-        // 13. i 14. miejsce 2.Ligi (L_PL_3) vs dwie losowe drużyny z 3.Ligi (L_PL_4)
+        // Zwycięzcy I etapu III ligi kontra miejsca 13–14 II ligi.
         // Wyniki są przechowywane w stanie gry do obliczenia agregatu 29 maja.
         case CompetitionType.RELEGATION_PLAYOFF_1: {
           if (processedDrawIds.includes(slot.id)) break;
@@ -9438,9 +9539,9 @@ Asystent`,
           const pairs2 = activePlayoffDraw?.relegationPlayoffs;
           if (!firstLeg || !pairs2 || pairs2.length < 2) { break; } // bezpieczeństwo — 1. mecze muszą istnieć
 
-          // W rewanżu strony się zamieniają: dotychczasowy gość gra u siebie
-          const p0homeR = clubs.find(c => c.id === pairs2[0].awayId); // 3.Liga gra u siebie w rewanżu
-          const p0awayR = clubs.find(c => c.id === pairs2[0].homeId); // 2.Liga gości w rewanżu
+          // W rewanżu strony się zamieniają: klub II ligi gra u siebie.
+          const p0homeR = clubs.find(c => c.id === pairs2[0].awayId);
+          const p0awayR = clubs.find(c => c.id === pairs2[0].homeId);
           const p1homeR = clubs.find(c => c.id === pairs2[1].awayId);
           const p1awayR = clubs.find(c => c.id === pairs2[1].homeId);
 
@@ -9449,11 +9550,11 @@ Asystent`,
           const dateSeed29 = dateToProcess.getTime() + matchSimulationSeed;
           const playoffSimulationContext = { playersMap: players, lineups, coaches, currentDate: dateToProcess, seasonNumber };
 
-          // clubs z 2.Ligi — para 0 i para 1 (homeId w leg1 = klub 2.Ligi)
-          const clubL3pair0 = clubs.find(c => c.id === pairs2[0].homeId)!;
-          const clubL4pair0 = clubs.find(c => c.id === pairs2[0].awayId)!;
-          const clubL3pair1 = clubs.find(c => c.id === pairs2[1].homeId)!;
-          const clubL4pair1 = clubs.find(c => c.id === pairs2[1].awayId)!;
+          // `awayId` is the II-liga incumbent; `homeId` is the III-liga challenger.
+          const clubL3pair0 = clubs.find(c => c.id === pairs2[0].awayId)!;
+          const clubL4pair0 = clubs.find(c => c.id === pairs2[0].homeId)!;
+          const clubL3pair1 = clubs.find(c => c.id === pairs2[1].awayId)!;
+          const clubL4pair1 = clubs.find(c => c.id === pairs2[1].homeId)!;
 
           // Sprawdzenie czy drużyna gracza gra w rewanżu
           const userInPair0_leg2 = userTeamId && (pairs2[0].homeId === userTeamId || pairs2[0].awayId === userTeamId);
@@ -9463,7 +9564,7 @@ Asystent`,
             const playerPairIdx = userInPair0_leg2 ? 0 : 1;
             const otherPairIdx = playerPairIdx === 0 ? 1 : 0;
             // Symuluj tylko rewanż pary bez gracza
-            const otherL2Home = clubs.find(c => c.id === pairs2[otherPairIdx].awayId)!; // w rewanżu strony zamienione
+            const otherL2Home = clubs.find(c => c.id === pairs2[otherPairIdx].awayId)!; // klub II ligi u siebie
             const otherL2Away = clubs.find(c => c.id === pairs2[otherPairIdx].homeId)!;
             const otherLeg2 = RelegationPlayoffSimulator.simulateMatch(otherL2Home, otherL2Away, dateSeed29 + (otherPairIdx + 1), playoffSimulationContext);
             const otherClubL3 = otherPairIdx === 0 ? clubL3pair0 : clubL3pair1;
@@ -9477,11 +9578,11 @@ Asystent`,
             );
             const playerPair = pairs2[playerPairIdx];
             const playerFirstLeg = playerPairIdx === 0 ? firstLeg.pair0 : firstLeg.pair1;
-            // W rewanżu strony zamienione: awayId z leg1 (L4) gra u siebie
+            // W rewanżu strony są zamienione: awayId z pierwszego meczu (II liga) gra u siebie.
             setActivePlayoffMatch({
               matchType: 'RELEGATION_LEG2',
-              homeClub: clubs.find(c => c.id === playerPair.awayId)!, // L4 gra u siebie w rewanżu
-              awayClub: clubs.find(c => c.id === playerPair.homeId)!, // L3 gości w rewanżu
+              homeClub: clubs.find(c => c.id === playerPair.awayId)!, // II liga u siebie
+              awayClub: clubs.find(c => c.id === playerPair.homeId)!, // III liga na wyjeździe
               userSide: playerPair.homeId === userTeamId ? 'AWAY' : 'HOME',
               pairIndex: playerPairIdx,
               firstLegResult: playerFirstLeg,
@@ -9502,7 +9603,7 @@ Asystent`,
         }
 
         // ── Zakończenie sezonu — pauza, gracz czyta emaile i klika "Nowy sezon" ──
-        // â”€â”€ BARAÅ»E O AWANS â€” PÃ“ÅFINAÅY (31 maja) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── BARAŻE O AWANS — PÓŁFINAŁY (31 maja) ──────────────────────
         case CompetitionType.PROMOTION_PLAYOFF_31_MAY: {
           if (processedDrawIds.includes(slot.id)) break;
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
@@ -9575,7 +9676,7 @@ Asystent`,
           skipDayAdvance = true; break;
         }
 
-        // â”€â”€ BARAÅ»E O AWANS â€” FINAÅY (4 czerwca) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── BARAŻE O AWANS — FINAŁY (4 czerwca) ───────────────────────
         case CompetitionType.PROMOTION_PLAYOFF_4_JUNE: {
           if (processedDrawIds.includes(slot.id)) break;
           if (isAutoJumping) { setTargetJumpTime(null); navigateTo(ViewState.DASHBOARD); skipDayAdvance = true; break; }
@@ -11906,6 +12007,21 @@ Asystent`,
       if (anyAdaptationChanged) postReviewPlayers = nextPlayersAdapt;
     }
     DebugLoggerService.checkpoint('DAY_PHASE', `ADAPTATION_AFTER ${dateToProcess.toDateString()}`);
+
+    // IV liga deliberately bypasses the full match engine. On a regional
+    // matchday this updates only compact fixtures, club tables and generated
+    // statistical leaders. It is deterministic and idempotent: a FINISHED
+    // fixture can never be applied to the table twice after a reload or jump.
+    const fourthLeagueSimulation = PolishFourthLeagueService.processDate(
+      fourthLeagueState,
+      postReviewClubs,
+      dateToProcess,
+      sessionSeed
+    );
+    if (fourthLeagueSimulation.played > 0) {
+      postReviewClubs = fourthLeagueSimulation.clubs;
+      setFourthLeagueState(fourthLeagueSimulation.state);
+    }
 
 const finalResult: SimulationOutput = {
       ...simulation,
@@ -15052,7 +15168,7 @@ const finalResult: SimulationOutput = {
     DebugLoggerService.checkpoint('DAY_PHASE', `DAY_END ${dateToProcess.toDateString()}`);
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, buildFriendlyPlanningReminder, prependUniqueMessages, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, fourthLeagueState, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, buildFriendlyPlanningReminder, prependUniqueMessages, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();
@@ -20661,7 +20777,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
 
   return (
     <GameContext.Provider value={{
-      currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, staffMembers, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, nextEvent,
+      currentDate, viewState, clubs, leagues, players, viewCoachDetails, coaches, staffMembers, lineups, fixtures: allFixtures, userTeamId, seasonTemplate, leagueSchedules, fourthLeagueState, nextEvent,
     viewedClubId, viewedPlayerId, viewedCoachId, viewedRefereeId, previousViewState, lastMatchSummary, roundResults, isJumping: targetJumpTime !== null,
       lastRecoveryDate,
       managerProfile, managerJobOffers, activeManagerContract, managerContractNegotiation, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,

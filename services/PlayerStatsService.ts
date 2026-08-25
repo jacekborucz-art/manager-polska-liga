@@ -1,23 +1,61 @@
-import { Player, MatchEventType } from '../types';
+import { Player, MatchEventType, PlayerStats } from '../types';
 import { PlayerFormService } from './PlayerFormService';
 
+const emptyStats = (): PlayerStats => ({
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  cleanSheets: 0,
+  matchesPlayed: 0,
+  minutesPlayed: 0,
+  seasonalChanges: {},
+  ratingHistory: [],
+});
+
+const withCompetitionStats = (
+  player: Player,
+  competitionId: string | undefined,
+  update: (stats: PlayerStats) => PlayerStats
+): Player => {
+  if (!competitionId) return player;
+  const current = player.competitionStats?.[competitionId] ?? emptyStats();
+  return {
+    ...player,
+    competitionStats: {
+      ...(player.competitionStats ?? {}),
+      [competitionId]: update(current),
+    },
+  };
+};
+
 export const PlayerStatsService = {
-  applyGoal: (players: Record<string, Player[]>, scorerId: string, assistId?: string): Record<string, Player[]> => {
+  applyGoal: (players: Record<string, Player[]>, scorerId: string, assistId?: string, competitionId?: string): Record<string, Player[]> => {
     const newPlayers = { ...players };
 
     for (const clubId in newPlayers) {
       newPlayers[clubId] = newPlayers[clubId].map(p => {
         if (p.id === scorerId) {
-          return PlayerFormService.withUpdatedForm({
+          const aggregated = {
             ...p,
             stats: { ...p.stats, goals: p.stats.goals + 1 }
-          });
+          };
+          return PlayerFormService.withUpdatedForm(withCompetitionStats(
+            aggregated,
+            competitionId,
+            stats => ({ ...stats, goals: stats.goals + 1 })
+          ));
         }
         if (assistId && p.id === assistId) {
-          return PlayerFormService.withUpdatedForm({
+          const aggregated = {
             ...p,
             stats: { ...p.stats, assists: p.stats.assists + 1 }
-          });
+          };
+          return PlayerFormService.withUpdatedForm(withCompetitionStats(
+            aggregated,
+            competitionId,
+            stats => ({ ...stats, assists: stats.assists + 1 })
+          ));
         }
         return p;
       });
@@ -26,7 +64,7 @@ export const PlayerStatsService = {
     return newPlayers;
   },
 
-  applyCard: (players: Record<string, Player[]>, playerId: string, type: MatchEventType): Record<string, Player[]> => {
+  applyCard: (players: Record<string, Player[]>, playerId: string, type: MatchEventType, competitionId?: string): Record<string, Player[]> => {
     const newPlayers = { ...players };
 
     for (const clubId in newPlayers) {
@@ -48,11 +86,20 @@ export const PlayerStatsService = {
             suspensionMatches += 2;
           }
 
-          return PlayerFormService.withUpdatedForm({
+          const aggregated = {
             ...p,
             stats: { ...p.stats, yellowCards, redCards },
             suspensionMatches
-          });
+          };
+          return PlayerFormService.withUpdatedForm(withCompetitionStats(
+            aggregated,
+            competitionId,
+            stats => ({
+              ...stats,
+              yellowCards: stats.yellowCards + (type === MatchEventType.YELLOW_CARD ? 1 : 0),
+              redCards: stats.redCards + (type === MatchEventType.RED_CARD ? 1 : 0),
+            })
+          ));
         }
         return p;
       });
@@ -66,7 +113,13 @@ export const PlayerStatsService = {
    * Redukuje kary zawieszenia i zwiększa licznik rozegranych meczów oraz minut.
    * Regeneracja odbywa się wyłącznie w RecoveryService.
    */
-  processMatchDayEndForClub: (players: Record<string, Player[]>, clubId: string, participatingIds: string[]): Record<string, Player[]> => {
+  processMatchDayEndForClub: (
+    players: Record<string, Player[]>,
+    clubId: string,
+    participatingIds: string[],
+    competitionId?: string,
+    minutesByPlayer: Record<string, number> = {}
+  ): Record<string, Player[]> => {
     const newPlayers = { ...players };
     const idSet = new Set(participatingIds);
 
@@ -76,11 +129,20 @@ export const PlayerStatsService = {
         
         // 1. Inkrementacja meczów i minut dla zawodników biorących udział
         if (idSet.has(p.id)) {
+           const playedMinutes = Math.max(1, Math.min(120, Math.round(minutesByPlayer[p.id] ?? 90)));
            updated.stats = { 
              ...updated.stats, 
              matchesPlayed: updated.stats.matchesPlayed + 1,
-             minutesPlayed: updated.stats.minutesPlayed + 90
+             minutesPlayed: updated.stats.minutesPlayed + playedMinutes
            };
+           // The aggregate remains useful to season-development systems, but
+           // rankings use this exact competition bucket. Substitutes count as
+           // appearances because the match engine includes them in playedPlayerIds.
+           updated = withCompetitionStats(updated, competitionId, stats => ({
+             ...stats,
+             matchesPlayed: stats.matchesPlayed + 1,
+             minutesPlayed: stats.minutesPlayed + playedMinutes,
+           }));
            updated = PlayerFormService.withUpdatedForm(updated);
         }
 
@@ -96,12 +158,17 @@ export const PlayerStatsService = {
     return newPlayers;
   },
 
-  applyCleanSheet: (players: Record<string, Player[]>, clubId: string, gkIds: string[]): Record<string, Player[]> => {
+  applyCleanSheet: (players: Record<string, Player[]>, clubId: string, gkIds: string[], competitionId?: string): Record<string, Player[]> => {
     const newPlayers = { ...players };
     if (newPlayers[clubId]) {
       newPlayers[clubId] = newPlayers[clubId].map(p => {
         if (gkIds.includes(p.id)) {
-          return PlayerFormService.withUpdatedForm({ ...p, stats: { ...p.stats, cleanSheets: (p.stats.cleanSheets || 0) + 1 } });
+          const aggregated = { ...p, stats: { ...p.stats, cleanSheets: (p.stats.cleanSheets || 0) + 1 } };
+          return PlayerFormService.withUpdatedForm(withCompetitionStats(
+            aggregated,
+            competitionId,
+            stats => ({ ...stats, cleanSheets: stats.cleanSheets + 1 })
+          ));
         }
         return p;
       });
