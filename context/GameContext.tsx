@@ -12282,22 +12282,35 @@ const finalResult: SimulationOutput = {
       });
     }
 
-    // 4b. Symulacja meczów CL w tle (11 i 15 lipca)
-    // Pomijamy dzień UEFA_SUPER_CUP — mecz jest przetwarzany bezpośrednio w case CompetitionType.UEFA_SUPER_CUP
+    // 4b. Background simulation of Champions League, Europa League and
+    // Conference League matches. The UEFA Super Cup is handled directly by its
+    // own calendar-event branch and must never be processed here a second time.
     const isUEFASuperCupDay = primaryEvent?.slot.competition === CompetitionType.UEFA_SUPER_CUP;
-    const clResult = await runProcessingStep(
-      'Europejskie puchary rozgrywane w tle',
-      () => isUEFASuperCupDay
-        ? { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] }
-        : BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+    const hasEuropeanBackgroundMatches = !isUEFASuperCupDay &&
+      BackgroundMatchProcessorCL.hasMatchesToProcess(dateToProcess, userTeamId, allFixtures);
+
+    /**
+     * Do not create a visible processing row for an idle European calendar day.
+     * Previously the row was opened every day, so React's paint time and the
+     * no-op scans/copies below were reported as if European matches had actually
+     * been simulated. The preflight predicate is read-only and uses exactly the
+     * same eligibility rules as the processor, so match days retain their full
+     * simulation and RNG sequence.
+     */
+    const clResult = hasEuropeanBackgroundMatches
+      ? await runProcessingStep(
+          'Europejskie puchary rozgrywane w tle',
+          () => BackgroundMatchProcessorCL.processChampionsLeagueEvent(
             dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, matchSimulationSeed, coaches
           )
-    );
+        )
+      : { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] };
     // WAŻNE: używamy functional update + porównania, aby nie nadpisać wyników ligowych
     // (clResult.updatedFixtures zawiera WSZYSTKIE fixtures ze starego allFixtures)
-    // Pomijamy aktualizację fixtures i graczy z clResult gdy to dzień UEFA Super Cup,
-    // bo clResult.updatedFixtures = stare allFixtures (SCHEDULED) i nadpisałoby FINISHED z case UEFA_SUPER_CUP
-    if (!isUEFASuperCupDay) {
+    // State reconciliation is also skipped when the calendar gate found no
+    // matches. This prevents identity results from rebuilding fixture maps and
+    // scheduling redundant React updates on every ordinary day.
+    if (hasEuropeanBackgroundMatches) {
       setGlobalFixtures(prev => {
         const clMap = new Map(clResult.updatedFixtures.map(f => [f.id, f]));
         return prev.map(f => {
@@ -12328,7 +12341,7 @@ const finalResult: SimulationOutput = {
         });
       }
     }
-    if (!isUEFASuperCupDay) {
+    if (hasEuropeanBackgroundMatches) {
       setCoaches(prev => CoachService.applyMatchExpForFinishedFixtures(
         prev,
         clubs,

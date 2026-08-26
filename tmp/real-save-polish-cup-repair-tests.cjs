@@ -1,5 +1,192 @@
-// tests/EuropeanAiMatchPreparationTests.ts
+globalThis.window=globalThis.window||{addEventListener:()=>{}};globalThis.window.addEventListener=globalThis.window.addEventListener||(()=>{});globalThis.localStorage=globalThis.localStorage||{getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
+
+// tests/RealSavePolishCupRepairTests.ts
 var import_node_assert = require("node:assert");
+var import_node_fs = require("node:fs");
+var import_node_zlib = require("node:zlib");
+
+// services/PolandWeatherService.ts
+var PolandWeatherService = {
+  getWeather: (date, seedStr) => {
+    const month = date.getMonth();
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+      hash |= 0;
+    }
+    const r1 = Math.abs(hash) % 1e4 / 1e4;
+    const r2 = Math.abs(hash * 1664525 + 1013904223) % 1e4 / 1e4;
+    const r3 = Math.abs(hash * 22695477 + 1) % 1e4 / 1e4;
+    const tempConfigs = {
+      0: { minT: -8, maxT: 3 },
+      // Sty
+      1: { minT: -6, maxT: 5 },
+      // Lut
+      2: { minT: -1, maxT: 10 },
+      // Mar
+      3: { minT: 4, maxT: 16 },
+      // Kwi
+      4: { minT: 9, maxT: 21 },
+      // Maj
+      5: { minT: 13, maxT: 25 },
+      // Cze
+      6: { minT: 15, maxT: 27 },
+      // Lip
+      7: { minT: 14, maxT: 26 },
+      // Sie
+      8: { minT: 9, maxT: 20 },
+      // Wrz
+      9: { minT: 4, maxT: 14 },
+      // Paź
+      10: { minT: 0, maxT: 8 },
+      // Lis
+      11: { minT: -4, maxT: 4 }
+      // Gru
+    };
+    const tc = tempConfigs[month];
+    const tempC = Math.floor(tc.minT + r2 * (tc.maxT - tc.minT));
+    const windKmh = Math.floor(r3 * 55);
+    let description;
+    let precipitationChance;
+    let weatherIntensity;
+    if (month === 0 || month === 1 || month === 11) {
+      if (r1 < 0.07) {
+        description = "Zamie\u0107 \u015Bnie\u017Cna";
+        precipitationChance = 100;
+        weatherIntensity = 1;
+      } else if (r1 < 0.2) {
+        description = "Intensywne opady \u015Bniegu";
+        precipitationChance = 100;
+        weatherIntensity = 0.85;
+      } else if (r1 < 0.37) {
+        description = "Opady \u015Bniegu";
+        precipitationChance = 100;
+        weatherIntensity = 0.6;
+      } else if (r1 < 0.5) {
+        description = tempC <= -4 ? "Silny mr\xF3z" : "Mr\xF3z";
+        precipitationChance = 0;
+        weatherIntensity = tempC <= -5 ? 0.55 : 0.35;
+      } else if (r1 < 0.6) {
+        description = "G\u0119sta mg\u0142a";
+        precipitationChance = 20;
+        weatherIntensity = 0.4;
+      } else if (r1 < 0.72) {
+        description = windKmh > 30 ? "Silny wiatr, pochmurno" : "Pochmurno, zimno";
+        precipitationChance = 0;
+        weatherIntensity = windKmh > 35 ? 0.45 : 0.1;
+      } else if (r1 < 0.88) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0.05;
+      } else {
+        description = "S\u0142onecznie, mro\u017Ano";
+        precipitationChance = 0;
+        weatherIntensity = 0.1;
+      }
+    } else if (month === 2 || month === 3) {
+      if (r1 < 0.05 && month === 2) {
+        description = "Ostatnie opady \u015Bniegu";
+        precipitationChance = 100;
+        weatherIntensity = 0.5;
+      } else if (r1 < 0.22) {
+        description = windKmh > 30 ? "Deszcz ze silnym wiatrem" : "Deszcz";
+        precipitationChance = 100;
+        weatherIntensity = windKmh > 30 ? 0.55 : 0.38;
+      } else if (r1 < 0.35) {
+        description = "Lekki deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.22;
+      } else if (r1 < 0.47) {
+        description = "Silny wiatr";
+        precipitationChance = 0;
+        weatherIntensity = 0.38;
+      } else if (r1 < 0.62) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0.05;
+      } else if (r1 < 0.78) {
+        description = "Pochmurno";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      } else {
+        description = "Bezchmurnie";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      }
+    } else if (month >= 4 && month <= 7) {
+      const thunderChance = month === 5 || month === 6 ? 0.12 : 0.07;
+      const heatChance = month === 6 || month === 7 ? 0.09 : 0.03;
+      if (r1 < thunderChance) {
+        description = "Burza z piorunami";
+        precipitationChance = 100;
+        weatherIntensity = 1;
+      } else if (r1 < thunderChance + heatChance) {
+        description = "Upa\u0142";
+        precipitationChance = 0;
+        weatherIntensity = 0.65;
+      } else if (r1 < 0.32) {
+        description = "Ulewny deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.8;
+      } else if (r1 < 0.5) {
+        description = "Deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.38;
+      } else if (r1 < 0.62) {
+        description = "Lekki deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.2;
+      } else if (r1 < 0.74) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      } else {
+        description = "Bezchmurnie";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      }
+    } else {
+      const fogChance = month === 10 ? 0.18 : month === 9 ? 0.12 : 0.06;
+      const frostChance = month === 10 ? 0.1 : 0;
+      if (r1 < frostChance) {
+        description = "Pierwszy przymrozek";
+        precipitationChance = 0;
+        weatherIntensity = 0.3;
+      } else if (r1 < frostChance + fogChance) {
+        description = "G\u0119sta mg\u0142a";
+        precipitationChance = 20;
+        weatherIntensity = 0.4;
+      } else if (r1 < 0.4) {
+        description = windKmh > 30 ? "Deszcz ze silnym wiatrem" : "Deszcz";
+        precipitationChance = 100;
+        weatherIntensity = windKmh > 30 ? 0.62 : 0.4;
+      } else if (r1 < 0.54) {
+        description = "Lekki deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.22;
+      } else if (r1 < 0.65) {
+        description = "Silny wiatr";
+        precipitationChance = 0;
+        weatherIntensity = windKmh > 35 ? 0.45 : 0.25;
+      } else if (r1 < 0.78) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0.05;
+      } else {
+        description = "Pochmurno";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      }
+    }
+    return {
+      tempC,
+      precipitationChance,
+      windKmh,
+      description,
+      weatherIntensity
+    };
+  }
+};
 
 // resources/tactics_db.ts
 var createSlot = (index, role, x, y) => ({ index, role, x, y });
@@ -1464,8 +1651,8 @@ var FinanceService = {
   /**
    * Główny silnik prawdopodobieństwa akceptacji (FM HARDCORE MODE)
    */
-  evaluateContractLogic: (player, newSalary, newBonus, newEndDate, currentDate, clubReputation, clubTier, managerProfile) => {
-    const now = currentDate.getTime();
+  evaluateContractLogic: (player, newSalary, newBonus, newEndDate, currentDate2, clubReputation, clubTier, managerProfile) => {
+    const now = currentDate2.getTime();
     const currentEnd = new Date(player.contractEndDate).getTime();
     const newEnd = new Date(newEndDate).getTime();
     const rawExpectedSalary = player.annualSalary > 0 ? player.annualSalary : FinanceService.getFairMarketSalary(player.overallRating);
@@ -2310,10 +2497,10 @@ var getPromotionRaiseRequest = (player, club, squadAverage) => {
     matches
   };
 };
-var shouldRequestPromotionRaise = (player, club, squadAverage, currentDate) => {
+var shouldRequestPromotionRaise = (player, club, squadAverage, currentDate2) => {
   const currentSalary = player.annualSalary || 0;
   if (currentSalary <= 0) return false;
-  if (PlayerMoraleService.isMoraleDemandLocked(player, currentDate) || PlayerMoraleService.hasActiveMoraleDemand(player)) return false;
+  if (PlayerMoraleService.isMoraleDemandLocked(player, currentDate2) || PlayerMoraleService.hasActiveMoraleDemand(player)) return false;
   if (player.transferPendingClubId || player.contractRaiseRequest || player.contractRaiseDemandUntil) return false;
   const matches = getLastSeasonMatches(player);
   const playedRegularly = matches >= 18 || (player.squadRole === "STARTER" || player.squadRole === "KEY_PLAYER" || player.isUntouchable) && matches >= 12;
@@ -2410,11 +2597,11 @@ var formatSeasonOutputSummary = (profile) => {
   return `${profile.goals} goli, ${profile.assists} asyst${ratingPart}`;
 };
 var isAvailableForMinutesDemand = (player) => player.health.status === "HEALTHY" /* HEALTHY */ && player.condition >= 75 && (player.fatigueDebt ?? 0) <= 55;
-var getContractDaysLeft = (player, currentDate) => {
+var getContractDaysLeft = (player, currentDate2) => {
   if (!player.contractEndDate) return 9999;
   const contractEnd = new Date(player.contractEndDate);
   if (Number.isNaN(contractEnd.getTime())) return 9999;
-  return Math.floor((contractEnd.getTime() - currentDate.getTime()) / DAY_MS);
+  return Math.floor((contractEnd.getTime() - currentDate2.getTime()) / DAY_MS);
 };
 var getAgeTransferStabilityBias = (player) => {
   const isEliteLatePrime = player.age >= 26 && player.overallRating >= 85;
@@ -2868,31 +3055,31 @@ var PlayerMoraleService = {
     transferAllowAfterSeasonDeadline: player.transferAllowAfterSeasonDeadline ?? null,
     transferRequestPendingResponse: player.transferRequestPendingResponse ?? null
   }),
-  getMoraleDemandLockoutUntil: (currentDate) => {
-    const lockoutUntil = new Date(currentDate);
+  getMoraleDemandLockoutUntil: (currentDate2) => {
+    const lockoutUntil = new Date(currentDate2);
     lockoutUntil.setFullYear(lockoutUntil.getFullYear() + 1);
     return lockoutUntil.toISOString();
   },
-  isMoraleDemandLocked: (player, currentDate) => {
+  isMoraleDemandLocked: (player, currentDate2) => {
     if (!player.moraleDemandLockoutUntil) return false;
     const lockoutUntil = new Date(player.moraleDemandLockoutUntil);
-    return !Number.isNaN(lockoutUntil.getTime()) && dateOnly(currentDate).getTime() < dateOnly(lockoutUntil).getTime();
+    return !Number.isNaN(lockoutUntil.getTime()) && dateOnly(currentDate2).getTime() < dateOnly(lockoutUntil).getTime();
   },
   hasActiveMoraleDemand: (player) => !!player.minutesDemandUntil || !!player.roleDemandUntil || !!player.transferListDemandUntil || !!player.developmentExitDemandUntil || !!player.contractRaiseDemandUntil || !!player.reserveProtestUntil || !!player.boardAppealDeadline,
-  applyClinchedSeasonAchievementMorale: (player, achievement, currentDate) => {
+  applyClinchedSeasonAchievementMorale: (player, achievement, currentDate2) => {
     let withMorale = PlayerMoraleService.ensurePlayerState(player);
     if (hasClinchedSeasonAchievementMorale(withMorale, achievement)) return withMorale;
     const baseBoost = achievement === "championship" ? 8 : 7;
     const reason = getClinchedSeasonAchievementReason(achievement);
     const currentMorale = withMorale.morale ?? 50;
-    const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate)}_${achievement}_CLINCHED`);
+    const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate2)}_${achievement}_CLINCHED`);
     const achievementBoost = getSeasonSuccessMoraleBoost(
       currentMorale,
       baseBoost,
       getRandomSeasonSuccessLevelUpSteps(seed, 41)
     );
     const effectiveMoraleBoost = hasBrokenContractPromise(withMorale) ? Math.max(1, Math.round(achievementBoost * 0.35)) : achievementBoost;
-    withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate);
+    withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate2);
     return PlayerMoraleService.withMindsetChange(
       withMorale,
       {
@@ -2903,30 +3090,30 @@ var PlayerMoraleService = {
         conflictLevel: hasBrokenContractPromise(withMorale) ? 0 : -7
       },
       reason,
-      currentDate
+      currentDate2
     );
   },
-  applyPresidentTeamBonusMorale: (player, totalBonusAmount, squadSize, currentDate) => {
+  applyPresidentTeamBonusMorale: (player, totalBonusAmount, squadSize, currentDate2) => {
     let withMorale = PlayerMoraleService.ensurePlayerState(player);
     const mindset = PlayerMoraleService.normalizeMindset(withMorale);
     const personality = withMorale.moralePersonality ?? "CALM";
-    const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate)}_${totalBonusAmount}_PRESIDENT_TEAM_BONUS`);
+    const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate2)}_${totalBonusAmount}_PRESIDENT_TEAM_BONUS`);
     const shareValue = totalBonusAmount / Math.max(1, squadSize);
     const amountBonus = shareValue >= 1e5 ? 2 : shareValue >= 5e4 ? 1 : 0;
     const gratitudeScore = (withMorale.morale ?? 50) * 0.14 + mindset.clubHappiness * 0.24 + mindset.squadBelonging * 0.18 + mindset.coachTrust * 0.1 - mindset.conflictLevel * 0.18 + (personality === "LOYAL" || personality === "PROFESSIONAL" ? 10 : 0) + (personality === "EGOIST" || personality === "AMBITIOUS" ? -4 : 0) + seededRng(seed, 31) * 24;
     const moraleDelta = gratitudeScore >= 66 ? Math.min(6, 4 + amountBonus) : gratitudeScore >= 50 ? Math.min(4, 2 + amountBonus) : gratitudeScore >= 36 ? 1 : 0;
     const reason = moraleDelta > 0 ? "Premia dru\u017Cynowa prezesa poprawi\u0142a morale" : "Premia dru\u017Cynowa prezesa przyj\u0119ta neutralnie";
     if (moraleDelta > 0) {
-      withMorale = PlayerMoraleService.withMoraleChange(withMorale, moraleDelta, reason, currentDate);
+      withMorale = PlayerMoraleService.withMoraleChange(withMorale, moraleDelta, reason, currentDate2);
     }
     return PlayerMoraleService.withMindsetChange(
       withMorale,
       moraleDelta > 0 ? { clubHappiness: 4 + moraleDelta, squadBelonging: 2 + Math.ceil(moraleDelta / 2), conflictLevel: -2 } : { clubHappiness: 1, squadBelonging: 1 },
       reason,
-      currentDate
+      currentDate2
     );
   },
-  applyContractSigningMindflowReset: (player, currentDate) => ({
+  applyContractSigningMindflowReset: (player, currentDate2) => ({
     ...player,
     playerMindset: PlayerMoraleService.withMindsetChange(
       PlayerMoraleService.ensurePlayerState(player),
@@ -2938,9 +3125,9 @@ var PlayerMoraleService = {
         conflictLevel: -12
       },
       "Podpisanie kontraktu i wyciszenie \u017C\u0105da\u0144",
-      currentDate
+      currentDate2
     ).playerMindset,
-    moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate),
+    moraleDemandLockoutUntil: PlayerMoraleService.getMoraleDemandLockoutUntil(currentDate2),
     lastMoraleDemandDate: null,
     promisedMinutesUntil: null,
     minutesDemandUntil: null,
@@ -2969,11 +3156,11 @@ var PlayerMoraleService = {
     transferRequestPendingResponse: null
   }),
   applySeasonOutcomeMindflow: (player, input) => {
-    const { club, currentDate, squadAverage } = input;
+    const { club, currentDate: currentDate2, squadAverage } = input;
     let withMorale = PlayerMoraleService.ensurePlayerState(player);
-    const dateKey = toDateKey(currentDate);
+    const dateKey2 = toDateKey(currentDate2);
     const personality = withMorale.moralePersonality ?? "CALM";
-    const seed = stableHash(`${withMorale.id}_${dateKey}_SEASON_OUTCOME`);
+    const seed = stableHash(`${withMorale.id}_${dateKey2}_SEASON_OUTCOME`);
     const roll = seededRng(seed, 71);
     const stayReasonParts = [
       input.isChampion ? "mistrzostwo kraju" : null,
@@ -3005,7 +3192,7 @@ var PlayerMoraleService = {
       );
       const effectiveMoraleBoost = seasonAchievementBoost <= 0 ? 0 : isContractPromiseConflict ? Math.max(1, Math.round(seasonAchievementBoost * 0.35)) : seasonAchievementBoost;
       if (effectiveMoraleBoost > 0) {
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, effectiveMoraleBoost, reason, currentDate2);
       }
       withMorale = PlayerMoraleService.withMindsetChange(
         withMorale,
@@ -3017,7 +3204,7 @@ var PlayerMoraleService = {
           conflictLevel: isContractPromiseConflict ? 0 : -6
         },
         reason,
-        currentDate
+        currentDate2
       );
       if (roll < stayChance) {
         const shouldWithdrawTransferIntent = input.isPromoted && hadExitIntent ? true : withMorale.isOnTransferList && roll < stayChance * 0.35;
@@ -3033,14 +3220,14 @@ var PlayerMoraleService = {
           transferListPrice: nextIsOnTransferList ? withMorale.transferListPrice : void 0
         };
       }
-      if (input.isPromoted && shouldRequestPromotionRaise(withMorale, club, squadAverage, currentDate)) {
-        const deadline2 = new Date(currentDate);
+      if (input.isPromoted && shouldRequestPromotionRaise(withMorale, club, squadAverage, currentDate2)) {
+        const deadline2 = new Date(currentDate2);
         deadline2.setDate(deadline2.getDate() + 21);
         const deadlineKey2 = toDateKey(deadline2);
         const raiseRequest = getPromotionRaiseRequest(withMorale, club, squadAverage);
         const playerName2 = `${withMorale.firstName} ${withMorale.lastName}`;
         const mail2 = input.createMail ? {
-          id: `PLAYER_PROMOTION_RAISE_REQUEST_${withMorale.id}_${dateKey}`,
+          id: `PLAYER_PROMOTION_RAISE_REQUEST_${withMorale.id}_${dateKey2}`,
           sender: playerName2,
           role: "Zawodnik",
           subject: `Pro\u015Bba po awansie: ${withMorale.lastName}`,
@@ -3056,7 +3243,7 @@ var PlayerMoraleService = {
             "",
             playerName2
           ].join("\n"),
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: withMorale.squadRole === "KEY_PLAYER" || withMorale.isUntouchable ? 6 : 5,
@@ -3072,14 +3259,14 @@ var PlayerMoraleService = {
         } : null;
         return {
           player: {
-            ...PlayerMoraleService.withMoraleChange(withMorale, -1, "Zawodnik oczekuje podwy\u017Cki po awansie", currentDate),
-            lastMoraleDemandDate: dateKey,
+            ...PlayerMoraleService.withMoraleChange(withMorale, -1, "Zawodnik oczekuje podwy\u017Cki po awansie", currentDate2),
+            lastMoraleDemandDate: dateKey2,
             contractRaiseDemandUntil: deadlineKey2,
             contractRaiseRequest: {
               salary: raiseRequest.salary,
               bonus: raiseRequest.bonus,
               years: raiseRequest.years,
-              requestedAt: dateKey,
+              requestedAt: dateKey2,
               deadline: deadlineKey2,
               reason: raiseRequest.reason,
               raisePct: raiseRequest.raisePct
@@ -3091,7 +3278,7 @@ var PlayerMoraleService = {
       return { player: withMorale, mail: null };
     }
     if (!input.isRelegated) return { player: withMorale, mail: null };
-    const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
+    const contractDaysLeft = getContractDaysLeft(withMorale, currentDate2);
     const isGoodEnoughForBetterClub = withMorale.overallRating >= Math.max(62, squadAverage + 5) && (withMorale.overallRating >= 68 || withMorale.marketValue >= Math.max(4e5, (withMorale.annualSalary ?? 0) * 3) || hasStandoutSeasonOutput(withMorale, getSeasonOutputProfile(withMorale)));
     const careerStageCanMove = withMorale.age <= 32 || withMorale.overallRating >= squadAverage + 9;
     const reputationCeilingPressure = Math.max(0, (withMorale.overallRating - 58) / 5 - club.reputation);
@@ -3106,7 +3293,7 @@ var PlayerMoraleService = {
       )
     );
     const relegationReason = "Spadek dru\u017Cyny zwi\u0119ksza presj\u0119 na odej\u015Bcie";
-    withMorale = PlayerMoraleService.withMoraleChange(withMorale, -4, relegationReason, currentDate);
+    withMorale = PlayerMoraleService.withMoraleChange(withMorale, -4, relegationReason, currentDate2);
     withMorale = PlayerMoraleService.withMindsetChange(
       withMorale,
       {
@@ -3117,17 +3304,17 @@ var PlayerMoraleService = {
         conflictLevel: isGoodEnoughForBetterClub ? 7 : 3
       },
       relegationReason,
-      currentDate
+      currentDate2
     );
-    if (!isGoodEnoughForBetterClub || !careerStageCanMove || withMorale.isOnTransferList || withMorale.transferPendingClubId || PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate) || roll >= exitChance) {
+    if (!isGoodEnoughForBetterClub || !careerStageCanMove || withMorale.isOnTransferList || withMorale.transferPendingClubId || PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate2) || roll >= exitChance) {
       return { player: withMorale, mail: null };
     }
-    const deadline = new Date(currentDate);
+    const deadline = new Date(currentDate2);
     deadline.setDate(deadline.getDate() + 45);
     const deadlineKey = toDateKey(deadline);
     const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
     const mail = input.createMail ? {
-      id: `PLAYER_RELEGATION_EXIT_REQUEST_${withMorale.id}_${dateKey}`,
+      id: `PLAYER_RELEGATION_EXIT_REQUEST_${withMorale.id}_${dateKey2}`,
       sender: playerName,
       role: "Zawodnik",
       subject: `Pro\u015Bba po spadku: ${withMorale.lastName}`,
@@ -3140,7 +3327,7 @@ var PlayerMoraleService = {
         "",
         playerName
       ].join("\n"),
-      date: new Date(currentDate),
+      date: new Date(currentDate2),
       isRead: false,
       type: "STAFF" /* STAFF */,
       priority: 5,
@@ -3159,7 +3346,7 @@ var PlayerMoraleService = {
         transferListPrice: withMorale.transferListPrice ?? void 0,
         transferLockoutUntil: null,
         transferOfferBanUntil: null,
-        lastMoraleDemandDate: dateKey,
+        lastMoraleDemandDate: dateKey2,
         transferListDemandUntil: deadlineKey
       },
       mail
@@ -3219,11 +3406,11 @@ var PlayerMoraleService = {
     };
     return labels[personality];
   },
-  canTalk: (player, currentDate) => {
+  canTalk: (player, currentDate2) => {
     if (!player.lastIndividualTalkDate) return true;
     const last = new Date(player.lastIndividualTalkDate);
     if (Number.isNaN(last.getTime())) return true;
-    return dayDiff(last, currentDate) >= 7;
+    return dayDiff(last, currentDate2) >= 7;
   },
   getNextTalkDate: (player) => {
     if (!player.lastIndividualTalkDate) return null;
@@ -3233,11 +3420,11 @@ var PlayerMoraleService = {
     next.setDate(next.getDate() + 7);
     return next;
   },
-  calculateTalkResult: (player, talkType, currentDate, seed) => {
+  calculateTalkResult: (player, talkType, currentDate2, seed) => {
     const personality = player.moralePersonality ?? PlayerMoraleService.getInitialPersonality(player);
     const morale = player.morale ?? PlayerMoraleService.getInitialMorale(player);
     const recentRating = player.stats.ratingHistory?.at(-1) ?? 6.5;
-    const rng = seededRng(seed + stableHash(player.id) + currentDate.getTime(), talkType.length);
+    const rng = seededRng(seed + stableHash(player.id) + currentDate2.getTime(), talkType.length);
     let base = 3;
     let successChance = 0.58;
     if (talkType === "PRAISE") {
@@ -3359,7 +3546,7 @@ var PlayerMoraleService = {
     };
   },
   getTotalMinutesPlayed: (player) => (player.stats?.minutesPlayed ?? 0) + (player.reserveStats?.matches ?? 0) * 90,
-  reviewMinutePromise: (player, currentDate) => {
+  reviewMinutePromise: (player, currentDate2) => {
     const withMorale = PlayerMoraleService.ensurePlayerState(player);
     if (!withMorale.promisedMinutesUntil) {
       return { player: withMorale, fulfilled: false, expired: false, moraleDelta: 0 };
@@ -3368,13 +3555,13 @@ var PlayerMoraleService = {
     const currentMinutes = PlayerMoraleService.getTotalMinutesPlayed(withMorale);
     const deadline = new Date(withMorale.promisedMinutesUntil);
     const fulfilled = currentMinutes > baseline;
-    const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+    const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(deadline).getTime();
     if (fulfilled) {
       const moraleDelta = 3;
       return {
         player: {
           ...withMorale,
-          ...PlayerMoraleService.withMoraleChange(withMorale, moraleDelta, "Obietnica minut spe\u0142niona", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, moraleDelta, "Obietnica minut spe\u0142niona", currentDate2),
           promisedMinutesUntil: null,
           promisedMinutesBaseline: null,
           promisedRoleNextMatchFixtureId: null
@@ -3408,7 +3595,7 @@ var PlayerMoraleService = {
             withMorale,
             moraleDelta,
             isRoleNextMatchPromise ? "Niespe\u0142niona obietnica gry w nast\u0119pnym meczu" : "Niespe\u0142niona obietnica minut",
-            currentDate
+            currentDate2
           ),
           promisedMinutesUntil: null,
           promisedMinutesBaseline: null,
@@ -3421,15 +3608,15 @@ var PlayerMoraleService = {
     }
     return { player: withMorale, fulfilled: false, expired: false, moraleDelta: 0 };
   },
-  processPeriodicReview: (players, currentDate) => {
+  processPeriodicReview: (players, currentDate2) => {
     const reviewedPlayers = players.map((player) => {
-      const demandReview = PlayerMoraleService.reviewPlayerDemands(player, currentDate);
-      const promiseReview = PlayerMoraleService.reviewMinutePromise(demandReview, currentDate);
-      const mindsetFeedback = currentDate.getDay() === 1 ? PlayerMoraleService.getMindsetMoraleFeedback(promiseReview.player) : null;
-      const afterMindsetFeedback = mindsetFeedback ? PlayerMoraleService.withMoraleChange(promiseReview.player, mindsetFeedback.delta, mindsetFeedback.reason, currentDate) : promiseReview.player;
+      const demandReview = PlayerMoraleService.reviewPlayerDemands(player, currentDate2);
+      const promiseReview = PlayerMoraleService.reviewMinutePromise(demandReview, currentDate2);
+      const mindsetFeedback = currentDate2.getDay() === 1 ? PlayerMoraleService.getMindsetMoraleFeedback(promiseReview.player) : null;
+      const afterMindsetFeedback = mindsetFeedback ? PlayerMoraleService.withMoraleChange(promiseReview.player, mindsetFeedback.delta, mindsetFeedback.reason, currentDate2) : promiseReview.player;
       const drifted = PlayerMoraleService.applyNaturalDrift(afterMindsetFeedback);
       if ((drifted.morale ?? 50) !== (afterMindsetFeedback.morale ?? 50)) {
-        return PlayerMoraleService.withMoraleChange(afterMindsetFeedback, (drifted.morale ?? 50) - (afterMindsetFeedback.morale ?? 50), "Naturalna stabilizacja morale", currentDate);
+        return PlayerMoraleService.withMoraleChange(afterMindsetFeedback, (drifted.morale ?? 50) - (afterMindsetFeedback.morale ?? 50), "Naturalna stabilizacja morale", currentDate2);
       }
       return drifted;
     });
@@ -3443,7 +3630,7 @@ var PlayerMoraleService = {
       let nextPlayer = player;
       for (const event of teamMoraleEvents) {
         if (event.playerId === nextPlayer.id) continue;
-        nextPlayer = PlayerMoraleService.withMoraleChange(nextPlayer, event.delta, event.reason, currentDate);
+        nextPlayer = PlayerMoraleService.withMoraleChange(nextPlayer, event.delta, event.reason, currentDate2);
       }
       if ((nextPlayer.contractRaiseTeamMoraleDelta ?? 0) < 0) {
         return {
@@ -3455,30 +3642,30 @@ var PlayerMoraleService = {
       return nextPlayer;
     });
   },
-  processReserveProtestReviews: (players, currentDate, existingMessages = []) => {
+  processReserveProtestReviews: (players, currentDate2, existingMessages = []) => {
     const mails = [];
-    const dateKey = toDateKey(currentDate);
-    const transferDeadline = new Date(currentDate);
+    const dateKey2 = toDateKey(currentDate2);
+    const transferDeadline = new Date(currentDate2);
     transferDeadline.setDate(transferDeadline.getDate() + 14);
     const transferDeadlineKey = toDateKey(transferDeadline);
     const reviewedPlayers = players.map((player) => {
       let withMorale = PlayerMoraleService.ensurePlayerState(player);
       if (!withMorale.reserveProtestUntil) return withMorale;
       const protestDeadline = new Date(withMorale.reserveProtestUntil);
-      const expired = !Number.isNaN(protestDeadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(protestDeadline).getTime();
+      const expired = !Number.isNaN(protestDeadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(protestDeadline).getTime();
       if (withMorale.isOnTransferList) {
         return {
           ...PlayerMoraleService.withMoraleChange(
             withMorale,
             4,
             "Trener otworzy\u0142 drog\u0119 do transferu po prote\u015Bcie rezerw",
-            currentDate
+            currentDate2
           ),
           reserveProtestUntil: null
         };
       }
       if (!expired) return withMorale;
-      const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
+      const contractDaysLeft = getContractDaysLeft(withMorale, currentDate2);
       if (contractDaysLeft <= 365) {
         return { ...withMorale, reserveProtestUntil: null };
       }
@@ -3488,16 +3675,16 @@ var PlayerMoraleService = {
         withMorale,
         penalty,
         "Zignorowany protest po zes\u0142aniu do rezerw",
-        currentDate
+        currentDate2
       );
-      if (PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate)) {
+      if (PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate2)) {
         return {
           ...withMorale,
           reserveProtestUntil: null,
-          lastMoraleDemandDate: dateKey
+          lastMoraleDemandDate: dateKey2
         };
       }
-      const mailId = `PLAYER_RESERVE_PROTEST_ESCALATION_${withMorale.id}_${dateKey}`;
+      const mailId = `PLAYER_RESERVE_PROTEST_ESCALATION_${withMorale.id}_${dateKey2}`;
       const hasDuplicateMail = existingMessages.some((mail) => mail.id === mailId) || mails.some((mail) => mail.id === mailId);
       if (!hasDuplicateMail) {
         const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
@@ -3517,7 +3704,7 @@ var PlayerMoraleService = {
             "",
             playerName
           ].join("\n"),
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: 5,
@@ -3533,17 +3720,17 @@ var PlayerMoraleService = {
         ...withMorale,
         reserveProtestUntil: null,
         transferListDemandUntil: withMorale.transferListDemandUntil ?? transferDeadlineKey,
-        lastMoraleDemandDate: dateKey
+        lastMoraleDemandDate: dateKey2
       };
     });
     return { players: reviewedPlayers, mails };
   },
-  processPlayerDemands: (club, squad, currentDate, existingMessages = [], fixtures, allClubs = []) => {
-    if (squad.length === 0 || club.stats.played < 4 || currentDate.getDay() !== 1) {
+  processPlayerDemands: (club, squad, currentDate2, existingMessages = [], fixtures2, allClubs = []) => {
+    if (squad.length === 0 || club.stats.played < 4 || currentDate2.getDay() !== 1) {
       return { players: squad.map(PlayerMoraleService.ensurePlayerState), mails: [] };
     }
-    const dateKey = toDateKey(currentDate);
-    const deadline = new Date(currentDate);
+    const dateKey2 = toDateKey(currentDate2);
+    const deadline = new Date(currentDate2);
     deadline.setDate(deadline.getDate() + 14);
     const deadlineKey = toDateKey(deadline);
     const sortedByQuality = [...squad].sort((a, b) => b.overallRating - a.overallRating);
@@ -3557,14 +3744,14 @@ var PlayerMoraleService = {
       byPosition.set(position, [...playersForPosition].sort((a, b) => b.overallRating - a.overallRating));
     });
     const hasRecentMail = (player, requestType) => existingMessages.some(
-      (mail) => mail.metadata?.type === "PLAYER_MORALE_REQUEST" && mail.metadata.playerId === player.id && mail.metadata.requestType === requestType && new Date(mail.date).getTime() >= currentDate.getTime() - 21 * DAY_MS
+      (mail) => mail.metadata?.type === "PLAYER_MORALE_REQUEST" && mail.metadata.playerId === player.id && mail.metadata.requestType === requestType && new Date(mail.date).getTime() >= currentDate2.getTime() - 21 * DAY_MS
     );
-    const nextLeagueFixtureDuringDemandWindow = (fixtures ?? []).filter(
-      (f) => f.status === "SCHEDULED" /* SCHEDULED */ && f.leagueId === club.leagueId && (f.homeTeamId === club.id || f.awayTeamId === club.id) && f.date.getTime() >= currentDate.getTime() && f.date.getTime() <= deadline.getTime()
+    const nextLeagueFixtureDuringDemandWindow = (fixtures2 ?? []).filter(
+      (f) => f.status === "SCHEDULED" /* SCHEDULED */ && f.leagueId === club.leagueId && (f.homeTeamId === club.id || f.awayTeamId === club.id) && f.date.getTime() >= currentDate2.getTime() && f.date.getTime() <= deadline.getTime()
     ).sort((a, b) => fDate(a).getTime() - fDate(b).getTime())[0] ?? null;
     const hasLeagueFixtureDuringDemandWindow = !!nextLeagueFixtureDuringDemandWindow;
-    function fDate(fixture2) {
-      return fixture2.date instanceof Date ? fixture2.date : new Date(fixture2.date);
+    function fDate(fixture) {
+      return fixture.date instanceof Date ? fixture.date : new Date(fixture.date);
     }
     const createdMails = [];
     const nextPlayers = squad.map((player) => {
@@ -3576,21 +3763,21 @@ var PlayerMoraleService = {
       const minutesShare = totalMinutes / possibleMinutes;
       const personality = withMorale.moralePersonality ?? "CALM";
       const lastDemand = withMorale.lastMoraleDemandDate ? new Date(withMorale.lastMoraleDemandDate) : null;
-      const demandCooldown = lastDemand && !Number.isNaN(lastDemand.getTime()) && dayDiff(lastDemand, currentDate) < 21;
-      const isDemandLockedAfterContract = PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate);
+      const demandCooldown = lastDemand && !Number.isNaN(lastDemand.getTime()) && dayDiff(lastDemand, currentDate2) < 21;
+      const isDemandLockedAfterContract = PlayerMoraleService.isMoraleDemandLocked(withMorale, currentDate2);
       const hasActiveDemand = PlayerMoraleService.hasActiveMoraleDemand(withMorale);
       const isHealthyEnough = withMorale.health.status === "HEALTHY" /* HEALTHY */ || (withMorale.health.injury?.daysRemaining ?? 0) <= 3;
       const hasSportingArgument = withMorale.overallRating >= squadAverage - 1 && (rank <= Math.max(8, Math.ceil(squad.length * 0.35)) || positionRank <= 2);
       const pressureBonus = personality === "AMBITIOUS" || personality === "EGOIST" || personality === "CONFIDENT" ? 1 : 0;
       const ignoresStatusNoise = personality === "LOYAL" || personality === "CALM" || personality === "PROFESSIONAL";
-      const contractDaysLeft = getContractDaysLeft(withMorale, currentDate);
+      const contractDaysLeft = getContractDaysLeft(withMorale, currentDate2);
       const isContractEndingSoon = contractDaysLeft <= 365;
       const fairSalary = FinanceService.getFairMarketSalary(withMorale.overallRating);
       const financialRespectRatio = (withMorale.annualSalary || 0) / Math.max(1, fairSalary);
       const salaryUnderpaid = financialRespectRatio < 0.86 || rank <= 5 && financialRespectRatio < 1.02;
       const contractRaiseRequest = buildRaiseRequest(withMorale, club, squadAverage, rank);
       const reminderDate = withMorale.contractRaiseReminderUntil ? new Date(withMorale.contractRaiseReminderUntil) : null;
-      const raiseReminderCooldown = reminderDate && !Number.isNaN(reminderDate.getTime()) && dateOnly(currentDate).getTime() < dateOnly(reminderDate).getTime();
+      const raiseReminderCooldown = reminderDate && !Number.isNaN(reminderDate.getTime()) && dateOnly(currentDate2).getTime() < dateOnly(reminderDate).getTime();
       const roleExpectation = rank <= 3 || positionRank === 1 && withMorale.overallRating >= squadAverage + 3 ? "KEY_PLAYER" : rank <= 8 || positionRank <= 2 ? "STARTER" : null;
       const shouldRequestRole = !!roleExpectation && !isSameOrHigherRole(withMorale.squadRole, roleExpectation) && hasSportingArgument && isHealthyEnough && !demandCooldown && !isDemandLockedAfterContract && !hasActiveDemand && !withMorale.transferPendingClubId && hasLeagueFixtureDuringDemandWindow && !hasRecentMail(withMorale, "ROLE") && (withMorale.morale ?? 50) <= (ignoresStatusNoise ? 34 : 48 + pressureBonus * 6);
       const expectedShare = withMorale.squadRole === "KEY_PLAYER" || roleExpectation === "KEY_PLAYER" ? 0.68 : withMorale.squadRole === "STARTER" || roleExpectation === "STARTER" ? 0.48 : 0.35;
@@ -3614,7 +3801,7 @@ var PlayerMoraleService = {
       const ageTransferStabilityBias = getAgeTransferStabilityBias(withMorale);
       const eliteLatePrimeMoveBoost = withMorale.age >= 26 && withMorale.overallRating >= 85 && club.reputation < 16 ? 7 : 0;
       const transferMoodPressure = (withMorale.morale ?? 50) <= 24 ? 12 : (withMorale.morale ?? 50) <= 39 ? 7 : (withMorale.morale ?? 50) <= 54 ? 3 : 0;
-      const transferRandomFactor = Math.floor(seededRng(stableHash(`${withMorale.id}_${dateKey}`), 43) * 13) - 6;
+      const transferRandomFactor = Math.floor(seededRng(stableHash(`${withMorale.id}_${dateKey2}`), 43) * 13) - 6;
       const hasExcellentForm = recentAverageRating !== null && recentAverageRating >= 7;
       const seasonOutput = getSeasonOutputProfile(withMorale);
       const hasStandoutSeason = hasStandoutSeasonOutput(withMorale, seasonOutput);
@@ -3639,7 +3826,7 @@ var PlayerMoraleService = {
       const shouldRequestTransferList = (isClearlyAboveSquadLevel || wantsExitBecauseUnhappy || wantsBreakoutSeasonMove || wantsHighReputationInterestMove) && isHealthyEnough && !demandCooldown && !isDemandLockedAfterContract && !hasActiveDemand && !isContractEndingSoon && !withMorale.isOnTransferList && !withMorale.transferPendingClubId && !withMorale.transferListDemandUntil && !hasRecentMail(withMorale, "TRANSFER_LIST") && (wantsProtectedExitConversation || wantsHigherReputationMove || wantsBreakoutSeasonMove || wantsHighReputationInterestMove || wantsExitBecauseUnhappy);
       if (createdMails.length >= 2) return withMorale;
       if (prominentRoleWithoutMinutes) {
-        const mailId = `PLAYER_ROLE_PLAYTIME_REQUEST_${withMorale.id}_${dateKey}`;
+        const mailId = `PLAYER_ROLE_PLAYTIME_REQUEST_${withMorale.id}_${dateKey2}`;
         const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
         const currentRoleLabel = roleLabel(withMorale.squadRole);
         createdMails.push({
@@ -3658,7 +3845,7 @@ var PlayerMoraleService = {
             "",
             playerName
           ].join("\n"),
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: withMorale.squadRole === "KEY_PLAYER" ? 5 : 4,
@@ -3671,16 +3858,16 @@ var PlayerMoraleService = {
             responseDeadline: deadlineKey
           }
         });
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -2, "Wa\u017Cny zawodnik prosi o rozmow\u0119 po braku minut", currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -2, "Wa\u017Cny zawodnik prosi o rozmow\u0119 po braku minut", currentDate2);
         return {
           ...withMorale,
-          lastMoraleDemandDate: dateKey,
+          lastMoraleDemandDate: dateKey2,
           minutesDemandUntil: deadlineKey,
           minutesDemandBaseline: totalMinutes
         };
       }
       if (shouldRequestDevelopmentExit) {
-        const mailId = `PLAYER_DEVELOPMENT_EXIT_REQUEST_${withMorale.id}_${dateKey}`;
+        const mailId = `PLAYER_DEVELOPMENT_EXIT_REQUEST_${withMorale.id}_${dateKey2}`;
         const demandCopy = getDevelopmentExitDemandCopy(withMorale, personality, totalMinutes);
         createdMails.push({
           id: mailId,
@@ -3688,7 +3875,7 @@ var PlayerMoraleService = {
           role: "Zawodnik",
           subject: demandCopy.subject,
           body: demandCopy.body,
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: demandCopy.priority,
@@ -3699,10 +3886,10 @@ var PlayerMoraleService = {
             responseDeadline: deadlineKey
           }
         });
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, demandCopy.moraleDrop, "Brak minut eskaluje do pro\u015Bby o odej\u015Bcie lub wypo\u017Cyczenie", currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, demandCopy.moraleDrop, "Brak minut eskaluje do pro\u015Bby o odej\u015Bcie lub wypo\u017Cyczenie", currentDate2);
         return {
           ...withMorale,
-          lastMoraleDemandDate: dateKey,
+          lastMoraleDemandDate: dateKey2,
           unresolvedMinutesDemandDate: null,
           unresolvedMinutesDemandBaseline: null,
           developmentExitDemandUntil: deadlineKey,
@@ -3710,7 +3897,7 @@ var PlayerMoraleService = {
         };
       }
       if (shouldRequestRaise) {
-        const mailId = `PLAYER_RAISE_REQUEST_${withMorale.id}_${dateKey}`;
+        const mailId = `PLAYER_RAISE_REQUEST_${withMorale.id}_${dateKey2}`;
         const playerName = `${withMorale.firstName} ${withMorale.lastName}`;
         createdMails.push({
           id: mailId,
@@ -3728,7 +3915,7 @@ var PlayerMoraleService = {
             "",
             playerName
           ].join("\n"),
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: rank <= 5 ? 5 : 4,
@@ -3742,20 +3929,20 @@ var PlayerMoraleService = {
             responseDeadline: deadlineKey
           }
         });
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -1, "Zawodnik oczekuje podwy\u017Cki", currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -1, "Zawodnik oczekuje podwy\u017Cki", currentDate2);
         return {
           ...withMorale,
-          lastMoraleDemandDate: dateKey,
+          lastMoraleDemandDate: dateKey2,
           contractRaiseDemandUntil: deadlineKey,
           contractRaiseRequest: {
             ...contractRaiseRequest,
-            requestedAt: dateKey,
+            requestedAt: dateKey2,
             deadline: deadlineKey
           }
         };
       }
       if (shouldRequestTransferList) {
-        const mailId = `PLAYER_TRANSFER_LIST_REQUEST_${withMorale.id}_${dateKey}`;
+        const mailId = `PLAYER_TRANSFER_LIST_REQUEST_${withMorale.id}_${dateKey2}`;
         const transferDemandTrigger = wantsHighReputationInterestMove ? "STRONG_INTEREST" : wantsBreakoutSeasonMove ? "STANDOUT_SEASON" : wantsHigherReputationMove ? "HIGHER_REPUTATION" : "DEFAULT";
         const demandCopy = getTransferListDemandCopy(
           withMorale,
@@ -3769,7 +3956,7 @@ var PlayerMoraleService = {
           role: "Zawodnik",
           subject: demandCopy.subject,
           body: demandCopy.body,
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: 4,
@@ -3782,7 +3969,7 @@ var PlayerMoraleService = {
         });
         if (boardSupportsProtectedExit && protectedExitPrice && createdMails.length < 2) {
           createdMails.push({
-            id: `BOARD_PROTECTED_EXIT_SUPPORT_${withMorale.id}_${dateKey}`,
+            id: `BOARD_PROTECTED_EXIT_SUPPORT_${withMorale.id}_${dateKey2}`,
             sender: "Zarz\u0105d Klubu",
             role: "Zarz\u0105d",
             subject: `Zarz\u0105d jest got\xF3w rozwa\u017Cy\u0107 sprzeda\u017C: ${withMorale.lastName}`,
@@ -3795,7 +3982,7 @@ var PlayerMoraleService = {
               "",
               "To nie oznacza zgody na dowoln\u0105 ofert\u0119, ale chcemy zostawi\u0107 klubowi realn\u0105 drog\u0119 do dobrej transakcji i jednocze\u015Bnie ograniczy\u0107 konflikt z zawodnikiem."
             ].join("\n"),
-            date: new Date(currentDate),
+            date: new Date(currentDate2),
             isRead: false,
             type: "BOARD" /* BOARD */,
             priority: 5
@@ -3805,12 +3992,12 @@ var PlayerMoraleService = {
           withMorale,
           boardSupportsProtectedExit ? 1 : -3,
           boardSupportsProtectedExit ? "Zarz\u0105d otwiera drog\u0119 do sprzeda\u017Cy po sprzeciwie zawodnika" : "Zawodnik prosi o wystawienie na list\u0119 transferow\u0105",
-          currentDate
+          currentDate2
         );
         if (boardSupportsProtectedExit && protectedExitPrice) {
           return {
             ...withMorale,
-            lastMoraleDemandDate: dateKey,
+            lastMoraleDemandDate: dateKey2,
             transferListDemandUntil: null,
             isUntouchable: false,
             isOnTransferList: true,
@@ -3821,12 +4008,12 @@ var PlayerMoraleService = {
         }
         return {
           ...withMorale,
-          lastMoraleDemandDate: dateKey,
+          lastMoraleDemandDate: dateKey2,
           transferListDemandUntil: deadlineKey
         };
       }
       if (shouldRequestRole && roleExpectation) {
-        const mailId = `PLAYER_ROLE_REQUEST_${withMorale.id}_${dateKey}`;
+        const mailId = `PLAYER_ROLE_REQUEST_${withMorale.id}_${dateKey2}`;
         createdMails.push({
           id: mailId,
           sender: `${withMorale.firstName} ${withMorale.lastName}`,
@@ -3839,7 +4026,7 @@ Chcia\u0142bym porozmawia\u0107 o mojej roli w dru\u017Cynie. Patrz\u0105c na mo
 Nie chodzi mi o konflikt, ale o jasny sygna\u0142, \u017Ce klub widzi mnie zgodnie z moj\u0105 warto\u015Bci\u0105 dla zespo\u0142u. Je\u015Bli sytuacja si\u0119 nie zmieni, trudno b\u0119dzie mi utrzyma\u0107 pe\u0142ne zaanga\u017Cowanie.
 
 ${withMorale.firstName} ${withMorale.lastName}`,
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: roleExpectation === "KEY_PLAYER" ? 4 : 3,
@@ -3851,16 +4038,16 @@ ${withMorale.firstName} ${withMorale.lastName}`,
             responseDeadline: deadlineKey
           }
         });
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -2, `Zawodnik domaga si\u0119 statusu: ${roleLabel(roleExpectation)}`, currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, -2, `Zawodnik domaga si\u0119 statusu: ${roleLabel(roleExpectation)}`, currentDate2);
         return {
           ...withMorale,
-          lastMoraleDemandDate: dateKey,
+          lastMoraleDemandDate: dateKey2,
           roleDemandUntil: deadlineKey,
           requestedSquadRole: roleExpectation
         };
       }
       if (shouldRequestMinutes) {
-        const mailId = `PLAYER_MINUTES_REQUEST_${withMorale.id}_${dateKey}`;
+        const mailId = `PLAYER_MINUTES_REQUEST_${withMorale.id}_${dateKey2}`;
         const demandCopy = getMinutesDemandCopy(withMorale, minutesMindset.approach, recentAverageRating);
         createdMails.push({
           id: mailId,
@@ -3868,7 +4055,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
           role: "Zawodnik",
           subject: demandCopy.subject,
           body: demandCopy.body,
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: minutesMindset.priority,
@@ -3879,10 +4066,10 @@ ${withMorale.firstName} ${withMorale.lastName}`,
             responseDeadline: deadlineKey
           }
         });
-        withMorale = PlayerMoraleService.withMoraleChange(withMorale, minutesMindset.moraleDrop, "Zawodnik domaga si\u0119 wi\u0119kszej liczby wyst\u0119p\xF3w", currentDate);
+        withMorale = PlayerMoraleService.withMoraleChange(withMorale, minutesMindset.moraleDrop, "Zawodnik domaga si\u0119 wi\u0119kszej liczby wyst\u0119p\xF3w", currentDate2);
         return {
           ...withMorale,
-          lastMoraleDemandDate: dateKey,
+          lastMoraleDemandDate: dateKey2,
           minutesDemandUntil: deadlineKey,
           minutesDemandBaseline: totalMinutes
         };
@@ -3891,21 +4078,21 @@ ${withMorale.firstName} ${withMorale.lastName}`,
     });
     return { players: nextPlayers, mails: createdMails };
   },
-  reviewPlayerDemands: (player, currentDate) => {
+  reviewPlayerDemands: (player, currentDate2) => {
     let withMorale = PlayerMoraleService.ensurePlayerState(player);
     if (withMorale.contractRaiseDemandUntil && withMorale.contractRaiseRequest) {
       const deadline = new Date(withMorale.contractRaiseDemandUntil);
-      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(deadline).getTime();
       const request = withMorale.contractRaiseRequest;
       const isPromotionRaiseRequest = request.reason === "PROMOTION_RAISE";
-      const fulfilled = (withMorale.annualSalary || 0) >= request.salary && getContractDaysLeft(withMorale, currentDate) > 365;
+      const fulfilled = (withMorale.annualSalary || 0) >= request.salary && getContractDaysLeft(withMorale, currentDate2) > 365;
       if (fulfilled) {
         withMorale = {
           ...PlayerMoraleService.withMoraleChange(
             withMorale,
             isPromotionRaiseRequest ? 9 : 7,
             isPromotionRaiseRequest ? "Klub spe\u0142ni\u0142 pro\u015Bb\u0119 o podwy\u017Ck\u0119 po awansie" : "Klub spe\u0142ni\u0142 pro\u015Bb\u0119 o podwy\u017Ck\u0119",
-            currentDate
+            currentDate2
           ),
           contractRaiseDemandUntil: null,
           contractRaiseRequest: null,
@@ -3915,37 +4102,37 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       } else if (expired) {
         const personality = withMorale.moralePersonality ?? "CALM";
         const leadership = withMorale.attributes?.leadership ?? 50;
-        const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate)}_RAISE_REJECTED`);
+        const seed = stableHash(`${withMorale.id}_${toDateKey(currentDate2)}_RAISE_REJECTED`);
         const roll = seededRng(seed, 19);
         const frustrationScore = (personality === "EGOIST" ? 28 : personality === "AMBITIOUS" ? 22 : personality === "CONFIDENT" ? 15 : personality === "LOYAL" ? -10 : personality === "PROFESSIONAL" ? -4 : 0) + Math.max(0, withMorale.overallRating - 66) + Math.max(0, request.salary / Math.max(1, withMorale.annualSalary || 1) - 1) * 18 + ((withMorale.morale ?? 50) <= 45 ? 8 : 0) + (isPromotionRaiseRequest ? 8 : 0) + roll * 18;
-        if (frustrationScore >= 34 && getContractDaysLeft(withMorale, currentDate) > 365) {
-          const boardLockoutActive = !!withMorale.boardLockoutUntil && dateOnly(currentDate).getTime() < dateOnly(new Date(withMorale.boardLockoutUntil)).getTime();
-          const appealCooldownOk = !withMorale.boardAppealSentAt || dayDiff(new Date(withMorale.boardAppealSentAt), currentDate) > 180;
+        if (frustrationScore >= 34 && getContractDaysLeft(withMorale, currentDate2) > 365) {
+          const boardLockoutActive = !!withMorale.boardLockoutUntil && dateOnly(currentDate2).getTime() < dateOnly(new Date(withMorale.boardLockoutUntil)).getTime();
+          const appealCooldownOk = !withMorale.boardAppealSentAt || dayDiff(new Date(withMorale.boardAppealSentAt), currentDate2) > 180;
           if (boardLockoutActive && appealCooldownOk && !withMorale.boardAppealDeadline) {
-            const appealDeadline = new Date(currentDate);
+            const appealDeadline = new Date(currentDate2);
             appealDeadline.setDate(appealDeadline.getDate() + 14);
             withMorale = {
               ...PlayerMoraleService.withMoraleChange(
                 withMorale,
                 isPromotionRaiseRequest ? -8 : -6,
                 isPromotionRaiseRequest ? "Zablokowana podwy\u017Cka po awansie przez dyrektora \u2014 zawodnik apeluje do zarz\u0105du" : "Zablokowana podwy\u017Cka przez dyrektora \u2014 zawodnik apeluje do zarz\u0105du",
-                currentDate
+                currentDate2
               ),
               contractRaiseDemandUntil: null,
               contractRaiseRequest: null,
-              boardAppealSentAt: toDateKey(currentDate),
+              boardAppealSentAt: toDateKey(currentDate2),
               boardAppealType: "RAISE",
               boardAppealDeadline: toDateKey(appealDeadline)
             };
           } else {
-            const transferDeadline = new Date(currentDate);
+            const transferDeadline = new Date(currentDate2);
             transferDeadline.setDate(transferDeadline.getDate() + 14);
             withMorale = {
               ...PlayerMoraleService.withMoraleChange(
                 withMorale,
                 isPromotionRaiseRequest ? -15 : -12,
                 isPromotionRaiseRequest ? "Odrzucona podwy\u017Cka po awansie eskaluje do \u017C\u0105dania listy transferowej" : "Odrzucona podwy\u017Cka eskaluje do \u017C\u0105dania listy transferowej",
-                currentDate
+                currentDate2
               ),
               contractRaiseDemandUntil: null,
               contractRaiseRequest: null,
@@ -3961,7 +4148,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
               withMorale,
               ownPenalty,
               isPromotionRaiseRequest ? "Odrzucona pro\u015Bba o podwy\u017Ck\u0119 po awansie" : "Odrzucona pro\u015Bba o podwy\u017Ck\u0119",
-              currentDate
+              currentDate2
             ),
             contractRaiseDemandUntil: null,
             contractRaiseRequest: null,
@@ -3969,43 +4156,43 @@ ${withMorale.firstName} ${withMorale.lastName}`,
             contractRaiseTeamMoraleReason: teamDelta < 0 ? isPromotionRaiseRequest ? `Wp\u0142yw lidera po odrzuconej podwy\u017Cce po awansie: ${withMorale.firstName} ${withMorale.lastName}` : `Wp\u0142yw lidera po odrzuconej podwy\u017Cce: ${withMorale.firstName} ${withMorale.lastName}` : null
           };
         } else {
-          const reminderUntil = new Date(currentDate);
+          const reminderUntil = new Date(currentDate2);
           reminderUntil.setMonth(reminderUntil.getMonth() + 3);
           withMorale = {
             ...withMorale,
             contractRaiseDemandUntil: null,
             contractRaiseRequest: null,
             contractRaiseReminderUntil: toDateKey(reminderUntil),
-            lastMoraleDemandDate: toDateKey(currentDate)
+            lastMoraleDemandDate: toDateKey(currentDate2)
           };
         }
       }
     }
     if (withMorale.transferListDemandUntil) {
       const deadline = new Date(withMorale.transferListDemandUntil);
-      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(deadline).getTime();
       if (withMorale.isOnTransferList) {
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, 8, "Trener zgodzi\u0142 si\u0119 na list\u0119 transferow\u0105", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, 8, "Trener zgodzi\u0142 si\u0119 na list\u0119 transferow\u0105", currentDate2),
           transferListDemandUntil: null
         };
       } else if (expired) {
         const personality = withMorale.moralePersonality ?? "CALM";
         const penalty = personality === "LOYAL" || personality === "PROFESSIONAL" ? -8 : personality === "EGOIST" || personality === "AMBITIOUS" ? -16 : -12;
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Odrzucona pro\u015Bba o list\u0119 transferow\u0105", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Odrzucona pro\u015Bba o list\u0119 transferow\u0105", currentDate2),
           transferListDemandUntil: null
         };
       }
     }
     if (withMorale.minutesDemandUntil) {
       const deadline = new Date(withMorale.minutesDemandUntil);
-      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(deadline).getTime();
       const baseline = withMorale.minutesDemandBaseline ?? PlayerMoraleService.getTotalMinutesPlayed(withMorale);
       const hasPlayed = PlayerMoraleService.getTotalMinutesPlayed(withMorale) > baseline;
       if (hasPlayed) {
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, 4, "Dosta\u0142 szans\u0119 po pro\u015Bbie o minuty", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, 4, "Dosta\u0142 szans\u0119 po pro\u015Bbie o minuty", currentDate2),
           minutesDemandUntil: null,
           minutesDemandBaseline: null,
           unresolvedMinutesDemandDate: null,
@@ -4021,21 +4208,21 @@ ${withMorale.firstName} ${withMorale.lastName}`,
         const personality = withMorale.moralePersonality ?? "CALM";
         const penalty = personality === "LOYAL" || personality === "CALM" ? -6 : personality === "EGOIST" || personality === "AMBITIOUS" ? -12 : -9;
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Zignorowana pro\u015Bba o wi\u0119cej wyst\u0119p\xF3w", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Zignorowana pro\u015Bba o wi\u0119cej wyst\u0119p\xF3w", currentDate2),
           minutesDemandUntil: null,
           minutesDemandBaseline: null,
-          unresolvedMinutesDemandDate: toDateKey(currentDate),
+          unresolvedMinutesDemandDate: toDateKey(currentDate2),
           unresolvedMinutesDemandBaseline: PlayerMoraleService.getTotalMinutesPlayed(withMorale)
         };
       }
     }
     if (withMorale.developmentExitDemandUntil) {
       const deadline = new Date(withMorale.developmentExitDemandUntil);
-      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(deadline).getTime();
       const fulfilled = !!withMorale.isOnTransferList || !!withMorale.isAvailableForLoan || !!withMorale.loan;
       if (fulfilled) {
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, 6, "Klub zgodzi\u0142 si\u0119 na transfer lub wypo\u017Cyczenie po braku minut", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, 6, "Klub zgodzi\u0142 si\u0119 na transfer lub wypo\u017Cyczenie po braku minut", currentDate2),
           developmentExitDemandUntil: null,
           developmentExitDemandBaseline: null,
           unresolvedMinutesDemandDate: null,
@@ -4045,7 +4232,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
         const personality = withMorale.moralePersonality ?? "CALM";
         const penalty = personality === "LOYAL" || personality === "PROFESSIONAL" ? -10 : personality === "EGOIST" || personality === "AMBITIOUS" ? -18 : -14;
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Zignorowana pro\u015Bba o odej\u015Bcie lub wypo\u017Cyczenie po braku minut", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Zignorowana pro\u015Bba o odej\u015Bcie lub wypo\u017Cyczenie po braku minut", currentDate2),
           developmentExitDemandUntil: null,
           developmentExitDemandBaseline: null,
           unresolvedMinutesDemandDate: null,
@@ -4055,11 +4242,11 @@ ${withMorale.firstName} ${withMorale.lastName}`,
     }
     if (withMorale.roleDemandUntil && withMorale.requestedSquadRole) {
       const deadline = new Date(withMorale.roleDemandUntil);
-      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate).getTime() > dateOnly(deadline).getTime();
+      const expired = !Number.isNaN(deadline.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(deadline).getTime();
       const fulfilled = isSameOrHigherRole(withMorale.squadRole, withMorale.requestedSquadRole);
       if (fulfilled) {
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, withMorale.requestedSquadRole === "KEY_PLAYER" ? 6 : 4, "Otrzyma\u0142 oczekiwany status w dru\u017Cynie", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, withMorale.requestedSquadRole === "KEY_PLAYER" ? 6 : 4, "Otrzyma\u0142 oczekiwany status w dru\u017Cynie", currentDate2),
           roleDemandUntil: null,
           requestedSquadRole: null
         };
@@ -4067,7 +4254,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
         const personality = withMorale.moralePersonality ?? "CALM";
         const penalty = personality === "PROFESSIONAL" || personality === "LOYAL" ? -5 : personality === "EGOIST" || personality === "AMBITIOUS" ? -13 : -9;
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Zignorowana pro\u015Bba o wy\u017Cszy status", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, penalty, "Zignorowana pro\u015Bba o wy\u017Cszy status", currentDate2),
           roleDemandUntil: null,
           requestedSquadRole: null
         };
@@ -4092,31 +4279,31 @@ ${withMorale.firstName} ${withMorale.lastName}`,
     }
     return null;
   },
-  createOneTimeBonusPromise: (player, currentDate, seasonNumber) => {
-    const decisionDueAt = new Date(currentDate);
+  createOneTimeBonusPromise: (player, currentDate2, seasonNumber) => {
+    const decisionDueAt = new Date(currentDate2);
     decisionDueAt.setDate(decisionDueAt.getDate() + 3);
     const withMorale = PlayerMoraleService.withMoraleChange(
       PlayerMoraleService.ensurePlayerState(player),
       1,
       "Trener obieca\u0142 rozmow\u0119 z zarz\u0105dem o jednorazowej premii",
-      currentDate
+      currentDate2
     );
     return PlayerMoraleService.withMindsetChange(
       {
         ...withMorale,
         oneTimeBonusPromise: {
-          requestedAt: toDateKey(currentDate),
+          requestedAt: toDateKey(currentDate2),
           decisionDueAt: toDateKey(decisionDueAt),
           seasonNumber
         }
       },
       { coachTrust: 2, clubHappiness: 1 },
       "Obietnica rozmowy z zarz\u0105dem o premii",
-      currentDate
+      currentDate2
     );
   },
-  reviewOneTimeBonusPromises: (club, squad, currentDate, seasonNumber, seed) => {
-    const dateKey = toDateKey(currentDate);
+  reviewOneTimeBonusPromises: (club, squad, currentDate2, seasonNumber, seed) => {
+    const dateKey2 = toDateKey(currentDate2);
     let nextClub = club;
     const mails = [];
     const nextPlayers = squad.map((player) => {
@@ -4124,7 +4311,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       const promise = withMorale.oneTimeBonusPromise;
       if (!promise || promise.seasonNumber !== seasonNumber) return withMorale;
       const decisionDate = new Date(promise.decisionDueAt);
-      const decisionDue = !Number.isNaN(decisionDate.getTime()) && dateOnly(currentDate).getTime() >= dateOnly(decisionDate).getTime();
+      const decisionDue = !Number.isNaN(decisionDate.getTime()) && dateOnly(currentDate2).getTime() >= dateOnly(decisionDate).getTime();
       if (!decisionDue) return withMorale;
       const profile = getSeasonOutputProfile(withMorale);
       const performanceScore = getOneTimeBonusPerformanceScore(withMorale, profile);
@@ -4132,7 +4319,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       const generosity = boardAttributeScore(nextClub.board?.hojnosc);
       const ambition = boardAttributeScore(nextClub.board?.ambicja);
       const greed = boardAttributeScore(nextClub.board?.chciwosc);
-      const localSeed = seed + stableHash(`${withMorale.id}_${dateKey}_ONE_TIME_BONUS`);
+      const localSeed = seed + stableHash(`${withMorale.id}_${dateKey2}_ONE_TIME_BONUS`);
       const accuracy = 0.58 + boardCompetence * 0.09;
       const budgetNoise = (seededRng(localSeed, 11) - 0.5) * 0.2 * (1.25 - accuracy);
       const perceivedBudget = Math.max(0, nextClub.budget * (1 + budgetNoise));
@@ -4166,19 +4353,19 @@ ${withMorale.firstName} ${withMorale.lastName}`,
             },
             moraleDelta,
             bonusReactionReason,
-            currentDate
+            currentDate2
           ),
           delighted ? { clubHappiness: 8, coachTrust: 5, conflictLevel: -4, transferOpenness: -3 } : pleased ? { clubHappiness: 5, coachTrust: 3, conflictLevel: -2, transferOpenness: -1 } : { clubHappiness: 1, coachTrust: 1 },
           "Decyzja zarz\u0105du o jednorazowej premii",
-          currentDate
+          currentDate2
         );
         nextClub = {
           ...nextClub,
           budget: nextClub.budget - amount,
           oneTimePlayerBonusesThisSeason: (nextClub.oneTimePlayerBonusesThisSeason ?? 0) + 1,
           financeHistory: [{
-            id: `ONE_TIME_BONUS_${withMorale.id}_${dateKey}`,
-            date: dateKey,
+            id: `ONE_TIME_BONUS_${withMorale.id}_${dateKey2}`,
+            date: dateKey2,
             amount: -amount,
             type: "EXPENSE",
             description: `Jednorazowa premia dla zawodnika: ${playerName}`,
@@ -4197,14 +4384,14 @@ ${withMorale.firstName} ${withMorale.lastName}`,
             },
             moralePenalty,
             "Zarz\u0105d odrzuci\u0142 pro\u015Bb\u0119 o jednorazow\u0105 premi\u0119",
-            currentDate
+            currentDate2
           ),
           { clubHappiness: -7, coachTrust: -2, conflictLevel: 4 },
           "Odrzucona pro\u015Bba o jednorazow\u0105 premi\u0119",
-          currentDate
+          currentDate2
         );
         mails.push({
-          id: `ONE_TIME_BONUS_REJECTED_${withMorale.id}_${dateKey}`,
+          id: `ONE_TIME_BONUS_REJECTED_${withMorale.id}_${dateKey2}`,
           sender: ceoName,
           role: "Zarz\u0105d",
           subject: `PREMIA ODRZUCONA: ${withMorale.lastName}`,
@@ -4219,7 +4406,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
             ceoName,
             `Zarz\u0105d ${nextClub.name}`
           ].join("\n"),
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "BOARD" /* BOARD */,
           priority: 6,
@@ -4234,7 +4421,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
         return withMorale;
       }
       mails.push({
-        id: `ONE_TIME_BONUS_APPROVED_${withMorale.id}_${dateKey}`,
+        id: `ONE_TIME_BONUS_APPROVED_${withMorale.id}_${dateKey2}`,
         sender: ceoName,
         role: "Zarz\u0105d",
         subject: `PREMIA ZATWIERDZONA: ${withMorale.lastName}`,
@@ -4250,7 +4437,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
           ceoName,
           `Zarz\u0105d ${nextClub.name}`
         ].join("\n"),
-        date: new Date(currentDate),
+        date: new Date(currentDate2),
         isRead: false,
         type: "BOARD" /* BOARD */,
         priority: 7,
@@ -4266,11 +4453,11 @@ ${withMorale.firstName} ${withMorale.lastName}`,
     });
     return { club: nextClub, players: nextPlayers, mails };
   },
-  processBoardAppeals: (club, squad, currentDate, existingMessages = []) => {
-    if (squad.length === 0 || club.stats.played < 4 || currentDate.getDay() !== 1) {
+  processBoardAppeals: (club, squad, currentDate2, existingMessages = []) => {
+    if (squad.length === 0 || club.stats.played < 4 || currentDate2.getDay() !== 1) {
       return { players: squad, mails: [] };
     }
-    const dateKey = toDateKey(currentDate);
+    const dateKey2 = toDateKey(currentDate2);
     const mails = [];
     const squadAverage = squad.reduce((sum, p) => sum + p.overallRating, 0) / squad.length;
     const sortedByQuality = [...squad].sort((a, b) => b.overallRating - a.overallRating);
@@ -4279,7 +4466,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       (m) => m.metadata?.type === "PLAYER_BOARD_APPEAL" && m.metadata.playerId === player.id
     );
     const hasBoardDecisionMail = (player) => existingMessages.some(
-      (m) => m.metadata?.type === "BOARD_APPEAL_DECISION" && m.metadata.playerId === player.id && new Date(m.date).getTime() >= currentDate.getTime() - 60 * DAY_MS
+      (m) => m.metadata?.type === "BOARD_APPEAL_DECISION" && m.metadata.playerId === player.id && new Date(m.date).getTime() >= currentDate2.getTime() - 60 * DAY_MS
     );
     const nextPlayers = squad.map((player) => {
       let withMorale = PlayerMoraleService.ensurePlayerState(player);
@@ -4312,12 +4499,12 @@ ${withMorale.firstName} ${withMorale.lastName}`,
           playerName
         ].join("\n");
         mails.push({
-          id: `PLAYER_BOARD_APPEAL_${withMorale.id}_${dateKey}`,
+          id: `PLAYER_BOARD_APPEAL_${withMorale.id}_${dateKey2}`,
           sender: playerName,
           role: "Zawodnik",
           subject: `APEL DO ZARZ\u0104DU: ${withMorale.lastName} \u2014 ${subjectSuffix}`,
           body: appealType === "RAISE" ? bodyRaise : bodyTransfer,
-          date: new Date(currentDate),
+          date: new Date(currentDate2),
           isRead: false,
           type: "STAFF" /* STAFF */,
           priority: 6,
@@ -4330,9 +4517,9 @@ ${withMorale.firstName} ${withMorale.lastName}`,
         });
       }
       const decisionDeadlineDate = new Date(withMorale.boardAppealDeadline);
-      const decisionDue = !Number.isNaN(decisionDeadlineDate.getTime()) && dateOnly(currentDate).getTime() > dateOnly(decisionDeadlineDate).getTime();
+      const decisionDue = !Number.isNaN(decisionDeadlineDate.getTime()) && dateOnly(currentDate2).getTime() > dateOnly(decisionDeadlineDate).getTime();
       if (!decisionDue || hasBoardDecisionMail(withMorale)) return withMorale;
-      const seed = stableHash(`${withMorale.id}_${dateKey}_BOARD_APPEAL`);
+      const seed = stableHash(`${withMorale.id}_${dateKey2}_BOARD_APPEAL`);
       const rank = rankById.get(withMorale.id) ?? squad.length;
       const marketValue = withMorale.marketValue ?? 0;
       const annualSalary = withMorale.annualSalary ?? 0;
@@ -4397,12 +4584,12 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       })();
       const subjectDecision = decision === "SELL" ? `ZARZ\u0104D WYRAZI\u0141 ZGOD\u0118 NA SPRZEDA\u017B: ${withMorale.lastName}` : decision === "RAISE" ? `ZARZ\u0104D ODBLOKOWA\u0141 NEGOCJACJE KONTRAKTU: ${withMorale.lastName}` : `ZARZ\u0104D PODTRZYMA\u0141 DECYZJ\u0118 DYREKTORA: ${withMorale.lastName}`;
       mails.push({
-        id: `BOARD_APPEAL_DECISION_${withMorale.id}_${dateKey}`,
+        id: `BOARD_APPEAL_DECISION_${withMorale.id}_${dateKey2}`,
         sender: ceoName,
         role: "Zarz\u0105d",
         subject: subjectDecision,
         body: bodyDecision,
-        date: new Date(currentDate),
+        date: new Date(currentDate2),
         isRead: false,
         type: "BOARD" /* BOARD */,
         priority: 7,
@@ -4416,7 +4603,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       if (decision === "SELL") {
         const askingPrice = estimateProtectedExitPrice(withMorale, club, squadAverage);
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, 6, "Zarz\u0105d wyrazi\u0142 zgod\u0119 na sprzeda\u017C po apelu zawodnika", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, 6, "Zarz\u0105d wyrazi\u0142 zgod\u0119 na sprzeda\u017C po apelu zawodnika", currentDate2),
           isOnTransferList: true,
           transferListPrice: askingPrice,
           boardLockoutUntil: null,
@@ -4426,7 +4613,7 @@ ${withMorale.firstName} ${withMorale.lastName}`,
         };
       } else if (decision === "RAISE") {
         withMorale = {
-          ...PlayerMoraleService.withMoraleChange(withMorale, 4, "Zarz\u0105d odblokowa\u0142 negocjacje kontraktu po apelu zawodnika", currentDate),
+          ...PlayerMoraleService.withMoraleChange(withMorale, 4, "Zarz\u0105d odblokowa\u0142 negocjacje kontraktu po apelu zawodnika", currentDate2),
           boardLockoutUntil: null,
           boardAppealSentAt: null,
           boardAppealType: null,
@@ -4435,10 +4622,10 @@ ${withMorale.firstName} ${withMorale.lastName}`,
       } else {
         withMorale = {
           ...PlayerMoraleService.withMindsetChange(
-            PlayerMoraleService.withMoraleChange(withMorale, -12, "Zarz\u0105d podtrzyma\u0142 decyzj\u0119 dyrektora \u2014 apel odrzucony", currentDate),
+            PlayerMoraleService.withMoraleChange(withMorale, -12, "Zarz\u0105d podtrzyma\u0142 decyzj\u0119 dyrektora \u2014 apel odrzucony", currentDate2),
             { conflictLevel: 20, clubHappiness: -15 },
             "Apel do zarz\u0105du odrzucony",
-            currentDate
+            currentDate2
           ),
           boardAppealSentAt: null,
           boardAppealType: null,
@@ -5381,7 +5568,7 @@ var LineupService = {
 
 // services/AiMatchPreparationService.ts
 var AiMatchPreparationService = {
-  getClubCoach: (club, coaches2) => club.coachId ? coaches2[club.coachId] ?? null : null,
+  getClubCoach: (club, coaches) => club.coachId ? coaches[club.coachId] ?? null : null,
   determineMatchIntent: (club, opponent, coach, isHome, aggregateGoalDifference) => {
     if (aggregateGoalDifference !== void 0) {
       if (aggregateGoalDifference <= -1) return "OFFENSIVE";
@@ -5395,8 +5582,8 @@ var AiMatchPreparationService = {
     if (strengthDifference <= -adaptationThreshold) return "DEFENSIVE";
     return "NEUTRAL";
   },
-  prepareTeamForMatch: (club, opponent, squad, coach, fixture2, isHome, selectionSeed, aggregateGoalDifference, requireNaturalPositionFit = false) => {
-    const competitionId = fixture2.leagueId;
+  prepareTeamForMatch: (club, opponent, squad, coach, fixture, isHome, selectionSeed, aggregateGoalDifference, requireNaturalPositionFit = false) => {
+    const competitionId = fixture.leagueId;
     const matchEligibleSquad = LineupService.getMatchEligiblePlayers(squad, { competitionId });
     const readySquad = squad.filter((player) => player.condition >= 87);
     const analysisSquad = readySquad.length >= 14 ? readySquad : squad.filter((player) => player.condition >= 75);
@@ -5447,17 +5634,17 @@ var AiMatchPreparationService = {
   // odczytuje newLineups[home.id]/[away.id] i CAŁKOWICIE POMIJA mecz, jeśli składu
   // brakuje (patrz `if (!hLineup || !aLineup) return;` w processLeagueEvent), więc
   // brak siatki bezpieczeństwa mógłby po cichu psuć symulację.
-  prepareAllTeams: (clubs, playersMap, currentLineups, userTeamId, coaches2 = {}, fixtures, currentDate) => {
+  prepareAllTeams: (clubs, playersMap, currentLineups, userTeamId, coaches = {}, fixtures2, currentDate2) => {
     const updatedLineups = { ...currentLineups };
     let relevantClubIds = null;
     const relevantFixturesByClubId = /* @__PURE__ */ new Map();
-    if (fixtures && currentDate) {
+    if (fixtures2 && currentDate2) {
       relevantClubIds = /* @__PURE__ */ new Set();
-      const todayStr = currentDate.toDateString();
-      const tomorrow = new Date(currentDate);
+      const todayStr = currentDate2.toDateString();
+      const tomorrow = new Date(currentDate2);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toDateString();
-      fixtures.forEach((f) => {
+      fixtures2.forEach((f) => {
         if (f.status !== "SCHEDULED" /* SCHEDULED */) return;
         const fDateStr = f.date.toDateString();
         if (fDateStr !== todayStr && fDateStr !== tomorrowStr) return;
@@ -5478,19 +5665,19 @@ var AiMatchPreparationService = {
       if (relevantClubIds && !relevantClubIds.has(club.id)) return;
       const squad = playersMap[club.id];
       if (!squad || squad.length === 0) return;
-      const clubCoach = club.coachId ? coaches2[club.coachId] ?? null : null;
-      const fixture2 = relevantFixturesByClubId.get(club.id);
-      if (fixture2) {
-        const opponentId = fixture2.homeTeamId === club.id ? fixture2.awayTeamId : fixture2.homeTeamId;
+      const clubCoach = club.coachId ? coaches[club.coachId] ?? null : null;
+      const fixture = relevantFixturesByClubId.get(club.id);
+      if (fixture) {
+        const opponentId = fixture.homeTeamId === club.id ? fixture.awayTeamId : fixture.homeTeamId;
         const opponent = clubs.find((candidate) => candidate.id === opponentId) ?? null;
         updatedLineups[club.id] = AiMatchPreparationService.prepareTeamForMatch(
           club,
           opponent,
           squad,
           clubCoach,
-          fixture2,
-          fixture2.homeTeamId === club.id,
-          `${fixture2.id}_${club.id}_ai_match_preparation`
+          fixture,
+          fixture.homeTeamId === club.id,
+          `${fixture.id}_${club.id}_ai_match_preparation`
         );
         return;
       }
@@ -5538,6 +5725,90 @@ var AiMatchPreparationService = {
     if (linePlayers.length === 0) return 0;
     const total = linePlayers.reduce((sum, p) => sum + PlayerMoraleService.getEffectiveOverall(PlayerMoraleService.ensurePlayerState(p)), 0);
     return total / linePlayers.length;
+  }
+};
+
+// services/MatchHistoryService.ts
+var matchHistory = [];
+var matchIndex = /* @__PURE__ */ new Map();
+var indexKey = (season, matchId) => `${season}::${matchId}`;
+var toArchivedSummary = (entry) => ({
+  matchId: entry.matchId,
+  date: entry.date,
+  season: entry.season,
+  archived: true,
+  competition: entry.competition,
+  homeTeamId: entry.homeTeamId,
+  awayTeamId: entry.awayTeamId,
+  homeScore: entry.homeScore,
+  awayScore: entry.awayScore,
+  homePenaltyScore: entry.homePenaltyScore,
+  awayPenaltyScore: entry.awayPenaltyScore,
+  isExtraTime: entry.isExtraTime,
+  attendance: entry.attendance,
+  venue: entry.venue,
+  goals: [],
+  cards: []
+});
+var MatchHistoryService = {
+  // Funkcja dodająca nowy wpis
+  logMatch: (entry) => {
+    const duplicateIndex = matchIndex.get(indexKey(entry.season, entry.matchId));
+    if (duplicateIndex !== void 0) {
+      matchHistory = matchHistory.map(
+        (existing, index) => index === duplicateIndex ? entry : existing
+      );
+      console.log(`[MatchHistory] Zaktualizowano mecz: ${entry.homeTeamId} vs ${entry.awayTeamId}`);
+      return;
+    }
+    matchHistory.push(entry);
+    matchIndex.set(indexKey(entry.season, entry.matchId), matchHistory.length - 1);
+    console.log(`[MatchHistory] Zapisano mecz: ${entry.homeTeamId} vs ${entry.awayTeamId}`);
+  },
+  updateMatch: (matchId, updates) => {
+    matchHistory = matchHistory.map(
+      (entry) => entry.matchId === matchId ? { ...entry, ...updates } : entry
+    );
+  },
+  // Funkcja pobierająca całą historię
+  getAll: () => [...matchHistory],
+  // Funkcja pobierająca mecze konkretnej drużyny
+  getTeamHistory: (teamId) => {
+    return matchHistory.filter((m) => m.homeTeamId === teamId || m.awayTeamId === teamId);
+  },
+  archiveBeforeSeason: (firstDetailedSeason) => {
+    let archivedCount = 0;
+    matchHistory = matchHistory.map((entry) => {
+      if (entry.season >= firstDetailedSeason || entry.archived) return entry;
+      archivedCount += 1;
+      return toArchivedSummary(entry);
+    });
+    return archivedCount;
+  },
+  // PERF/ROZMIAR ZAPISU (dodane 2026-08-01): zwraca historię meczów przeznaczoną
+  // do ZAPISU DO PLIKU — mecze starsze niż `detailSeasons` pełnych sezonów wstecz
+  // dostają wersję "podglądową" (bez goals[]/cards[]), dokładnie tym samym
+  // przekształceniem (toArchivedSummary) co archiveBeforeSeason powyżej — zero
+  // nowej logiki, tylko reużycie istniejącej funkcji.
+  //
+  // KLUCZOWA RÓŻNICA względem archiveBeforeSeason: ta funkcja NIE mutuje żywej
+  // tablicy `matchHistory` w pamięci (buduje nową tablicę przez .map(), nie
+  // przypisuje do `matchHistory`). Rozgrywka w bieżącej sesji (widok "Historia
+  // meczów", statystyki na żywo) nadal widzi pełne szczegóły niezależnie od wieku
+  // meczu — przycięcie dotyczy WYŁĄCZNIE tego, co trafia do pliku zapisu. Dopiero
+  // wczytanie takiego zapisu pokaże stare mecze bez szczegółów (bo to fizycznie
+  // jedyne dane, jakie w nim wtedy będą).
+  getAllForSave: (currentSeasonNumber, detailSeasons = 2) => {
+    const firstDetailedSeason = currentSeasonNumber - (detailSeasons - 1);
+    return matchHistory.map((entry) => {
+      if (entry.season >= firstDetailedSeason || entry.archived) return entry;
+      return toArchivedSummary(entry);
+    });
+  },
+  // Funkcja czyszcząca (np. przy nowej grze)
+  clear: () => {
+    matchHistory = [];
+    matchIndex.clear();
   }
 };
 
@@ -5655,135 +5926,6 @@ var GoalAttributionService = {
       r -= weights[i];
     }
     return items[items.length - 1];
-  }
-};
-
-// services/EuropeanWeatherService.ts
-var COUNTRY_TO_ZONE = {
-  // Północ
-  "NOR": "NORTH",
-  "SWE": "NORTH",
-  "DEN": "NORTH",
-  "FIN": "NORTH",
-  "ISL": "NORTH",
-  "FRO": "NORTH",
-  "SCO": "NORTH",
-  // Atlantycki
-  "ENG": "ATLANTIC",
-  "IRL": "ATLANTIC",
-  "WAL": "ATLANTIC",
-  "NIR": "ATLANTIC",
-  "POR": "ATLANTIC",
-  "BEL": "ATLANTIC",
-  "NED": "ATLANTIC",
-  "FRA": "ATLANTIC",
-  // Kontynentalny
-  "GER": "CONTINENTAL",
-  "POL": "CONTINENTAL",
-  "CZE": "CONTINENTAL",
-  "SVK": "CONTINENTAL",
-  "AUT": "CONTINENTAL",
-  "SUI": "CONTINENTAL",
-  "HUN": "CONTINENTAL",
-  "SRB": "CONTINENTAL",
-  "CRO": "CONTINENTAL",
-  "BIH": "CONTINENTAL",
-  "MKD": "CONTINENTAL",
-  "MNE": "CONTINENTAL",
-  "BUL": "CONTINENTAL",
-  "SVN": "CONTINENTAL",
-  "UKR": "CONTINENTAL",
-  "ROU": "CONTINENTAL",
-  "MDA": "CONTINENTAL",
-  "LTU": "CONTINENTAL",
-  "LAT": "CONTINENTAL",
-  "EST": "CONTINENTAL",
-  "BLR": "CONTINENTAL",
-  // Śródziemnomorski
-  "ITA": "MEDITERRANEAN",
-  "ESP": "MEDITERRANEAN",
-  "GRE": "MEDITERRANEAN",
-  "TUR": "MEDITERRANEAN",
-  "CYP": "MEDITERRANEAN",
-  "MLT": "MEDITERRANEAN",
-  "AND": "MEDITERRANEAN",
-  "GIB": "MEDITERRANEAN",
-  "SMR": "MEDITERRANEAN",
-  "ISR": "MEDITERRANEAN",
-  "LIB": "MEDITERRANEAN",
-  // Wschód
-  "RUS": "EAST",
-  "KAZ": "EAST",
-  "AZE": "EAST",
-  "GEO": "EAST",
-  "ARM": "EAST"
-};
-var BASE_MODIFIER = {
-  NORTH: [0.82, 0.83, 0.88, 0.95, 1.02, 1.05, 1.05, 1.03, 0.98, 0.92, 0.87, 0.83],
-  ATLANTIC: [0.9, 0.9, 0.93, 0.97, 1, 1.02, 1.03, 1.02, 1, 0.96, 0.92, 0.9],
-  CONTINENTAL: [0.84, 0.85, 0.9, 0.97, 1.02, 1.04, 1.04, 1.03, 1, 0.95, 0.89, 0.85],
-  MEDITERRANEAN: [0.96, 0.97, 0.99, 1.02, 1.04, 1.05, 1.05, 1.05, 1.03, 1.01, 0.98, 0.97],
-  EAST: [0.8, 0.81, 0.87, 0.95, 1.01, 1.04, 1.04, 1.02, 0.98, 0.91, 0.85, 0.81]
-};
-var ZONE_CLIMATE = {
-  NORTH: [{ minT: -8, maxT: -2, precip: 0.45 }, { minT: -7, maxT: 0, precip: 0.4 }, { minT: -3, maxT: 5, precip: 0.35 }, { minT: 3, maxT: 11, precip: 0.35 }, { minT: 8, maxT: 17, precip: 0.3 }, { minT: 12, maxT: 21, precip: 0.35 }, { minT: 15, maxT: 23, precip: 0.4 }, { minT: 14, maxT: 22, precip: 0.4 }, { minT: 9, maxT: 17, precip: 0.4 }, { minT: 4, maxT: 11, precip: 0.45 }, { minT: -1, maxT: 5, precip: 0.5 }, { minT: -5, maxT: 0, precip: 0.5 }],
-  ATLANTIC: [{ minT: 5, maxT: 11, precip: 0.55 }, { minT: 5, maxT: 12, precip: 0.5 }, { minT: 6, maxT: 14, precip: 0.45 }, { minT: 8, maxT: 16, precip: 0.4 }, { minT: 11, maxT: 19, precip: 0.4 }, { minT: 14, maxT: 22, precip: 0.35 }, { minT: 16, maxT: 24, precip: 0.3 }, { minT: 16, maxT: 24, precip: 0.3 }, { minT: 13, maxT: 20, precip: 0.4 }, { minT: 10, maxT: 16, precip: 0.5 }, { minT: 7, maxT: 12, precip: 0.55 }, { minT: 5, maxT: 10, precip: 0.6 }],
-  CONTINENTAL: [{ minT: -4, maxT: 3, precip: 0.38 }, { minT: -3, maxT: 5, precip: 0.33 }, { minT: 2, maxT: 10, precip: 0.3 }, { minT: 7, maxT: 16, precip: 0.35 }, { minT: 12, maxT: 21, precip: 0.45 }, { minT: 15, maxT: 25, precip: 0.5 }, { minT: 17, maxT: 27, precip: 0.45 }, { minT: 17, maxT: 26, precip: 0.4 }, { minT: 12, maxT: 21, precip: 0.35 }, { minT: 7, maxT: 14, precip: 0.3 }, { minT: 2, maxT: 8, precip: 0.4 }, { minT: -2, maxT: 4, precip: 0.42 }],
-  MEDITERRANEAN: [{ minT: 8, maxT: 15, precip: 0.32 }, { minT: 8, maxT: 16, precip: 0.28 }, { minT: 11, maxT: 19, precip: 0.22 }, { minT: 14, maxT: 22, precip: 0.18 }, { minT: 18, maxT: 27, precip: 0.12 }, { minT: 22, maxT: 31, precip: 0.08 }, { minT: 25, maxT: 34, precip: 0.04 }, { minT: 25, maxT: 34, precip: 0.05 }, { minT: 21, maxT: 30, precip: 0.15 }, { minT: 17, maxT: 24, precip: 0.28 }, { minT: 13, maxT: 20, precip: 0.32 }, { minT: 9, maxT: 15, precip: 0.35 }],
-  EAST: [{ minT: -12, maxT: -5, precip: 0.4 }, { minT: -10, maxT: -3, precip: 0.35 }, { minT: -4, maxT: 5, precip: 0.3 }, { minT: 5, maxT: 14, precip: 0.35 }, { minT: 12, maxT: 21, precip: 0.4 }, { minT: 16, maxT: 25, precip: 0.45 }, { minT: 18, maxT: 28, precip: 0.4 }, { minT: 17, maxT: 27, precip: 0.38 }, { minT: 12, maxT: 21, precip: 0.35 }, { minT: 5, maxT: 13, precip: 0.3 }, { minT: -2, maxT: 5, precip: 0.38 }, { minT: -8, maxT: -2, precip: 0.42 }]
-};
-var EuropeanWeatherService = {
-  // Zwraca modyfikator liczby goli (0.75 – 1.10) dla kraju gospodarza i daty meczu.
-  // randVariation: wartość 0–1 z seededRng — dodaje małą losową wariację ±0.05
-  getGoalModifier: (countryCode, date, randVariation) => {
-    const zone = COUNTRY_TO_ZONE[countryCode] ?? "CONTINENTAL";
-    const month = date.getMonth();
-    const base = BASE_MODIFIER[zone][month];
-    return Math.max(0.75, Math.min(1.1, base + (randVariation - 0.5) * 0.1));
-  },
-  getSnapshot: (countryCode, date, seedStr) => {
-    const zone = COUNTRY_TO_ZONE[countryCode] ?? "CONTINENTAL";
-    const month = date.getMonth();
-    const cfg = ZONE_CLIMATE[zone][month];
-    let hash = 0;
-    for (let i = 0; i < seedStr.length; i++) {
-      hash = (hash << 5) - hash + seedStr.charCodeAt(i);
-      hash |= 0;
-    }
-    const r1 = Math.abs(hash) % 1e4 / 1e4;
-    const r2 = Math.abs(hash * 1664525 + 1013904223) % 1e4 / 1e4;
-    const r3 = Math.abs(hash * 22695477 + 1) % 1e4 / 1e4;
-    const tempC = Math.floor(cfg.minT + r2 * (cfg.maxT - cfg.minT));
-    const windKmh = Math.floor(r3 * 55);
-    let description;
-    let precipitationChance;
-    let weatherIntensity;
-    if (r1 < cfg.precip * 0.1) {
-      description = tempC < 1 ? "Zamie\u0107 \u015Bnie\u017Cna" : "Burza";
-      precipitationChance = 100;
-      weatherIntensity = 1;
-    } else if (r1 < cfg.precip * 0.6) {
-      description = tempC < 1 ? "Intensywne opady \u015Bniegu" : "Ulewny deszcz";
-      precipitationChance = 100;
-      weatherIntensity = 0.72;
-    } else if (r1 < cfg.precip) {
-      description = tempC < 1 ? "Lekki \u015Bnieg" : "Lekki deszcz";
-      precipitationChance = 85;
-      weatherIntensity = 0.36;
-    } else if (windKmh >= 34) {
-      description = "Silny wiatr";
-      precipitationChance = 10;
-      weatherIntensity = windKmh > 45 ? 0.45 : 0.25;
-    } else if (r1 > 0.75) {
-      description = "Zachmurzenie umiarkowane";
-      precipitationChance = 0;
-      weatherIntensity = 0.05;
-    } else {
-      description = "Bezchmurnie";
-      precipitationChance = 0;
-      weatherIntensity = 0;
-    }
-    return { tempC, precipitationChance, windKmh, description, weatherIntensity };
   }
 };
 
@@ -20993,1187 +21135,1548 @@ var rollInjuryBySeverity = (severity, random = Math.random) => {
   };
 };
 
-// services/BackgroundMatchProcessorCL.ts
-var CL_FINAL_VENUES = [
-  { name: "Wembley Stadium", city: "Londyn", capacity: 9e4, country: "England" },
-  { name: "Stade de France", city: "Saint-Denis", capacity: 81338, country: "France" },
-  { name: "Estadio Santiago Bernab\xE9u", city: "Madryt", capacity: 81044, country: "Spain" },
-  { name: "Allianz Arena", city: "Monachium", capacity: 75e3, country: "Germany" },
-  { name: "Stadio Giuseppe Meazza", city: "Mediolan", capacity: 75817, country: "Italy" },
-  { name: "Signal Iduna Park", city: "Dortmund", capacity: 81365, country: "Germany" },
-  { name: "Olympiastadion", city: "Berlin", capacity: 74475, country: "Germany" },
-  { name: "Puskas Ar\xE9na", city: "Budapeszt", capacity: 67215, country: "Hungary" },
-  { name: "Est\xE1dio da Luz", city: "Lizbona", capacity: 64642, country: "Portugal" },
-  { name: "Tottenham Hotspur Stadium", city: "Londyn", capacity: 62850, country: "England" }
-];
-var EL_FINAL_VENUES = [
-  { name: "Aviva Stadium", city: "Dublin", capacity: 51700, country: "Ireland" },
-  { name: "Est\xE1dio do Drag\xE3o", city: "Porto", capacity: 50033, country: "Portugal" },
-  { name: "Ram\xF3n S\xE1nchez-Pizju\xE1n", city: "Sewilla", capacity: 43883, country: "Spain" },
-  { name: "Volksparkstadion", city: "Hamburg", capacity: 57e3, country: "Germany" },
-  { name: "Arena Nationala", city: "Bukareszt", capacity: 55634, country: "Romania" },
-  { name: "Philips Stadion", city: "Eindhoven", capacity: 35e3, country: "Netherlands" },
-  { name: "Estadio de La Cartuja", city: "Sewilla", capacity: 57619, country: "Spain" },
-  { name: "Estadio Olimpico", city: "Ateny", capacity: 68e3, country: "Greece" }
-];
-var CONF_FINAL_VENUES = [
-  { name: "Stadion Narodowy", city: "Warszawa", capacity: 58580, country: "Poland" },
-  { name: "Lerkendal Stadion", city: "Trondheim", capacity: 21166, country: "Norway" },
-  { name: "Eden Arena", city: "Praga", capacity: 19370, country: "Czech" },
-  { name: "Parken", city: "Kopenhaga", capacity: 38065, country: "Denmark" },
-  { name: "Estadio do Algarve", city: "Faro", capacity: 30305, country: "Portugal" },
-  { name: "Stade de Suisse", city: "Berno", capacity: 31783, country: "Switzerland" },
-  { name: "GSP Stadium", city: "Nikozja", capacity: 22700, country: "Cyprus" },
-  { name: "OAKA Stadium", city: "Ateny", capacity: 69618, country: "Greece" }
-];
+// resources/ClubKits.ts
+var FALLBACK_COLORS = ["#111111", "#ffffff", "#ff0000", "#facc15"];
+var DEFAULT_KIT_PATTERN = "solid";
+var inferDefaultHomePattern = (club) => {
+  const name = club.name.toLowerCase();
+  if (name.includes("barcelona") || name.includes("inter mediolan") || name.includes("inter milan") || name.includes("ac milan") || name.includes("atletico") || name.includes("juventus") || name.includes("psv") || name.includes("feyenoord") || name.includes("athletic bilbao") || name.includes("real sociedad")) {
+    return "vertical_stripes";
+  }
+  if (name.includes("celtic") || name.includes("sporting cp") || name.includes("sporting lizbona")) {
+    return "horizontal_stripes";
+  }
+  return DEFAULT_KIT_PATTERN;
+};
+var normalizeKitColor = (value, fallback) => {
+  if (!value) return fallback;
+  const trimmed = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase();
+  return fallback;
+};
+var normalizeKitPattern = (value) => {
+  if (value === "horizontal_stripes" || value === "vertical_stripes" || value === "diagonal_stripe" || value === "center_band" || value === "center_vertical_stripe") return value;
+  return DEFAULT_KIT_PATTERN;
+};
+var createDefaultClubKits = (colorsHex = []) => {
+  const colors = [
+    normalizeKitColor(colorsHex[0], FALLBACK_COLORS[0]),
+    normalizeKitColor(colorsHex[1], FALLBACK_COLORS[1]),
+    normalizeKitColor(colorsHex[2], FALLBACK_COLORS[2]),
+    normalizeKitColor(colorsHex[3], FALLBACK_COLORS[3])
+  ];
+  return [
+    {
+      id: "home",
+      name: "Domowy",
+      shirt: colors[0],
+      shirtSecondary: colors[1],
+      shorts: colors[0],
+      socks: colors[0],
+      pattern: DEFAULT_KIT_PATTERN,
+      isActive: true
+    },
+    {
+      id: "away",
+      name: "Wyjazdowy",
+      shirt: colors[1],
+      shirtSecondary: colors[0],
+      shorts: colors[1],
+      socks: colors[1],
+      pattern: DEFAULT_KIT_PATTERN,
+      isActive: true
+    },
+    {
+      id: "third",
+      name: "Trzeci",
+      shirt: colors[2],
+      shirtSecondary: colors[0],
+      shorts: colors[2],
+      socks: colors[2],
+      pattern: DEFAULT_KIT_PATTERN,
+      isActive: Boolean(colorsHex[2])
+    },
+    {
+      id: "fourth",
+      name: "Czwarty",
+      shirt: colors[3],
+      shirtSecondary: colors[0],
+      shorts: colors[3],
+      socks: colors[3],
+      pattern: DEFAULT_KIT_PATTERN,
+      isActive: Boolean(colorsHex[3])
+    }
+  ];
+};
+var getClubKits = (club) => {
+  const fallback = createDefaultClubKits(club.colorsHex);
+  fallback[0] = { ...fallback[0], pattern: inferDefaultHomePattern(club) };
+  const source = club.kits && club.kits.length >= 2 ? club.kits : fallback;
+  return [0, 1, 2, 3].map((index) => {
+    const base = fallback[index];
+    const kit = source[index];
+    return {
+      id: kit?.id || base.id,
+      name: kit?.name || base.name,
+      shirt: normalizeKitColor(kit?.shirt, base.shirt),
+      shirtSecondary: normalizeKitColor(kit?.shirtSecondary, base.shirtSecondary ?? base.shorts),
+      shorts: normalizeKitColor(kit?.shorts, base.shorts),
+      socks: normalizeKitColor(kit?.socks, base.socks),
+      pattern: kit?.pattern ? normalizeKitPattern(kit.pattern) : base.pattern,
+      isActive: index < 2 ? true : Boolean(kit?.isActive)
+    };
+  });
+};
+var getActiveClubKits = (club) => getClubKits(club).filter((kit, index) => index < 2 || kit.isActive);
+var createDefaultNationalTeamKits = (colorsHex = []) => createDefaultClubKits(colorsHex).slice(0, 3).map((kit, index) => ({
+  ...kit,
+  name: index === 0 ? "Domowy" : index === 1 ? "Wyjazdowy" : "Rezerwowy",
+  isActive: true
+}));
+var getNationalTeamKits = (team) => {
+  const fallback = createDefaultNationalTeamKits(team.colorsHex);
+  const source = team.kits && team.kits.length >= 3 ? team.kits : fallback;
+  return [0, 1, 2].map((index) => {
+    const base = fallback[index];
+    const kit = source[index];
+    return {
+      id: kit?.id || base.id,
+      name: kit?.name || base.name,
+      shirt: normalizeKitColor(kit?.shirt, base.shirt),
+      shirtSecondary: normalizeKitColor(kit?.shirtSecondary, base.shirtSecondary ?? base.shorts),
+      shorts: normalizeKitColor(kit?.shorts, base.shorts),
+      socks: normalizeKitColor(kit?.socks, base.socks),
+      pattern: kit?.pattern ? normalizeKitPattern(kit.pattern) : base.pattern,
+      isActive: true
+    };
+  });
+};
+var getActiveNationalTeamKits = (team) => getNationalTeamKits(team);
+
+// services/KitSelectionService.ts
+var MIN_KIT_CONTRAST_DISTANCE = 120;
+var hasVisibleShirtAccent = (pattern) => Boolean(pattern && pattern !== "solid");
+var getVisibleShirtColors = (kit) => {
+  const colors = [kit.primary];
+  if (hasVisibleShirtAccent(kit.pattern) && kit.shirtSecondary) colors.push(kit.shirtSecondary);
+  return [...new Set(colors)];
+};
+var toMatchKitColors = (kit) => ({
+  primary: kit.shirt,
+  shirtSecondary: kit.shirtSecondary,
+  secondary: kit.shorts,
+  pattern: kit.pattern,
+  text: KitSelectionService.isColorLight(kit.shirt) ? "#000000" : "#ffffff"
+});
+var buildKitSelection = (homeKit, awayKit) => ({
+  home: toMatchKitColors(homeKit),
+  away: toMatchKitColors(awayKit)
+});
+var getKitPairScore = (homeKit, awayKit) => {
+  const homeMatchKit = toMatchKitColors(homeKit);
+  const awayMatchKit = toMatchKitColors(awayKit);
+  const shirtDistance = KitSelectionService.getKitClashScore(homeMatchKit, awayMatchKit);
+  const primaryDistance = KitSelectionService.getColorDistance(awayKit.shirt, homeKit.shirt);
+  const shortsDistance = Math.min(
+    KitSelectionService.getColorDistance(awayKit.shorts, homeKit.shirt),
+    KitSelectionService.getColorDistance(awayKit.shirt, homeKit.shorts)
+  );
+  return {
+    shirtDistance,
+    primaryDistance,
+    supportingScore: primaryDistance * 0.7 + shortsDistance * 0.3
+  };
+};
+var isBetterKitPair = (candidate, current) => {
+  const candidateHasContrast = candidate.shirtDistance >= MIN_KIT_CONTRAST_DISTANCE;
+  const currentHasContrast = current.shirtDistance >= MIN_KIT_CONTRAST_DISTANCE;
+  if (candidateHasContrast !== currentHasContrast) return candidateHasContrast;
+  if (candidate.shirtDistance !== current.shirtDistance) return candidate.shirtDistance > current.shirtDistance;
+  if (candidate.primaryDistance !== current.primaryDistance) return candidate.primaryDistance > current.primaryDistance;
+  return candidate.supportingScore > current.supportingScore;
+};
+var selectBestAwayKit = (homeKit, awayOptions) => {
+  let bestAwayKit = awayOptions[0];
+  let bestScore = getKitPairScore(homeKit, bestAwayKit);
+  for (const awayKit of awayOptions.slice(1)) {
+    const score = getKitPairScore(homeKit, awayKit);
+    if (isBetterKitPair(score, bestScore)) {
+      bestAwayKit = awayKit;
+      bestScore = score;
+    }
+  }
+  return bestAwayKit;
+};
+var selectOptimalKitsFromVariants = (homeOptions, awayOptions) => {
+  const defaultHomeKit = homeOptions[0];
+  const defaultAwayKit = selectBestAwayKit(defaultHomeKit, awayOptions);
+  if (getKitPairScore(defaultHomeKit, defaultAwayKit).shirtDistance >= MIN_KIT_CONTRAST_DISTANCE) {
+    return buildKitSelection(defaultHomeKit, defaultAwayKit);
+  }
+  let bestHomeKit = defaultHomeKit;
+  let bestAwayKit = defaultAwayKit;
+  let bestScore = getKitPairScore(bestHomeKit, bestAwayKit);
+  for (const homeKit of homeOptions) {
+    for (const awayKit of awayOptions) {
+      const score = getKitPairScore(homeKit, awayKit);
+      if (isBetterKitPair(score, bestScore)) {
+        bestHomeKit = homeKit;
+        bestAwayKit = awayKit;
+        bestScore = score;
+      }
+    }
+  }
+  return buildKitSelection(bestHomeKit, bestAwayKit);
+};
+var KitSelectionService = {
+  /**
+   * Calculates perceptual color distance between two hex colors.
+   * Uses weighted Euclidean distance for better human perception approximation.
+   */
+  getColorDistance: (hex1, hex2) => {
+    const r1 = parseInt(hex1.substring(1, 3), 16);
+    const g1 = parseInt(hex1.substring(3, 5), 16);
+    const b1 = parseInt(hex1.substring(5, 7), 16);
+    const r2 = parseInt(hex2.substring(1, 3), 16);
+    const g2 = parseInt(hex2.substring(3, 5), 16);
+    const b2 = parseInt(hex2.substring(5, 7), 16);
+    const rmean = (r1 + r2) / 2;
+    const r = r1 - r2;
+    const g = g1 - g2;
+    const b = b1 - b2;
+    return Math.sqrt(((512 + rmean) * r * r >> 8) + 4 * g * g + ((767 - rmean) * b * b >> 8));
+  },
+  getKitClashScore: (kitA, kitB) => {
+    const colorsA = getVisibleShirtColors(kitA);
+    const colorsB = getVisibleShirtColors(kitB);
+    return Math.min(...colorsA.flatMap((a) => colorsB.map((b) => KitSelectionService.getColorDistance(a, b))));
+  },
+  hasKitClash: (kitA, kitB) => KitSelectionService.getKitClashScore(kitA, kitB) < MIN_KIT_CONTRAST_DISTANCE,
+  /**
+   * Determines if a color is light or dark for text contrast.
+   */
+  isColorLight: (hex) => {
+    const r = parseInt(hex.substring(1, 3), 16);
+    const g = parseInt(hex.substring(3, 5), 16);
+    const b = parseInt(hex.substring(5, 7), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1e3;
+    return brightness > 155;
+  },
+  /**
+   * Selects the best possible combination from real club kit variants.
+   */
+  selectOptimalKits: (home, away) => {
+    const homeOptions = getActiveClubKits(home);
+    const awayOptions = getActiveClubKits(away);
+    return selectOptimalKitsFromVariants(homeOptions, awayOptions);
+  },
+  selectOptimalNationalTeamKits: (home, away) => selectOptimalKitsFromVariants(getActiveNationalTeamKits(home), getActiveNationalTeamKits(away)),
+  /**
+   * Selects the opponent kit after the player explicitly changes their own kit.
+   */
+  selectOpponentKitForKit: (playerKit, opponent) => {
+    const opponentKits = getActiveClubKits(opponent);
+    const selectedKit = {
+      id: "selected-player-kit",
+      name: "Wybrany str\xF3j",
+      shirt: playerKit.primary,
+      shirtSecondary: playerKit.shirtSecondary,
+      shorts: playerKit.secondary,
+      socks: playerKit.secondary,
+      pattern: playerKit.pattern ?? "solid",
+      isActive: true
+    };
+    return toMatchKitColors(selectBestAwayKit(selectedKit, opponentKits));
+  },
+  /**
+   * Selects the opponent kit that is furthest from the player's chosen shirt color.
+   */
+  selectOpponentKit: (playerKitHex, opponent) => {
+    return KitSelectionService.selectOpponentKitForKit({
+      primary: playerKitHex,
+      secondary: playerKitHex,
+      pattern: "solid",
+      text: KitSelectionService.isColorLight(playerKitHex) ? "#000000" : "#ffffff"
+    }, opponent);
+  }
+};
+
+// services/PolishCupVenueService.ts
+var POLISH_CUP_NEUTRAL_VENUE = {
+  name: "PGE Narodowy, Warszawa",
+  capacity: 58580
+};
+var isPolishCupFinal = (fixture) => fixture.id.toUpperCase().includes("FINA\u0141");
+var PolishCupVenueService = {
+  getVenue: (fixture, homeClub) => {
+    const isNeutral = fixture.leagueId === "SUPER_CUP" /* SUPER_CUP */ || isPolishCupFinal(fixture);
+    return isNeutral ? { ...POLISH_CUP_NEUTRAL_VENUE, isNeutral: true } : { name: homeClub.stadiumName, capacity: homeClub.stadiumCapacity, isNeutral: false };
+  },
+  getHistoryVenue: (match, homeClub) => {
+    const venue = PolishCupVenueService.getVenue(
+      { id: match.matchId, leagueId: match.competition },
+      homeClub
+    );
+    return venue.isNeutral ? venue.name : match.venue || venue.name;
+  }
+};
+
+// services/PolishCupDrawService.ts
+var POLISH_CUP_BYE_TEAM_ID = "POLISH_CUP_BYE";
+
+// services/BackgroundMatchProcessorPolishCup.ts
 var formatPlayerReportName = (player) => {
   const lastName = player.lastName.trim();
   return lastName ? `${player.firstName.charAt(0)}. ${lastName}` : player.firstName;
 };
-var makeSeededRng = (seed) => (offset) => {
-  const x = Math.sin(seed + offset) * 1e4;
-  return x - Math.floor(x);
-};
-var getEuropeanBackgroundProfile = (competitionId) => {
-  const id = String(competitionId);
-  const family = id.startsWith("CONF_") ? "CONF" : id.startsWith("EL_") ? "EL" : "CL";
-  const stage = /_R[12]Q(?:_|$)/.test(id) ? "QUALIFYING" : id.includes("_GROUP_STAGE") ? "LEAGUE" : id.endsWith("_FINAL") ? "FINAL" : "KNOCKOUT";
-  const isReturnLeg = id.endsWith("_RETURN");
-  if (family === "CL") {
-    return {
-      family,
-      stage,
-      isReturnLeg,
-      useLegacyChampionsLeagueModel: true,
-      individualVariance: 0,
-      quietMatchChance: 0,
-      quietMatchMultiplier: 1,
-      openMatchChance: 0,
-      openMatchMultiplier: 1,
-      upsetWindowChance: 0,
-      collapseChance: 0,
-      expectedGoalsCap: 3.8
-    };
+var clamp6 = (value, min, max) => Math.max(min, Math.min(max, value));
+var getPolishCupCoachMatchProfile = (coach) => {
+  if (!coach) {
+    return { attackingMultiplier: 1, defensiveMultiplier: 1, penaltyAdjustment: 0 };
   }
-  const isConference = family === "CONF";
-  const stageSettings = {
-    QUALIFYING: {
-      individualVariance: isConference ? 0.24 : 0.21,
-      quietMatchChance: 0.09,
-      quietMatchMultiplier: 0.62,
-      openMatchChance: isConference ? 0.075 : 0.065,
-      openMatchMultiplier: isConference ? 1.44 : 1.4,
-      upsetWindowChance: isConference ? 0.078 : 0.066,
-      collapseChance: isConference ? 0.04 : 0.034,
-      expectedGoalsCap: isConference ? 5.4 : 5.1
-    },
-    LEAGUE: {
-      individualVariance: isConference ? 0.2 : 0.17,
-      quietMatchChance: 0.1,
-      quietMatchMultiplier: 0.64,
-      openMatchChance: isConference ? 0.062 : 0.05,
-      openMatchMultiplier: isConference ? 1.4 : 1.36,
-      upsetWindowChance: isConference ? 0.066 : 0.055,
-      collapseChance: isConference ? 0.03 : 0.023,
-      expectedGoalsCap: isConference ? 4.9 : 4.6
-    },
-    KNOCKOUT: {
-      individualVariance: isConference ? 0.17 : 0.15,
-      quietMatchChance: 0.12,
-      quietMatchMultiplier: 0.61,
-      openMatchChance: isConference ? 0.05 : 0.04,
-      openMatchMultiplier: isConference ? 1.36 : 1.32,
-      upsetWindowChance: isConference ? 0.055 : 0.045,
-      collapseChance: isConference ? 0.023 : 0.018,
-      expectedGoalsCap: isConference ? 4.6 : 4.4
-    },
-    FINAL: {
-      individualVariance: isConference ? 0.16 : 0.14,
-      quietMatchChance: 0.13,
-      quietMatchMultiplier: 0.6,
-      openMatchChance: isConference ? 0.045 : 0.035,
-      openMatchMultiplier: isConference ? 1.34 : 1.3,
-      upsetWindowChance: isConference ? 0.05 : 0.04,
-      collapseChance: isConference ? 0.02 : 0.015,
-      expectedGoalsCap: isConference ? 4.4 : 4.2
-    }
-  };
+  const experience = coach.attributes.experience ?? 50;
+  const decisionMaking = coach.attributes.decisionMaking ?? 50;
+  const motivation = coach.attributes.motivation ?? 50;
+  const training = coach.attributes.training ?? 50;
+  const attackingScore = motivation * 0.4 + training * 0.35 + decisionMaking * 0.25;
+  const defensiveScore = decisionMaking * 0.45 + experience * 0.35 + training * 0.2;
+  const shootoutScore = motivation * 0.45 + decisionMaking * 0.35 + experience * 0.2;
   return {
-    family,
-    stage,
-    isReturnLeg,
-    useLegacyChampionsLeagueModel: false,
-    ...stageSettings[stage]
+    attackingMultiplier: clamp6(1 + (attackingScore - 50) * 8e-4, 0.96, 1.04),
+    defensiveMultiplier: clamp6(1 + (defensiveScore - 50) * 8e-4, 0.96, 1.04),
+    penaltyAdjustment: clamp6((shootoutScore - 50) * 7e-4, -0.035, 0.035)
   };
 };
-var TACTIC_CLASH_MATRIX = {
-  "4-4-2": { "4-4-2": 4, "4-3-3": 3, "5-4-1": 2, "4-2-3-1": 4, "3-5-2": 5, "3-4-3": 3, "5-3-2": 3, "4-5-1": 4, "4-4-2-DIAMOND": 6 },
-  "4-3-3": { "4-4-2": 5, "4-3-3": 4, "5-4-1": 2, "4-2-3-1": 5, "3-5-2": 4, "3-4-3": 6, "5-3-2": 2, "4-5-1": 3, "4-4-2-DIAMOND": 5 },
-  "5-4-1": { "4-4-2": 6, "4-3-3": 7, "5-4-1": 4, "4-2-3-1": 5, "3-5-2": 3, "3-4-3": 6, "5-3-2": 4, "4-5-1": 4, "4-4-2-DIAMOND": 7 },
-  "4-2-3-1": { "4-4-2": 4, "4-3-3": 3, "5-4-1": 3, "4-2-3-1": 4, "3-5-2": 6, "3-4-3": 4, "5-3-2": 4, "4-5-1": 5, "4-4-2-DIAMOND": 4 },
-  "3-5-2": { "4-4-2": 3, "4-3-3": 4, "5-4-1": 5, "4-2-3-1": 2, "3-5-2": 4, "3-4-3": 5, "5-3-2": 5, "4-5-1": 3, "4-4-2-DIAMOND": 4 }
-};
-var getEffectivenessMult = (score) => {
-  if (score <= 1) return 0.7;
-  if (score <= 3) return 0.85;
-  if (score === 4) return 1;
-  if (score <= 6) return 1.15;
-  return 1.35;
-};
-var getWeightedLineStrength = (players, lineup, allSubs, exits = []) => {
-  const TOTAL = 90;
-  const minutesPlayed = {};
-  const currentXI = lineup.startingXI.map((id) => ({ id: id ?? null, entryMin: 0 }));
-  const timeline = [
-    ...allSubs.map((sub) => ({ type: "sub", min: sub.min, outId: sub.outId, inId: sub.inId })),
-    ...exits.map((exit) => ({ type: "exit", min: exit.min, outId: exit.outId }))
-  ].sort((a, b) => a.min - b.min || (a.type === "exit" ? -1 : 1));
-  for (const event of timeline) {
-    const outIdx = currentXI.findIndex((p) => p.id === event.outId);
-    if (outIdx === -1) continue;
-    const leaving = currentXI[outIdx];
-    if (leaving.id) minutesPlayed[leaving.id] = (minutesPlayed[leaving.id] ?? 0) + (event.min - leaving.entryMin);
-    currentXI[outIdx] = event.type === "sub" ? { id: event.inId, entryMin: event.min } : { id: null, entryMin: event.min };
-  }
-  for (const slot of currentXI) {
-    if (slot.id) minutesPlayed[slot.id] = (minutesPlayed[slot.id] ?? 0) + (TOTAL - slot.entryMin);
-  }
-  let attSum = 0, defSum = 0, totalMins = 0;
-  for (const [pId, mins] of Object.entries(minutesPlayed)) {
-    const p = players.find((x) => x.id === pId);
-    if (!p) continue;
-    attSum += (p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3 * mins;
-    defSum += (p.attributes.defending + p.attributes.stamina) / 2 * mins;
-    totalMins += mins;
-  }
-  const att = totalMins > 0 ? attSum / totalMins : 40;
-  const def = totalMins > 0 ? defSum / totalMins : 40;
-  const gk = players.find((p) => p.id === lineup.startingXI[0])?.attributes.goalkeeping ?? 40;
-  return { att, def, gk };
-};
-var getGoalsPoissonLike = (xg, rng, baseOffset, isChaos) => {
-  let g = 0;
-  let cur = Math.max(0.05, Math.min(isChaos ? 3.8 : 2.8, xg + (rng(baseOffset) - 0.5) * 0.35));
-  for (let i = 0; i < 8; i++) {
-    if (rng(baseOffset + 10 + i) < cur / (i + 1.15)) {
-      g++;
-      cur *= isChaos ? 0.72 : 0.62;
-    }
-  }
-  return g;
-};
-var applyRareMismatchRout = (homeScore, awayScore, homeClub, awayClub, xgHome, xgAway, rng, isChaos) => {
-  const repGap = homeClub.reputation - awayClub.reputation;
-  const xgGap = xgHome - xgAway;
-  const homeFavorite = repGap >= 7 && xgGap >= 0.75;
-  const awayFavorite = repGap <= -7 && xgGap <= -0.75;
-  if (!homeFavorite && !awayFavorite) return { homeScore, awayScore };
-  const favoriteScore = homeFavorite ? homeScore : awayScore;
-  const underdogScore = homeFavorite ? awayScore : homeScore;
-  const mismatchChance = Math.max(0, Math.abs(repGap) - 6) * 0.012 + Math.max(0, Math.abs(xgGap) - 0.75) * 0.035 + (favoriteScore >= 3 && underdogScore <= 1 ? 0.05 : favoriteScore >= 2 && underdogScore === 0 ? 0.035 : 0) + (isChaos ? 0.06 : 0);
-  if (rng(9300) >= Math.min(0.22, mismatchChance)) return { homeScore, awayScore };
-  let extraGoals = 1;
-  if (rng(9301) < 0.55) extraGoals++;
-  if (rng(9302) < 0.22) extraGoals++;
-  if (Math.abs(repGap) >= 12 && rng(9303) < 0.18) extraGoals++;
-  const targetMinimum = underdogScore === 0 ? 5 : 4;
-  if (favoriteScore < targetMinimum && rng(9304) < 0.65) {
-    extraGoals = Math.max(extraGoals, targetMinimum - favoriteScore);
-  }
-  const cap = underdogScore === 0 ? 7 : 6;
-  if (homeFavorite) return { homeScore: Math.min(cap, homeScore + extraGoals), awayScore };
-  return { homeScore, awayScore: Math.min(cap, awayScore + extraGoals) };
-};
-var sampleEuropeanBackgroundGoals = (expectedGoals, rng, offset) => {
-  const lambda = Math.max(0.01, expectedGoals);
-  const roll = rng(offset);
-  let goals = 0;
-  let probability = Math.exp(-lambda);
-  let cumulative = probability;
-  while (roll > cumulative && probability > Number.EPSILON) {
-    goals++;
-    probability *= lambda / goals;
-    cumulative += probability;
-  }
-  return goals;
-};
-var simulateEuropeanBackgroundScore = (input) => {
-  const profile = getEuropeanBackgroundProfile(input.competitionId);
-  const rng = makeSeededRng(input.seed);
-  let homeXg = Math.max(0.04, input.homeExpectedGoals);
-  let awayXg = Math.max(0.04, input.awayExpectedGoals);
-  const homeDayMultiplier = 1 + (rng(40101) + rng(40102) - 1) * profile.individualVariance;
-  const awayDayMultiplier = 1 + (rng(40103) + rng(40104) - 1) * profile.individualVariance;
-  homeXg *= Math.max(0.62, Math.min(1.45, homeDayMultiplier));
-  awayXg *= Math.max(0.62, Math.min(1.45, awayDayMultiplier));
-  const tempoRoll = rng(40110);
-  const isQuietMatch = tempoRoll < profile.quietMatchChance;
-  const isOpenMatch = !isQuietMatch && tempoRoll < profile.quietMatchChance + profile.openMatchChance;
-  if (isQuietMatch) {
-    homeXg *= profile.quietMatchMultiplier;
-    awayXg *= profile.quietMatchMultiplier;
-  } else if (isOpenMatch) {
-    homeXg *= profile.openMatchMultiplier;
-    awayXg *= profile.openMatchMultiplier;
-  }
-  const strengthGap = input.homeStrength - input.awayStrength;
-  const absoluteStrengthGap = Math.abs(strengthGap);
-  let upsetWindowApplied = false;
-  if (absoluteStrengthGap >= 5) {
-    const extremeGapReduction = Math.min(0.35, Math.max(0, absoluteStrengthGap - 18) / 70);
-    const upsetChance = profile.upsetWindowChance * (1 - extremeGapReduction);
-    if (rng(40120) < upsetChance) {
-      upsetWindowApplied = true;
-      const underdogBoost = 1.25 + rng(40121) * 0.32;
-      const favoriteSlump = 0.72 + rng(40122) * 0.18;
-      if (strengthGap > 0) {
-        homeXg *= favoriteSlump;
-        awayXg *= underdogBoost;
-      } else {
-        homeXg *= underdogBoost;
-        awayXg *= favoriteSlump;
-      }
-    }
-  }
-  const gapRisk = Math.min(0.022, absoluteStrengthGap / 900);
-  const homeCollapseChance = profile.collapseChance + (strengthGap < 0 ? gapRisk : 0);
-  const awayCollapseChance = profile.collapseChance + (strengthGap > 0 ? gapRisk : 0);
-  const homeCollapsed = rng(40130) < homeCollapseChance;
-  const awayCollapsed = rng(40131) < awayCollapseChance;
-  if (homeCollapsed) {
-    homeXg *= 0.78 + rng(40132) * 0.1;
-    awayXg *= 1.42 + rng(40133) * 0.48;
-  }
-  if (awayCollapsed) {
-    awayXg *= 0.78 + rng(40134) * 0.1;
-    homeXg *= 1.42 + rng(40135) * 0.48;
-  }
-  if (profile.stage === "KNOCKOUT" && !profile.isReturnLeg) {
-    homeXg *= 0.94;
-    awayXg *= 0.94;
-  } else if (profile.isReturnLeg && input.leg1Diff !== void 0) {
-    const currentHomeAggregateDiff = -input.leg1Diff;
-    if (currentHomeAggregateDiff < 0) {
-      homeXg *= 1 + Math.min(0.24, Math.abs(currentHomeAggregateDiff) * 0.08);
-      awayXg *= 1.05;
-    } else if (currentHomeAggregateDiff > 0) {
-      awayXg *= 1 + Math.min(0.24, currentHomeAggregateDiff * 0.08);
-      homeXg *= 1.05;
-    }
-  } else if (profile.stage === "FINAL") {
-    homeXg *= 0.96;
-    awayXg *= 0.96;
-  }
-  homeXg = Math.max(0.04, Math.min(profile.expectedGoalsCap, homeXg));
-  awayXg = Math.max(0.04, Math.min(profile.expectedGoalsCap, awayXg));
-  return {
-    homeScore: sampleEuropeanBackgroundGoals(homeXg, rng, 40200),
-    awayScore: sampleEuropeanBackgroundGoals(awayXg, rng, 40201),
-    adjustedHomeExpectedGoals: homeXg,
-    adjustedAwayExpectedGoals: awayXg,
-    isOpenMatch,
-    upsetWindowApplied,
-    homeCollapsed,
-    awayCollapsed
+var simulateCupMatch = (home, away, hPlayers, aPlayers, hLineup, aLineup, homeCoach, awayCoach, seed, weatherEqualizer, isNeutralVenue) => {
+  let rngState = (seed ^ 3735928559) >>> 0 || 1;
+  const rng = () => {
+    rngState = rngState * 1664525 + 1013904223 & 4294967295;
+    return (rngState >>> 0) / 4294967295;
   };
-};
-var simulateSubs = (lineup, teamPlayers, sideOffset, rng) => {
-  const subCount = Math.floor(3 + rng(sideOffset) * 3);
-  const matchSubs = [];
-  const currentXI = [...lineup.startingXI];
-  const currentBench = [...lineup.bench];
-  const participants = new Set(currentXI.filter((id) => id !== null));
-  const subbedInIds = /* @__PURE__ */ new Set();
-  const plannedSubs = Array.from({ length: subCount }, (_, i) => ({
-    i,
-    min: Math.floor(46 + rng(sideOffset + i + 100) * 42),
-    outIdx: Math.floor(1 + rng(sideOffset + i + 200) * 10)
-  })).sort((a, b) => a.min - b.min || a.i - b.i);
-  for (const planned of plannedSubs) {
-    const subMin = planned.min;
-    const outIdx = planned.outIdx;
-    const playerOutId = currentXI[outIdx];
-    if (!playerOutId || subbedInIds.has(playerOutId)) continue;
-    const tacticSlots = TacticRepository.getById(lineup.tacticId).slots;
-    const roleNeeded = outIdx < tacticSlots.length ? tacticSlots[outIdx].role : "MID" /* MID */;
-    const subInId = currentBench.find((id) => teamPlayers.find((p) => p.id === id)?.position === roleNeeded) || currentBench.find((id) => teamPlayers.find((p) => p.id === id)?.position !== "GK" /* GK */);
-    if (subInId) {
-      matchSubs.push({ min: subMin, outId: playerOutId, inId: subInId });
-      currentXI[outIdx] = subInId;
-      currentBench.splice(currentBench.indexOf(subInId), 1);
-      participants.add(subInId);
-      subbedInIds.add(subInId);
-    }
-  }
-  return { matchSubs, allPlayedIds: Array.from(participants) };
-};
-var getActiveLineupAt = (min, originalXI, subs, exits = []) => {
-  const current = [...originalXI];
-  const timeline = [
-    ...subs.map((sub) => ({ type: "sub", min: sub.min, outId: sub.outId, inId: sub.inId })),
-    ...exits.map((exit) => ({ type: "exit", min: exit.min, outId: exit.outId }))
-  ].filter((event) => event.min <= min).sort((a, b) => a.min - b.min || (a.type === "exit" ? -1 : 1));
-  timeline.forEach((event) => {
-    const idx = current.indexOf(event.outId);
-    if (idx !== -1) current[idx] = event.type === "sub" ? event.inId : null;
-  });
-  return current.filter((id) => id !== null);
-};
-var getPlayerIntervals = (originalXI, subs, exits = [], maxMinute = 90) => {
-  const current = originalXI.map((id) => ({ id: id ?? null, start: 0 }));
-  const intervals = [];
-  const timeline = [
-    ...subs.map((sub) => ({ type: "sub", min: sub.min, outId: sub.outId, inId: sub.inId })),
-    ...exits.map((exit) => ({ type: "exit", min: exit.min, outId: exit.outId }))
-  ].sort((a, b) => a.min - b.min || (a.type === "exit" ? -1 : 1));
-  timeline.forEach((event) => {
-    const idx = current.findIndex((slot) => slot.id === event.outId);
-    if (idx === -1) return;
-    const leaving = current[idx];
-    if (leaving.id) intervals.push({ playerId: leaving.id, start: leaving.start, end: event.min });
-    current[idx] = event.type === "sub" ? { id: event.inId, start: event.min } : { id: null, start: event.min };
-  });
-  current.forEach((slot) => {
-    if (slot.id) intervals.push({ playerId: slot.id, start: slot.start, end: maxMinute });
-  });
-  return intervals.filter((interval) => interval.end > interval.start);
-};
-var reconcileMatchTimeline = (originalXI, subs, exits) => {
-  const current = originalXI.map((id) => ({ id: id ?? null, start: 0 }));
-  const appliedSubs = [];
-  const appliedExits = [];
-  const minutesPlayedMap = {};
-  const participants = new Set(originalXI.filter((id) => id !== null));
-  const timeline = [
-    ...subs.map((sub) => ({ type: "sub", min: sub.min, outId: sub.outId, inId: sub.inId })),
-    ...exits.map((exit) => ({ type: "exit", min: exit.min, outId: exit.outId }))
-  ].sort((a, b) => a.min - b.min || (a.type === "exit" ? -1 : 1));
-  timeline.forEach((event) => {
-    const idx = current.findIndex((slot) => slot.id === event.outId);
-    if (idx === -1) return;
-    const leaving = current[idx];
-    if (leaving.id) {
-      minutesPlayedMap[leaving.id] = (minutesPlayedMap[leaving.id] ?? 0) + (event.min - leaving.start);
-    }
-    if (event.type === "sub") {
-      current[idx] = { id: event.inId, start: event.min };
-      participants.add(event.inId);
-      appliedSubs.push({ outId: event.outId, inId: event.inId, min: event.min });
-    } else {
-      current[idx] = { id: null, start: event.min };
-      appliedExits.push({ outId: event.outId, min: event.min });
-    }
-  });
-  current.forEach((slot) => {
-    if (slot.id) minutesPlayedMap[slot.id] = (minutesPlayedMap[slot.id] ?? 0) + (90 - slot.start);
-  });
-  return { appliedSubs, appliedExits, minutesPlayedMap, participatingIds: Array.from(participants) };
-};
-var simulateInjuriesPerMinute = (lineup, players, teamId, preRolledSubs, subsAlreadyUsed, rng, offset, refExpFactor, matchDate) => {
-  const currentXI = [...lineup.startingXI];
-  const entryMins = currentXI.map(() => 0);
-  const currentBench = [...lineup.bench];
-  let subsUsed = 0;
-  const injuryChance = 2295e-6 * refExpFactor;
-  const injuries = [];
-  let updatedPlayers = [...players];
-  const injuryPenaltyMap = {};
-  const injurySubs = [];
-  const forcedExits = [];
-  const appliedRegularSubs = [];
-  const minutesPlayedMap = {};
-  const participants = new Set(currentXI.filter((id) => id !== null));
-  const sortedPreRolledSubs = [...preRolledSubs].sort((a, b) => a.min - b.min);
-  for (let minute = 1; minute <= 90; minute++) {
-    for (const sub of sortedPreRolledSubs) {
-      if (sub.min === minute) {
-        const idx = currentXI.indexOf(sub.outId);
-        if (idx !== -1 && subsUsed < 5) {
-          const leaving = currentXI[idx];
-          if (leaving) minutesPlayedMap[leaving] = (minutesPlayedMap[leaving] ?? 0) + (minute - entryMins[idx]);
-          currentXI[idx] = sub.inId;
-          entryMins[idx] = minute;
-          const benchIdx = currentBench.indexOf(sub.inId);
-          if (benchIdx !== -1) currentBench.splice(benchIdx, 1);
-          appliedRegularSubs.push(sub);
-          participants.add(sub.inId);
-          subsUsed++;
-        }
-      }
-    }
-    if (rng(offset + minute + 800) >= injuryChance) continue;
-    const activeIndices = currentXI.map((id, i) => id ? i : -1).filter((i) => i !== -1);
-    if (activeIndices.length === 0) continue;
-    const pIdx = activeIndices[Math.floor(rng(offset + minute + 801) * activeIndices.length)];
-    const pId = currentXI[pIdx];
-    const p = players.find((x) => x.id === pId);
-    if (!p) continue;
-    const isSev = rng(offset + minute + 803) >= 0.667;
-    const severity = isSev ? "SEVERE" /* SEVERE */ : "LIGHT" /* LIGHT */;
-    let injuryRollOffset = offset + minute + 808;
-    const { days, type } = rollInjuryBySeverity(severity, () => rng(injuryRollOffset++));
-    const playerName = formatPlayerReportName(p);
-    injuries.push({ playerId: pId, playerName, minute, teamId, severity, days, type });
-    injuryPenaltyMap[pId] = (isSev ? 55 : 20) + rng(offset + minute + 5e3) * 15;
-    updatedPlayers = updatedPlayers.map((pl) => pl.id === pId ? {
-      ...pl,
-      health: {
-        status: "INJURED",
-        injury: { type, daysRemaining: days, severity, injuryDate: matchDate.toISOString(), totalDays: days }
-      }
-    } : pl);
-    if (isSev) {
-      const canSub = subsUsed < 5;
-      if (canSub) {
-        const tacticSlots = TacticRepository.getById(lineup.tacticId).slots;
-        const roleNeeded = pIdx < tacticSlots.length ? tacticSlots[pIdx].role : void 0;
-        const candidate = (roleNeeded ? currentBench.find((id) => players.find((pl) => pl.id === id)?.position === roleNeeded) : void 0) ?? currentBench.find((id) => players.find((pl) => pl.id === id)?.position !== "GK" /* GK */);
-        if (candidate) {
-          injurySubs.push({ outId: pId, inId: candidate, min: minute });
-          minutesPlayedMap[pId] = (minutesPlayedMap[pId] ?? 0) + (minute - entryMins[pIdx]);
-          currentXI[pIdx] = candidate;
-          entryMins[pIdx] = minute;
-          currentBench.splice(currentBench.indexOf(candidate), 1);
-          participants.add(candidate);
-          subsUsed++;
-        } else {
-          minutesPlayedMap[pId] = (minutesPlayedMap[pId] ?? 0) + (minute - entryMins[pIdx]);
-          forcedExits.push({ outId: pId, min: minute });
-          currentXI[pIdx] = null;
-        }
-      } else {
-        minutesPlayedMap[pId] = (minutesPlayedMap[pId] ?? 0) + (minute - entryMins[pIdx]);
-        forcedExits.push({ outId: pId, min: minute });
-        currentXI[pIdx] = null;
-      }
-    }
-  }
-  currentXI.forEach((pId, idx) => {
-    if (pId) minutesPlayedMap[pId] = (minutesPlayedMap[pId] ?? 0) + (90 - entryMins[idx]);
-  });
-  return { injuries, updatedPlayers, injuryPenaltyMap, injurySubs, forcedExits, appliedRegularSubs, participatingIds: Array.from(participants), minutesPlayedMap };
-};
-var simulateCardsAndInjuries = (lineup, players, teamId, subs, offset, rng, referee, isHomeTeam, exits = []) => {
+  const referee = RefereeService.assignPolishReferee(`${home.id}_${away.id}_${seed}`, 3);
+  const scorers = [];
   const cards = [];
-  let redCount = 0;
-  let updatedPlayers = [...players];
-  const fatigueMap = {};
-  const fatigueDebtMap = {};
-  const injuryPenaltyMap = {};
   const injuries = [];
-  const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
-  const yellowProb = 0.087 * (referee.strictness / 50) * refExpFactor;
-  const homeBias = isHomeTeam ? -(referee.advantageTendency / 5e3) : referee.advantageTendency / 1e4;
-  const adjustedYellowProb = Math.max(0.02, yellowProb + homeBias);
-  const directRedProb = 33e-4 * (referee.strictness / 50) * refExpFactor;
-  const intervals = getPlayerIntervals(lineup.startingXI, subs, exits);
-  intervals.forEach((interval, idx) => {
-    const p = players.find((x) => x.id === interval.playerId);
-    if (!p) return;
-    const playerName = formatPlayerReportName(p);
-    const minuteFactor = Math.max(0.1, Math.min(1, (interval.end - interval.start) / 90));
-    const randomMinute = (base) => Math.max(1, Math.min(90, Math.floor(interval.start + rng(base) * Math.max(1, interval.end - interval.start))));
-    const isDirectRed = rng(offset + idx + 1500) < directRedProb * minuteFactor;
-    const yellowRoll = rng(offset + idx + 1e3);
-    const isSecondYellow = yellowRoll < adjustedYellowProb * minuteFactor && rng(offset + idx + 1200) < 0.05;
-    const isNormalYellow = yellowRoll < adjustedYellowProb * minuteFactor && !isSecondYellow;
-    if (isDirectRed) {
-      const m = randomMinute(offset + idx + 550);
-      cards.push({ playerId: p.id, playerName, minute: m, teamId, type: "RED" });
-      redCount++;
-    } else if (isSecondYellow) {
-      const duration = Math.max(2, interval.end - interval.start);
-      const m1 = Math.max(1, Math.min(89, Math.floor(interval.start + rng(offset + idx + 660) * Math.max(1, duration * 0.55))));
-      const m2 = Math.max(m1 + 1, Math.min(90, Math.floor(m1 + 1 + rng(offset + idx + 770) * Math.max(1, interval.end - m1))));
-      cards.push({ playerId: p.id, playerName, minute: m1, teamId, type: "YELLOW" });
-      cards.push({ playerId: p.id, playerName, minute: m2, teamId, type: "SECOND_YELLOW" });
-      redCount++;
-    } else if (isNormalYellow) {
-      const m = randomMinute(offset + idx + 880);
-      cards.push({ playerId: p.id, playerName, minute: m, teamId, type: "YELLOW" });
-    }
-    const stamina = p.attributes.stamina || 50;
-    const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
-    let drain = (2.5 + rng(offset + idx + 4e3) * 1.5 + stamEff * 0.5 + 1.5) * minuteFactor;
-    if (p.position === "GK" /* GK */) drain *= 0.75 + stamina / 100 * 0.1;
-    fatigueMap[p.id] = (fatigueMap[p.id] ?? 0) + drain;
-    const gkDebtFactor = p.position === "GK" /* GK */ ? Math.max(0.7, Math.min(0.9, 0.75 + Math.max(0, (p.age - 27) * 4e-3) - stamina / 100 * 0.05)) : 1;
-    fatigueDebtMap[p.id] = (fatigueDebtMap[p.id] ?? 0) + (5 + (100 - stamina) * 0.15) * minuteFactor * gkDebtFactor;
-  });
-  return { cards, redCount, updatedPlayers, fatigueMap, fatigueDebtMap, injuryPenaltyMap, injuries };
-};
-var getRedCardExits = (cards) => {
-  const exitByPlayer = /* @__PURE__ */ new Map();
-  cards.forEach((card) => {
-    if (card.type !== "RED" && card.type !== "SECOND_YELLOW") return;
-    const currentMinute = exitByPlayer.get(card.playerId);
-    if (currentMinute === void 0 || card.minute < currentMinute) {
-      exitByPlayer.set(card.playerId, card.minute);
-    }
-  });
-  return Array.from(exitByPlayer.entries()).map(([outId, min]) => ({ outId, min }));
-};
-var calculateEuropeanRedCardImpact = (redExits, maxMinute = 90) => {
-  const redEquivalent = redExits.reduce((sum, exit) => {
-    const remaining = Math.max(0, maxMinute - Math.max(1, Math.min(maxMinute, exit.min)));
-    return sum + remaining / maxMinute;
-  }, 0);
-  return {
-    attackMult: Math.max(0.25, 1 - redEquivalent * 0.68),
-    defenseLeakMult: 1 + redEquivalent * 0.75,
-    winProbPenalty: redEquivalent * 0.28
+  const substitutions = [];
+  const fatigue = {};
+  const fatigueDebtMap = {};
+  let homeXI = [...hLineup.startingXI];
+  let awayXI = [...aLineup.startingXI];
+  let homeRedCount = 0;
+  let awayRedCount = 0;
+  let homeGoals = 0;
+  let awayGoals = 0;
+  const usedGoalMinutes = /* @__PURE__ */ new Set();
+  const getTeamStrength = (players, xi) => {
+    const active = players.filter((p) => xi.includes(p.id));
+    if (active.length === 0) return { att: 40, def: 40, gk: 40, overall: 40 };
+    const att = active.reduce((s, p) => s + (p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3, 0) / active.length;
+    const def = active.reduce((s, p) => s + (p.attributes.defending + p.attributes.stamina) / 2, 0) / active.length;
+    const gkPlayer = players.find((p) => p.id === xi[0]);
+    const gk = gkPlayer?.attributes.goalkeeping || 40;
+    const overall = (att + def + gk) / 3;
+    return { att, def, gk, overall };
   };
-};
-var getExtraTimeRedCardImpact = (redExits) => {
-  const activeFromStart = redExits.map((exit) => ({ ...exit, min: 0 }));
-  return calculateEuropeanRedCardImpact(activeFromStart);
-};
-var adjustExtraTimeWinProbability = (homeWinProb, homeRedExits, awayRedExits) => {
-  const homeImpact = calculateEuropeanRedCardImpact(homeRedExits);
-  const awayImpact = calculateEuropeanRedCardImpact(awayRedExits);
-  return Math.max(0.12, Math.min(0.88, homeWinProb - homeImpact.winProbPenalty + awayImpact.winProbPenalty));
-};
-var sampleEuropeanExtraTimeGoals = (expectedGoals, rng, offset) => {
-  const lambda = Math.max(0.01, expectedGoals);
-  const roll = rng(offset);
-  let goals = 0;
-  let probability = Math.exp(-lambda);
-  let cumulative = probability;
-  while (roll > cumulative && probability > Number.EPSILON) {
-    goals++;
-    probability *= lambda / goals;
-    cumulative += probability;
+  const hTactic = TacticRepository.getById(hLineup.tacticId);
+  const aTactic = TacticRepository.getById(aLineup.tacticId);
+  const homeCoachProfile = getPolishCupCoachMatchProfile(homeCoach);
+  const awayCoachProfile = getPolishCupCoachMatchProfile(awayCoach);
+  const homeCoachXGMultiplier = clamp6(
+    homeCoachProfile.attackingMultiplier / awayCoachProfile.defensiveMultiplier,
+    0.92,
+    1.08
+  );
+  const awayCoachXGMultiplier = clamp6(
+    awayCoachProfile.attackingMultiplier / homeCoachProfile.defensiveMultiplier,
+    0.92,
+    1.08
+  );
+  const homeAdvantageBonus = isNeutralVenue ? 0 : 22e-4;
+  const homeDailyForm = (rng() - 0.5) * 0.3;
+  const awayDailyForm = (rng() - 0.5) * 0.3;
+  const redCardMultiplier = (redCount) => {
+    if (redCount === 0) return 1;
+    if (redCount === 1) return 0.6;
+    if (redCount === 2) return 0.34;
+    return 0.18;
+  };
+  const shortHandedGoalChance = (redCount) => {
+    if (redCount >= 2) return 1e-3;
+    if (redCount === 1) return 0.28;
+    return 1;
+  };
+  const computeMinuteXG = () => {
+    const hStr = getTeamStrength(hPlayers, homeXI);
+    const aStr = getTeamStrength(aPlayers, awayXI);
+    const baseXG = 0.014;
+    const ATTR_FLOOR = 20;
+    const homeAttEff = Math.max(ATTR_FLOOR, hStr.att) / Math.max(ATTR_FLOOR, aStr.def);
+    const awayAttEff = Math.max(ATTR_FLOOR, aStr.att) / Math.max(ATTR_FLOOR, hStr.def);
+    const avgAttEff = (homeAttEff + awayAttEff) / 2;
+    const homeStrMult = Math.pow(homeAttEff / avgAttEff, 1.5);
+    const awayStrMult = Math.pow(awayAttEff / avgAttEff, 1.5);
+    const REP_FLOOR = 1;
+    const repRatio = Math.pow(
+      Math.max(REP_FLOOR, home.reputation) / Math.max(REP_FLOOR, away.reputation),
+      0.3
+    );
+    const homeTacticBonus = (hTactic.attackBias - 50) / 5e3;
+    const awayTacticBonus = (aTactic.attackBias - 50) / 5e3;
+    const homeXGBase = baseXG * homeStrMult * repRatio + homeTacticBonus + homeAdvantageBonus + homeDailyForm * 2e-3;
+    const awayXGBase = baseXG * awayStrMult / repRatio + awayTacticBonus + awayDailyForm * 2e-3;
+    const homeXGAfterRed = homeXGBase * redCardMultiplier(homeRedCount) * (1 + awayRedCount * 0.28);
+    const awayXGAfterRed = awayXGBase * redCardMultiplier(awayRedCount) * (1 + homeRedCount * 0.28);
+    const homeXGWeather = homeXGAfterRed * weatherEqualizer * homeCoachXGMultiplier;
+    const awayXGWeather = awayXGAfterRed * weatherEqualizer * awayCoachXGMultiplier;
+    const formImpact = TeamFormImpactService.calculateMatchImpact(
+      hPlayers,
+      aPlayers,
+      { ...hLineup, startingXI: homeXI },
+      { ...aLineup, startingXI: awayXI }
+    );
+    return {
+      home: Math.max(3e-3, homeXGWeather * formImpact.homeGoalChanceMultiplier),
+      away: Math.max(3e-3, awayXGWeather * formImpact.awayGoalChanceMultiplier)
+    };
+  };
+  const getChaosChance = () => {
+    const hStr = getTeamStrength(hPlayers, homeXI);
+    const aStr = getTeamStrength(aPlayers, awayXI);
+    const strengthDiff = Math.abs(hStr.overall - aStr.overall);
+    const DIFF_MAX = 25;
+    const equalness = Math.max(0, 1 - strengthDiff / DIFF_MAX);
+    const minChaos = 0.02 + equalness * 0.08;
+    const maxChaos = 0.1 + equalness * 0.1;
+    return (minChaos + rng() * (maxChaos - minChaos)) * experienceFactor;
+  };
+  const experienceFactor = 1 + (50 - (referee.experience || 50)) / 100;
+  const getSaturationFactor = () => {
+    const totalGoals = homeGoals + awayGoals;
+    if (totalGoals <= 3) return 1;
+    if (totalGoals === 4) return 0.6;
+    if (totalGoals === 5) return 0.4;
+    if (totalGoals === 6) return 0.28;
+    if (totalGoals === 7) return 0.18;
+    return 0.1;
+  };
+  const pickScorer = (players, xi, isHome) => {
+    const activeIds = xi.filter((id) => id !== null);
+    return GoalAttributionService.pickScorer(players, activeIds, false, rng);
+  };
+  const pickAssistant = (players, xi, scorerId) => {
+    const activeIds = xi.filter((id) => id !== null);
+    return GoalAttributionService.pickAssistant(players, activeIds, scorerId, false, rng);
+  };
+  const maybeGiveCard = (minute) => {
+    const strictnessFactor = 1 + (referee.strictness - 50) / 100;
+    const decisionFactor = 1 + (referee.consistency - 50) / 200;
+    const YELLOW_CHANCE = 8e-3 * strictnessFactor * decisionFactor;
+    const RED_DIRECT_CHANCE = 1e-3 * strictnessFactor * decisionFactor;
+    for (const [side, xi, players] of [
+      ["HOME", homeXI, hPlayers],
+      ["AWAY", awayXI, aPlayers]
+    ]) {
+      const activeIds = xi.filter((id) => id !== null);
+      if (activeIds.length === 0) continue;
+      if (rng() < RED_DIRECT_CHANCE) {
+        const victimId = activeIds[Math.floor(rng() * activeIds.length)];
+        cards.push({ playerId: victimId, type: "RED_CARD" /* RED_CARD */, minute });
+        if (side === "HOME") {
+          homeXI = homeXI.map((id) => id === victimId ? null : id);
+          homeRedCount++;
+        } else {
+          awayXI = awayXI.map((id) => id === victimId ? null : id);
+          awayRedCount++;
+        }
+      } else if (rng() < YELLOW_CHANCE) {
+        const victimId = activeIds[Math.floor(rng() * activeIds.length)];
+        const existingYellows = cards.filter(
+          (c) => c.playerId === victimId && c.type === "YELLOW_CARD" /* YELLOW_CARD */
+        ).length;
+        cards.push({ playerId: victimId, type: "YELLOW_CARD" /* YELLOW_CARD */, minute });
+        if (existingYellows >= 1) {
+          cards.push({ playerId: victimId, type: "RED_CARD" /* RED_CARD */, minute });
+          if (side === "HOME") {
+            homeXI = homeXI.map((id) => id === victimId ? null : id);
+            homeRedCount++;
+          } else {
+            awayXI = awayXI.map((id) => id === victimId ? null : id);
+            awayRedCount++;
+          }
+        }
+      }
+    }
+  };
+  const maybeGiveInjury = (minute) => {
+    const experienceFactor2 = 1 + (50 - (referee.experience || 50)) / 100;
+    const INJURY_CHANCE = 3e-3 * experienceFactor2;
+    const sides = [
+      [hPlayers, homeXI],
+      [aPlayers, awayXI]
+    ];
+    for (const [players, xi] of sides) {
+      if (rng() < INJURY_CHANCE) {
+        const activeIds = xi.filter((id) => id !== null);
+        if (activeIds.length === 0) continue;
+        const healthyIds = activeIds.filter((id) => !injuries.find((inj) => inj.playerId === id));
+        if (healthyIds.length === 0) continue;
+        const victimId = healthyIds[Math.floor(rng() * healthyIds.length)];
+        const isSevere = rng() < 0.15;
+        const severity = isSevere ? "SEVERE" /* SEVERE */ : "LIGHT" /* LIGHT */;
+        const { days, type } = rollInjuryBySeverity(severity, rng);
+        injuries.push({
+          playerId: victimId,
+          minute,
+          severity,
+          days,
+          type
+        });
+      }
+    }
+  };
+  const maybeMakeSubstitution = (minute) => {
+    const sides = [
+      [hPlayers, hLineup, homeXI, home.id, (next) => {
+        homeXI = next;
+      }],
+      [aPlayers, aLineup, awayXI, away.id, (next) => {
+        awayXI = next;
+      }]
+    ];
+    for (const [players, lineup, xi, teamId, setXi] of sides) {
+      const activeIds = xi.filter((id) => !!id);
+      const replacement = (lineup.bench ?? []).map((id) => players.find((player) => player.id === id)).filter((player) => !!player && !activeIds.includes(player.id) && player.condition >= 60).sort((a, b) => b.condition - a.condition)[0];
+      const outgoing = xi.map((id, index) => ({ id, index, player: players.find((candidate) => candidate.id === id) })).filter((entry) => entry.index > 0 && !!entry.id && !!entry.player).sort((a, b) => (a.player?.condition ?? 100) - (b.player?.condition ?? 100))[0];
+      if (!replacement || !outgoing?.id || !outgoing.player) continue;
+      const nextXi = [...xi];
+      nextXi[outgoing.index] = replacement.id;
+      setXi(nextXi);
+      substitutions.push({
+        playerOutId: outgoing.player.id,
+        playerOutName: formatPlayerReportName(outgoing.player),
+        playerInId: replacement.id,
+        playerInName: formatPlayerReportName(replacement),
+        minute,
+        teamId
+      });
+    }
+  };
+  const computeFatigue = (players, xi) => {
+    xi.forEach((pId) => {
+      if (!pId) return;
+      const p = players.find((x) => x.id === pId);
+      if (!p) return;
+      const stamina = p.attributes.stamina || 50;
+      const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
+      let drain = 2.5 + rng() * 1.5 + stamEff * 0.5 + 1.5;
+      if (p.position === "GK" /* GK */) drain *= 0.75 + stamina / 100 * 0.1;
+      fatigue[pId] = drain;
+      const gkDebtFactor = p.position === "GK" /* GK */ ? Math.max(0.7, Math.min(0.9, 0.75 + Math.max(0, (p.age - 27) * 4e-3) - stamina / 100 * 0.05)) : 1;
+      fatigueDebtMap[pId] = (5 + (100 - stamina) * 0.15) * gkDebtFactor;
+    });
+  };
+  const simulateMinutes = (fromMinute, toMinute) => {
+    for (let minute = fromMinute; minute <= toMinute; minute++) {
+      if (minute === 60 || minute === 75 || minute === 105) maybeMakeSubstitution(minute);
+      maybeGiveCard(minute);
+      maybeGiveInjury(minute);
+      const xg = computeMinuteXG();
+      const chaos = getChaosChance();
+      const saturation = getSaturationFactor();
+      const homeChance = xg.home * saturation * shortHandedGoalChance(homeRedCount) * (1 + (rng() < chaos ? rng() * 0.1 : 0));
+      if (rng() < homeChance) {
+        let goalMin = minute;
+        while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;
+        usedGoalMinutes.add(goalMin);
+        const scorer = pickScorer(hPlayers, homeXI, true);
+        if (!scorer) {
+          homeGoals++;
+          continue;
+        }
+        const assistant = pickAssistant(hPlayers, homeXI, scorer.id);
+        const isPenalty = rng() < 0.08;
+        scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute: goalMin, isPenalty });
+        homeGoals++;
+      }
+      const awayChance = xg.away * saturation * shortHandedGoalChance(awayRedCount) * (1 + (rng() < chaos ? rng() * 0.1 : 0));
+      if (rng() < awayChance) {
+        let goalMin = minute;
+        while (usedGoalMinutes.has(goalMin) && goalMin <= toMinute + 5) goalMin++;
+        usedGoalMinutes.add(goalMin);
+        const scorer = pickScorer(aPlayers, awayXI, false);
+        if (!scorer) {
+          awayGoals++;
+          continue;
+        }
+        const assistant = pickAssistant(aPlayers, awayXI, scorer.id);
+        const isPenalty = rng() < 0.08;
+        scorers.push({ playerId: scorer.id, assistId: assistant?.id, minute: goalMin, isPenalty });
+        awayGoals++;
+      }
+    }
+  };
+  simulateMinutes(1, 90);
+  computeFatigue(hPlayers, hLineup.startingXI);
+  computeFatigue(aPlayers, aLineup.startingXI);
+  let wentToExtraTime = false;
+  if (homeGoals === awayGoals) {
+    wentToExtraTime = true;
+    simulateMinutes(91, 120);
   }
-  return goals;
-};
-var simulateExtraTimeAndPenalties = (homeScore, awayScore, homeWinProb, xgHome90, xgAway90, homeRedExits, awayRedExits, isChaosMatch, rng, baseOffset, leg1Diff) => {
-  let h = homeScore;
-  let a = awayScore;
-  const homeWeightedRedImpact = calculateEuropeanRedCardImpact(homeRedExits);
-  const awayWeightedRedImpact = calculateEuropeanRedCardImpact(awayRedExits);
-  const homeExtraTimeRedImpact = getExtraTimeRedCardImpact(homeRedExits);
-  const awayExtraTimeRedImpact = getExtraTimeRedCardImpact(awayRedExits);
-  const xgCap = isChaosMatch ? 3.8 : 2.8;
-  const homeRedAdjustment = homeExtraTimeRedImpact.attackMult / homeWeightedRedImpact.attackMult * (awayExtraTimeRedImpact.defenseLeakMult / awayWeightedRedImpact.defenseLeakMult);
-  const awayRedAdjustment = awayExtraTimeRedImpact.attackMult / awayWeightedRedImpact.attackMult * (homeExtraTimeRedImpact.defenseLeakMult / homeWeightedRedImpact.defenseLeakMult);
-  const homeExpectedExtraTimeGoals = Math.max(0.01, Math.min(xgCap, xgHome90) * 0.24 * homeRedAdjustment);
-  const awayExpectedExtraTimeGoals = Math.max(0.01, Math.min(xgCap, xgAway90) * 0.24 * awayRedAdjustment);
-  h += sampleEuropeanExtraTimeGoals(homeExpectedExtraTimeGoals, rng, baseOffset);
-  a += sampleEuropeanExtraTimeGoals(awayExpectedExtraTimeGoals, rng, baseOffset + 1);
   let penaltyHome;
   let penaltyAway;
-  const aggregateTied = leg1Diff !== void 0 ? h - a === leg1Diff : h === a;
-  if (aggregateTied) {
-    const simSeries = (favProb, seriesOffset) => {
+  if (homeGoals === awayGoals) {
+    const simulatePenaltySeries = (shooters, shooterXI, keeper, coachProfile) => {
+      const activeShooters = shooterXI.filter((id) => id !== null).map((id) => shooters.find((p) => p.id === id)).filter((p) => !!p).slice(0, 5);
       let scored = 0;
-      for (let i = 0; i < 5; i++) {
-        if (rng(seriesOffset + i) < 0.72 + (favProb - 0.5) * 0.1) scored++;
+      for (const shooter of activeShooters) {
+        const finishing = shooter.attributes.finishing || 50;
+        const keeperSave = keeper?.attributes.goalkeeping || 50;
+        const penChance = 0.75 + (finishing - keeperSave) / 200 + coachProfile.penaltyAdjustment;
+        if (rng() < Math.min(0.95, Math.max(0.4, penChance))) {
+          scored++;
+        }
       }
       return scored;
     };
-    penaltyHome = simSeries(homeWinProb, baseOffset + 100);
-    penaltyAway = simSeries(1 - homeWinProb, baseOffset + 200);
-    let sd = 0;
-    while (penaltyHome === penaltyAway && sd < 20) {
-      sd++;
-      const hScored = rng(baseOffset + 300 + sd * 2) < 0.72;
-      const aScored = rng(baseOffset + 301 + sd * 2) < 0.72;
-      if (hScored && !aScored) penaltyHome++;
-      else if (!hScored && aScored) penaltyAway++;
+    const homeGK = hPlayers.find((p) => p.id === homeXI[0]);
+    const awayGK = aPlayers.find((p) => p.id === awayXI[0]);
+    penaltyHome = simulatePenaltySeries(hPlayers, homeXI, awayGK, homeCoachProfile);
+    penaltyAway = simulatePenaltySeries(aPlayers, awayXI, homeGK, awayCoachProfile);
+    while (penaltyHome === penaltyAway) {
+      const hShooter = hPlayers.find((p) => homeXI.includes(p.id) && p.position !== "GK" /* GK */);
+      const aShooter = aPlayers.find((p) => awayXI.includes(p.id) && p.position !== "GK" /* GK */);
+      const hFinishing = hShooter?.attributes.finishing || 50;
+      const aFinishing = aShooter?.attributes.finishing || 50;
+      const hSave = awayGK?.attributes.goalkeeping || 50;
+      const aSave = homeGK?.attributes.goalkeeping || 50;
+      const hScored = rng() < Math.min(0.95, Math.max(0.4, 0.75 + (hFinishing - hSave) / 200 + homeCoachProfile.penaltyAdjustment));
+      const aScored = rng() < Math.min(0.95, Math.max(0.4, 0.75 + (aFinishing - aSave) / 200 + awayCoachProfile.penaltyAdjustment));
+      if (hScored && !aScored) penaltyHome += 1;
+      else if (!hScored && aScored) penaltyAway += 1;
     }
   }
-  return { homeScore: h, awayScore: a, penaltyHome, penaltyAway };
-};
-var simulateCLMatchFull = (homeClub, awayClub, homePlayersAll, awayPlayersAll, homeLineup, awayLineup, date, seed, referee, homeCoach, awayCoach, competitionId, leg1Diff, isFinalMatch) => {
-  const rng = makeSeededRng(seed);
-  const competitionProfile = getEuropeanBackgroundProfile(competitionId);
-  const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
-  const hTactic = TacticRepository.getById(homeLineup.tacticId);
-  const aTactic = TacticRepository.getById(awayLineup.tacticId);
-  const hClashBase = TACTIC_CLASH_MATRIX[homeLineup.tacticId]?.[awayLineup.tacticId] ?? 4;
-  const aClashBase = TACTIC_CLASH_MATRIX[awayLineup.tacticId]?.[homeLineup.tacticId] ?? 4;
-  const hClashFinal = Math.round(hClashBase + rng(900) * 1.5);
-  const aClashFinal = Math.round(aClashBase + rng(901) * 1.5);
-  const hTacticMod = getEffectivenessMult(hClashFinal);
-  const aTacticMod = getEffectivenessMult(aClashFinal);
-  const hCoachAtkMod = 1 + (homeCoach.attributes.motivation - 50) * 2e-3 + (homeCoach.attributes.experience - 50) * 1e-3;
-  const hCoachDefMod = 1 + (homeCoach.attributes.decisionMaking - 50) * 2e-3;
-  const aCoachAtkMod = 1 + (awayCoach.attributes.motivation - 50) * 2e-3 + (awayCoach.attributes.experience - 50) * 1e-3;
-  const aCoachDefMod = 1 + (awayCoach.attributes.decisionMaking - 50) * 2e-3;
-  const homeDailyForm = (rng(11) - 0.5) * 0.3;
-  const awayDailyForm = (rng(12) - 0.5) * 0.3;
-  const chaosRoll = rng(7);
-  let isChaosMatch = chaosRoll < 0.035;
-  const isStaleMatch = chaosRoll > 0.94;
-  const volatilityMult = competitionProfile.useLegacyChampionsLeagueModel ? isChaosMatch ? 1.65 : isStaleMatch ? 0.5 : 1 : 1;
-  const homeCountry = homeClub.country ?? "POL";
-  const weatherMod = EuropeanWeatherService.getGoalModifier(homeCountry, date, rng(13));
-  const homeSubData = simulateSubs(homeLineup, homePlayersAll, 5e3, rng);
-  const awaySubData = simulateSubs(awayLineup, awayPlayersAll, 6e3, rng);
-  const homeInjuryData = simulateInjuriesPerMinute(homeLineup, homePlayersAll, homeClub.id, homeSubData.matchSubs, homeSubData.matchSubs.length, rng, 1e4, refExpFactor, date);
-  const awayInjuryData = simulateInjuriesPerMinute(awayLineup, awayPlayersAll, awayClub.id, awaySubData.matchSubs, awaySubData.matchSubs.length, rng, 2e4, refExpFactor, date);
-  let homeAllSubs = [...homeInjuryData.appliedRegularSubs, ...homeInjuryData.injurySubs].sort((a, b) => a.min - b.min);
-  let awayAllSubs = [...awayInjuryData.appliedRegularSubs, ...awayInjuryData.injurySubs].sort((a, b) => a.min - b.min);
-  const homeCardData = simulateCardsAndInjuries(homeLineup, homePlayersAll, homeClub.id, homeAllSubs, 1e4, rng, referee, true, homeInjuryData.forcedExits);
-  const awayCardData = simulateCardsAndInjuries(awayLineup, awayPlayersAll, awayClub.id, awayAllSubs, 2e4, rng, referee, false, awayInjuryData.forcedExits);
-  const homeRedExits = getRedCardExits(homeCardData.cards);
-  const awayRedExits = getRedCardExits(awayCardData.cards);
-  const homeTimeline = reconcileMatchTimeline(homeLineup.startingXI, homeAllSubs, [...homeInjuryData.forcedExits, ...homeRedExits]);
-  const awayTimeline = reconcileMatchTimeline(awayLineup.startingXI, awayAllSubs, [...awayInjuryData.forcedExits, ...awayRedExits]);
-  homeAllSubs = homeTimeline.appliedSubs;
-  awayAllSubs = awayTimeline.appliedSubs;
-  let homeMinutesPlayedMap = homeTimeline.minutesPlayedMap;
-  let awayMinutesPlayedMap = awayTimeline.minutesPlayedMap;
-  const homeShortHanded = calculateEuropeanRedCardImpact(homeRedExits);
-  const awayShortHanded = calculateEuropeanRedCardImpact(awayRedExits);
-  const formImpact = TeamFormImpactService.calculateMatchImpact(
-    homePlayersAll,
-    awayPlayersAll,
-    homeLineup,
-    awayLineup,
-    { preserveUnderdogForm: !competitionProfile.useLegacyChampionsLeagueModel }
-  );
-  const hStr = getWeightedLineStrength(homePlayersAll, homeLineup, homeAllSubs, [...homeInjuryData.forcedExits, ...homeRedExits]);
-  const aStr = getWeightedLineStrength(awayPlayersAll, awayLineup, awayAllSubs, [...awayInjuryData.forcedExits, ...awayRedExits]);
-  const repDiff = homeClub.reputation - awayClub.reputation;
-  const baseXg = isFinalMatch ? 1.15 : 1.25;
-  const baseXgAway = isFinalMatch ? 1.15 : 1.05;
-  const homeAdvantage = isFinalMatch ? 0 : 0.08;
-  let xgHome = baseXg + repDiff * 0.015 + (hTactic.attackBias - 50) / 180 + (hStr.att - aStr.def) * 0.04 + homeDailyForm + homeAdvantage;
-  let xgAway = baseXgAway - repDiff * 0.015 + (aTactic.attackBias - 50) / 180 + (aStr.att - hStr.def) * 0.04 + awayDailyForm;
-  if (xgHome > xgAway + 1.2) xgHome += 0.5;
-  if (xgAway > xgHome + 1.2) xgAway += 0.5;
-  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod * formImpact.homeGoalChanceMultiplier);
-  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod * formImpact.awayGoalChanceMultiplier);
-  let homeScore90;
-  let awayScore90;
-  if (competitionProfile.useLegacyChampionsLeagueModel) {
-    homeScore90 = getGoalsPoissonLike(xgHome, rng, 200, isChaosMatch);
-    awayScore90 = getGoalsPoissonLike(xgAway, rng, 300, isChaosMatch);
-    const routedScore90 = applyRareMismatchRout(
-      homeScore90,
-      awayScore90,
-      homeClub,
-      awayClub,
-      xgHome,
-      xgAway,
-      rng,
-      isChaosMatch
-    );
-    homeScore90 = routedScore90.homeScore;
-    awayScore90 = routedScore90.awayScore;
-  } else {
-    const scoreModel = simulateEuropeanBackgroundScore({
-      competitionId,
-      homeExpectedGoals: xgHome,
-      awayExpectedGoals: xgAway,
-      homeStrength: formImpact.home.teamQuality + homeClub.reputation * 0.6,
-      awayStrength: formImpact.away.teamQuality + awayClub.reputation * 0.6,
-      seed,
-      leg1Diff
-    });
-    homeScore90 = scoreModel.homeScore;
-    awayScore90 = scoreModel.awayScore;
-    xgHome = scoreModel.adjustedHomeExpectedGoals;
-    xgAway = scoreModel.adjustedAwayExpectedGoals;
-    isChaosMatch = scoreModel.isOpenMatch || scoreModel.homeCollapsed || scoreModel.awayCollapsed;
-  }
-  const penThreshold = referee.strictness / 300 * refExpFactor;
-  const inMatchGoals = [];
-  const tryPenalty = (side, rollOffset) => {
-    if (rng(rollOffset) >= penThreshold) return;
-    const isScored = rng(rollOffset + 1) < 0.78;
-    const teamPlayers = side === "H" ? homePlayersAll : awayPlayersAll;
-    const lineup = side === "H" ? homeLineup : awayLineup;
-    const subs = side === "H" ? homeAllSubs : awayAllSubs;
-    const exits = side === "H" ? homeTimeline.appliedExits : awayTimeline.appliedExits;
-    const penMin = Math.floor(5 + rng(rollOffset + 2) * 85);
-    const activeXI = getActiveLineupAt(penMin, lineup.startingXI, subs, exits);
-    const kicker = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
-    if (!kicker) return;
-    if (isScored) {
-      inMatchGoals.push({ playerName: formatPlayerReportName(kicker), playerId: kicker.id, minute: penMin, teamId: side === "H" ? homeClub.id : awayClub.id, isPenalty: true });
-    }
-  };
-  tryPenalty("H", 9100);
-  tryPenalty("A", 9200);
-  const fatigueMap = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
-  const fatigueDebtMap = { ...homeCardData.fatigueDebtMap, ...awayCardData.fatigueDebtMap };
-  const injuryPenaltyMap = { ...homeCardData.injuryPenaltyMap, ...awayCardData.injuryPenaltyMap, ...homeInjuryData.injuryPenaltyMap, ...awayInjuryData.injuryPenaltyMap };
-  const attributeWithVAR = (count, teamId, teamPlayers, lineup, subs, exits, baseOffset) => {
-    const entries = [];
-    const usedMinutes = /* @__PURE__ */ new Set();
-    let adjustedScore = 0;
-    for (let i = 0; i < count; i++) {
-      let minute = Math.floor(1 + rng(baseOffset + i) * 94);
-      while (usedMinutes.has(minute)) {
-        minute = minute >= 96 ? 1 : minute + 1;
-      }
-      usedMinutes.add(minute);
-      const activeXI = getActiveLineupAt(minute, lineup.startingXI, subs, exits);
-      const scorer = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(baseOffset + i + 500));
-      const assist = scorer ? GoalAttributionService.pickAssistant(teamPlayers, activeXI, scorer.id, false, () => rng(baseOffset + i + 501)) : null;
-      const isVarDisallowed = rng(baseOffset + i + 502) < 0.04;
-      if (!isVarDisallowed) adjustedScore++;
-      entries.push({
-        playerName: scorer ? formatPlayerReportName(scorer) : "?",
-        playerId: scorer?.id,
-        assistId: assist?.id,
-        minute,
-        teamId,
-        isPenalty: rng(baseOffset + i + 700) < 0.02,
-        varDisallowed: isVarDisallowed || void 0
-      });
-    }
-    return { entries, adjustedScore };
-  };
-  const homeGoalData = attributeWithVAR(homeScore90, homeClub.id, homePlayersAll, homeLineup, homeAllSubs, homeTimeline.appliedExits, 400);
-  const awayGoalData = attributeWithVAR(awayScore90, awayClub.id, awayPlayersAll, awayLineup, awayAllSubs, awayTimeline.appliedExits, 450);
-  let finalHomeScore90 = homeGoalData.adjustedScore + inMatchGoals.filter((g) => g.teamId === homeClub.id).length;
-  let finalAwayScore90 = awayGoalData.adjustedScore + inMatchGoals.filter((g) => g.teamId === awayClub.id).length;
-  const homeSubs = homeAllSubs.map((s) => {
-    const out = homePlayersAll.find((p) => p.id === s.outId);
-    const inP = homePlayersAll.find((p) => p.id === s.inId);
-    return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : "?", playerInId: s.inId, playerInName: inP ? formatPlayerReportName(inP) : "?", minute: s.min, teamId: homeClub.id };
-  });
-  const awaySubs = awayAllSubs.map((s) => {
-    const out = awayPlayersAll.find((p) => p.id === s.outId);
-    const inP = awayPlayersAll.find((p) => p.id === s.inId);
-    return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : "?", playerInId: s.inId, playerInName: inP ? formatPlayerReportName(inP) : "?", minute: s.min, teamId: awayClub.id };
-  });
-  let finalHomeScore = finalHomeScore90;
-  let finalAwayScore = finalAwayScore90;
-  let penaltyHome;
-  let penaltyAway;
-  let wentToExtraTime = false;
-  const homeWinProb = adjustExtraTimeWinProbability(
-    homeClub.reputation / (homeClub.reputation + awayClub.reputation),
-    homeRedExits,
-    awayRedExits
-  );
-  if (leg1Diff !== void 0 && finalHomeScore90 - finalAwayScore90 === leg1Diff) {
-    const etResult = simulateExtraTimeAndPenalties(
-      finalHomeScore90,
-      finalAwayScore90,
-      homeWinProb,
-      xgHome,
-      xgAway,
-      homeRedExits,
-      awayRedExits,
-      isChaosMatch,
-      rng,
-      1e3,
-      leg1Diff
-    );
-    finalHomeScore = etResult.homeScore;
-    finalAwayScore = etResult.awayScore;
-    penaltyHome = etResult.penaltyHome;
-    penaltyAway = etResult.penaltyAway;
-    wentToExtraTime = true;
-  } else if (isFinalMatch && finalHomeScore90 === finalAwayScore90) {
-    const etResult = simulateExtraTimeAndPenalties(
-      finalHomeScore90,
-      finalAwayScore90,
-      homeWinProb,
-      xgHome,
-      xgAway,
-      homeRedExits,
-      awayRedExits,
-      isChaosMatch,
-      rng,
-      1e3,
-      void 0
-    );
-    finalHomeScore = etResult.homeScore;
-    finalAwayScore = etResult.awayScore;
-    penaltyHome = etResult.penaltyHome;
-    penaltyAway = etResult.penaltyAway;
-    wentToExtraTime = true;
-  }
-  const etGoals = [];
-  if (wentToExtraTime) {
-    const etHomeCount = finalHomeScore - finalHomeScore90;
-    const etAwayCount = finalAwayScore - finalAwayScore90;
-    const usedETMin = /* @__PURE__ */ new Set();
-    for (let i = 0; i < etHomeCount; i++) {
-      let minute = Math.floor(91 + rng(2e3 + i) * 30);
-      while (usedETMin.has(minute)) {
-        minute = minute >= 120 ? 91 : minute + 1;
-      }
-      usedETMin.add(minute);
-      const activeXI = getActiveLineupAt(minute, homeLineup.startingXI, homeAllSubs, homeTimeline.appliedExits);
-      const scorer = GoalAttributionService.pickScorer(homePlayersAll, activeXI, false, () => rng(2e3 + i + 500));
-      etGoals.push({ playerName: scorer ? formatPlayerReportName(scorer) : "?", playerId: scorer?.id, minute, teamId: homeClub.id, isPenalty: false });
-    }
-    for (let i = 0; i < etAwayCount; i++) {
-      let minute = Math.floor(91 + rng(2100 + i) * 30);
-      while (usedETMin.has(minute)) {
-        minute = minute >= 120 ? 91 : minute + 1;
-      }
-      usedETMin.add(minute);
-      const activeXI = getActiveLineupAt(minute, awayLineup.startingXI, awayAllSubs, awayTimeline.appliedExits);
-      const scorer = GoalAttributionService.pickScorer(awayPlayersAll, activeXI, false, () => rng(2100 + i + 500));
-      etGoals.push({ playerName: scorer ? formatPlayerReportName(scorer) : "?", playerId: scorer?.id, minute, teamId: awayClub.id, isPenalty: false });
-    }
-  }
-  const ratings = {};
-  const homeWin = finalHomeScore > finalAwayScore;
-  const awayWin = finalAwayScore > finalHomeScore;
-  const isDraw = finalHomeScore === finalAwayScore;
-  const allGoals = [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals, ...etGoals];
-  const allCards = [...homeCardData.cards, ...awayCardData.cards];
-  const generateRating = (pId, isHome) => {
-    const p = (isHome ? homePlayersAll : awayPlayersAll).find((x) => x.id === pId);
-    if (!p) return;
-    const teamWon = isHome ? homeWin : awayWin;
-    const r = rng(pId.length + 90 + 999);
-    let score = teamWon ? 6.2 + r * 1.5 : isDraw ? 5.2 + r * 1.5 : 4 + r * 1.8;
-    const pGoals = allGoals.filter((g) => g.playerId === pId && !g.varDisallowed).length;
-    const pAssists = allGoals.filter((g) => g.assistId === pId && !g.varDisallowed).length;
-    score += pGoals * 1 + pAssists * 0.6;
-    const conceded = isHome ? finalAwayScore : finalHomeScore;
-    if (p.position === "GK" /* GK */ || p.position === "DEF") {
-      if (conceded === 0) score += 1.2;
-      else score -= conceded * 0.3;
-    }
-    allCards.filter((c) => c.playerId === pId).forEach((c) => {
-      if (c.type === "RED" || c.type === "SECOND_YELLOW") score -= 3;
-      if (c.type === "YELLOW") score -= 0.5;
-    });
-    ratings[pId] = parseFloat(Math.min(10, Math.max(1, score)).toFixed(1));
-  };
-  Object.keys(homeMinutesPlayedMap).forEach((id) => generateRating(id, true));
-  Object.keys(awayMinutesPlayedMap).forEach((id) => generateRating(id, false));
   return {
-    homeScore: finalHomeScore,
-    awayScore: finalAwayScore,
+    homeScore: homeGoals,
+    awayScore: awayGoals,
+    scorers,
+    cards,
+    injuries,
+    substitutions,
+    fatigue,
+    fatigueDebtMap,
     penaltyHome,
     penaltyAway,
     wentToExtraTime,
-    goals: allGoals.sort((a, b) => a.minute - b.minute),
-    cards: allCards,
-    substitutions: [
-      ...homeSubs,
-      ...awaySubs,
-      ...homeTimeline.appliedExits.map((s) => {
-        const out = homePlayersAll.find((p) => p.id === s.outId);
-        return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : "?", playerInName: "", minute: s.min, teamId: homeClub.id };
-      }),
-      ...awayTimeline.appliedExits.map((s) => {
-        const out = awayPlayersAll.find((p) => p.id === s.outId);
-        return { playerOutId: s.outId, playerOutName: out ? formatPlayerReportName(out) : "?", playerInName: "", minute: s.min, teamId: awayClub.id };
-      })
-    ],
-    updatedHomePlayers: homeInjuryData.updatedPlayers,
-    updatedAwayPlayers: awayInjuryData.updatedPlayers,
-    participatingHomePlayerIds: Object.keys(homeMinutesPlayedMap),
-    participatingAwayPlayerIds: Object.keys(awayMinutesPlayedMap),
-    homeMinutesPlayedMap,
-    awayMinutesPlayedMap,
-    fatigueMap,
-    fatigueDebtMap,
-    injuryPenaltyMap,
-    injuries: [...homeInjuryData.injuries, ...awayInjuryData.injuries],
-    ratings
+    referee
   };
 };
-var BACKGROUND_EUROPEAN_COMPETITIONS = /* @__PURE__ */ new Set([
-  "CL_R1Q" /* CL_R1Q */,
-  "CL_R1Q_RETURN" /* CL_R1Q_RETURN */,
-  "CL_R2Q" /* CL_R2Q */,
-  "CL_R2Q_RETURN" /* CL_R2Q_RETURN */,
-  "CL_GROUP_STAGE" /* CL_GROUP_STAGE */,
-  "CL_R16" /* CL_R16 */,
-  "CL_R16_RETURN" /* CL_R16_RETURN */,
-  "CL_QF" /* CL_QF */,
-  "CL_QF_RETURN" /* CL_QF_RETURN */,
-  "CL_SF" /* CL_SF */,
-  "CL_SF_RETURN" /* CL_SF_RETURN */,
-  "CL_FINAL" /* CL_FINAL */,
-  "EL_R1Q" /* EL_R1Q */,
-  "EL_R1Q_RETURN" /* EL_R1Q_RETURN */,
-  "EL_R2Q" /* EL_R2Q */,
-  "EL_R2Q_RETURN" /* EL_R2Q_RETURN */,
-  "EL_GROUP_STAGE" /* EL_GROUP_STAGE */,
-  "EL_R16" /* EL_R16 */,
-  "EL_R16_RETURN" /* EL_R16_RETURN */,
-  "EL_QF" /* EL_QF */,
-  "EL_QF_RETURN" /* EL_QF_RETURN */,
-  "EL_SF" /* EL_SF */,
-  "EL_SF_RETURN" /* EL_SF_RETURN */,
-  "EL_FINAL" /* EL_FINAL */,
-  "CONF_R1Q" /* CONF_R1Q */,
-  "CONF_R1Q_RETURN" /* CONF_R1Q_RETURN */,
-  "CONF_R2Q" /* CONF_R2Q */,
-  "CONF_R2Q_RETURN" /* CONF_R2Q_RETURN */,
-  "CONF_GROUP_STAGE" /* CONF_GROUP_STAGE */,
-  "CONF_R16" /* CONF_R16 */,
-  "CONF_R16_RETURN" /* CONF_R16_RETURN */,
-  "CONF_QF" /* CONF_QF */,
-  "CONF_QF_RETURN" /* CONF_QF_RETURN */,
-  "CONF_SF" /* CONF_SF */,
-  "CONF_SF_RETURN" /* CONF_SF_RETURN */,
-  "CONF_FINAL" /* CONF_FINAL */
-]);
-var BACKGROUND_CONFERENCE_COMPETITIONS = /* @__PURE__ */ new Set([
-  "CONF_R1Q" /* CONF_R1Q */,
-  "CONF_R1Q_RETURN" /* CONF_R1Q_RETURN */,
-  "CONF_R2Q" /* CONF_R2Q */,
-  "CONF_R2Q_RETURN" /* CONF_R2Q_RETURN */,
-  "CONF_GROUP_STAGE" /* CONF_GROUP_STAGE */,
-  "CONF_R16" /* CONF_R16 */,
-  "CONF_R16_RETURN" /* CONF_R16_RETURN */,
-  "CONF_QF" /* CONF_QF */,
-  "CONF_QF_RETURN" /* CONF_QF_RETURN */,
-  "CONF_SF" /* CONF_SF */,
-  "CONF_SF_RETURN" /* CONF_SF_RETURN */,
-  "CONF_FINAL" /* CONF_FINAL */
-]);
-var isEuropeanBackgroundMatchForDate = (fixture2, dateStr, userTeamId) => {
-  if (fixture2.date.toDateString() !== dateStr || fixture2.status !== "SCHEDULED" /* SCHEDULED */ || !BACKGROUND_EUROPEAN_COMPETITIONS.has(fixture2.leagueId)) {
-    return false;
-  }
-  return BACKGROUND_CONFERENCE_COMPETITIONS.has(fixture2.leagueId) || fixture2.leagueId === "CL_FINAL" /* CL_FINAL */ || fixture2.leagueId === "EL_FINAL" /* EL_FINAL */ || fixture2.homeTeamId !== userTeamId && fixture2.awayTeamId !== userTeamId;
-};
-var BackgroundMatchProcessorCL = {
-  /**
-   * Fast, allocation-free calendar gate used before opening a visible day
-   * processing phase. On ordinary days `.some()` returns after a read-only scan
-   * and avoids referee setup, fixture/player copies and React state updates.
-   */
-  hasMatchesToProcess: (currentDate, userTeamId, fixtures) => {
-    const dateStr = currentDate.toDateString();
-    return fixtures.some((fixture2) => isEuropeanBackgroundMatchForDate(fixture2, dateStr, userTeamId));
-  },
-  processChampionsLeagueEvent: (currentDate, userTeamId, fixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches2 = {}) => {
-    const dateStr = currentDate.toDateString();
-    const todayMatches = fixtures.filter(
-      (fixture2) => isEuropeanBackgroundMatchForDate(fixture2, dateStr, userTeamId)
+var BackgroundMatchProcessorPolishCup = {
+  processCupEvent: (currentDate2, userTeamId, fixtures2, clubs, playersMap, lineups, careerSeed, seasonNumber, coaches = {}) => {
+    const dateStr2 = currentDate2.toDateString();
+    const clubIds2 = new Set(clubs.map((club) => club.id));
+    const hasBrokenCupFixtureToday = fixtures2.some(
+      (fixture) => fixture.date.toDateString() === dateStr2 && fixture.status === "SCHEDULED" /* SCHEDULED */ && (fixture.leagueId === "POLISH_CUP" /* POLISH_CUP */ || fixture.leagueId === "SUPER_CUP" /* SUPER_CUP */) && (!clubIds2.has(fixture.homeTeamId) || !clubIds2.has(fixture.awayTeamId))
     );
-    if (todayMatches.length === 0) return { updatedFixtures: fixtures, updatedPlayers: players, matchHistoryEntries: [] };
-    RefereeService.initializePool();
-    let updatedFixtures = [...fixtures];
-    let updatedPlayersMap = { ...players };
-    const matchHistoryEntries = [];
-    const usedRefereeIds = /* @__PURE__ */ new Set();
-    todayMatches.forEach((fixture2) => {
-      const home = clubs.find((c) => c.id === fixture2.homeTeamId);
-      const away = clubs.find((c) => c.id === fixture2.awayTeamId);
+    const repairedFixtures = hasBrokenCupFixtureToday ? fixtures2.map((fixture) => {
+      const isTodayCupFixture = fixture.date.toDateString() === dateStr2 && fixture.status === "SCHEDULED" /* SCHEDULED */ && (fixture.leagueId === "POLISH_CUP" /* POLISH_CUP */ || fixture.leagueId === "SUPER_CUP" /* SUPER_CUP */);
+      if (!isTodayCupFixture) return fixture;
+      const homeExists = clubIds2.has(fixture.homeTeamId);
+      const awayExists = clubIds2.has(fixture.awayTeamId);
+      if (homeExists && awayExists) return fixture;
+      const advancingClubId = homeExists ? fixture.homeTeamId : awayExists ? fixture.awayTeamId : POLISH_CUP_BYE_TEAM_ID;
+      return {
+        ...fixture,
+        homeTeamId: advancingClubId,
+        awayTeamId: POLISH_CUP_BYE_TEAM_ID,
+        homeScore: homeExists || awayExists ? 1 : 0,
+        awayScore: 0,
+        status: "FINISHED" /* FINISHED */
+      };
+    }) : fixtures2;
+    const todayCupFixtures = repairedFixtures.filter(
+      (f) => f.date.toDateString() === dateStr2 && f.status === "SCHEDULED" /* SCHEDULED */ && (f.leagueId === "POLISH_CUP" /* POLISH_CUP */ || f.leagueId === "SUPER_CUP" /* SUPER_CUP */) && f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId && clubIds2.has(f.homeTeamId) && clubIds2.has(f.awayTeamId)
+    );
+    if (todayCupFixtures.length === 0) {
+      return { updatedFixtures: repairedFixtures, updatedPlayers: playersMap, updatedLineups: lineups, updatedClubs: clubs };
+    }
+    let currentFixtures = [...repairedFixtures];
+    let currentPlayers = { ...playersMap };
+    let currentClubs = [...clubs];
+    const newLineups = { ...lineups };
+    todayCupFixtures.forEach((fixture) => {
+      const home = currentClubs.find((club) => club.id === fixture.homeTeamId);
+      const away = currentClubs.find((club) => club.id === fixture.awayTeamId);
       if (!home || !away) return;
-      const matchHash = fixture2.id.split("").reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0);
-      const seed = matchHash ^ sessionSeed ^ (currentDate.getTime() / 1e3 | 0);
-      const homePlayers = updatedPlayersMap[fixture2.homeTeamId] ?? [];
-      const awayPlayers = updatedPlayersMap[fixture2.awayTeamId] ?? [];
-      const isReturnLeg = fixture2.leagueId === "CL_R1Q_RETURN" /* CL_R1Q_RETURN */ || fixture2.leagueId === "CL_R2Q_RETURN" /* CL_R2Q_RETURN */ || fixture2.leagueId === "CL_R16_RETURN" /* CL_R16_RETURN */ || fixture2.leagueId === "CL_QF_RETURN" /* CL_QF_RETURN */ || fixture2.leagueId === "CL_SF_RETURN" /* CL_SF_RETURN */ || fixture2.leagueId === "EL_R1Q_RETURN" /* EL_R1Q_RETURN */ || fixture2.leagueId === "EL_R2Q_RETURN" /* EL_R2Q_RETURN */ || fixture2.leagueId === "EL_R16_RETURN" /* EL_R16_RETURN */ || fixture2.leagueId === "EL_QF_RETURN" /* EL_QF_RETURN */ || fixture2.leagueId === "EL_SF_RETURN" /* EL_SF_RETURN */ || fixture2.leagueId === "CONF_R1Q_RETURN" /* CONF_R1Q_RETURN */ || fixture2.leagueId === "CONF_R2Q_RETURN" /* CONF_R2Q_RETURN */ || fixture2.leagueId === "CONF_R16_RETURN" /* CONF_R16_RETURN */ || fixture2.leagueId === "CONF_QF_RETURN" /* CONF_QF_RETURN */ || fixture2.leagueId === "CONF_SF_RETURN" /* CONF_SF_RETURN */;
-      const isFinal = fixture2.leagueId === "CL_FINAL" /* CL_FINAL */ || fixture2.leagueId === "EL_FINAL" /* EL_FINAL */ || fixture2.leagueId === "CONF_FINAL" /* CONF_FINAL */;
-      let leg1Diff = void 0;
-      if (isReturnLeg) {
-        const firstLegId = fixture2.id.replace("_RETURN", "");
-        const firstLeg = updatedFixtures.find((f) => f.id === firstLegId);
-        if (firstLeg && firstLeg.homeScore !== null && firstLeg.awayScore !== null) {
-          leg1Diff = firstLeg.homeScore - firstLeg.awayScore;
-        }
-      }
-      const matchSeedStr = `${fixture2.id}_${sessionSeed}`;
-      const referee = RefereeService.assignInternationalReferee(
-        matchSeedStr,
-        home.country ?? "POL",
-        away.country ?? "POL",
-        usedRefereeIds
-      );
-      usedRefereeIds.add(referee.id);
-      const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
-      const assignedHomeCoach = AiMatchPreparationService.getClubCoach(home, coaches2);
-      const assignedAwayCoach = AiMatchPreparationService.getClubCoach(away, coaches2);
-      const homeCoach = assignedHomeCoach ?? { id: "default_h", firstName: "", lastName: "", age: 0, nationality: "", nationalityFlag: "", attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: "", contractEndDate: "", annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: "", neutral: "", defensive: "" } };
-      const awayCoach = assignedAwayCoach ?? { id: "default_a", firstName: "", lastName: "", age: 0, nationality: "", nationalityFlag: "", attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: "", contractEndDate: "", annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: "", neutral: "", defensive: "" } };
-      const homeAggregateGoalDifference = isReturnLeg && leg1Diff !== void 0 ? -leg1Diff : void 0;
-      const awayAggregateGoalDifference = homeAggregateGoalDifference !== void 0 ? -homeAggregateGoalDifference : void 0;
-      const prepareLineup = (club, opponent, squad, coach, isHome, aggregateGoalDifference) => {
-        const existing = lineups[club.id];
-        if (!coach && existing) {
-          return LineupService.repairLineup(existing, squad, { competitionId: fixture2.leagueId });
-        }
+      const prepare = (club, opponent, isHome) => {
+        const squad = currentPlayers[club.id] ?? [];
+        if (squad.length === 0) return null;
+        const coach = AiMatchPreparationService.getClubCoach(club, coaches);
         return AiMatchPreparationService.prepareTeamForMatch(
           club,
           opponent,
           squad,
           coach,
-          fixture2,
+          fixture,
           isHome,
-          `${fixture2.id}_${club.id}_european_background`,
-          aggregateGoalDifference,
+          `${fixture.id}_${club.id}_polish_cup_background`,
+          void 0,
           true
         );
       };
-      const homeLineup = prepareLineup(home, away, homePlayers, assignedHomeCoach, true, homeAggregateGoalDifference);
-      const awayLineup = prepareLineup(away, home, awayPlayers, assignedAwayCoach, false, awayAggregateGoalDifference);
-      const pseudoRng = (seed * 9301 + 49297) % 233280 / 233280;
-      let attendance;
-      let venueLabel;
-      let weatherCountry = home.country ?? "POL";
-      if (isFinal) {
-        const venueList = fixture2.leagueId === "CL_FINAL" /* CL_FINAL */ ? CL_FINAL_VENUES : fixture2.leagueId === "EL_FINAL" /* EL_FINAL */ ? EL_FINAL_VENUES : CONF_FINAL_VENUES;
-        const venueIdx = ((seasonNumber - 1) % venueList.length + venueList.length) % venueList.length;
-        const venue = venueList[venueIdx];
-        const fillRate = 0.98 + pseudoRng * 0.02;
-        attendance = Math.floor(venue.capacity * fillRate);
-        venueLabel = `${venue.name}, ${venue.city}`;
-        weatherCountry = venue.country;
-      } else {
-        const homeRep = home.reputation;
-        const awayRep = away.reputation;
-        if (homeRep >= 18 || awayRep >= 18) {
-          attendance = home.stadiumCapacity ?? 5e4;
-        } else {
-          const combinedRep = homeRep + awayRep;
-          const repNorm = Math.max(0, Math.min(1, (combinedRep - 2) / 32));
-          const scatter = 0.1 * (1 - repNorm);
-          const randomOffset = (pseudoRng * 2 - 1) * scatter;
-          const fillRate = 0.45 + 0.47 * repNorm + randomOffset;
-          const weatherMod = EuropeanWeatherService.getGoalModifier(home.country ?? "POL", currentDate, pseudoRng);
-          const weatherPenalty = weatherMod < 0.995 ? 0.88 : 1;
-          attendance = Math.floor((home.stadiumCapacity ?? 2e4) * Math.min(1, fillRate * weatherPenalty));
-        }
-      }
-      const weather = EuropeanWeatherService.getSnapshot(weatherCountry, currentDate, matchSeedStr);
-      const result = simulateCLMatchFull(
+      const homeLineup = prepare(home, away, true);
+      const awayLineup = prepare(away, home, false);
+      if (homeLineup) newLineups[home.id] = homeLineup;
+      if (awayLineup) newLineups[away.id] = awayLineup;
+    });
+    todayCupFixtures.forEach((fixture) => {
+      const home = currentClubs.find((c) => c.id === fixture.homeTeamId);
+      const away = currentClubs.find((c) => c.id === fixture.awayTeamId);
+      if (!home || !away) return;
+      const hPlayers = currentPlayers[home.id] || [];
+      const aPlayers = currentPlayers[away.id] || [];
+      const hLineup = newLineups[home.id];
+      const aLineup = newLineups[away.id];
+      const homeCoach = AiMatchPreparationService.getClubCoach(home, coaches);
+      const awayCoach = AiMatchPreparationService.getClubCoach(away, coaches);
+      if (!hLineup || !aLineup) return;
+      const clubSalt = home.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const matchHash = fixture.id.split("").reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0);
+      const seed = matchHash ^ clubSalt ^ (currentDate2.getTime() / 1e3 | 0) ^ careerSeed;
+      const weatherSeed = `${fixture.id}_${currentDate2.getTime()}`;
+      const weather = PolandWeatherService.getWeather(currentDate2, weatherSeed);
+      const isBadWeather = weather.precipitationChance > 50 || weather.tempC < 2;
+      const weatherEqualizer = isBadWeather ? 0.82 : 1;
+      const venue = PolishCupVenueService.getVenue(fixture, home);
+      const isNeutralVenue = venue.isNeutral;
+      const result2 = simulateCupMatch(
         home,
         away,
-        homePlayers,
-        awayPlayers,
-        homeLineup,
-        awayLineup,
-        currentDate,
-        seed,
-        referee,
+        hPlayers,
+        aPlayers,
+        hLineup,
+        aLineup,
         homeCoach,
         awayCoach,
-        fixture2.leagueId,
-        leg1Diff,
-        isFinal
+        seed,
+        weatherEqualizer,
+        isNeutralVenue
       );
-      updatedFixtures = updatedFixtures.map(
-        (f) => f.id === fixture2.id ? {
-          ...f,
-          homeScore: result.homeScore,
-          awayScore: result.awayScore,
-          homePenaltyScore: result.penaltyHome,
-          awayPenaltyScore: result.penaltyAway,
-          status: "FINISHED" /* FINISHED */
-        } : f
-      );
-      const applyFatigueToTeam = (teamPlayers) => teamPlayers.map((p) => {
-        let updatedP = { ...p };
-        const drain = result.fatigueMap[p.id];
-        const debt = result.fatigueDebtMap[p.id];
-        if (drain !== void 0) {
-          updatedP.condition = Math.max(0, (updatedP.condition ?? 100) - drain);
-        }
-        if (debt !== void 0) {
-          updatedP.fatigueDebt = Math.min(100, (updatedP.fatigueDebt ?? 0) + debt);
-        }
-        const penalty = result.injuryPenaltyMap[p.id];
-        if (penalty !== void 0 && updatedP.health?.injury) {
-          const condAfterPenalty = Math.max(0, (updatedP.condition ?? 100) - penalty);
-          updatedP.health = { ...updatedP.health, injury: { ...updatedP.health.injury, conditionAtInjury: condAfterPenalty } };
-          updatedP.condition = condAfterPenalty;
-        }
-        return updatedP;
-      });
-      updatedPlayersMap = {
-        ...updatedPlayersMap,
-        [fixture2.homeTeamId]: applyFatigueToTeam(result.updatedHomePlayers),
-        [fixture2.awayTeamId]: applyFatigueToTeam(result.updatedAwayPlayers)
+      const finalHomeScore = result2.homeScore;
+      const finalAwayScore = result2.awayScore;
+      const penaltyHome = result2.penaltyHome;
+      const penaltyAway = result2.penaltyAway;
+      const allMatchPlayers = hPlayers.concat(aPlayers);
+      const getPlayerName = (playerId) => {
+        const player = allMatchPlayers.find((candidate) => candidate.id === playerId);
+        return player ? formatPlayerReportName(player) : "Nieznany";
       };
+      const goals = result2.scorers.map((s) => {
+        const player = allMatchPlayers.find((candidate) => candidate.id === s.playerId);
+        const assistant = s.assistId ? allMatchPlayers.find((candidate) => candidate.id === s.assistId) : void 0;
+        return {
+          playerId: s.playerId,
+          playerName: getPlayerName(s.playerId),
+          minute: s.minute,
+          teamId: player?.clubId ?? "?",
+          isPenalty: !!s.isPenalty,
+          assistantId: assistant?.id,
+          assistantName: assistant ? getPlayerName(assistant.id) : void 0
+        };
+      });
+      const yellowCounts = {};
+      const cards = [];
+      result2.cards.forEach((card) => {
+        if (card.type === "YELLOW_CARD" /* YELLOW_CARD */) {
+          yellowCounts[card.playerId] = (yellowCounts[card.playerId] || 0) + 1;
+          cards.push({
+            playerId: card.playerId,
+            playerName: getPlayerName(card.playerId),
+            minute: card.minute,
+            teamId: allMatchPlayers.find((candidate) => candidate.id === card.playerId)?.clubId ?? "?",
+            type: yellowCounts[card.playerId] === 2 ? "SECOND_YELLOW" : "YELLOW"
+          });
+          return;
+        }
+        const isDuplicateSecondYellow = result2.cards.some(
+          (candidate) => candidate.playerId === card.playerId && candidate.minute === card.minute && candidate.type === "YELLOW_CARD" /* YELLOW_CARD */
+        );
+        if (!isDuplicateSecondYellow) {
+          cards.push({
+            playerId: card.playerId,
+            playerName: getPlayerName(card.playerId),
+            minute: card.minute,
+            teamId: allMatchPlayers.find((candidate) => candidate.id === card.playerId)?.clubId ?? "?",
+            type: "RED"
+          });
+        }
+      });
+      const injuries = result2.injuries.map((injury) => ({
+        playerId: injury.playerId,
+        playerName: getPlayerName(injury.playerId),
+        minute: injury.minute,
+        teamId: allMatchPlayers.find((candidate) => candidate.id === injury.playerId)?.clubId ?? "?",
+        severity: injury.severity,
+        days: injury.days,
+        type: injury.type
+      }));
+      const allStarters = [
+        ...hLineup.startingXI.filter((id) => !!id),
+        ...aLineup.startingXI.filter((id) => !!id)
+      ];
+      const ratings = Object.fromEntries(allStarters.map((id, index) => [id, 6.1 + (seed + index * 17) % 18 / 10]));
+      const attendance = Math.round(venue.capacity * Math.min(0.98, 0.72 + (home.reputation + away.reputation) * 0.018));
+      RefereeService.recordMatchStats(
+        result2.referee.id,
+        RefereeService.generateMatchRating(result2.referee),
+        cards.filter((card) => card.type === "YELLOW" || card.type === "SECOND_YELLOW").length,
+        cards.filter((card) => card.type === "RED" || card.type === "SECOND_YELLOW").length
+      );
+      MatchHistoryService.logMatch({
+        matchId: fixture.id,
+        date: currentDate2.toDateString(),
+        competition: fixture.leagueId,
+        homeTeamId: home.id,
+        season: seasonNumber,
+        awayTeamId: away.id,
+        homeScore: finalHomeScore,
+        awayScore: finalAwayScore,
+        homePenaltyScore: penaltyHome,
+        awayPenaltyScore: penaltyAway,
+        isExtraTime: result2.wentToExtraTime,
+        attendance,
+        venue: venue.name,
+        weather,
+        goals,
+        cards,
+        substitutions: result2.substitutions,
+        injuries,
+        timeline: [],
+        refereeName: `${result2.referee.firstName} ${result2.referee.lastName}`,
+        homeLineup: hLineup.startingXI.filter((id) => !!id),
+        awayLineup: aLineup.startingXI.filter((id) => !!id),
+        ratings,
+        homeStartingTacticId: hLineup.tacticId,
+        awayStartingTacticId: aLineup.tacticId,
+        homeTacticId: hLineup.tacticId,
+        awayTacticId: aLineup.tacticId,
+        kits: KitSelectionService.selectOptimalKits(home, away)
+      });
+      currentFixtures = currentFixtures.map((f) => f.id === fixture.id ? {
+        ...f,
+        homeScore: finalHomeScore,
+        awayScore: finalAwayScore,
+        homePenaltyScore: penaltyHome,
+        awayPenaltyScore: penaltyAway,
+        status: "FINISHED" /* FINISHED */
+      } : f);
+      const isHomeWinner = penaltyHome !== void 0 ? penaltyHome > penaltyAway : finalHomeScore > finalAwayScore;
+      currentClubs = currentClubs.map((c) => {
+        if (c.id === home.id) return { ...c, isInPolishCup: isHomeWinner };
+        if (c.id === away.id) return { ...c, isInPolishCup: !isHomeWinner };
+        return c;
+      });
+      const totalMinutes = result2.wentToExtraTime ? 120 : 90;
+      const getMinutesPlayedMap = (lineup, teamId) => {
+        const minutesMap = Object.fromEntries(
+          lineup.startingXI.filter((id) => !!id).map((id) => [id, totalMinutes])
+        );
+        result2.substitutions.filter((substitution) => substitution.teamId === teamId).sort((a, b) => a.minute - b.minute).forEach((substitution) => {
+          const remainingMinutes = Math.max(0, totalMinutes - substitution.minute);
+          if (substitution.playerOutId) {
+            minutesMap[substitution.playerOutId] = Math.max(0, (minutesMap[substitution.playerOutId] ?? totalMinutes) - remainingMinutes);
+          }
+          if (substitution.playerInId) {
+            minutesMap[substitution.playerInId] = (minutesMap[substitution.playerInId] ?? 0) + remainingMinutes;
+          }
+        });
+        return minutesMap;
+      };
+      const homeMinutesPlayed = getMinutesPlayedMap(hLineup, home.id);
+      const awayMinutesPlayed = getMinutesPlayedMap(aLineup, away.id);
       const emptyS = () => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [] });
-      for (const [cId, minutesMap] of [[home.id, result.homeMinutesPlayedMap], [away.id, result.awayMinutesPlayedMap]]) {
-        updatedPlayersMap[cId] = updatedPlayersMap[cId].map((p) => {
+      for (const [cId, minutesMap] of [[home.id, homeMinutesPlayed], [away.id, awayMinutesPlayed]]) {
+        currentPlayers[cId] = currentPlayers[cId].map((p) => {
           const minutesPlayed = minutesMap[p.id];
           if (minutesPlayed === void 0) return p;
-          const eur = { ...p.euroStats ?? emptyS() };
-          eur.matchesPlayed += 1;
-          eur.minutesPlayed += minutesPlayed;
-          const rating = result.ratings[p.id];
-          if (typeof rating === "number" && Number.isFinite(rating)) {
-            eur.ratingHistory = [...eur.ratingHistory ?? [], rating];
-          }
-          return { ...p, euroStats: eur };
+          const cup = { ...p.cupStats ?? emptyS() };
+          cup.matchesPlayed += 1;
+          cup.minutesPlayed += minutesPlayed;
+          return { ...p, cupStats: cup };
         });
       }
       for (const cId of [home.id, away.id]) {
-        updatedPlayersMap[cId] = updatedPlayersMap[cId].map((p) => ({
+        currentPlayers[cId] = currentPlayers[cId].map((p) => ({
           ...p,
-          euroSuspensionMatches: Math.max(0, (p.euroSuspensionMatches ?? 0) - 1)
+          cupSuspensionMatches: Math.max(0, (p.cupSuspensionMatches ?? 0) - 1)
         }));
       }
-      result.goals.filter((g) => !g.varDisallowed && g.playerId).forEach((g) => {
-        for (const cId of Object.keys(updatedPlayersMap)) {
-          updatedPlayersMap[cId] = updatedPlayersMap[cId].map((p) => {
-            if (p.id === g.playerId) return { ...p, euroStats: { ...p.euroStats ?? emptyS(), goals: (p.euroStats?.goals ?? 0) + 1 } };
-            if (g.assistId && p.id === g.assistId) return { ...p, euroStats: { ...p.euroStats ?? emptyS(), assists: (p.euroStats?.assists ?? 0) + 1 } };
+      result2.scorers.forEach((s) => {
+        for (const cId of Object.keys(currentPlayers)) {
+          currentPlayers[cId] = currentPlayers[cId].map((p) => {
+            if (p.id === s.playerId) return { ...p, cupStats: { ...p.cupStats ?? emptyS(), goals: (p.cupStats?.goals ?? 0) + 1 } };
+            if (s.assistId && p.id === s.assistId) return { ...p, cupStats: { ...p.cupStats ?? emptyS(), assists: (p.cupStats?.assists ?? 0) + 1 } };
             return p;
           });
         }
       });
-      result.cards.forEach((card) => {
-        const evType = card.type === "RED" || card.type === "SECOND_YELLOW" ? "RED_CARD" /* RED_CARD */ : "YELLOW_CARD" /* YELLOW_CARD */;
-        for (const cId of Object.keys(updatedPlayersMap)) {
-          updatedPlayersMap[cId] = updatedPlayersMap[cId].map((p) => {
+      result2.cards.forEach((card) => {
+        for (const cId of Object.keys(currentPlayers)) {
+          currentPlayers[cId] = currentPlayers[cId].map((p) => {
             if (p.id !== card.playerId) return p;
-            const eur = { ...p.euroStats ?? emptyS() };
-            let euroSusp = p.euroSuspensionMatches ?? 0;
-            if (evType === "YELLOW_CARD" /* YELLOW_CARD */) {
-              eur.yellowCards += 1;
-              if (eur.yellowCards % 4 === 0) euroSusp += 1;
+            const cup = { ...p.cupStats ?? emptyS() };
+            let cupSusp = p.cupSuspensionMatches ?? 0;
+            if (card.type === "YELLOW_CARD" /* YELLOW_CARD */) {
+              cup.yellowCards += 1;
+              if (cup.yellowCards % 4 === 0) cupSusp += 1;
             }
-            if (evType === "RED_CARD" /* RED_CARD */) {
-              eur.redCards += 1;
-              euroSusp += 2;
+            if (card.type === "RED_CARD" /* RED_CARD */) {
+              cup.redCards += 1;
+              const isSecondYellow = result2.cards.some(
+                (candidate) => candidate.playerId === card.playerId && candidate.minute === card.minute && candidate.type === "YELLOW_CARD" /* YELLOW_CARD */
+              );
+              cupSusp += isSecondYellow ? 2 : 3;
             }
-            return { ...p, euroStats: eur, euroSuspensionMatches: euroSusp };
+            return { ...p, cupStats: cup, cupSuspensionMatches: cupSusp };
           });
         }
       });
-      const yellowsInMatch = result.cards.filter((c) => c.type === "YELLOW" || c.type === "SECOND_YELLOW").length;
-      const redsInMatch = result.cards.filter((c) => c.type === "RED" || c.type === "SECOND_YELLOW").length;
-      const refereeRating = RefereeService.generateMatchRating(referee);
-      RefereeService.recordMatchStats(referee.id, refereeRating, yellowsInMatch, redsInMatch);
-      matchHistoryEntries.push({
-        matchId: fixture2.id,
-        date: currentDate.toISOString(),
-        season: seasonNumber,
-        competition: fixture2.leagueId,
-        homeTeamId: fixture2.homeTeamId,
-        awayTeamId: fixture2.awayTeamId,
-        homeScore: result.homeScore,
-        awayScore: result.awayScore,
-        homePenaltyScore: result.penaltyHome,
-        awayPenaltyScore: result.penaltyAway,
-        isExtraTime: result.wentToExtraTime,
-        goals: result.goals,
-        cards: result.cards,
-        substitutions: result.substitutions,
-        injuries: result.injuries,
-        refereeName: `${referee.firstName} ${referee.lastName}`,
-        attendance,
-        venue: venueLabel,
-        weather,
-        homeLineup: homeLineup.startingXI.filter((id) => id !== null),
-        awayLineup: awayLineup.startingXI.filter((id) => id !== null),
-        homeStartingTacticId: homeLineup.tacticId,
-        awayStartingTacticId: awayLineup.tacticId,
-        homeTacticId: homeLineup.tacticId,
-        awayTacticId: awayLineup.tacticId,
-        ratings: result.ratings
-      });
+      for (const clubId of [home.id, away.id]) {
+        currentPlayers[clubId] = currentPlayers[clubId].map((p) => {
+          let updatedP = { ...p };
+          if (result2.fatigue[p.id] !== void 0) {
+            updatedP.condition = Math.max(0, updatedP.condition - result2.fatigue[p.id]);
+          }
+          if (result2.fatigueDebtMap[p.id]) {
+            updatedP.fatigueDebt = Math.min(100, (updatedP.fatigueDebt || 0) + result2.fatigueDebtMap[p.id]);
+          }
+          const maxCap = 100 - (updatedP.fatigueDebt || 0);
+          updatedP.condition = Math.min(maxCap, updatedP.condition);
+          const injury = result2.injuries.find((inj) => inj.playerId === p.id);
+          if (injury) {
+            const injSeed = (seed + p.id.charCodeAt(0)) % 15;
+            const basePenalty = injury.severity === "SEVERE" /* SEVERE */ ? 55 : 20;
+            const condAfterPenalty = Math.max(0, updatedP.condition - (basePenalty + injSeed));
+            updatedP.health = {
+              status: "INJURED" /* INJURED */,
+              injury: {
+                type: injury.type,
+                daysRemaining: injury.days,
+                severity: injury.severity,
+                injuryDate: currentDate2.toISOString(),
+                totalDays: injury.days,
+                conditionAtInjury: condAfterPenalty
+              }
+            };
+            updatedP.condition = condAfterPenalty;
+          }
+          return updatedP;
+        });
+      }
     });
-    return { updatedFixtures, updatedPlayers: updatedPlayersMap, matchHistoryEntries };
+    return {
+      updatedFixtures: currentFixtures,
+      updatedPlayers: currentPlayers,
+      updatedLineups: newLineups,
+      updatedClubs: currentClubs
+    };
   }
 };
 
-// services/BackgroundMatchUEFASuperCup.ts
-var emptyEuroStats = () => ({
+// services/ManagerExperienceService.ts
+var MIN_EXP_POINTS = 1;
+function dateKey(date) {
+  const parsed2 = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(parsed2.getTime())) return (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  return parsed2.toISOString().split("T")[0];
+}
+function getExperienceRating(expPoints) {
+  const safePoints = Math.max(MIN_EXP_POINTS, expPoints);
+  const rating = 1 + 98 * (1 - Math.exp(-safePoints / 1500));
+  return Math.max(1, Math.min(99, Math.round(rating)));
+}
+function getPointsForRoundedRatingBoundary(ratingBoundary) {
+  const raw = Math.max(1, Math.min(98.99, ratingBoundary));
+  return Math.ceil(-1500 * Math.log(1 - (raw - 1) / 98));
+}
+function getExperienceProgress(expPoints) {
+  const currentPoints = Math.max(MIN_EXP_POINTS, expPoints);
+  const rating = getExperienceRating(currentPoints);
+  if (rating >= 99) {
+    return {
+      rating,
+      currentPoints,
+      nextRating: null,
+      nextRatingPoints: null,
+      pointsToNext: 0,
+      progressPercent: 100
+    };
+  }
+  const currentRatingStart = getPointsForRoundedRatingBoundary(Math.max(1, rating - 0.5));
+  const nextRatingPoints = getPointsForRoundedRatingBoundary(rating + 0.5);
+  const span = Math.max(1, nextRatingPoints - currentRatingStart);
+  const progressPercent = Math.max(0, Math.min(100, (currentPoints - currentRatingStart) / span * 100));
+  return {
+    rating,
+    currentPoints,
+    nextRating: rating + 1,
+    nextRatingPoints,
+    pointsToNext: Math.max(0, nextRatingPoints - currentPoints),
+    progressPercent
+  };
+}
+function buildPromotionAchievementFromExp(entry) {
+  if (!entry.sourceKey.startsWith("season:") || !entry.sourceKey.includes(":promotion:")) return null;
+  if (entry.label !== "Awans do Ekstraklasy" && entry.label !== "Awans do 1. Ligi") return null;
+  const parts = entry.sourceKey.split(":");
+  const seasonLabel = parts[1] || String(entry.season);
+  const clubId = parts[3] || "club";
+  const promotedToEkstraklasa = entry.label === "Awans do Ekstraklasy";
+  return {
+    id: `achievement:${seasonLabel}:promotion-${promotedToEkstraklasa ? "ekstraklasa" : "1liga"}:${clubId}`,
+    seasonLabel,
+    title: `${entry.label} ${seasonLabel}`,
+    competition: "Liga Polska"
+  };
+}
+function backfillAchievementsFromExpHistory(profile) {
+  const existingIds = new Set(profile.achievements.map((entry) => entry.id));
+  const backfilled = [];
+  profile.expHistory.forEach((entry) => {
+    const achievement = buildPromotionAchievementFromExp(entry);
+    if (!achievement || existingIds.has(achievement.id)) return;
+    existingIds.add(achievement.id);
+    backfilled.push(achievement);
+  });
+  return backfilled.length > 0 ? [...backfilled, ...profile.achievements] : profile.achievements;
+}
+function ensureManagerExperience(profile) {
+  if (!profile) return null;
+  const expPoints = Math.max(MIN_EXP_POINTS, Number.isFinite(profile.expPoints) ? profile.expPoints : MIN_EXP_POINTS);
+  const safeProfile = {
+    ...profile,
+    expPoints,
+    experience: Number.isFinite(profile.experience) ? profile.experience : getExperienceRating(expPoints),
+    expHistory: Array.isArray(profile.expHistory) ? profile.expHistory : [],
+    careerHistory: Array.isArray(profile.careerHistory) ? profile.careerHistory : [],
+    achievements: Array.isArray(profile.achievements) ? profile.achievements : []
+  };
+  return {
+    ...safeProfile,
+    achievements: backfillAchievementsFromExpHistory(safeProfile)
+  };
+}
+function applyExpAwards(profile, awards) {
+  const safeProfile = ensureManagerExperience(profile);
+  if (!safeProfile || awards.length === 0) return safeProfile;
+  const existingKeys = new Set(safeProfile.expHistory.map((entry) => entry.sourceKey));
+  let expPoints = safeProfile.expPoints;
+  const newEntries = [];
+  awards.forEach((award) => {
+    if (existingKeys.has(award.sourceKey) || award.delta === 0) return;
+    existingKeys.add(award.sourceKey);
+    expPoints = Math.max(MIN_EXP_POINTS, expPoints + award.delta);
+    newEntries.push({
+      id: `${award.sourceKey}_${dateKey(award.date)}`,
+      sourceKey: award.sourceKey,
+      date: dateKey(award.date),
+      season: award.season,
+      delta: award.delta,
+      totalAfter: expPoints,
+      competition: award.competition,
+      label: award.label
+    });
+  });
+  if (newEntries.length === 0) return safeProfile;
+  return {
+    ...safeProfile,
+    expPoints,
+    experience: getExperienceRating(expPoints),
+    expHistory: [...newEntries, ...safeProfile.expHistory].slice(0, 250)
+  };
+}
+function addCareerSeason(profile, season) {
+  const safeProfile = ensureManagerExperience(profile);
+  if (!safeProfile) return null;
+  if (safeProfile.careerHistory.some((entry) => entry.id === season.id)) return safeProfile;
+  return {
+    ...safeProfile,
+    careerHistory: [season, ...safeProfile.careerHistory].slice(0, 50)
+  };
+}
+function addAchievements(profile, achievements) {
+  const safeProfile = ensureManagerExperience(profile);
+  if (!safeProfile || achievements.length === 0) return safeProfile;
+  const existingIds = new Set(safeProfile.achievements.map((entry) => entry.id));
+  const unique = achievements.filter((achievement) => {
+    if (existingIds.has(achievement.id)) return false;
+    existingIds.add(achievement.id);
+    return true;
+  });
+  if (unique.length === 0) return safeProfile;
+  return {
+    ...safeProfile,
+    achievements: [...unique, ...safeProfile.achievements].slice(0, 100)
+  };
+}
+function winnerFromFixture(fixture) {
+  const homeScore = fixture.homeScore ?? 0;
+  const awayScore = fixture.awayScore ?? 0;
+  if (homeScore > awayScore) return fixture.homeTeamId;
+  if (awayScore > homeScore) return fixture.awayTeamId;
+  if (fixture.homePenaltyScore !== void 0 || fixture.awayPenaltyScore !== void 0) {
+    const homePens = fixture.homePenaltyScore ?? 0;
+    const awayPens = fixture.awayPenaltyScore ?? 0;
+    if (homePens > awayPens) return fixture.homeTeamId;
+    if (awayPens > homePens) return fixture.awayTeamId;
+  }
+  return null;
+}
+function getPolishLeagueResultExp(competitionId, winnerId, userTeamId) {
+  if (winnerId && winnerId !== userTeamId) return -1;
+  const isDraw = winnerId === null;
+  if (competitionId === "L_PL_1") return isDraw ? 2.5 : 3.5;
+  if (competitionId === "L_PL_2") return isDraw ? 1.5 : 2.5;
+  if (competitionId === "L_PL_3") return isDraw ? 0.5 : 1.5;
+  return isDraw ? 0.5 : 1;
+}
+function buildDomesticMatchAward(fixture, userTeamId, currentDate2, season) {
+  if (fixture.status !== "FINISHED" /* FINISHED */) return null;
+  if (fixture.homeTeamId !== userTeamId && fixture.awayTeamId !== userTeamId) return null;
+  const competitionId = String(fixture.leagueId);
+  const isPolishLeague = competitionId.startsWith("L_PL_");
+  const isPolishCup = fixture.leagueId === "POLISH_CUP" /* POLISH_CUP */;
+  if (!isPolishLeague && !isPolishCup) return null;
+  const winnerId = winnerFromFixture(fixture);
+  const delta = isPolishLeague ? getPolishLeagueResultExp(competitionId, winnerId, userTeamId) : winnerId === userTeamId ? 2 : winnerId === null ? 1 : -1;
+  const resultLabel = winnerId === userTeamId ? "Zwyci\u0119stwo" : winnerId === null ? "Remis" : "Pora\u017Cka";
+  const competition = isPolishCup ? "Puchar Polski" : "Liga Polska";
+  return {
+    sourceKey: `match:${fixture.id}`,
+    date: currentDate2,
+    season,
+    delta,
+    competition,
+    label: `${resultLabel} - ${competition}`
+  };
+}
+function promotionExpForReputation(reputation) {
+  const normalized = Math.max(0, Math.min(1, (reputation - 1) / 9));
+  return Math.round(20 - normalized * 10);
+}
+function getEuropeanCompetitionCode(leagueId) {
+  if (leagueId.startsWith("CL_")) return "CL";
+  if (leagueId.startsWith("EL_")) return "EL";
+  if (leagueId.startsWith("CONF_")) return "CONF";
+  return null;
+}
+function reputationScaledPoints(reputation, min, max) {
+  const normalized = Math.max(0, Math.min(1, (reputation - 1) / 9));
+  return Math.round(min + normalized * (max - min));
+}
+function getEuropeanCompetitionName(comp) {
+  if (comp === "CL") return "Liga Mistrz\xF3w";
+  if (comp === "EL") return "Liga Europy";
+  return "Liga Konferencji";
+}
+function buildEuropeanMatchAward(fixture, userTeamId, currentDate2, season, clubs) {
+  if (fixture.status !== "FINISHED" /* FINISHED */) return null;
+  if (fixture.homeTeamId !== userTeamId && fixture.awayTeamId !== userTeamId) return null;
+  const comp = getEuropeanCompetitionCode(String(fixture.leagueId));
+  if (!comp) return null;
+  const userIsHome = fixture.homeTeamId === userTeamId;
+  const userScore = userIsHome ? fixture.homeScore ?? 0 : fixture.awayScore ?? 0;
+  const opponentScore = userIsHome ? fixture.awayScore ?? 0 : fixture.homeScore ?? 0;
+  if (userScore < opponentScore) return null;
+  const opponentId = userIsHome ? fixture.awayTeamId : fixture.homeTeamId;
+  const opponentReputation = clubs.find((club) => club.id === opponentId)?.reputation ?? 5;
+  const delta = (() => {
+    if (comp === "CL") {
+      return userScore > opponentScore ? reputationScaledPoints(opponentReputation, 5, 10) : reputationScaledPoints(opponentReputation, 3, 5);
+    }
+    if (comp === "EL") return userScore > opponentScore ? 4 : 2;
+    return userScore > opponentScore ? 3 : 1;
+  })();
+  return {
+    sourceKey: `euro-match:${fixture.id}`,
+    date: currentDate2,
+    season,
+    delta,
+    competition: getEuropeanCompetitionName(comp),
+    label: `${userScore > opponentScore ? "Zwyci\u0119stwo" : "Remis"} - ${getEuropeanCompetitionName(comp)}`
+  };
+}
+function buildEuropeanProgressAward(sourceKey, comp, stage, date, season) {
+  const deltaByComp = {
+    CL: { GROUP_ENTRY: 15, GROUP_EXIT: 30, NEXT_ROUND: 25, FINAL: 50, WINNER: 200 },
+    EL: { GROUP_ENTRY: 10, GROUP_EXIT: 20, NEXT_ROUND: 15, FINAL: 35, WINNER: 120 },
+    CONF: { GROUP_ENTRY: 8, GROUP_EXIT: 18, NEXT_ROUND: 13, FINAL: 33, WINNER: 100 }
+  };
+  const stageLabel = {
+    GROUP_ENTRY: "Awans do fazy grupowej",
+    GROUP_EXIT: "Wyj\u015Bcie z grupy",
+    NEXT_ROUND: "Awans do kolejnej rundy",
+    FINAL: "Awans do fina\u0142u",
+    WINNER: "Zwyci\u0119stwo w finale"
+  };
+  return {
+    sourceKey,
+    date,
+    season,
+    delta: deltaByComp[comp][stage],
+    competition: getEuropeanCompetitionName(comp),
+    label: `${stageLabel[stage]} - ${getEuropeanCompetitionName(comp)}`
+  };
+}
+var ManagerExperienceService = {
+  addAchievements,
+  addCareerSeason,
+  applyExpAwards,
+  buildDomesticMatchAward,
+  buildEuropeanMatchAward,
+  buildEuropeanProgressAward,
+  ensureManagerExperience,
+  getExperienceProgress,
+  getEuropeanCompetitionCode,
+  getEuropeanCompetitionName,
+  getExperienceRating,
+  promotionExpForReputation
+};
+
+// services/SaveGameService.ts
+var SAVE_VERSION = "4.0";
+var DEFAULT_START_DATE = /* @__PURE__ */ new Date("2025-07-01");
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function asDate(value, fallback = DEFAULT_START_DATE) {
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+  if (typeof value === "string") {
+    const parsed2 = new Date(value);
+    if (!isNaN(parsed2.getTime())) return parsed2;
+  }
+  return fallback;
+}
+function asDateString(value, fallback = "") {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString();
+  if (typeof value === "string") return value;
+  return fallback;
+}
+function asDateOnlyString(value, fallback = "") {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.toISOString().split("T")[0];
+  if (typeof value === "string") return value.includes("T") ? value.split("T")[0] : value;
+  return fallback;
+}
+function asPositiveNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function asClampedRating(value) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(1, Math.min(99, value)) : void 0;
+}
+function normalizePlayerClubAdaptation(value, playerClubId) {
+  if (value === void 0) return void 0;
+  if (value === null || !value || typeof value !== "object") return null;
+  const adaptation = value;
+  const clubId = typeof adaptation.clubId === "string" ? adaptation.clubId : "";
+  const startedAt = asDateOnlyString(adaptation.startedAt);
+  const lastUpdatedAt = asDateOnlyString(adaptation.lastUpdatedAt, startedAt);
+  const durationDays = typeof adaptation.durationDays === "number" ? adaptation.durationDays : Number.NaN;
+  const initialLevel = typeof adaptation.initialLevel === "number" ? adaptation.initialLevel : Number.NaN;
+  const level = typeof adaptation.level === "number" ? adaptation.level : Number.NaN;
+  if (!clubId || clubId !== playerClubId || !startedAt || !lastUpdatedAt || !/^\d{4}-\d{2}-\d{2}$/.test(startedAt) || !/^\d{4}-\d{2}-\d{2}$/.test(lastUpdatedAt) || !Number.isFinite(durationDays) || !Number.isFinite(initialLevel) || !Number.isFinite(level)) {
+    return null;
+  }
+  return {
+    clubId,
+    startedAt,
+    lastUpdatedAt,
+    durationDays: Math.max(1, Math.round(durationDays)),
+    initialLevel: Math.max(0, Math.min(100, initialLevel)),
+    level: Math.max(0, Math.min(100, level))
+  };
+}
+function normalizeFixture(fixture) {
+  if (!fixture || typeof fixture !== "object") return fixture;
+  return {
+    ...fixture,
+    date: asDate(fixture.date)
+  };
+}
+function normalizeDraw(draw) {
+  if (!draw || typeof draw !== "object") return draw ?? null;
+  return {
+    ...draw,
+    date: asDate(draw.date),
+    pairs: Array.isArray(draw.pairs) ? draw.pairs.map(normalizeFixture) : draw.pairs
+  };
+}
+function normalizeNationsLeagueState(state2) {
+  if (!state2 || typeof state2 !== "object") return null;
+  return {
+    ...state2,
+    groups: asArray(state2.groups).map((group) => ({
+      ...group,
+      teams: asArray(group?.teams),
+      standings: asArray(group?.standings)
+    })),
+    fixtures: asArray(state2.fixtures),
+    playoffs: asArray(state2.playoffs),
+    quarterFinalists: asArray(state2.quarterFinalists),
+    semiFinalists: asArray(state2.semiFinalists),
+    finals: state2.finals ? {
+      ...state2.finals,
+      semiFinalists: asArray(state2.finals.semiFinalists),
+      finalists: asArray(state2.finals.finalists),
+      thirdPlaceTeams: asArray(state2.finals.thirdPlaceTeams)
+    } : null,
+    completed: state2.completed ?? false
+  };
+}
+function normalizeEuroQualifiersState(state2) {
+  if (!state2 || typeof state2 !== "object") return null;
+  return {
+    ...state2,
+    groups: asArray(state2.groups).map((group) => ({
+      ...group,
+      teams: asArray(group?.teams),
+      hostTeams: asArray(group?.hostTeams),
+      standings: asArray(group?.standings)
+    })),
+    fixtures: asArray(state2.fixtures),
+    playoffPaths: asArray(state2.playoffPaths).map((path) => ({
+      ...path,
+      teams: asArray(path?.teams),
+      semiFinalFixtureIds: asArray(path?.semiFinalFixtureIds),
+      tieFixtureIds: path?.tieFixtureIds ? asArray(path.tieFixtureIds) : void 0
+    })),
+    hostTeams: asArray(state2.hostTeams),
+    qualifiedTeams: asArray(state2.qualifiedTeams),
+    directQualifiers: asArray(state2.directQualifiers),
+    hostReservedQualifiers: asArray(state2.hostReservedQualifiers),
+    playoffTeams: asArray(state2.playoffTeams),
+    drawCompleted: state2.drawCompleted ?? false,
+    completed: state2.completed ?? false
+  };
+}
+function normalizeTournamentState(state2) {
+  if (!state2 || typeof state2 !== "object") return null;
+  return {
+    ...state2,
+    teams: asArray(state2.teams),
+    groups: asArray(state2.groups).map((group) => ({
+      ...group,
+      teams: asArray(group?.teams),
+      matches: asArray(group?.matches)
+    })),
+    knockoutMatches: asArray(state2.knockoutMatches),
+    playerEffects: asArray(state2.playerEffects),
+    groupStageComplete: state2.groupStageComplete ?? false,
+    knockoutComplete: state2.knockoutComplete ?? false
+  };
+}
+function normalizeNTMatchResults(results) {
+  return results == null ? null : asArray(results);
+}
+function normalizeSeasonTemplate(template) {
+  if (!template || typeof template !== "object") return null;
+  return {
+    ...template,
+    careerStartDate: asDate(template.careerStartDate),
+    slots: asArray(template.slots).map((slot) => ({
+      ...slot,
+      start: asDate(slot.start),
+      end: asDate(slot.end)
+    }))
+  };
+}
+function normalizeLeagueSchedules(schedules) {
+  return Object.fromEntries(
+    Object.entries(asRecord(schedules)).map(([key, schedule]) => [
+      key,
+      {
+        ...schedule,
+        matchdays: asArray(schedule?.matchdays).map((matchday) => ({
+          ...matchday,
+          start: asDate(matchday.start),
+          end: asDate(matchday.end),
+          fixtures: asArray(matchday.fixtures).map(normalizeFixture)
+        }))
+      }
+    ])
+  );
+}
+function normalizeMessages(messages) {
+  return asArray(messages).map((message) => ({
+    ...message,
+    date: asDate(message?.date)
+  }));
+}
+function normalizeAcademyState(academy, currentDate2) {
+  if (!academy || typeof academy !== "object") return null;
+  const dateOnly2 = currentDate2.toISOString().split("T")[0];
+  const legacyCandidates = asArray(academy.youthPlayers).filter((player) => player?.contractSigned === false);
+  const existingCandidates = asArray(academy.scoutingCandidates);
+  const candidateIds = new Set(existingCandidates.map((candidate) => candidate?.id));
+  const migratedCandidates = legacyCandidates.filter((candidate) => !candidateIds.has(candidate?.id)).map((candidate) => {
+    const deadline = new Date(currentDate2);
+    deadline.setDate(deadline.getDate() + 14);
+    const attributeEstimates = Object.fromEntries(
+      Object.entries(candidate.attributes ?? {}).map(([key, value]) => {
+        const rating = typeof value === "number" ? value : 1;
+        return [key, { min: Math.max(1, rating - 8), max: Math.min(100, rating + 8) }];
+      })
+    );
+    return {
+      ...candidate,
+      sourceMissionId: `LEGACY_${candidate.id}`,
+      scoutId: "LEGACY_SCOUT",
+      discoveredDate: dateOnly2,
+      decisionDeadline: deadline.toISOString().split("T")[0],
+      scoutReport: {
+        scoutName: "Archiwalny raport",
+        confidence: "LOW",
+        talentRating: candidate.revealedTalentRating,
+        attributeEstimates,
+        recommendation: "OBSERVE"
+      }
+    };
+  });
+  const activeMissions = asArray(academy.activeMissions).map((mission) => ({
+    ...mission,
+    startedDate: asDateOnlyString(mission.startedDate, dateOnly2)
+  }));
+  const currentYear = currentDate2.getFullYear();
+  const annualIntakeAvailableYear = academy.annualIntakeAvailableYear ?? (currentDate2.getMonth() >= 7 && (academy.lastIntakeYear ?? 0) < currentYear && !activeMissions.some((mission) => mission?.isAnnualIntake) ? currentYear : void 0);
+  return {
+    ...academy,
+    youthPlayers: asArray(academy.youthPlayers).filter((player) => player?.contractSigned !== false),
+    scoutingCandidates: [...existingCandidates, ...migratedCandidates],
+    scoutingHistory: asArray(academy.scoutingHistory),
+    activeMissions,
+    annualIntakeAvailableYear
+  };
+}
+function normalizeClubManagementSource(club) {
+  const management = club?.management;
+  if (!management || typeof management !== "object" || Array.isArray(management)) return club;
+  const { sportingDirector: legacySportingDirector, ...managementWithoutSportingDirector } = management;
+  return {
+    ...club,
+    sportingDirector: club.sportingDirector ?? legacySportingDirector,
+    management: managementWithoutSportingDirector
+  };
+}
+function getBoardSignatoryForRole(club, templateRole) {
+  const formatName = (person) => person?.firstName && person?.lastName ? `${person.firstName} ${person.lastName}` : null;
+  if (templateRole === "Prezes Zarz\u0105du") {
+    const ceoName = formatName(club?.management?.ceo);
+    if (ceoName) return { name: ceoName, role: "Prezes Zarz\u0105du" };
+    const ownerName = formatName(club?.management?.owner);
+    if (ownerName) return { name: ownerName, role: "W\u0142a\u015Bciciel" };
+  }
+  if (templateRole === "Dyrektor Sportowy") {
+    const sportingDirectorName = formatName(club?.sportingDirector);
+    if (sportingDirectorName) return { name: sportingDirectorName, role: "Dyrektor Sportowy" };
+  }
+  if (templateRole === "W\u0142a\u015Bciciel Klubu") {
+    const ownerName = formatName(club?.management?.owner);
+    if (ownerName) return { name: ownerName, role: "W\u0142a\u015Bciciel" };
+  }
+  return null;
+}
+function migrateWelcomeMailSignatories(messages, clubs, userTeamId) {
+  const userClub = clubs.find((club) => club?.id === userTeamId);
+  if (!userClub?.name) return messages;
+  const escapedClubName = String(userClub.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const legacySignatures = [
+    { name: "Wojciech Marcin Jankowski", role: "Prezes Zarz\u0105du" },
+    { name: "Marcin Wi\u015Bniewski", role: "Prezes Zarz\u0105du" },
+    { name: "Tomasz Adamski", role: "Prezes Zarz\u0105du" },
+    { name: "Pawe\u0142 Nowak", role: "Dyrektor Sportowy" },
+    { name: "Krzysztof Mazurek", role: "Dyrektor Sportowy" },
+    { name: "Andrzej Karpowicz", role: "W\u0142a\u015Bciciel" }
+  ];
+  return messages.map((message) => {
+    if (!String(message?.id ?? "").startsWith("WELCOME_MAIL_") || typeof message?.body !== "string") {
+      return message;
+    }
+    const legacy = legacySignatures.find(
+      (signature) => message.body.includes(`${signature.name}
+${signature.role}, ${userClub.name}`)
+    );
+    const signatory = getBoardSignatoryForRole(userClub, message.role) ?? (legacy ? getBoardSignatoryForRole(userClub, legacy.role) : null);
+    if (!signatory) return message;
+    const body = message.body.replace(
+      new RegExp(`Z powa\u017Caniem,\\n[^\\n]+\\n[^\\n]+, ${escapedClubName}`),
+      `Z powa\u017Caniem,
+${signatory.name}
+${signatory.role}, ${userClub.name}`
+    );
+    if (body === message.body && message.role === signatory.role) return message;
+    return {
+      ...message,
+      role: signatory.role,
+      body
+    };
+  });
+}
+function normalizeMatchHistory(matchHistory2) {
+  return asArray(matchHistory2).map((match) => ({
+    ...match,
+    date: asDateString(match?.date),
+    goals: asArray(match?.goals),
+    cards: asArray(match?.cards)
+  }));
+}
+function reconcileCupStatsFromHistory(players, matchHistory2) {
+  const cupCompetitions = /* @__PURE__ */ new Set(["POLISH_CUP", "SUPER_CUP"]);
+  const playerCupTotals = /* @__PURE__ */ new Map();
+  const ensureTotals = (playerId) => {
+    if (!playerCupTotals.has(playerId)) playerCupTotals.set(playerId, { goals: 0, assists: 0 });
+    return playerCupTotals.get(playerId);
+  };
+  (matchHistory2 || []).forEach((match) => {
+    if (!cupCompetitions.has(String(match?.competition || ""))) return;
+    (match.goals || []).forEach((goal) => {
+      const scorerId = goal.playerId || goal.scorerId;
+      if (scorerId) ensureTotals(scorerId).goals += 1;
+      if (goal.assistantId) ensureTotals(goal.assistantId).assists += 1;
+    });
+  });
+  if (playerCupTotals.size === 0) return players;
+  return Object.fromEntries(
+    Object.entries(players).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player) => {
+        const totals = playerCupTotals.get(player.id);
+        if (!totals) return player;
+        const currentCup = player.cupStats ?? {
+          goals: 0,
+          assists: 0,
+          yellowCards: 0,
+          redCards: 0,
+          cleanSheets: 0,
+          matchesPlayed: 0,
+          minutesPlayed: 0,
+          seasonalChanges: {},
+          ratingHistory: []
+        };
+        return {
+          ...player,
+          cupStats: {
+            ...currentCup,
+            goals: Math.max(currentCup.goals ?? 0, totals.goals),
+            assists: Math.max(currentCup.assists ?? 0, totals.assists)
+          }
+        };
+      })
+    ])
+  );
+}
+var emptyPlayerStats = () => ({
   goals: 0,
   assists: 0,
   yellowCards: 0,
@@ -22184,949 +22687,401 @@ var emptyEuroStats = () => ({
   seasonalChanges: {},
   ratingHistory: []
 });
-var applyEuropeanAppearance = (playersMap, clubId, lineup, substitutions, ratings) => {
-  const squad = playersMap[clubId];
-  if (!squad) return playersMap;
-  const playedNames = /* @__PURE__ */ new Set();
-  lineup.startingXI.forEach((playerId) => {
-    const player = squad.find((p) => p.id === playerId);
-    if (player) playedNames.add(`${player.firstName} ${player.lastName}`);
-  });
-  substitutions.filter((sub) => sub.teamId === clubId).forEach((sub) => {
-    if (sub.playerInName) playedNames.add(sub.playerInName);
-    if (sub.playerOutName) playedNames.add(sub.playerOutName);
-  });
-  return {
-    ...playersMap,
-    [clubId]: squad.map((player) => {
-      if (!playedNames.has(`${player.firstName} ${player.lastName}`)) return player;
-      const euroStats = { ...player.euroStats ?? emptyEuroStats() };
-      euroStats.matchesPlayed += 1;
-      euroStats.minutesPlayed += 90;
-      const rating = ratings[player.id];
-      if (typeof rating === "number" && Number.isFinite(rating)) {
-        euroStats.ratingHistory = [...euroStats.ratingHistory ?? [], rating];
-      }
-      return { ...player, euroStats };
-    })
+function reconcileFriendlyStatsFromHistory(players, matchHistory2, seasonNumber) {
+  const playerFriendlyTotals = /* @__PURE__ */ new Map();
+  const ensureTotals = (playerId) => {
+    if (!playerFriendlyTotals.has(playerId)) playerFriendlyTotals.set(playerId, emptyPlayerStats());
+    return playerFriendlyTotals.get(playerId);
   };
-};
-var applyEuropeanCard = (playersMap, playerId, type) => {
-  const updated = { ...playersMap };
-  for (const clubId in updated) {
-    updated[clubId] = updated[clubId].map((player) => {
-      if (player.id !== playerId) return player;
-      const euroStats = { ...player.euroStats ?? emptyEuroStats() };
-      let euroSuspensionMatches = player.euroSuspensionMatches ?? 0;
-      if (type === "YELLOW_CARD" /* YELLOW_CARD */) {
-        euroStats.yellowCards += 1;
-        if (euroStats.yellowCards % 4 === 0) euroSuspensionMatches += 1;
-      }
-      if (type === "RED_CARD" /* RED_CARD */) {
-        euroStats.redCards += 1;
-        euroSuspensionMatches += 2;
-      }
-      return { ...player, euroStats, euroSuspensionMatches };
-    });
-  }
-  return updated;
-};
-var makeSeededRng2 = (seed) => (offset) => {
-  const x = Math.sin(seed + offset) * 1e4;
-  return x - Math.floor(x);
-};
-var TACTIC_CLASH_MATRIX2 = {
-  "4-4-2": { "4-4-2": 4, "4-3-3": 3, "5-4-1": 2, "4-2-3-1": 4, "3-5-2": 5, "3-4-3": 3, "5-3-2": 3, "4-5-1": 4, "4-4-2-DIAMOND": 6 },
-  "4-3-3": { "4-4-2": 5, "4-3-3": 4, "5-4-1": 2, "4-2-3-1": 5, "3-5-2": 4, "3-4-3": 6, "5-3-2": 2, "4-5-1": 3, "4-4-2-DIAMOND": 5 },
-  "5-4-1": { "4-4-2": 6, "4-3-3": 7, "5-4-1": 4, "4-2-3-1": 5, "3-5-2": 3, "3-4-3": 6, "5-3-2": 4, "4-5-1": 4, "4-4-2-DIAMOND": 7 },
-  "4-2-3-1": { "4-4-2": 4, "4-3-3": 3, "5-4-1": 3, "4-2-3-1": 4, "3-5-2": 6, "3-4-3": 4, "5-3-2": 4, "4-5-1": 5, "4-4-2-DIAMOND": 4 },
-  "3-5-2": { "4-4-2": 3, "4-3-3": 4, "5-4-1": 5, "4-2-3-1": 2, "3-5-2": 4, "3-4-3": 5, "5-3-2": 5, "4-5-1": 3, "4-4-2-DIAMOND": 4 }
-};
-var getEffectivenessMult2 = (score) => {
-  if (score <= 1) return 0.7;
-  if (score <= 3) return 0.85;
-  if (score === 4) return 1;
-  if (score <= 6) return 1.15;
-  return 1.35;
-};
-var getWeightedLineStrength2 = (players, lineup, allSubs, exits = []) => {
-  const TOTAL = 90;
-  const minutesPlayed = {};
-  const currentXI = lineup.startingXI.map((id) => ({ id: id ?? null, entryMin: 0 }));
-  const timeline = [
-    ...allSubs.map((sub) => ({ type: "sub", min: sub.min, outId: sub.outId, inId: sub.inId })),
-    ...exits.map((exit) => ({ type: "exit", min: exit.min, outId: exit.outId }))
-  ].sort((a, b) => a.min - b.min || (a.type === "exit" ? -1 : 1));
-  for (const event of timeline) {
-    const outIdx = currentXI.findIndex((p) => p.id === event.outId);
-    if (outIdx === -1) continue;
-    const leaving = currentXI[outIdx];
-    if (leaving.id) minutesPlayed[leaving.id] = (minutesPlayed[leaving.id] ?? 0) + (event.min - leaving.entryMin);
-    currentXI[outIdx] = event.type === "sub" ? { id: event.inId, entryMin: event.min } : { id: null, entryMin: event.min };
-  }
-  for (const slot of currentXI) {
-    if (slot.id) minutesPlayed[slot.id] = (minutesPlayed[slot.id] ?? 0) + (TOTAL - slot.entryMin);
-  }
-  let attSum = 0, defSum = 0, totalMins = 0;
-  for (const [pId, mins] of Object.entries(minutesPlayed)) {
-    const p = players.find((x) => x.id === pId);
-    if (!p) continue;
-    attSum += (p.attributes.attacking + p.attributes.finishing + p.attributes.passing) / 3 * mins;
-    defSum += (p.attributes.defending + p.attributes.stamina) / 2 * mins;
-    totalMins += mins;
-  }
-  const att = totalMins > 0 ? attSum / totalMins : 40;
-  const def = totalMins > 0 ? defSum / totalMins : 40;
-  const gk = players.find((p) => p.id === lineup.startingXI[0])?.attributes.goalkeeping ?? 40;
-  return { att, def, gk };
-};
-var getGoalsPoissonLike2 = (xg, rng, baseOffset, isChaos) => {
-  let g = 0;
-  let cur = Math.max(0.05, Math.min(isChaos ? 3.8 : 2.8, xg + (rng(baseOffset) - 0.5) * 0.35));
-  for (let i = 0; i < 8; i++) {
-    if (rng(baseOffset + 10 + i) < cur / (i + 1.15)) {
-      g++;
-      cur *= isChaos ? 0.72 : 0.62;
-    }
-  }
-  return g;
-};
-var simulateSubs2 = (lineup, teamPlayers, sideOffset, rng) => {
-  const subCount = Math.floor(3 + rng(sideOffset) * 3);
-  const matchSubs = [];
-  const currentXI = [...lineup.startingXI];
-  const currentBench = [...lineup.bench];
-  const participants = new Set(currentXI.filter((id) => id !== null));
-  for (let i = 0; i < subCount; i++) {
-    const subMin = Math.floor(46 + rng(sideOffset + i + 100) * 42);
-    const outIdx = Math.floor(1 + rng(sideOffset + i + 200) * 10);
-    const playerOutId = currentXI[outIdx];
-    if (!playerOutId) continue;
-    const tacticSlots = TacticRepository.getById(lineup.tacticId).slots;
-    const roleNeeded = outIdx < tacticSlots.length ? tacticSlots[outIdx].role : "MID" /* MID */;
-    const subInId = currentBench.find((id) => teamPlayers.find((p) => p.id === id)?.position === roleNeeded) || currentBench.find((id) => teamPlayers.find((p) => p.id === id)?.position !== "GK" /* GK */);
-    if (subInId) {
-      matchSubs.push({ min: subMin, outId: playerOutId, inId: subInId });
-      currentXI[outIdx] = subInId;
-      currentBench.splice(currentBench.indexOf(subInId), 1);
-      participants.add(subInId);
-    }
-  }
-  return { matchSubs, allPlayedIds: Array.from(participants) };
-};
-var getActiveLineupAt2 = (min, originalXI, subs, exits = []) => {
-  const current = [...originalXI];
-  const timeline = [
-    ...subs.map((sub) => ({ type: "sub", min: sub.min, outId: sub.outId, inId: sub.inId })),
-    ...exits.map((exit) => ({ type: "exit", min: exit.min, outId: exit.outId }))
-  ].filter((event) => event.min <= min).sort((a, b) => a.min - b.min || (a.type === "exit" ? -1 : 1));
-  timeline.forEach((event) => {
-    const idx = current.indexOf(event.outId);
-    if (idx !== -1) current[idx] = event.type === "sub" ? event.inId : null;
-  });
-  return current.filter((id) => id !== null);
-};
-var simulateCardsAndInjuries2 = (lineup, players, teamId, offset, rng, referee, isHomeTeam, matchDate) => {
-  const cards = [];
-  let redCount = 0;
-  let updatedPlayers = [...players];
-  const fatigueMap = {};
-  const fatigueDebtMap = {};
-  const injuryPenaltyMap = {};
-  const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
-  const yellowProb = 0.087 * (referee.strictness / 50) * refExpFactor;
-  const homeBias = isHomeTeam ? -(referee.advantageTendency / 5e3) : referee.advantageTendency / 1e4;
-  const adjustedYellowProb = Math.max(0.02, yellowProb + homeBias);
-  const directRedProb = 33e-4 * (referee.strictness / 50) * refExpFactor;
-  lineup.startingXI.forEach((pId, idx) => {
-    if (!pId) return;
-    const p = players.find((x) => x.id === pId);
-    if (!p) return;
-    const playerName = `${p.firstName} ${p.lastName}`;
-    const isDirectRed = rng(offset + idx + 1500) < directRedProb;
-    const yellowRoll = rng(offset + idx + 1e3);
-    const isSecondYellow = yellowRoll < adjustedYellowProb && rng(offset + idx + 1200) < 0.05;
-    const isNormalYellow = yellowRoll < adjustedYellowProb && !isSecondYellow;
-    if (isDirectRed) {
-      const m = Math.max(1, Math.floor(10 + rng(offset + idx + 550) * 85));
-      cards.push({ playerId: pId, playerName, minute: m, teamId, type: "RED" });
-      redCount++;
-    } else if (isSecondYellow) {
-      const m1 = Math.max(1, Math.floor(5 + rng(offset + idx + 660) * 40));
-      const m2 = Math.max(m1 + 1, Math.floor(m1 + 10 + rng(offset + idx + 770) * 40));
-      cards.push({ playerId: pId, playerName, minute: m1, teamId, type: "YELLOW" });
-      cards.push({ playerId: pId, playerName, minute: m2, teamId, type: "SECOND_YELLOW" });
-      redCount++;
-    } else if (isNormalYellow) {
-      const m = Math.max(1, Math.floor(5 + rng(offset + idx + 880) * 90));
-      cards.push({ playerId: pId, playerName, minute: m, teamId, type: "YELLOW" });
-    }
-    const isInjured = rng(offset + idx + 2e3) < 64e-4;
-    if (isInjured) {
-      const isSev = rng(idx + 3e3) < 0.15;
-      let injuryRollOffset = offset + idx + 3100;
-      const { days, type } = rollInjuryBySeverity(
-        isSev ? "SEVERE" /* SEVERE */ : "LIGHT" /* LIGHT */,
-        () => rng(injuryRollOffset++)
-      );
-      updatedPlayers = updatedPlayers.map((pl) => pl.id === pId ? {
-        ...pl,
-        health: {
-          status: "INJURED",
-          injury: {
-            type,
-            daysRemaining: days,
-            severity: isSev ? "SEVERE" /* SEVERE */ : "LIGHT" /* LIGHT */,
-            injuryDate: matchDate.toISOString(),
-            totalDays: days
-          }
-        }
-      } : pl);
-      injuryPenaltyMap[pId] = (isSev ? 55 : 20) + rng(offset + idx + 5e3) * 15;
-    }
-    const stamina = p.attributes.stamina || 50;
-    const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
-    let drain = 2.5 + rng(offset + idx + 4e3) * 1.5 + stamEff * 0.5 + 1.5;
-    if (p.position === "GK" /* GK */) drain *= 0.75 + stamina / 100 * 0.1;
-    fatigueMap[pId] = drain;
-    const gkDebtFactor1 = p.position === "GK" /* GK */ ? Math.max(0.7, Math.min(0.9, 0.75 + Math.max(0, (p.age - 27) * 4e-3) - stamina / 100 * 0.05)) : 1;
-    fatigueDebtMap[pId] = (5 + (100 - stamina) * 0.15) * gkDebtFactor1;
-  });
-  return { cards, redCount, updatedPlayers, fatigueMap, fatigueDebtMap, injuryPenaltyMap };
-};
-var getRedCardExits2 = (cards) => {
-  const exitByPlayer = /* @__PURE__ */ new Map();
-  cards.forEach((card) => {
-    if (card.type !== "RED" && card.type !== "SECOND_YELLOW") return;
-    const currentMinute = exitByPlayer.get(card.playerId);
-    if (currentMinute === void 0 || card.minute < currentMinute) {
-      exitByPlayer.set(card.playerId, card.minute);
-    }
-  });
-  return Array.from(exitByPlayer.entries()).map(([outId, min]) => ({ outId, min }));
-};
-var getShortHandedImpact = (redExits, maxMinute = 90) => {
-  const redEquivalent = redExits.reduce((sum, exit) => {
-    const remaining = Math.max(0, maxMinute - Math.max(1, Math.min(maxMinute, exit.min)));
-    return sum + remaining / maxMinute;
-  }, 0);
-  return {
-    attackMult: Math.max(0.25, 1 - redEquivalent * 0.68),
-    defenseLeakMult: 1 + redEquivalent * 0.75,
-    winProbPenalty: redEquivalent * 0.28
-  };
-};
-var getShortHandedGoalChance = (redExits, minute) => {
-  const activeReds = redExits.filter((exit) => exit.min < minute).length;
-  if (activeReds >= 2) return 1e-3;
-  if (activeReds === 1) return 0.28;
-  return 1;
-};
-var adjustExtraTimeWinProbability2 = (homeWinProb, homeRedExits, awayRedExits) => {
-  const homeImpact = getShortHandedImpact(homeRedExits);
-  const awayImpact = getShortHandedImpact(awayRedExits);
-  return Math.max(0.12, Math.min(0.88, homeWinProb - homeImpact.winProbPenalty + awayImpact.winProbPenalty));
-};
-var simulateExtraTimeAndPenalties2 = (homeScore, awayScore, homeWinProb, rng, baseOffset, leg1Diff) => {
-  let h = homeScore;
-  let a = awayScore;
-  const homeAdvantage = 0.05;
-  const etRoll = rng(baseOffset);
-  const etGoals = etRoll < 0.1 ? 2 : etRoll < 0.45 ? 1 : 0;
-  for (let i = 0; i < etGoals; i++) {
-    if (rng(baseOffset + 10 + i) < homeWinProb + homeAdvantage) h++;
-    else a++;
-  }
-  let penaltyHome;
-  let penaltyAway;
-  const aggregateTied = leg1Diff !== void 0 ? h - a === leg1Diff : h === a;
-  if (aggregateTied) {
-    const simSeries = (favProb, seriesOffset) => {
-      let scored = 0;
-      for (let i = 0; i < 5; i++) {
-        if (rng(seriesOffset + i) < 0.72 + (favProb - 0.5) * 0.1) scored++;
-      }
-      return scored;
+  (matchHistory2 || []).forEach((match) => {
+    if (String(match?.competition || "") !== "FRIENDLY") return;
+    if (Number(match?.season) !== seasonNumber) return;
+    const homePlayedIds = /* @__PURE__ */ new Set([
+      ...asArray(match.homeLineup).filter(Boolean),
+      ...asArray(match.substitutions).filter((sub) => sub?.teamId === match.homeTeamId).map((sub) => sub.playerInId).filter(Boolean)
+    ]);
+    const awayPlayedIds = /* @__PURE__ */ new Set([
+      ...asArray(match.awayLineup).filter(Boolean),
+      ...asArray(match.substitutions).filter((sub) => sub?.teamId === match.awayTeamId).map((sub) => sub.playerInId).filter(Boolean)
+    ]);
+    const applyPlayed = (playerId) => {
+      const totals = ensureTotals(playerId);
+      totals.matchesPlayed += 1;
+      totals.minutesPlayed += 90;
+      const rating = match.ratings?.[playerId];
+      if (typeof rating === "number") totals.ratingHistory.push(rating);
     };
-    penaltyHome = simSeries(homeWinProb, baseOffset + 100);
-    penaltyAway = simSeries(1 - homeWinProb, baseOffset + 200);
-    let sd = 0;
-    while (penaltyHome === penaltyAway && sd < 20) {
-      sd++;
-      const hScored = rng(baseOffset + 300 + sd * 2) < 0.72;
-      const aScored = rng(baseOffset + 301 + sd * 2) < 0.72;
-      if (hScored && !aScored) penaltyHome++;
-      else if (!hScored && aScored) penaltyAway++;
-    }
-  }
-  return { homeScore: h, awayScore: a, penaltyHome, penaltyAway };
-};
-var simulateCLMatchFull2 = (homeClub, awayClub, homePlayersAll, awayPlayersAll, homeLineup, awayLineup, date, seed, referee, homeCoach, awayCoach, leg1Diff, isFinalMatch) => {
-  const rng = makeSeededRng2(seed);
-  const refExpFactor = 1 + (50 - (referee.experience || 50)) / 100;
-  const hTactic = TacticRepository.getById(homeLineup.tacticId);
-  const aTactic = TacticRepository.getById(awayLineup.tacticId);
-  const hClashBase = TACTIC_CLASH_MATRIX2[homeLineup.tacticId]?.[awayLineup.tacticId] ?? 4;
-  const aClashBase = TACTIC_CLASH_MATRIX2[awayLineup.tacticId]?.[homeLineup.tacticId] ?? 4;
-  const hClashFinal = Math.round(hClashBase + rng(900) * 1.5);
-  const aClashFinal = Math.round(aClashBase + rng(901) * 1.5);
-  const hTacticMod = getEffectivenessMult2(hClashFinal);
-  const aTacticMod = getEffectivenessMult2(aClashFinal);
-  const hCoachAtkMod = 1 + (homeCoach.attributes.motivation - 50) * 2e-3 + (homeCoach.attributes.experience - 50) * 1e-3;
-  const hCoachDefMod = 1 + (homeCoach.attributes.decisionMaking - 50) * 2e-3;
-  const aCoachAtkMod = 1 + (awayCoach.attributes.motivation - 50) * 2e-3 + (awayCoach.attributes.experience - 50) * 1e-3;
-  const aCoachDefMod = 1 + (awayCoach.attributes.decisionMaking - 50) * 2e-3;
-  const homeDailyForm = (rng(11) - 0.5) * 0.3;
-  const awayDailyForm = (rng(12) - 0.5) * 0.3;
-  const chaosRoll = rng(7);
-  const isChaosMatch = chaosRoll < 0.035;
-  const isStaleMatch = chaosRoll > 0.94;
-  const volatilityMult = isChaosMatch ? 1.65 : isStaleMatch ? 0.5 : 1;
-  const homeCountry = homeClub.country ?? "POL";
-  const weatherMod = EuropeanWeatherService.getGoalModifier(homeCountry, date, rng(13));
-  const homeSubData = simulateSubs2(homeLineup, homePlayersAll, 5e3, rng);
-  const awaySubData = simulateSubs2(awayLineup, awayPlayersAll, 6e3, rng);
-  const homeCardData = simulateCardsAndInjuries2(homeLineup, homePlayersAll, homeClub.id, 1e4, rng, referee, true, date);
-  const awayCardData = simulateCardsAndInjuries2(awayLineup, awayPlayersAll, awayClub.id, 2e4, rng, referee, false, date);
-  const homeRedExits = getRedCardExits2(homeCardData.cards);
-  const awayRedExits = getRedCardExits2(awayCardData.cards);
-  const homeShortHanded = getShortHandedImpact(homeRedExits);
-  const awayShortHanded = getShortHandedImpact(awayRedExits);
-  const formImpact = TeamFormImpactService.calculateMatchImpact(homePlayersAll, awayPlayersAll, homeLineup, awayLineup);
-  const hStr = getWeightedLineStrength2(homePlayersAll, homeLineup, homeSubData.matchSubs, homeRedExits);
-  const aStr = getWeightedLineStrength2(awayPlayersAll, awayLineup, awaySubData.matchSubs, awayRedExits);
-  const repDiff = homeClub.reputation - awayClub.reputation;
-  let xgHome = 1.25 + repDiff * 0.015 + (hTactic.attackBias - 50) / 180 + (hStr.att - aStr.def) * 0.04 + homeDailyForm + 0.08;
-  let xgAway = 1.05 - repDiff * 0.015 + (aTactic.attackBias - 50) / 180 + (aStr.att - hStr.def) * 0.04 + awayDailyForm;
-  if (xgHome > xgAway + 1.2) xgHome += 0.5;
-  if (xgAway > xgHome + 1.2) xgAway += 0.5;
-  xgHome = Math.max(0.05, xgHome * volatilityMult * hTacticMod * hCoachAtkMod * (1 / Math.max(0.5, hCoachDefMod)) * homeShortHanded.attackMult * awayShortHanded.defenseLeakMult * weatherMod * formImpact.homeGoalChanceMultiplier);
-  xgAway = Math.max(0.05, xgAway * volatilityMult * aTacticMod * aCoachAtkMod * (1 / Math.max(0.5, aCoachDefMod)) * awayShortHanded.attackMult * homeShortHanded.defenseLeakMult * weatherMod * formImpact.awayGoalChanceMultiplier);
-  let homeScore90 = getGoalsPoissonLike2(xgHome, rng, 200, isChaosMatch);
-  let awayScore90 = getGoalsPoissonLike2(xgAway, rng, 300, isChaosMatch);
-  const penThreshold = referee.strictness / 300 * refExpFactor;
-  const inMatchGoals = [];
-  const tryPenalty = (side, rollOffset) => {
-    if (rng(rollOffset) >= penThreshold) return;
-    const isScored = rng(rollOffset + 1) < 0.78;
-    const teamPlayers = side === "H" ? homePlayersAll : awayPlayersAll;
-    const lineup = side === "H" ? homeLineup : awayLineup;
-    const subs = side === "H" ? homeSubData.matchSubs : awaySubData.matchSubs;
-    const exits = side === "H" ? homeRedExits : awayRedExits;
-    const penMin = Math.floor(5 + rng(rollOffset + 2) * 85);
-    if (rng(rollOffset + 4) > getShortHandedGoalChance(exits, penMin)) return;
-    const activeXI = getActiveLineupAt2(penMin, lineup.startingXI, subs, exits);
-    const kicker = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(rollOffset + 3));
-    if (!kicker) return;
-    if (isScored) {
-      inMatchGoals.push({ playerName: `${kicker.firstName} ${kicker.lastName}`, playerId: kicker.id, minute: penMin, teamId: side === "H" ? homeClub.id : awayClub.id, isPenalty: true });
-    }
-  };
-  tryPenalty("H", 9100);
-  tryPenalty("A", 9200);
-  const fatigueMap = { ...homeCardData.fatigueMap, ...awayCardData.fatigueMap };
-  const fatigueDebtMap = { ...homeCardData.fatigueDebtMap, ...awayCardData.fatigueDebtMap };
-  const injuryPenaltyMap = { ...homeCardData.injuryPenaltyMap, ...awayCardData.injuryPenaltyMap };
-  const homeSubIns = homeSubData.allPlayedIds.filter((id) => !homeLineup.startingXI.includes(id));
-  homeSubIns.forEach((id, idx) => {
-    const p = homePlayersAll.find((x) => x.id === id);
-    if (!p) return;
-    const stamina = p.attributes.stamina || 50;
-    const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
-    let drain = (2.5 + rng(7e3 + idx) * 1.5 + stamEff * 0.5 + 1.5) * 0.4;
-    if (p.position === "GK" /* GK */) drain *= 0.75 + stamina / 100 * 0.1;
-    fatigueMap[id] = drain;
-    const gkDebtFactor2 = p.position === "GK" /* GK */ ? Math.max(0.7, Math.min(0.9, 0.75 + Math.max(0, (p.age - 27) * 4e-3) - stamina / 100 * 0.05)) : 1;
-    fatigueDebtMap[id] = (5 + (100 - stamina) * 0.15) * 0.4 * gkDebtFactor2;
+    homePlayedIds.forEach(applyPlayed);
+    awayPlayedIds.forEach(applyPlayed);
+    asArray(match.goals).forEach((goal) => {
+      if (goal?.isMiss) return;
+      const scorerId = goal.playerId || goal.scorerId;
+      if (scorerId) ensureTotals(scorerId).goals += 1;
+      if (goal.assistantId) ensureTotals(goal.assistantId).assists += 1;
+    });
+    asArray(match.cards).forEach((card) => {
+      if (!card?.playerId) return;
+      const totals = ensureTotals(card.playerId);
+      if (card.type === "RED" || card.type === "RED_CARD") totals.redCards += 1;
+      if (card.type === "YELLOW" || card.type === "YELLOW_CARD" || card.type === "SECOND_YELLOW") totals.yellowCards += 1;
+    });
   });
-  const awaySubIns = awaySubData.allPlayedIds.filter((id) => !awayLineup.startingXI.includes(id));
-  awaySubIns.forEach((id, idx) => {
-    const p = awayPlayersAll.find((x) => x.id === id);
-    if (!p) return;
-    const stamina = p.attributes.stamina || 50;
-    const stamEff = Math.pow((100 - stamina) / 100, 1.2) * 10;
-    let drain = (2.5 + rng(8e3 + idx) * 1.5 + stamEff * 0.5 + 1.5) * 0.4;
-    if (p.position === "GK" /* GK */) drain *= 0.75 + stamina / 100 * 0.1;
-    fatigueMap[id] = drain;
-    const gkDebtFactor3 = p.position === "GK" /* GK */ ? Math.max(0.7, Math.min(0.9, 0.75 + Math.max(0, (p.age - 27) * 4e-3) - stamina / 100 * 0.05)) : 1;
-    fatigueDebtMap[id] = (5 + (100 - stamina) * 0.15) * 0.4 * gkDebtFactor3;
-  });
-  const attributeWithVAR = (count, teamId, teamPlayers, lineup, subs, exits, baseOffset) => {
-    const entries = [];
-    const usedMinutes = /* @__PURE__ */ new Set();
-    let adjustedScore = 0;
-    for (let i = 0; i < count; i++) {
-      let minute = Math.floor(1 + rng(baseOffset + i) * 94);
-      while (usedMinutes.has(minute)) {
-        minute = minute >= 96 ? 1 : minute + 1;
-      }
-      usedMinutes.add(minute);
-      if (rng(baseOffset + i + 503) > getShortHandedGoalChance(exits, minute)) continue;
-      const activeXI = getActiveLineupAt2(minute, lineup.startingXI, subs, exits);
-      const scorer = GoalAttributionService.pickScorer(teamPlayers, activeXI, false, () => rng(baseOffset + i + 500));
-      const assist = scorer ? GoalAttributionService.pickAssistant(teamPlayers, activeXI, scorer.id, false, () => rng(baseOffset + i + 501)) : null;
-      const isVarDisallowed = rng(baseOffset + i + 502) < 0.04;
-      if (!isVarDisallowed) adjustedScore++;
-      entries.push({
-        playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : "?",
-        playerId: scorer?.id,
-        assistId: assist?.id,
-        minute,
-        teamId,
-        isPenalty: rng(baseOffset + i + 700) < 0.02,
-        varDisallowed: isVarDisallowed || void 0
-      });
-    }
-    return { entries, adjustedScore };
-  };
-  const homeGoalData = attributeWithVAR(homeScore90, homeClub.id, homePlayersAll, homeLineup, homeSubData.matchSubs, homeRedExits, 400);
-  const awayGoalData = attributeWithVAR(awayScore90, awayClub.id, awayPlayersAll, awayLineup, awaySubData.matchSubs, awayRedExits, 450);
-  let finalHomeScore90 = homeGoalData.adjustedScore + inMatchGoals.filter((g) => g.teamId === homeClub.id).length;
-  let finalAwayScore90 = awayGoalData.adjustedScore + inMatchGoals.filter((g) => g.teamId === awayClub.id).length;
-  const homeSubs = homeSubData.matchSubs.map((s) => {
-    const out = homePlayersAll.find((p) => p.id === s.outId);
-    const inP = homePlayersAll.find((p) => p.id === s.inId);
-    return { playerOutName: out ? `${out.firstName} ${out.lastName}` : "?", playerInName: inP ? `${inP.firstName} ${inP.lastName}` : "?", minute: s.min, teamId: homeClub.id };
-  });
-  const awaySubs = awaySubData.matchSubs.map((s) => {
-    const out = awayPlayersAll.find((p) => p.id === s.outId);
-    const inP = awayPlayersAll.find((p) => p.id === s.inId);
-    return { playerOutName: out ? `${out.firstName} ${out.lastName}` : "?", playerInName: inP ? `${inP.firstName} ${inP.lastName}` : "?", minute: s.min, teamId: awayClub.id };
-  });
-  let finalHomeScore = finalHomeScore90;
-  let finalAwayScore = finalAwayScore90;
-  let penaltyHome;
-  let penaltyAway;
-  let wentToExtraTime = false;
-  const homeWinProb = adjustExtraTimeWinProbability2(
-    homeClub.reputation / (homeClub.reputation + awayClub.reputation),
-    homeRedExits,
-    awayRedExits
+  if (playerFriendlyTotals.size === 0) return players;
+  return Object.fromEntries(
+    Object.entries(players).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player) => {
+        const totals = playerFriendlyTotals.get(player.id);
+        if (!totals) return player;
+        const currentFriendly = player.friendlyStats ?? emptyPlayerStats();
+        if ((currentFriendly.matchesPlayed ?? 0) >= totals.matchesPlayed) return player;
+        return {
+          ...player,
+          friendlyStats: {
+            ...currentFriendly,
+            matchesPlayed: totals.matchesPlayed,
+            minutesPlayed: totals.minutesPlayed,
+            goals: totals.goals,
+            assists: totals.assists,
+            yellowCards: totals.yellowCards,
+            redCards: totals.redCards,
+            cleanSheets: Math.max(currentFriendly.cleanSheets ?? 0, totals.cleanSheets),
+            ratingHistory: totals.ratingHistory
+          }
+        };
+      })
+    ])
   );
-  if (leg1Diff !== void 0 && finalHomeScore90 - finalAwayScore90 === leg1Diff) {
-    const etResult = simulateExtraTimeAndPenalties2(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1e3, leg1Diff);
-    finalHomeScore = etResult.homeScore;
-    finalAwayScore = etResult.awayScore;
-    penaltyHome = etResult.penaltyHome;
-    penaltyAway = etResult.penaltyAway;
-    wentToExtraTime = true;
-  } else if (isFinalMatch && finalHomeScore90 === finalAwayScore90) {
-    const etResult = simulateExtraTimeAndPenalties2(finalHomeScore90, finalAwayScore90, homeWinProb, rng, 1e3, void 0);
-    finalHomeScore = etResult.homeScore;
-    finalAwayScore = etResult.awayScore;
-    penaltyHome = etResult.penaltyHome;
-    penaltyAway = etResult.penaltyAway;
-    wentToExtraTime = true;
-  }
-  const etGoals = [];
-  if (wentToExtraTime) {
-    const etHomeCount = finalHomeScore - finalHomeScore90;
-    const etAwayCount = finalAwayScore - finalAwayScore90;
-    const usedETMin = /* @__PURE__ */ new Set();
-    for (let i = 0; i < etHomeCount; i++) {
-      let minute = Math.floor(91 + rng(2e3 + i) * 30);
-      while (usedETMin.has(minute)) {
-        minute = minute >= 120 ? 91 : minute + 1;
-      }
-      usedETMin.add(minute);
-      const activeXI = getActiveLineupAt2(minute, homeLineup.startingXI, homeSubData.matchSubs, homeRedExits);
-      const scorer = GoalAttributionService.pickScorer(homePlayersAll, activeXI, false, () => rng(2e3 + i + 500));
-      etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : "?", playerId: scorer?.id, minute, teamId: homeClub.id, isPenalty: false });
-    }
-    for (let i = 0; i < etAwayCount; i++) {
-      let minute = Math.floor(91 + rng(2100 + i) * 30);
-      while (usedETMin.has(minute)) {
-        minute = minute >= 120 ? 91 : minute + 1;
-      }
-      usedETMin.add(minute);
-      const activeXI = getActiveLineupAt2(minute, awayLineup.startingXI, awaySubData.matchSubs, awayRedExits);
-      const scorer = GoalAttributionService.pickScorer(awayPlayersAll, activeXI, false, () => rng(2100 + i + 500));
-      etGoals.push({ playerName: scorer ? `${scorer.firstName} ${scorer.lastName}` : "?", playerId: scorer?.id, minute, teamId: awayClub.id, isPenalty: false });
-    }
-  }
-  const ratings = {};
-  const homeWin = finalHomeScore > finalAwayScore;
-  const awayWin = finalAwayScore > finalHomeScore;
-  const isDraw = finalHomeScore === finalAwayScore;
-  const allGoals = [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals, ...etGoals];
-  const allCards = [...homeCardData.cards, ...awayCardData.cards];
-  const generateRating = (pId, isHome) => {
-    const p = (isHome ? homePlayersAll : awayPlayersAll).find((x) => x.id === pId);
-    if (!p) return;
-    const teamWon = isHome ? homeWin : awayWin;
-    const r = rng(pId.length + 90 + 999);
-    let score = teamWon ? 6.2 + r * 1.5 : isDraw ? 5.2 + r * 1.5 : 4 + r * 1.8;
-    const pGoals = allGoals.filter((g) => g.playerId === pId && !g.varDisallowed).length;
-    const pAssists = allGoals.filter((g) => g.assistId === pId && !g.varDisallowed).length;
-    score += pGoals * 1 + pAssists * 0.6;
-    const conceded = isHome ? finalAwayScore : finalHomeScore;
-    if (p.position === "GK" /* GK */ || p.position === "DEF") {
-      if (conceded === 0) score += 1.2;
-      else score -= conceded * 0.3;
-    }
-    allCards.filter((c) => c.playerId === pId).forEach((c) => {
-      if (c.type === "RED" || c.type === "SECOND_YELLOW") score -= 3;
-      if (c.type === "YELLOW") score -= 0.5;
+}
+function isEuropeanCupCompetition(competition) {
+  const value = String(competition || "");
+  return value === "UEFA_SUPER_CUP" || value.startsWith("CL_") || value.startsWith("EL_") || value.startsWith("CONF_");
+}
+function reconcileEuroRatingHistoryFromHistory(players, matchHistory2, seasonNumber) {
+  const playerRatings = /* @__PURE__ */ new Map();
+  (matchHistory2 || []).forEach((match) => {
+    if (!isEuropeanCupCompetition(match?.competition)) return;
+    if (Number(match?.season) !== seasonNumber) return;
+    const playedIds = /* @__PURE__ */ new Set([
+      ...asArray(match.homeLineup).filter(Boolean),
+      ...asArray(match.awayLineup).filter(Boolean),
+      ...asArray(match.substitutions).map((sub) => sub?.playerInId).filter(Boolean),
+      ...asArray(match.substitutions).map((sub) => sub?.playerOutId).filter(Boolean),
+      ...Object.keys(asRecord(match.ratings))
+    ]);
+    playedIds.forEach((playerId) => {
+      const rating = match.ratings?.[playerId];
+      if (typeof rating !== "number" || !Number.isFinite(rating)) return;
+      if (!playerRatings.has(playerId)) playerRatings.set(playerId, []);
+      playerRatings.get(playerId).push(rating);
     });
-    ratings[pId] = parseFloat(Math.min(10, Math.max(1, score)).toFixed(1));
-  };
-  homeLineup.startingXI.filter((id) => id !== null).forEach((id) => generateRating(id, true));
-  awayLineup.startingXI.filter((id) => id !== null).forEach((id) => generateRating(id, false));
+  });
+  if (playerRatings.size === 0) return players;
+  return Object.fromEntries(
+    Object.entries(players).map(([clubId, squad]) => [
+      clubId,
+      (squad || []).map((player) => {
+        const ratings = playerRatings.get(player.id);
+        if (!ratings || ratings.length === 0) return player;
+        const currentEuro = player.euroStats ?? emptyPlayerStats();
+        const currentHistory = asArray(currentEuro.ratingHistory).filter((rating) => typeof rating === "number" && Number.isFinite(rating));
+        if (currentHistory.length >= ratings.length) return player;
+        return {
+          ...player,
+          euroStats: {
+            ...currentEuro,
+            ratingHistory: ratings
+          }
+        };
+      })
+    ])
+  );
+}
+function normalizeSaveState(data) {
+  const normalizedMatchHistory = normalizeMatchHistory(data.matchHistory);
+  const normalizedClubs = (data.clubs || []).map((rawClub) => {
+    const club = normalizeClubManagementSource(rawClub);
+    return {
+      ...club,
+      rosterIds: asArray(club.rosterIds),
+      stats: club.stats ?? { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+      budget: Number.isFinite(club.budget) ? club.budget : 0,
+      transferBudget: Number.isFinite(club.transferBudget) ? Math.max(0, club.transferBudget) : 0,
+      reserveBudget: Number.isFinite(club.reserveBudget) ? Math.max(0, club.reserveBudget) : FinanceService.calculateInitialReserveBudget(club.budget || 0, club.reputation || 1),
+      reserveTeamSeasonGrant: Number.isFinite(club.reserveTeamSeasonGrant) ? Math.max(0, club.reserveTeamSeasonGrant) : void 0,
+      reserveTeamSeasonGrantRate: Number.isFinite(club.reserveTeamSeasonGrantRate) ? Math.max(0, club.reserveTeamSeasonGrantRate) : void 0,
+      reserveTeamSeasonGrantYear: Number.isFinite(club.reserveTeamSeasonGrantYear) ? club.reserveTeamSeasonGrantYear : void 0,
+      reserveTeamEmergencySupportYear: Number.isFinite(club.reserveTeamEmergencySupportYear) ? club.reserveTeamEmergencySupportYear : void 0,
+      // Parent/reserve squad integration is idempotent only when its monthly
+      // review and emergency-call-up timestamps survive SAVE/LOAD. Old saves
+      // omit these optional fields and safely begin with no completed review.
+      reserveSquadLastReviewMonth: typeof club.reserveSquadLastReviewMonth === "string" ? club.reserveSquadLastReviewMonth : void 0,
+      reserveSquadLastEmergencyMoveDate: typeof club.reserveSquadLastEmergencyMoveDate === "string" ? club.reserveSquadLastEmergencyMoveDate : void 0,
+      boardBudgetRequestsThisSeason: club.boardBudgetRequestsThisSeason ?? 0,
+      boardExceptionalContractApprovals: club.boardExceptionalContractApprovals ?? 0,
+      boardApprovedFreeAgentContract: club.boardApprovedFreeAgentContract ?? null,
+      boardBudgetMonitorState: club.boardBudgetMonitorState ?? "NORMAL",
+      signingBonusPool: club.signingBonusPool ?? 0,
+      financeHistory: asArray(club.financeHistory),
+      stadiumExpansionProjects: asArray(club.stadiumExpansionProjects),
+      trainingFacilityLevel: Math.max(1, Math.min(10, Math.round(Number.isFinite(club.trainingFacilityLevel) ? club.trainingFacilityLevel : 1))),
+      trainingFacilityUpgradeProjects: asArray(club.trainingFacilityUpgradeProjects)
+    };
+  });
+  const normalizedPlayersBase = Object.fromEntries(
+    Object.entries(asRecord(data.players)).map(([clubId, squad]) => [
+      clubId,
+      asArray(squad).map((player) => {
+        const playerClubId = typeof player.clubId === "string" && player.clubId.length > 0 ? player.clubId : clubId;
+        const secondaryPosition = typeof player.secondaryPosition === "string" && player.secondaryPosition !== player.position ? player.secondaryPosition : null;
+        const hasPendingTransfer = typeof player.transferPendingClubId === "string" && player.transferPendingClubId.length > 0;
+        const normalizedPlayer = {
+          ...player,
+          clubId: playerClubId,
+          clubAdaptation: normalizePlayerClubAdaptation(player.clubAdaptation, playerClubId),
+          secondaryPosition,
+          secondaryPositionRating: secondaryPosition ? asClampedRating(player.secondaryPositionRating) : void 0,
+          // Save files keep the complete per-competition map. Normalizing every
+          // bucket here prevents malformed optional arrays from breaking the III
+          // liga ranking screen after a mid-season save/load cycle.
+          competitionStats: Object.fromEntries(
+            Object.entries(asRecord(player.competitionStats)).map(([competitionId, rawStats]) => [
+              competitionId,
+              {
+                ...emptyPlayerStats(),
+                ...asRecord(rawStats),
+                seasonalChanges: asRecord(asRecord(rawStats).seasonalChanges),
+                ratingHistory: asArray(asRecord(rawStats).ratingHistory)
+              }
+            ])
+          ),
+          friendlyStats: player.friendlyStats ?? {
+            goals: 0,
+            assists: 0,
+            yellowCards: 0,
+            redCards: 0,
+            cleanSheets: 0,
+            matchesPlayed: 0,
+            minutesPlayed: 0,
+            seasonalChanges: {},
+            ratingHistory: []
+          },
+          history: asArray(player.history),
+          boardLockoutUntil: player.boardLockoutUntil ?? null,
+          isUntouchable: player.isUntouchable ?? false,
+          negotiationStep: player.negotiationStep ?? 0,
+          negotiationLockoutUntil: player.negotiationLockoutUntil ?? null,
+          contractLockoutUntil: player.contractLockoutUntil ?? null,
+          moraleDemandLockoutUntil: player.moraleDemandLockoutUntil ?? null,
+          transferListRemovalPromiseDeadline: player.transferListRemovalPromiseDeadline ?? null,
+          fatigueDebt: player.fatigueDebt ?? 0,
+          isNegotiationPermanentBlocked: player.isNegotiationPermanentBlocked ?? false,
+          transferLockoutUntil: player.transferLockoutUntil ?? null,
+          transferClubLockouts: player.transferClubLockouts ?? {},
+          transferPendingSalary: hasPendingTransfer ? asPositiveNumber(player.transferPendingSalary) : void 0,
+          transferPendingBonus: hasPendingTransfer ? asPositiveNumber(player.transferPendingBonus) : void 0,
+          transferPendingContractYears: hasPendingTransfer ? asPositiveNumber(player.transferPendingContractYears) : void 0,
+          // Internal-movement state is deliberately optional for backward
+          // compatibility. Invalid legacy values are discarded so cooldown and
+          // surplus-age calculations never operate on malformed dates/flags.
+          lastInternalSquadMoveDate: typeof player.lastInternalSquadMoveDate === "string" ? player.lastInternalSquadMoveDate : null,
+          lastInternalSquadMoveDirection: player.lastInternalSquadMoveDirection === "TO_FIRST_TEAM" || player.lastInternalSquadMoveDirection === "TO_RESERVES" ? player.lastInternalSquadMoveDirection : null,
+          firstTeamSurplusSince: typeof player.firstTeamSurplusSince === "string" ? player.firstTeamSurplusSince : null,
+          freeAgentLockoutUntil: player.freeAgentLockoutUntil ?? null,
+          freeAgentClubLockouts: player.freeAgentClubLockouts ?? {},
+          reputacja: player.reputacja ?? 50,
+          lojalnosc: typeof player.lojalnosc === "number" && player.lojalnosc >= 1 ? player.lojalnosc : Math.floor(Math.random() * 99) + 1
+        };
+        return PlayerFormService.withUpdatedForm(normalizedPlayer);
+      })
+    ])
+  );
+  const normalizedPlayersWithCup = reconcileCupStatsFromHistory(
+    normalizedPlayersBase,
+    normalizedMatchHistory
+  );
+  const normalizedPlayersWithFriendlies = reconcileFriendlyStatsFromHistory(
+    normalizedPlayersWithCup,
+    normalizedMatchHistory,
+    Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1
+  );
+  const normalizedPlayers = reconcileEuroRatingHistoryFromHistory(
+    normalizedPlayersWithFriendlies,
+    normalizedMatchHistory,
+    Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1
+  );
   return {
-    homeScore: finalHomeScore,
-    awayScore: finalAwayScore,
-    penaltyHome,
-    penaltyAway,
-    wentToExtraTime,
-    goals: [...homeGoalData.entries, ...awayGoalData.entries, ...inMatchGoals, ...etGoals].sort((a, b) => a.minute - b.minute),
-    cards: allCards,
-    substitutions: [...homeSubs, ...awaySubs],
-    updatedHomePlayers: homeCardData.updatedPlayers,
-    updatedAwayPlayers: awayCardData.updatedPlayers,
-    fatigueMap,
-    fatigueDebtMap,
-    injuryPenaltyMap,
-    ratings
+    ...data,
+    version: SAVE_VERSION,
+    savedAt: asDateString(data.savedAt, (/* @__PURE__ */ new Date()).toISOString()),
+    currentDate: asDate(data.currentDate),
+    sessionSeed: Number.isFinite(data.sessionSeed) ? data.sessionSeed : Date.now(),
+    datapackCareerStartYear: Number.isInteger(data.datapackCareerStartYear) ? data.datapackCareerStartYear : null,
+    clubs: normalizedClubs,
+    leagues: asArray(data.leagues),
+    players: normalizedPlayers,
+    reserves: asArray(data.reserves),
+    reserveCoachId: data.reserveCoachId ?? null,
+    academy: normalizeAcademyState(data.academy, asDate(data.currentDate)),
+    reserveReleaseDirective: data.reserveReleaseDirective ?? null,
+    scoutPool: asArray(data.scoutPool),
+    scoutMarket: asArray(data.scoutMarket),
+    scoutMarketRefreshDate: asDateOnlyString(data.scoutMarketRefreshDate),
+    scoutMarketManualRefreshCount: data.scoutMarketManualRefreshCount ?? 0,
+    scoutMarketPeriodStart: asDateOnlyString(data.scoutMarketPeriodStart),
+    transferScoutPool: asArray(data.transferScoutPool),
+    transferScoutingAssignments: asArray(data.transferScoutingAssignments),
+    transferScoutingReports: asArray(data.transferScoutingReports),
+    discoveredTransferPlayerIds: asArray(data.discoveredTransferPlayerIds).filter((id) => typeof id === "string"),
+    mysteryAgentOffer: data.mysteryAgentOffer ?? null,
+    lineups: asRecord(data.lineups),
+    seasonTemplate: normalizeSeasonTemplate(data.seasonTemplate),
+    leagueSchedules: normalizeLeagueSchedules(data.leagueSchedules),
+    fourthLeagueState: data.fourthLeagueState ?? null,
+    lastRecoveryDate: asDate(data.lastRecoveryDate),
+    coaches: asRecord(data.coaches),
+    staffMembers: asRecord(data.staffMembers),
+    roundResults: asRecord(data.roundResults),
+    managerProfile: ManagerExperienceService.ensureManagerExperience(data.managerProfile),
+    managerJobOffers: asArray(data.managerJobOffers),
+    activeManagerContract: data.activeManagerContract ?? null,
+    managerContractNegotiation: data.managerContractNegotiation ?? null,
+    seasonNumber: Number.isFinite(data.seasonNumber) ? data.seasonNumber : 1,
+    messages: migrateWelcomeMailSignatories(normalizeMessages(data.messages), normalizedClubs, data.userTeamId ?? null),
+    activeTrainingId: typeof data.activeTrainingId === "string" ? data.activeTrainingId : null,
+    activeIntensity: data.activeIntensity ?? "NORMAL",
+    trainingProgressHistory: asArray(data.trainingProgressHistory),
+    reserveProgressHistory: asArray(data.reserveProgressHistory),
+    pendingNegotiations: data.pendingNegotiations || [],
+    pendingFriendlyRequests: data.pendingFriendlyRequests || [],
+    activeFriendlyFixtureId: data.activeFriendlyFixtureId ?? null,
+    activeFriendlyConditions: data.activeFriendlyConditions ?? null,
+    transferOffers: data.transferOffers || [],
+    incomingOffers: data.incomingOffers || [],
+    aiTransferLog: data.aiTransferLog || [],
+    europeanStatus: asRecord(data.europeanStatus),
+    nationalTeams: asArray(data.nationalTeams),
+    nationsLeagueState: normalizeNationsLeagueState(data.nationsLeagueState),
+    nationsLeagueArchive: asArray(data.nationsLeagueArchive).map(normalizeNationsLeagueState).filter(Boolean),
+    euroHostAnnouncements: asArray(data.euroHostAnnouncements),
+    euroQualifiersState: normalizeEuroQualifiersState(data.euroQualifiersState),
+    worldCupQualifiersState: normalizeEuroQualifiersState(data.worldCupQualifiersState),
+    uefaNationalRankingState: data.uefaNationalRankingState ?? null,
+    wcqPlayoffState: data.wcqPlayoffState ?? null,
+    wcState: normalizeTournamentState(data.wcState),
+    euroState: normalizeTournamentState(data.euroState),
+    cupParticipants: asArray(data.cupParticipants),
+    activeCupDraw: normalizeDraw(data.activeCupDraw),
+    activeGroupDraw: normalizeDraw(data.activeGroupDraw),
+    activePlayoffDraw: data.activePlayoffDraw ?? null,
+    relegationPlayoffFirstLegResults: data.relegationPlayoffFirstLegResults ?? null,
+    relegationPlayoffFinalResult: data.relegationPlayoffFinalResult ?? null,
+    promotionPlayoffSemiResults: data.promotionPlayoffSemiResults ?? null,
+    promotionPlayoffFinalResults: data.promotionPlayoffFinalResults ?? null,
+    activePlayoffMatch: data.activePlayoffMatch ?? null,
+    clGroups: data.clGroups ?? null,
+    activeELGroupDraw: normalizeDraw(data.activeELGroupDraw),
+    elGroups: data.elGroups ?? null,
+    activeConfGroupDraw: normalizeDraw(data.activeConfGroupDraw),
+    confGroups: data.confGroups ?? null,
+    elHistoryInitialRound: data.elHistoryInitialRound ?? null,
+    confHistoryInitialRound: data.confHistoryInitialRound ?? null,
+    processedDrawIds: asArray(data.processedDrawIds),
+    globalFixtures: asArray(data.globalFixtures).map(normalizeFixture),
+    isResigned: data.isResigned ?? false,
+    managerEmploymentStatus: data.managerEmploymentStatus === "FIRED" || data.managerEmploymentStatus === "RESIGNED" || data.managerEmploymentStatus === "EMPLOYED" ? data.managerEmploymentStatus : data.isResigned ? "RESIGNED" : "EMPLOYED",
+    reserveFixtures: asArray(data.reserveFixtures),
+    reserveMatchResults: asArray(data.reserveMatchResults),
+    supercupWinners: asArray(data.supercupWinners),
+    matchHistory: normalizedMatchHistory,
+    championshipHistory: asArray(data.championshipHistory),
+    confR1QPolishTeamIds: asArray(data.confR1QPolishTeamIds),
+    confR2QPolishTeamIds: data.confR2QPolishTeamIds ?? ["PL_JAGIELLONIA_BIALYSTOK", "PL_POGON_SZCZECIN"],
+    lastUEFASuperCupResult: data.lastUEFASuperCupResult ?? null,
+    currentPolishChampionId: data.currentPolishChampionId ?? "PL_LECH_POZNAN",
+    currentPolishViceChampionId: data.currentPolishViceChampionId ?? null,
+    currentPolishCupWinnerId: data.currentPolishCupWinnerId ?? "PL_LEGIA_WARSZAWA",
+    currentCLWinnerId: data.currentCLWinnerId ?? "EU_CL_PARIS_SAINT_GERMAIN",
+    currentELWinnerId: data.currentELWinnerId ?? "EU_CL_TOTTENHAM_HOTSPUR",
+    winterCampInvitePending: data.winterCampInvitePending ?? false,
+    winterCampProgramPending: data.winterCampProgramPending ?? false,
+    summerCampInvitePending: data.summerCampInvitePending ?? false,
+    summerCampProgramPending: data.summerCampProgramPending ?? false,
+    lastNTMatchResults: normalizeNTMatchResults(data.lastNTMatchResults),
+    aiFriendlyPairs: asArray(data.aiFriendlyPairs),
+    aiFriendlyReports: asArray(data.aiFriendlyReports),
+    pzpnDisciplinaryEvents: asArray(data.pzpnDisciplinaryEvents),
+    sentMailIds: asArray(data.sentMailIds),
+    lastProcessedLeagueDate: data.lastProcessedLeagueDate ?? null,
+    mediaRelationships: asRecord(data.mediaRelationships),
+    sentUnfriendlyPressMonths: asArray(data.sentUnfriendlyPressMonths),
+    sentFriendlyPressMonths: asArray(data.sentFriendlyPressMonths),
+    pendingPressArticles: asArray(data.pendingPressArticles),
+    completedPressConferenceFixtureIds: asArray(data.completedPressConferenceFixtureIds),
+    pressConferenceEffects: asRecord(data.pressConferenceEffects)
   };
-};
-var SUPER_CUP_VENUES = [
-  { name: "Wembley Stadium", city: "Londyn", capacity: 9e4, country: "England" },
-  { name: "Stade de France", city: "Saint-Denis", capacity: 81338, country: "France" },
-  { name: "Signal Iduna Park", city: "Dortmund", capacity: 81365, country: "Germany" },
-  { name: "Estadio Santiago Bernab\xE9u", city: "Madryt", capacity: 81044, country: "Spain" },
-  { name: "Allianz Arena", city: "Monachium", capacity: 75e3, country: "Germany" },
-  { name: "Stadio Giuseppe Meazza", city: "Mediolan", capacity: 75817, country: "Italy" },
-  { name: "Olympiastadion", city: "Berlin", capacity: 74475, country: "Germany" },
-  { name: "Stadio Olimpico", city: "Rzym", capacity: 72698, country: "Italy" },
-  { name: "Puskas Ar\xE9na", city: "Budapeszt", capacity: 67215, country: "Hungary" },
-  { name: "Tottenham Hotspur Stadium", city: "Londyn", capacity: 62850, country: "England" },
-  { name: "Est\xE1dio da Luz", city: "Lizbona", capacity: 64642, country: "Portugal" },
-  { name: "Stadion Narodowy", city: "Warszawa", capacity: 58580, country: "Poland" },
-  { name: "Johan Cruyff Arena", city: "Amsterdam", capacity: 54990, country: "Netherlands" },
-  { name: "Aviva Stadium", city: "Dublin", capacity: 51700, country: "Ireland" },
-  { name: "Volksparkstadion", city: "Hamburg", capacity: 57e3, country: "Germany" }
-];
-var BackgroundMatchUEFASuperCup = {
-  processSuperCupMatch: (currentDate, fixtures, clubs, players, lineups, seasonNumber, sessionSeed, coaches2 = {}) => {
-    RefereeService.initializePool();
-    const dateStr = currentDate.toDateString();
-    const todayMatches = fixtures.filter(
-      (f) => f.date.toDateString() === dateStr && f.status === "SCHEDULED" /* SCHEDULED */ && f.leagueId === "UEFA_SUPER_CUP" /* UEFA_SUPER_CUP */
-    );
-    if (todayMatches.length === 0) return { updatedFixtures: fixtures, updatedPlayers: players, matchHistoryEntries: [] };
-    let updatedFixtures = [...fixtures];
-    let updatedPlayersMap = { ...players };
-    const matchHistoryEntries = [];
-    const usedRefereeIds = /* @__PURE__ */ new Set();
-    todayMatches.forEach((fixture2) => {
-      const home = clubs.find((c) => c.id === fixture2.homeTeamId);
-      const away = clubs.find((c) => c.id === fixture2.awayTeamId);
-      if (!home || !away) return;
-      const matchHash = fixture2.id.split("").reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0);
-      const seed = matchHash ^ sessionSeed ^ (currentDate.getTime() / 1e3 | 0);
-      const homePlayers = updatedPlayersMap[fixture2.homeTeamId] ?? [];
-      const awayPlayers = updatedPlayersMap[fixture2.awayTeamId] ?? [];
-      const assignedHomeCoach = AiMatchPreparationService.getClubCoach(home, coaches2);
-      const assignedAwayCoach = AiMatchPreparationService.getClubCoach(away, coaches2);
-      const prepareLineup = (club, opponent, squad, coach, isHome) => {
-        const existing = lineups[club.id];
-        if (!coach && existing) {
-          return LineupService.repairLineup(existing, squad, { competitionId: fixture2.leagueId });
-        }
-        return AiMatchPreparationService.prepareTeamForMatch(
-          club,
-          opponent,
-          squad,
-          coach,
-          fixture2,
-          isHome,
-          `${fixture2.id}_${club.id}_uefa_super_cup`,
-          void 0,
-          true
-        );
-      };
-      const homeLineup = prepareLineup(home, away, homePlayers, assignedHomeCoach, true);
-      const awayLineup = prepareLineup(away, home, awayPlayers, assignedAwayCoach, false);
-      const isFinal = true;
-      const leg1Diff = void 0;
-      const matchSeedStr = `${fixture2.id}_${sessionSeed}`;
-      const referee = RefereeService.assignInternationalReferee(
-        matchSeedStr,
-        home.country ?? "POL",
-        away.country ?? "POL",
-        usedRefereeIds
-      );
-      usedRefereeIds.add(referee.id);
-      const DEFAULT_COACH_ATTRS = { experience: 50, decisionMaking: 50, motivation: 50, training: 50 };
-      const homeCoach = assignedHomeCoach ?? { id: "default_h", firstName: "", lastName: "", age: 0, nationality: "", nationalityFlag: "", attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: "", contractEndDate: "", annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: "", neutral: "", defensive: "" } };
-      const awayCoach = assignedAwayCoach ?? { id: "default_a", firstName: "", lastName: "", age: 0, nationality: "", nationalityFlag: "", attributes: DEFAULT_COACH_ATTRS, history: [], seasonStats: [], currentClubId: null, hiredDate: "", contractEndDate: "", annualSalary: 0, expPoints: 1, blacklist: {}, favoriteTactics: { offensive: "", neutral: "", defensive: "" } };
-      const venueIndex = ((seasonNumber - 1) % SUPER_CUP_VENUES.length + SUPER_CUP_VENUES.length) % SUPER_CUP_VENUES.length;
-      const venue = SUPER_CUP_VENUES[venueIndex];
-      const pseudoRng = (seed * 9301 + 49297) % 233280 / 233280;
-      const fillRate = 0.98 + pseudoRng * 0.02;
-      const attendance = Math.floor(venue.capacity * fillRate);
-      const weather = EuropeanWeatherService.getSnapshot(venue.country, currentDate, matchSeedStr);
-      const result = simulateCLMatchFull2(
-        home,
-        away,
-        homePlayers,
-        awayPlayers,
-        homeLineup,
-        awayLineup,
-        currentDate,
-        seed,
-        referee,
-        homeCoach,
-        awayCoach,
-        leg1Diff,
-        isFinal
-      );
-      updatedFixtures = updatedFixtures.map(
-        (f) => f.id === fixture2.id ? {
-          ...f,
-          homeScore: result.homeScore,
-          awayScore: result.awayScore,
-          homePenaltyScore: result.penaltyHome,
-          awayPenaltyScore: result.penaltyAway,
-          status: "FINISHED" /* FINISHED */
-        } : f
-      );
-      const applyFatigueToTeam = (teamPlayers) => teamPlayers.map((p) => {
-        let updatedP = { ...p };
-        const drain = result.fatigueMap[p.id];
-        const debt = result.fatigueDebtMap[p.id];
-        if (drain !== void 0) {
-          updatedP.condition = Math.max(0, (updatedP.condition ?? 100) - drain);
-        }
-        if (debt !== void 0) {
-          updatedP.fatigueDebt = Math.min(100, (updatedP.fatigueDebt ?? 0) + debt);
-        }
-        const penalty = result.injuryPenaltyMap[p.id];
-        if (penalty !== void 0 && updatedP.health?.injury) {
-          const condAfterPenalty = Math.max(0, (updatedP.condition ?? 100) - penalty);
-          updatedP.health = { ...updatedP.health, injury: { ...updatedP.health.injury, conditionAtInjury: condAfterPenalty } };
-          updatedP.condition = condAfterPenalty;
-        }
-        return updatedP;
-      });
-      updatedPlayersMap = {
-        ...updatedPlayersMap,
-        [fixture2.homeTeamId]: applyFatigueToTeam(result.updatedHomePlayers),
-        [fixture2.awayTeamId]: applyFatigueToTeam(result.updatedAwayPlayers)
-      };
-      updatedPlayersMap = applyEuropeanAppearance(updatedPlayersMap, fixture2.homeTeamId, homeLineup, result.substitutions, result.ratings);
-      updatedPlayersMap = applyEuropeanAppearance(updatedPlayersMap, fixture2.awayTeamId, awayLineup, result.substitutions, result.ratings);
-      result.cards.forEach((card) => {
-        const eventType = card.type === "RED" || card.type === "SECOND_YELLOW" ? "RED_CARD" /* RED_CARD */ : "YELLOW_CARD" /* YELLOW_CARD */;
-        updatedPlayersMap = applyEuropeanCard(updatedPlayersMap, card.playerId, eventType);
-      });
-      const yellowsInMatch = result.cards.filter((c) => c.type === "YELLOW" || c.type === "SECOND_YELLOW").length;
-      const redsInMatch = result.cards.filter((c) => c.type === "RED" || c.type === "SECOND_YELLOW").length;
-      const refereeRating = RefereeService.generateMatchRating(referee);
-      RefereeService.recordMatchStats(referee.id, refereeRating, yellowsInMatch, redsInMatch);
-      matchHistoryEntries.push({
-        matchId: fixture2.id,
-        date: currentDate.toISOString(),
-        season: seasonNumber,
-        competition: fixture2.leagueId,
-        homeTeamId: fixture2.homeTeamId,
-        awayTeamId: fixture2.awayTeamId,
-        homeScore: result.homeScore,
-        awayScore: result.awayScore,
-        homePenaltyScore: result.penaltyHome,
-        awayPenaltyScore: result.penaltyAway,
-        isExtraTime: result.wentToExtraTime || void 0,
-        goals: result.goals,
-        cards: result.cards,
-        substitutions: result.substitutions,
-        injuries: result.injuries,
-        refereeName: `${referee.firstName} ${referee.lastName}`,
-        attendance,
-        venue: `${venue.name}, ${venue.city}`,
-        weather,
-        homeLineup: homeLineup.startingXI.filter((id) => id !== null),
-        awayLineup: awayLineup.startingXI.filter((id) => id !== null),
-        homeStartingTacticId: homeLineup.tacticId,
-        awayStartingTacticId: awayLineup.tacticId,
-        homeTacticId: homeLineup.tacticId,
-        awayTacticId: awayLineup.tacticId,
-        ratings: result.ratings
-      });
-    });
-    return { updatedFixtures, updatedPlayers: updatedPlayersMap, matchHistoryEntries };
-  }
-};
+}
 
-// tests/EuropeanAiMatchPreparationTests.ts
-var makePlayer = (id, position, level) => ({
-  id,
-  firstName: "Test",
-  lastName: id,
-  position,
-  overallRating: level,
-  condition: 100,
-  morale: 75,
-  suspensionMatches: 0,
-  euroSuspensionMatches: 0,
-  health: { status: "HEALTHY" /* HEALTHY */ },
-  stats: { matchesPlayed: 0, minutesPlayed: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0, seasonalChanges: {}, ratingHistory: [] },
-  attributes: {
-    strength: level,
-    stamina: level,
-    pace: level,
-    acceleration: level,
-    defending: level,
-    passing: level,
-    attacking: level,
-    finishing: level,
-    technique: level,
-    vision: level,
-    dribbling: level,
-    heading: level,
-    positioning: level,
-    goalkeeping: level,
-    freeKicks: level,
-    talent: level,
-    penalties: level,
-    corners: level,
-    aggression: level,
-    crossing: level,
-    leadership: level,
-    mentality: level,
-    workRate: level
-  }
-});
-var makeSquad = (prefix, level) => [
-  makePlayer(`${prefix}_gk_1`, "GK" /* GK */, level),
-  makePlayer(`${prefix}_gk_2`, "GK" /* GK */, level - 2),
-  ...Array.from({ length: 7 }, (_, index) => makePlayer(`${prefix}_def_${index}`, "DEF" /* DEF */, level - index % 3)),
-  ...Array.from({ length: 8 }, (_, index) => makePlayer(`${prefix}_mid_${index}`, "MID" /* MID */, level - index % 3)),
-  ...Array.from({ length: 5 }, (_, index) => makePlayer(`${prefix}_fwd_${index}`, "FWD" /* FWD */, level - index % 3))
-];
-var makeCoach = (id, clubId, quality, tactics) => ({
-  id,
-  firstName: "Coach",
-  lastName: id,
-  age: 48,
-  nationality: "Europe",
-  nationalityFlag: "",
-  currentClubId: clubId,
-  hiredDate: "2025-07-01",
-  contractEndDate: "2027-06-30",
-  annualSalary: 1,
-  expPoints: 100,
-  blacklist: {},
-  attributes: { experience: quality, decisionMaking: quality, motivation: quality, training: quality },
-  favoriteTactics: tactics,
-  history: [],
-  seasonStats: []
-});
-var strongClub = { id: "STRONG", coachId: "COACH_STRONG", reputation: 18, stats: {} };
-var weakClub = { id: "WEAK", coachId: "COACH_WEAK", reputation: 10, stats: {} };
-var cautiousClub = { id: "CAUTIOUS", coachId: "COACH_CAUTIOUS", reputation: 14, stats: {} };
-var strongCoach = makeCoach("COACH_STRONG", strongClub.id, 90, {
-  offensive: "4-3-3 Atak",
-  neutral: "4-2-3-1",
-  defensive: "5-4-1"
-});
-var weakCoach = makeCoach("COACH_WEAK", weakClub.id, 85, {
-  offensive: "3-4-3",
-  neutral: "3-5-2",
-  defensive: "5-4-1"
-});
-var cautiousCoach = makeCoach("COACH_CAUTIOUS", cautiousClub.id, 20, {
-  offensive: "4-3-3 Atak",
-  neutral: "3-5-2",
-  defensive: "5-4-1"
-});
-var coaches = {
-  [strongCoach.id]: strongCoach,
-  [weakCoach.id]: weakCoach,
-  [cautiousCoach.id]: cautiousCoach
+// tests/RealSavePolishCupRepairTests.ts
+var savePath = process.env.FM_REAL_SAVE_PATH;
+import_node_assert.strict.ok(savePath, "ustaw FM_REAL_SAVE_PATH na analizowany plik zapisu");
+var reviveIsoDates = (_key, value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date;
 };
-var halfMatchRedImpact = calculateEuropeanRedCardImpact([{ outId: "test_player", min: 45 }]);
-import_node_assert.strict.ok(Math.abs(halfMatchRedImpact.attackMult - 0.66) < 1e-6, "kartka w 45. minucie ma obni\u017Cy\u0107 ofensyw\u0119 proporcjonalnie do czasu gry w os\u0142abieniu");
-import_node_assert.strict.ok(Math.abs(halfMatchRedImpact.defenseLeakMult - 1.375) < 1e-6, "kartka w 45. minucie ma zwi\u0119kszy\u0107 podatno\u015B\u0107 obrony proporcjonalnie do czasu gry w os\u0142abieniu");
-var extraTimeWithoutGoalCap = sampleEuropeanExtraTimeGoals(0.8, () => 0.9999, 0);
-import_node_assert.strict.ok(extraTimeWithoutGoalCap > 2, "dogrywka nie mo\u017Ce mie\u0107 sztywnego limitu dw\xF3ch bramek");
-import_node_assert.strict.equal(
-  AiMatchPreparationService.getClubCoach(strongClub, coaches),
-  strongCoach,
-  "trener musi by\u0107 pobierany przez club.coachId, a nie przez ID klubu"
+var parsed = JSON.parse(
+  (0, import_node_zlib.gunzipSync)((0, import_node_fs.readFileSync)(savePath)).toString("utf8"),
+  reviveIsoDates
 );
-import_node_assert.strict.equal(
-  AiMatchPreparationService.determineMatchIntent(strongClub, weakClub, strongCoach, true),
-  "OFFENSIVE",
-  "mocny trener zdecydowanego faworyta powinien wybra\u0107 plan ofensywny"
+var state = normalizeSaveState(parsed);
+var leagueFixtures = Object.values(state.leagueSchedules ?? {}).flatMap(
+  (schedule) => (schedule?.matchdays ?? []).flatMap((matchday) => matchday?.fixtures ?? [])
 );
-import_node_assert.strict.equal(
-  AiMatchPreparationService.determineMatchIntent(weakClub, strongClub, weakCoach, false),
-  "DEFENSIVE",
-  "mocny trener outsidera powinien wybra\u0107 plan defensywny"
+var fixtures = [...leagueFixtures, ...state.globalFixtures ?? []];
+var currentDate = state.currentDate instanceof Date ? state.currentDate : new Date(state.currentDate);
+var dateStr = currentDate.toDateString();
+var clubIds = new Set(state.clubs.map((club) => club.id));
+var brokenBefore = fixtures.filter(
+  (fixture) => fixture.date.toDateString() === dateStr && fixture.status === "SCHEDULED" /* SCHEDULED */ && fixture.leagueId === "POLISH_CUP" /* POLISH_CUP */ && (!clubIds.has(fixture.homeTeamId) || !clubIds.has(fixture.awayTeamId))
 );
-import_node_assert.strict.equal(
-  AiMatchPreparationService.determineMatchIntent(cautiousClub, weakClub, cautiousCoach, false),
-  "NEUTRAL",
-  "s\u0142abszy trener ma pozosta\u0107 neutralny zamiast wybiera\u0107 nielogiczn\u0105 skrajno\u015B\u0107"
+import_node_assert.strict.ok(brokenBefore.length > 0, "rzeczywisty zapis testowy musi zawiera\u0107 uszkodzon\u0105 par\u0119 Pucharu Polski");
+var playerCountBefore = Object.values(state.players).reduce((sum, squad) => sum + squad.length, 0);
+MatchHistoryService.clear();
+var result = BackgroundMatchProcessorPolishCup.processCupEvent(
+  currentDate,
+  state.userTeamId,
+  fixtures,
+  state.clubs,
+  state.players,
+  state.lineups,
+  state.sessionSeed,
+  state.seasonNumber,
+  state.coaches
 );
+var playerCountAfter = Object.values(result.updatedPlayers).reduce((sum, squad) => sum + squad.length, 0);
+brokenBefore.forEach((brokenFixture) => {
+  const repaired = result.updatedFixtures.find((fixture) => fixture.id === brokenFixture.id);
+  import_node_assert.strict.ok(repaired, "naprawiona para musi pozosta\u0107 w terminarzu");
+  import_node_assert.strict.equal(repaired?.status, "FINISHED" /* FINISHED */, "wolny los musi zamkn\u0105\u0107 uszkodzon\u0105 par\u0119");
+  import_node_assert.strict.equal(repaired?.awayTeamId, POLISH_CUP_BYE_TEAM_ID, "brakuj\u0105cy klub musi zosta\u0107 zast\u0105piony znacznikiem wolnego losu");
+  import_node_assert.strict.equal(repaired?.homeScore, 1, "istniej\u0105cy klub musi awansowa\u0107 przez wolny los");
+});
 import_node_assert.strict.equal(
-  AiMatchPreparationService.determineMatchIntent(weakClub, strongClub, weakCoach, false, -1),
-  "OFFENSIVE",
-  "przegrywaj\u0105cy zesp\xF3\u0142 w rewan\u017Cu musi pr\xF3bowa\u0107 odrobi\u0107 wynik"
-);
-var fixture = {
-  id: "EL_TEST_MATCH",
-  leagueId: "EL_GROUP_STAGE" /* EL_GROUP_STAGE */,
-  homeTeamId: strongClub.id,
-  awayTeamId: weakClub.id,
-  date: new Date(2025, 7, 7),
-  status: "SCHEDULED" /* SCHEDULED */,
-  homeScore: null,
-  awayScore: null
-};
-var strongSquad = makeSquad("strong", 84);
-var weakSquad = makeSquad("weak", 68);
-var idleDate = new Date(2025, 7, 8);
-var idleFixtures = [fixture];
-var idlePlayers = { [strongClub.id]: strongSquad, [weakClub.id]: weakSquad };
-RefereeService.pool.length = 0;
-import_node_assert.strict.equal(
-  BackgroundMatchProcessorCL.hasMatchesToProcess(idleDate, null, idleFixtures),
+  result.updatedFixtures.some(
+    (fixture) => fixture.date.toDateString() === dateStr && fixture.status === "SCHEDULED" /* SCHEDULED */ && fixture.leagueId === "POLISH_CUP" /* POLISH_CUP */ && (!clubIds.has(fixture.homeTeamId) || !clubIds.has(fixture.awayTeamId))
+  ),
   false,
-  "dzie\u0144 bez europejskiego meczu nie mo\u017Ce uruchamia\u0107 symulacji w tle"
+  "po naprawie nie mo\u017Ce pozosta\u0107 zaplanowana para z brakuj\u0105cym klubem"
 );
-import_node_assert.strict.equal(
-  BackgroundMatchProcessorCL.hasMatchesToProcess(new Date(fixture.date), null, [fixture]),
-  true,
-  "termin europejskiego meczu musi przej\u015B\u0107 kontrol\u0119 kalendarza"
-);
-var idleEuropeanResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-  idleDate,
-  null,
-  idleFixtures,
-  [strongClub, weakClub],
-  idlePlayers,
-  {},
-  1,
-  123456,
-  coaches
-);
-import_node_assert.strict.equal(idleEuropeanResult.updatedFixtures, idleFixtures, "bezczynny dzie\u0144 musi zachowa\u0107 terminarz przez referencj\u0119");
-import_node_assert.strict.equal(idleEuropeanResult.updatedPlayers, idlePlayers, "bezczynny dzie\u0144 musi zachowa\u0107 map\u0119 zawodnik\xF3w przez referencj\u0119");
-import_node_assert.strict.equal(idleEuropeanResult.matchHistoryEntries.length, 0, "bezczynny dzie\u0144 nie mo\u017Ce tworzy\u0107 raport\xF3w meczowych");
-import_node_assert.strict.equal(RefereeService.pool.length, 0, "bezczynny dzie\u0144 nie mo\u017Ce generowa\u0107 puli s\u0119dzi\xF3w");
-var strongLineup = AiMatchPreparationService.prepareTeamForMatch(
-  strongClub,
-  weakClub,
-  strongSquad,
-  strongCoach,
-  fixture,
-  true,
-  "strong_test"
-);
-var weakLineup = AiMatchPreparationService.prepareTeamForMatch(
-  weakClub,
-  strongClub,
-  weakSquad,
-  weakCoach,
-  fixture,
-  false,
-  "weak_test"
-);
-import_node_assert.strict.equal(strongLineup.tacticId, "4-3-3", "faworyt musi u\u017Cy\u0107 ofensywnej ulubionej taktyki swojego trenera");
-import_node_assert.strict.equal(weakLineup.tacticId, "5-4-1", "outsider musi u\u017Cy\u0107 defensywnej ulubionej taktyki swojego trenera");
-import_node_assert.strict.notEqual(strongLineup.tacticId, weakLineup.tacticId, "europejskie dru\u017Cyny nie mog\u0105 by\u0107 sprowadzane do wsp\xF3lnego 4-4-2");
-import_node_assert.strict.equal(strongLineup.startingXI.filter(Boolean).length, 11, "trener gospodarzy musi wystawi\u0107 pe\u0142n\u0105 jedenastk\u0119");
-import_node_assert.strict.equal(weakLineup.startingXI.filter(Boolean).length, 11, "trener go\u015Bci musi wystawi\u0107 pe\u0142n\u0105 jedenastk\u0119");
-var constrainedSquad = [
-  makePlayer("limited_gk_1", "GK" /* GK */, 82),
-  makePlayer("limited_gk_2", "GK" /* GK */, 76),
-  ...Array.from({ length: 4 }, (_, index) => makePlayer(`limited_def_${index}`, "DEF" /* DEF */, 80 - index)),
-  ...Array.from({ length: 6 }, (_, index) => makePlayer(`limited_mid_${index}`, "MID" /* MID */, 81 - index)),
-  makePlayer("limited_fwd_fit", "FWD" /* FWD */, 80),
-  { ...makePlayer("limited_fwd_suspended", "FWD" /* FWD */, 86), euroSuspensionMatches: 1 },
-  {
-    ...makePlayer("limited_fwd_injured", "FWD" /* FWD */, 88),
-    health: {
-      status: "INJURED" /* INJURED */,
-      injury: {
-        type: "Test injury",
-        daysRemaining: 20,
-        totalDays: 20,
-        injuryDate: "2025-08-01",
-        severity: "SEVERE" /* SEVERE */
-      }
-    }
-  },
-  { ...makePlayer("limited_fwd_unfit", "FWD" /* FWD */, 90), condition: 40 }
-];
-var strictEuropeanLineup = AiMatchPreparationService.prepareTeamForMatch(
-  strongClub,
-  weakClub,
-  constrainedSquad,
-  strongCoach,
-  fixture,
-  true,
-  "strict_european_test",
-  void 0,
-  true
-);
-import_node_assert.strict.equal(strictEuropeanLineup.tacticId, "4-2-3-1", "braki pozycyjne musz\u0105 wymusi\u0107 wykonaln\u0105 alternatyw\u0119 dla 4-3-3");
-import_node_assert.strict.equal(strictEuropeanLineup.startingXI.filter(Boolean).length, 11, "alternatywna formacja musi zapewni\u0107 pe\u0142n\u0105 jedenastk\u0119");
-import_node_assert.strict.equal(strictEuropeanLineup.startingXI.includes("limited_fwd_suspended"), false, "zawieszony zawodnik nie mo\u017Ce wp\u0142ywa\u0107 na formacj\u0119 ani sk\u0142ad");
-import_node_assert.strict.equal(strictEuropeanLineup.startingXI.includes("limited_fwd_injured"), false, "powa\u017Cnie kontuzjowany zawodnik nie mo\u017Ce wp\u0142ywa\u0107 na formacj\u0119 ani sk\u0142ad");
-import_node_assert.strict.equal(strictEuropeanLineup.startingXI.includes("limited_fwd_unfit"), false, "zawodnik poni\u017Cej progu kondycji nie mo\u017Ce wp\u0142ywa\u0107 na formacj\u0119 ani sk\u0142ad");
-var strictTactic = TacticRepository.getById(strictEuropeanLineup.tacticId);
-strictEuropeanLineup.startingXI.forEach((playerId, slotIndex) => {
-  const player = constrainedSquad.find((candidate) => candidate.id === playerId);
-  import_node_assert.strict.ok(player, `slot ${slotIndex} musi zawiera\u0107 istniej\u0105cego zawodnika`);
-  import_node_assert.strict.equal(player?.position, strictTactic.slots[slotIndex].role, `slot ${slotIndex} musi by\u0107 obsadzony naturaln\u0105 pozycj\u0105`);
-});
-var staleLineups = {
-  [strongClub.id]: LineupService.autoPickLineup(strongClub.id, strongSquad, "4-4-2", null, { respectRequestedTactic: true }),
-  [weakClub.id]: LineupService.autoPickLineup(weakClub.id, weakSquad, "4-4-2", null, { respectRequestedTactic: true })
-};
-var backgroundResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-  new Date(fixture.date),
-  null,
-  [fixture],
-  [strongClub, weakClub],
-  { [strongClub.id]: strongSquad, [weakClub.id]: weakSquad },
-  staleLineups,
-  1,
-  123456,
-  coaches
-);
-var report = backgroundResult.matchHistoryEntries[0];
-import_node_assert.strict.ok(report, "symulowany mecz europejski musi utworzy\u0107 raport");
-import_node_assert.strict.equal(report.homeStartingTacticId, "4-3-3", "raport ma zapisa\u0107 startow\u0105 taktyk\u0119 w\u0142a\u015Bciwego trenera gospodarzy");
-import_node_assert.strict.equal(report.awayStartingTacticId, "5-4-1", "raport ma zapisa\u0107 startow\u0105 taktyk\u0119 w\u0142a\u015Bciwego trenera go\u015Bci");
-import_node_assert.strict.equal(report.homeTacticId, "4-3-3", "raport nie mo\u017Ce odziedziczy\u0107 starego globalnego 4-4-2 gospodarzy");
-import_node_assert.strict.equal(report.awayTacticId, "5-4-1", "raport nie mo\u017Ce odziedziczy\u0107 starego globalnego 4-4-2 go\u015Bci");
-import_node_assert.strict.equal(report.homeLineup?.length, 11, "raport ma zawiera\u0107 pe\u0142ny sk\u0142ad gospodarzy");
-import_node_assert.strict.equal(report.awayLineup?.length, 11, "raport ma zawiera\u0107 pe\u0142ny sk\u0142ad go\u015Bci");
-var validHomeGoals = report.goals?.filter((goal) => goal.teamId === strongClub.id && !goal.varDisallowed).length ?? 0;
-var validAwayGoals = report.goals?.filter((goal) => goal.teamId === weakClub.id && !goal.varDisallowed).length ?? 0;
-import_node_assert.strict.equal(validHomeGoals, report.homeScore, "ka\u017Cda bramka gospodarzy musi mie\u0107 strzelca w raporcie");
-import_node_assert.strict.equal(validAwayGoals, report.awayScore, "ka\u017Cda bramka go\u015Bci musi mie\u0107 strzelca w raporcie");
-var superCupFixture = {
-  ...fixture,
-  id: "UEFA_SUPER_CUP_TEST",
-  leagueId: "UEFA_SUPER_CUP" /* UEFA_SUPER_CUP */
-};
-var superCupResult = BackgroundMatchUEFASuperCup.processSuperCupMatch(
-  new Date(superCupFixture.date),
-  [superCupFixture],
-  [strongClub, weakClub],
-  { [strongClub.id]: constrainedSquad, [weakClub.id]: weakSquad },
-  {},
-  1,
-  654321,
-  coaches
-);
-var superCupReport = superCupResult.matchHistoryEntries[0];
-import_node_assert.strict.ok(superCupReport, "Superpuchar UEFA musi utworzy\u0107 raport");
-import_node_assert.strict.equal(superCupReport.homeStartingTacticId, "4-2-3-1", "Superpuchar UEFA ma u\u017Cy\u0107 wykonalnej alternatywy trenera gospodarzy");
-import_node_assert.strict.equal(superCupReport.awayStartingTacticId, "5-4-1", "Superpuchar UEFA ma u\u017Cy\u0107 trenera go\u015Bci");
-import_node_assert.strict.equal(superCupReport.ratings && Object.keys(superCupReport.ratings).length > 0, true, "raport Superpucharu UEFA ma zapisa\u0107 oceny");
-console.log("EuropeanAiMatchPreparationTests: OK");
+import_node_assert.strict.equal(playerCountAfter, playerCountBefore, "naprawa rundy nie mo\u017Ce zgubi\u0107 ani powieli\u0107 zawodnik\xF3w");
+console.log(JSON.stringify({
+  date: dateStr,
+  brokenFixturesRepaired: brokenBefore.length,
+  finishedCupFixtures: result.updatedFixtures.filter(
+    (fixture) => fixture.date.toDateString() === dateStr && fixture.leagueId === "POLISH_CUP" /* POLISH_CUP */ && fixture.status === "FINISHED" /* FINISHED */
+  ).length,
+  playerCountBefore,
+  playerCountAfter
+}, null, 2));
+console.log("RealSavePolishCupRepairTests: OK");

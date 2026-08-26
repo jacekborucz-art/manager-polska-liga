@@ -5347,6 +5347,7 @@ var ReserveTeamFinanceService = {
 };
 
 // services/PolishCupDrawService.ts
+var POLISH_CUP_BYE_TEAM_ID = "POLISH_CUP_BYE";
 var createSeededRandom = (seedText) => {
   let hash2 = 0;
   for (let i = 0; i < seedText.length; i++) {
@@ -5375,16 +5376,47 @@ var PolishCupDrawService = {
     const tier1 = clubs.filter((c) => c.leagueId === "L_PL_1").map((c) => c.id);
     const tier2 = clubs.filter((c) => c.leagueId === "L_PL_2").map((c) => c.id);
     const tier3 = clubs.filter((c) => c.leagueId === "L_PL_3").map((c) => c.id);
-    const tier4Pool = clubs.filter(
+    const thirdLeaguePool = clubs.filter(
       (c) => PolishThirdLeagueService.isThirdLeagueId(c.leagueId) || c.leagueId === "L_PL_4"
     );
     const guaranteedCount = tier1.length + tier2.length + tier3.length;
     const tier4Places = Math.max(0, 128 - guaranteedCount);
-    const selectedTier4 = shuffleWithSeed(
-      tier4Pool,
+    const selectedThirdLeague = shuffleWithSeed(
+      thirdLeaguePool,
       `POLISH_CUP_INITIAL_${seasonStartYear}_${sessionSeed}`
     ).slice(0, tier4Places).map((c) => c.id);
-    return [...tier1, ...tier2, ...tier3, ...selectedTier4];
+    const missingAfterThirdLeague = Math.max(0, tier4Places - selectedThirdLeague.length);
+    const alreadySelected = /* @__PURE__ */ new Set([...tier1, ...tier2, ...tier3, ...selectedThirdLeague]);
+    const fourthLeagueCandidates = clubs.filter(
+      (club) => PolishFourthLeagueService.isFourthLeagueId(club.leagueId) && !alreadySelected.has(club.id)
+    );
+    const selectedFourthLeague = shuffleWithSeed(
+      fourthLeagueCandidates,
+      `POLISH_CUP_FOURTH_LEAGUE_${seasonStartYear}_${sessionSeed}`
+    ).slice(0, missingAfterThirdLeague).map((club) => club.id);
+    const missingAfterFourthLeague = Math.max(
+      0,
+      tier4Places - selectedThirdLeague.length - selectedFourthLeague.length
+    );
+    const selectedBeforeFeeder = /* @__PURE__ */ new Set([
+      ...alreadySelected,
+      ...selectedFourthLeague
+    ]);
+    const feederCandidates = clubs.filter(
+      (club) => PolishFourthLeagueService.isFourthLeagueFeederId(club.leagueId) && !selectedBeforeFeeder.has(club.id)
+    );
+    const selectedFeeders = shuffleWithSeed(
+      feederCandidates,
+      `POLISH_CUP_FEEDER_FALLBACK_${seasonStartYear}_${sessionSeed}`
+    ).slice(0, missingAfterFourthLeague).map((club) => club.id);
+    return [
+      ...tier1,
+      ...tier2,
+      ...tier3,
+      ...selectedThirdLeague,
+      ...selectedFourthLeague,
+      ...selectedFeeders
+    ];
   },
   /**
    * Losuje pary z podanej listy uczestników.
@@ -5392,7 +5424,9 @@ var PolishCupDrawService = {
    */
   drawPairs: (participantIds, clubs, date, roundLabel, sessionSeed) => {
     const seededRandom = createSeededRandom(roundLabel + date.getFullYear() + sessionSeed);
-    const shuffled2 = [...participantIds];
+    const validClubIds = new Set(clubs.map((club) => club.id));
+    const uniqueParticipantIds = Array.from(new Set(participantIds)).filter((id) => validClubIds.has(id));
+    const shuffled2 = [...uniqueParticipantIds];
     for (let i = shuffled2.length - 1; i > 0; i--) {
       const j = Math.floor(seededRandom() * (i + 1));
       [shuffled2[i], shuffled2[j]] = [shuffled2[j], shuffled2[i]];
@@ -5424,6 +5458,20 @@ var PolishCupDrawService = {
     for (let i = 0; i < shuffled2.length; i += 2) {
       const teamA = shuffled2[i];
       const teamB = shuffled2[i + 1];
+      if (teamA && !teamB) {
+        fixtures.push({
+          id: `CUP_${cleanRoundLabel.replace(/\s+/g, "_")}_${i}`,
+          leagueId: "POLISH_CUP" /* POLISH_CUP */,
+          homeTeamId: teamA,
+          awayTeamId: POLISH_CUP_BYE_TEAM_ID,
+          date: new Date(date),
+          status: "FINISHED" /* FINISHED */,
+          homeScore: 1,
+          awayScore: 0
+        });
+        continue;
+      }
+      if (!teamA || !teamB) continue;
       const tierA = getTierValue(teamA);
       const tierB = getTierValue(teamB);
       let homeTeamId = teamA;
@@ -5757,4 +5805,18 @@ import_node_assert.strict.notDeepEqual(
   cupParticipantsSeedB.slice(guaranteedCupClubIds.length),
   "inna kariera powinna losowa\u0107 inny zestaw klub\xF3w z L_PL_4"
 );
+var oddCupParticipants = cupParticipantsSeedA.slice(0, 63);
+var oddCupPairs = PolishCupDrawService.drawPairs(
+  oddCupParticipants,
+  clubs2025,
+  new Date(2026, 8, 14),
+  "Puchar Polski: 1/32",
+  12345
+);
+var byePairs = oddCupPairs.filter((pair) => pair.awayTeamId === POLISH_CUP_BYE_TEAM_ID);
+import_node_assert.strict.equal(oddCupPairs.length, 32, "63 uczestnik\xF3w musi utworzy\u0107 31 mecz\xF3w i jeden wolny los");
+import_node_assert.strict.equal(byePairs.length, 1, "nieparzysta runda musi zawiera\u0107 dok\u0142adnie jeden wolny los");
+import_node_assert.strict.equal(byePairs[0].status, "FINISHED" /* FINISHED */, "wolny los nie mo\u017Ce oczekiwa\u0107 na symulacj\u0119 meczu");
+import_node_assert.strict.equal(byePairs[0].homeScore, 1, "wolny los musi jednoznacznie wskazywa\u0107 awansuj\u0105cy klub");
+import_node_assert.strict.ok(oddCupParticipants.includes(byePairs[0].homeTeamId), "wolny los musi nale\u017Ce\u0107 do prawdziwego uczestnika rundy");
 console.log("PolishLeagueSeasonTests: OK");

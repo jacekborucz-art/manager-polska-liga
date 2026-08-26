@@ -10,6 +10,7 @@ import { rollInjuryBySeverity } from './InjuryCatalog';
 import { KitSelectionService } from './KitSelectionService';
 import { PolishCupVenueService } from './PolishCupVenueService';
 import { TeamFormImpactService } from './TeamFormImpactService';
+import { POLISH_CUP_BYE_TEAM_ID } from './PolishCupDrawService';
 // ============================================================
 //  WBUDOWANY SILNIK PUCHAROWY — symulacja minuta po minucie
 //  Zastępuje wywołanie LeagueBackgroundMatchEngine.simulate()
@@ -576,12 +577,60 @@ export const BackgroundMatchProcessorPolishCup = {
   } => {
 
     const dateStr = currentDate.toDateString();
-    const todayCupFixtures = fixtures.filter(f =>
+    const clubIds = new Set(clubs.map(club => club.id));
+
+    /**
+     * Legacy saves created with an odd participant count can contain a cup
+     * fixture whose second club id is undefined. Repair that fixture into a
+     * completed bye before selecting matches. The existing club advances simply
+     * by retaining its isInPolishCup flag; no player statistics, fatigue, coach
+     * experience or match RNG are generated for a game that never took place.
+     *
+     * The symmetric branch also handles a removed home club from a datapack. If
+     * neither referenced club exists, the orphan is closed with two stable
+     * sentinel ids so it can never block the calendar again.
+     */
+    const hasBrokenCupFixtureToday = fixtures.some(fixture =>
+      fixture.date.toDateString() === dateStr &&
+      fixture.status === MatchStatus.SCHEDULED &&
+      (fixture.leagueId === CompetitionType.POLISH_CUP || fixture.leagueId === CompetitionType.SUPER_CUP) &&
+      (!clubIds.has(fixture.homeTeamId) || !clubIds.has(fixture.awayTeamId))
+    );
+    const repairedFixtures = hasBrokenCupFixtureToday
+      ? fixtures.map(fixture => {
+          const isTodayCupFixture = fixture.date.toDateString() === dateStr &&
+            fixture.status === MatchStatus.SCHEDULED &&
+            (fixture.leagueId === CompetitionType.POLISH_CUP || fixture.leagueId === CompetitionType.SUPER_CUP);
+          if (!isTodayCupFixture) return fixture;
+
+          const homeExists = clubIds.has(fixture.homeTeamId);
+          const awayExists = clubIds.has(fixture.awayTeamId);
+          if (homeExists && awayExists) return fixture;
+
+          const advancingClubId = homeExists
+            ? fixture.homeTeamId
+            : awayExists
+              ? fixture.awayTeamId
+              : POLISH_CUP_BYE_TEAM_ID;
+          return {
+            ...fixture,
+            homeTeamId: advancingClubId,
+            awayTeamId: POLISH_CUP_BYE_TEAM_ID,
+            homeScore: homeExists || awayExists ? 1 : 0,
+            awayScore: 0,
+            status: MatchStatus.FINISHED,
+          };
+        })
+      : fixtures;
+
+    const todayCupFixtures = repairedFixtures.filter(f =>
       f.date.toDateString() === dateStr &&
       f.status === MatchStatus.SCHEDULED &&
       (f.leagueId === CompetitionType.POLISH_CUP || f.leagueId === CompetitionType.SUPER_CUP) &&
       f.homeTeamId !== userTeamId &&
-      f.awayTeamId !== userTeamId
+      f.awayTeamId !== userTeamId &&
+      clubIds.has(f.homeTeamId) &&
+      clubIds.has(f.awayTeamId)
     );
 
     /**
@@ -590,10 +639,10 @@ export const BackgroundMatchProcessorPolishCup = {
      * on a no-op day, creating hundreds of unnecessary lineup and morale graphs.
      */
     if (todayCupFixtures.length === 0) {
-      return { updatedFixtures: fixtures, updatedPlayers: playersMap, updatedLineups: lineups, updatedClubs: clubs };
+      return { updatedFixtures: repairedFixtures, updatedPlayers: playersMap, updatedLineups: lineups, updatedClubs: clubs };
     }
 
-    let currentFixtures = [...fixtures];
+    let currentFixtures = [...repairedFixtures];
     let currentPlayers = { ...playersMap };
     let currentClubs = [...clubs];
 
@@ -653,8 +702,11 @@ export const BackgroundMatchProcessorPolishCup = {
     });
 
     todayCupFixtures.forEach(fixture => {
-      const home = currentClubs.find(c => c.id === fixture.homeTeamId)!;
-      const away = currentClubs.find(c => c.id === fixture.awayTeamId)!;
+      const home = currentClubs.find(c => c.id === fixture.homeTeamId);
+      const away = currentClubs.find(c => c.id === fixture.awayTeamId);
+      // The selection filter above guarantees both clubs, but retain this guard
+      // against state changes or malformed direct service calls.
+      if (!home || !away) return;
       const hPlayers = currentPlayers[home.id] || [];
       const aPlayers = currentPlayers[away.id] || [];
       const hLineup = newLineups[home.id];

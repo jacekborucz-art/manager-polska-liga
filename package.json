@@ -72,6 +72,7 @@
     "test:european-ai-preparation": "esbuild tests/EuropeanAiMatchPreparationTests.ts --bundle --platform=node --format=cjs --outfile=tmp/european-ai-preparation-tests.cjs && node tmp/european-ai-preparation-tests.cjs",
     "test:european-background-score-distribution": "esbuild tests/EuropeanBackgroundScoreDistributionTests.ts --bundle --platform=node --format=cjs --outfile=tmp/european-background-score-distribution-tests.cjs && node tmp/european-background-score-distribution-tests.cjs",
     "test:polish-cup-ai-coach": "esbuild tests/PolishCupAiCoachPreparationTests.ts --bundle --platform=node --format=cjs --banner:js=\"globalThis.window=globalThis.window||{};\" --outfile=tmp/polish-cup-ai-coach-tests.cjs && node tmp/polish-cup-ai-coach-tests.cjs",
+    "test:real-save-polish-cup-repair": "esbuild tests/RealSavePolishCupRepairTests.ts --bundle --platform=node --format=cjs --banner:js=\"globalThis.window=globalThis.window||{addEventListener:()=>{}};globalThis.window.addEventListener=globalThis.window.addEventListener||(()=>{});globalThis.localStorage=globalThis.localStorage||{getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\" --outfile=tmp/real-save-polish-cup-repair-tests.cjs && node tmp/real-save-polish-cup-repair-tests.cjs",
     "test:polish-cup-live-phases": "esbuild tests/PolishCupLivePhaseTests.ts --bundle --platform=node --format=cjs --outfile=tmp/polish-cup-live-phase-tests.cjs && node tmp/polish-cup-live-phase-tests.cjs"
   },
   "dependencies": {

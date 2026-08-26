@@ -24992,31 +24992,46 @@ var _buildAiMarketSquadSnapshot = (squad) => {
 };
 var _buildFreeAgentCandidates = (pool, club, squad, needsFA, aiStrategy, minCounts, idealOvr, currentDate) => {
   const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
-  return pool.filter((fa) => {
-    if (fa.transferPendingClubId) return false;
-    const needFA = needsFA.find((n) => n.position === fa.position);
-    if (!needFA) return false;
-    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
-    if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA, marketSnapshot)) return false;
-    const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
-    const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === "CRITICAL" ? idealOvr - 16 : idealOvr - 12;
-    const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
-    if (fa.overallRating > faMaxOvr || fa.overallRating < faMinOvr) return false;
-    if (fa.aiNegotiationClubId) return false;
-    if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) return false;
-    const positionCount = marketSnapshot.positionCounts.get(fa.position) ?? 0;
-    const weakestExisting = marketSnapshot.weakestByPosition.get(fa.position);
-    const hasShortage = positionCount < minCounts[fa.position];
-    const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
-    const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
-    return hasShortage || needsSquadBody || isUpgrade && _canAddBalancedDepth(squad, fa.position);
-  }).sort((a, b) => {
-    const needA = needsFA.find((n) => n.position === a.position);
-    const needB = needsFA.find((n) => n.position === b.position);
-    const scoreA = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needA?.urgency }) + _getRecruitmentReputationBonus(a, 3, needA);
-    const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
-    return scoreB - scoreA || a.age - b.age;
+  const needsByPosition = new Map(needsFA.map((need) => [need.position, need]));
+  const positionContexts = /* @__PURE__ */ new Map();
+  needsFA.forEach((need) => {
+    const position = need.position;
+    const positionCount = marketSnapshot.positionCounts.get(position) ?? 0;
+    const isQuantityNeed = _isQuantityDepthNeed(need, squad, position, marketSnapshot.positionCounts);
+    const canAddBalancedDepth = _canAddBalancedDepth(squad, position, marketSnapshot.positionCounts);
+    positionContexts.set(position, {
+      need,
+      qualityFloor: _getAiMarketQualityFloor(club, squad, position, need, marketSnapshot),
+      minOverall: isQuantityNeed ? 45 : need.urgency === "CRITICAL" ? idealOvr - 16 : idealOvr - 12,
+      maxOverall: isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7,
+      hasShortage: positionCount < minCounts[position],
+      needsSquadBody: (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && canAddBalancedDepth,
+      canAddBalancedDepth,
+      weakestExisting: marketSnapshot.weakestByPosition.get(position)
+    });
   });
+  const candidates = [];
+  for (const fa of pool) {
+    if (fa.transferPendingClubId) continue;
+    const context = positionContexts.get(fa.position);
+    if (!context) continue;
+    const prestigeRoll = Math.random();
+    if (fa.overallRating < context.qualityFloor) continue;
+    if (fa.overallRating > context.maxOverall || fa.overallRating < context.minOverall) continue;
+    if (fa.aiNegotiationClubId) continue;
+    if (fa.freeAgentClubLockouts?.[club.id] && FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) continue;
+    const isUpgrade = !!context.weakestExisting && fa.overallRating >= context.weakestExisting.overallRating + 2;
+    if (!context.hasShortage && !context.needsSquadBody && !(isUpgrade && context.canAddBalancedDepth)) continue;
+    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club, 0, prestigeRoll)) continue;
+    candidates.push(fa);
+  }
+  return candidates.map((player) => {
+    const need = needsByPosition.get(player.position);
+    return {
+      player,
+      score: AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: need?.urgency }) + _getRecruitmentReputationBonus(player, 3, need)
+    };
+  }).sort((a, b) => b.score - a.score || a.player.age - b.player.age).map((entry) => entry.player);
 };
 var _protectPendingTransferPlayerFromMarket = (player) => {
   if (!player.transferPendingClubId) return player;
@@ -25791,6 +25806,12 @@ var AiContractService = {
     if (freeAgents.length === 0) return { updatedClubs: updatedClubs2, updatedPlayers: updatedPlayersMap, newOffers, logEntries };
     const clubMap = new Map(updatedClubs2.map((c) => [c.id, c]));
     const freeAgentsById = new Map(freeAgents.map((fa) => [fa.id, fa]));
+    const freeAgentIndexById = /* @__PURE__ */ new Map();
+    freeAgents.forEach((freeAgent, index) => {
+      if (!freeAgentIndexById.has(freeAgent.id)) freeAgentIndexById.set(freeAgent.id, index);
+    });
+    let currentFreeAgents = updatedPlayersMap["FREE_AGENTS"] || rawFreeAgents;
+    let ownsCurrentFreeAgentArray = currentFreeAgents !== rawFreeAgents;
     const negotiatingClubIds = new Set(
       freeAgents.filter((fa) => fa.aiNegotiationClubId).map((fa) => fa.aiNegotiationClubId)
     );
@@ -25863,12 +25884,18 @@ var AiContractService = {
       const responseDate = new Date(currentDate);
       responseDate.setDate(responseDate.getDate() + (gulfStarCandidate ? 2 : 4));
       const gulfStarOffer = candidate === gulfStarCandidate ? _buildGulfStarOffer(candidate, club, currentDate) : null;
-      const faList = updatedPlayersMap["FREE_AGENTS"];
-      const idx = faList.findIndex((p) => p.id === candidate.id);
+      const idx = freeAgentIndexById.get(candidate.id) ?? -1;
       if (idx !== -1) {
-        updatedPlayersMap["FREE_AGENTS"] = faList.map(
-          (p, i) => i === idx ? { ...p, aiNegotiationClubId: club.id, aiNegotiationResponseDate: responseDate.toISOString() } : p
-        );
+        if (!ownsCurrentFreeAgentArray) {
+          currentFreeAgents = [...currentFreeAgents];
+          ownsCurrentFreeAgentArray = true;
+        }
+        currentFreeAgents[idx] = {
+          ...currentFreeAgents[idx],
+          aiNegotiationClubId: club.id,
+          aiNegotiationResponseDate: responseDate.toISOString()
+        };
+        updatedPlayersMap["FREE_AGENTS"] = currentFreeAgents;
       }
       if (gulfStarOffer) {
         const previousClub = _getGulfMegaOfferPreviousClub(candidate, clubMap);
@@ -26610,6 +26637,61 @@ var AiContractService = {
       (currentDate.getTime() - new Date(currentDate.getFullYear(), 0, 0).getTime()) / 864e5
     );
     const signedPlayerIds = /* @__PURE__ */ new Set();
+    const positions = [
+      "GK" /* GK */,
+      "DEF" /* DEF */,
+      "MID" /* MID */,
+      "FWD" /* FWD */
+    ];
+    const signedHash = (value) => {
+      let hash2 = 0;
+      for (let index = 0; index < value.length; index += 1) {
+        hash2 = (hash2 << 5) - hash2 + value.charCodeAt(index) | 0;
+      }
+      return hash2;
+    };
+    const powerOf31 = (length) => {
+      let value = 1;
+      for (let index = 0; index < length; index += 1) value = Math.imul(value, 31);
+      return value;
+    };
+    const clubById = new Map(clubs2.map((club) => [club.id, club]));
+    const buyerContexts = clubs2.filter((buyer) => buyer.id !== userTeamId && buyer.id !== "FREE_AGENTS").map((buyerClub) => {
+      const buyerSquad = updatedPlayersMap[buyerClub.id] || [];
+      const strategy = AiClubTransferStrategyService.buildStrategy(buyerClub);
+      const needs = _assessClubNeeds(buyerClub, buyerSquad, currentDate, strategy);
+      const needPositions = new Set(needs.map((need) => need.position));
+      const positionAverages = /* @__PURE__ */ new Map();
+      const balancedDepth = /* @__PURE__ */ new Map();
+      positions.forEach((position) => {
+        positionAverages.set(position, _getPositionAverageOverall(buyerSquad, position));
+        balancedDepth.set(position, _canAddBalancedDepth(buyerSquad, position));
+      });
+      return {
+        buyerClub,
+        buyerSquad,
+        needPositions,
+        positionAverages,
+        balancedDepth,
+        // Hashing `${buyer.id}_${player.id}` character by character for 4.3
+        // million pairs was the largest remaining cost after squad-profile
+        // caching. Store the prefix hash and combine it with the player hash
+        // through the exact same 32-bit polynomial formula.
+        staggerHashPrefix: signedHash(`${buyerClub.id}_`),
+        hasCriticalDepthShortage: _hasCriticalDepthShortage(buyerSquad),
+        canMonitorEliteWatchlist: buyerClub.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION
+      };
+    });
+    const buyerContextsBySellerId = /* @__PURE__ */ new Map();
+    const getBuyerContextsForSeller = (sellerClubId) => {
+      const cached = buyerContextsBySellerId.get(sellerClubId);
+      if (cached) return cached;
+      const eligible = buyerContexts.filter(
+        ({ buyerClub }) => buyerClub.id !== sellerClubId && ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClubId)
+      );
+      buyerContextsBySellerId.set(sellerClubId, eligible);
+      return eligible;
+    };
     for (const sellerClub of clubs2) {
       if (sellerClub.id === userTeamId || sellerClub.id === "FREE_AGENTS") continue;
       const sellerSquad = updatedPlayersMap[sellerClub.id] || [];
@@ -26622,41 +26704,46 @@ var AiContractService = {
         const daysLeft = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 864e5);
         if (daysLeft <= 0 || daysLeft > PRE_CONTRACT_PRIORITY_DAYS3) continue;
         const isEliteWatchlistOpportunity = _isElitePreContractWatchlistPlayer(player, currentDate);
-        const candidateBuyers = clubs2.filter((buyer) => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== "FREE_AGENTS").filter((buyer) => ReserveTeamLeagueService.canRecruitPlayerFrom(buyer.id, sellerClub.id)).filter((buyer) => {
+        const interestedClubIds = new Set(player.interestedClubs || []);
+        const interestedClubs = (player.interestedClubs || []).map((clubId) => clubById.get(clubId)).filter((club) => !!club);
+        const playerIdHash = signedHash(player.id);
+        const playerIdHashMultiplier = powerOf31(player.id.length);
+        const candidateBuyerContexts = getBuyerContextsForSeller(sellerClub.id).filter((context) => {
+          const { buyerClub: buyer, buyerSquad } = context;
           const stagger = isEliteWatchlistOpportunity ? 3 : 9;
-          if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % stagger !== 0) return false;
-          const buyerSquad = updatedPlayersMap[buyer.id] || [];
-          const buyerStrategy = AiClubTransferStrategyService.buildStrategy(buyer);
-          const canMonitorEliteWatchlist = buyer.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION;
-          if (isEliteWatchlistOpportunity && !canMonitorEliteWatchlist) return false;
-          if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
-          const needs = _assessClubNeeds(buyer, buyerSquad, currentDate, buyerStrategy);
-          const hasPosNeed = needs.some((need) => need.position === player.position);
-          const isShortlisted = (player.interestedClubs || []).includes(buyer.id);
-          const buyerPositionAverage = _getPositionAverageOverall(buyerSquad, player.position);
+          const combinedStaggerHash = Math.abs(
+            Math.imul(context.staggerHashPrefix, playerIdHashMultiplier) + playerIdHash | 0
+          );
+          if ((dayOfYear + combinedStaggerHash) % stagger !== 0) return false;
+          if (isEliteWatchlistOpportunity && !context.canMonitorEliteWatchlist) return false;
+          if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !context.hasCriticalDepthShortage) return false;
+          const hasPosNeed = context.needPositions.has(player.position);
+          const isShortlisted = interestedClubIds.has(buyer.id);
+          const buyerPositionAverage = context.positionAverages.get(player.position) ?? 0;
           const sportingUpgrade = player.overallRating >= buyerPositionAverage + 1;
           const stepUp = buyer.reputation >= sellerClub.reputation + 1;
           if (isEliteWatchlistOpportunity) return player.overallRating >= buyerPositionAverage - 2;
-          if (!_canAddBalancedDepth(buyerSquad, player.position) && !hasPosNeed) return false;
+          if (!context.balancedDepth.get(player.position) && !hasPosNeed) return false;
           return (hasPosNeed || isShortlisted || stepUp) && sportingUpgrade;
         }).sort((a, b) => {
-          const aShortlisted = (player.interestedClubs || []).includes(a.id) ? 8 : 0;
-          const bShortlisted = (player.interestedClubs || []).includes(b.id) ? 8 : 0;
-          const aEliteBonus = isEliteWatchlistOpportunity && a.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION ? 40 : 0;
-          const bEliteBonus = isEliteWatchlistOpportunity && b.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION ? 40 : 0;
-          return b.reputation + bShortlisted + bEliteBonus - (a.reputation + aShortlisted + aEliteBonus);
+          const aShortlisted = interestedClubIds.has(a.buyerClub.id) ? 8 : 0;
+          const bShortlisted = interestedClubIds.has(b.buyerClub.id) ? 8 : 0;
+          const aEliteBonus = isEliteWatchlistOpportunity && a.canMonitorEliteWatchlist ? 40 : 0;
+          const bEliteBonus = isEliteWatchlistOpportunity && b.canMonitorEliteWatchlist ? 40 : 0;
+          return b.buyerClub.reputation + bShortlisted + bEliteBonus - (a.buyerClub.reputation + aShortlisted + aEliteBonus);
         });
-        for (const buyerClub of candidateBuyers) {
-          const buyerSquad = updatedPlayersMap[buyerClub.id] || [];
+        for (const context of candidateBuyerContexts) {
+          const buyerClub = context.buyerClub;
+          const buyerSquad = updatedPlayersMap[buyerClub.id] || context.buyerSquad;
           const seedBase = `AI_PRECONTRACT_${todayKey}_${sellerClub.id}_${buyerClub.id}_${player.id}`;
-          const isShortlisted = (player.interestedClubs || []).includes(buyerClub.id);
+          const isShortlisted = interestedClubIds.has(buyerClub.id);
           const repDelta = buyerClub.reputation - sellerClub.reputation;
           const contractMindflow = PlayerContractMindflowService.evaluate({
             player,
             currentClub: sellerClub,
             currentSquad: sellerSquad,
             currentDate,
-            interestedClubs: _getInterestedClubs(player, clubs2),
+            interestedClubs,
             targetClub: buyerClub,
             targetSquad: buyerSquad
           });

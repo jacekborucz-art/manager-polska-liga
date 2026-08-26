@@ -23078,31 +23078,46 @@ var _buildAiMarketSquadSnapshot = (squad) => {
 };
 var _buildFreeAgentCandidates = (pool, club, squad, needsFA, aiStrategy, minCounts, idealOvr, currentDate2) => {
   const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
-  return pool.filter((fa) => {
-    if (fa.transferPendingClubId) return false;
-    const needFA = needsFA.find((n) => n.position === fa.position);
-    if (!needFA) return false;
-    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
-    if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA, marketSnapshot)) return false;
-    const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
-    const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === "CRITICAL" ? idealOvr - 16 : idealOvr - 12;
-    const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
-    if (fa.overallRating > faMaxOvr || fa.overallRating < faMinOvr) return false;
-    if (fa.aiNegotiationClubId) return false;
-    if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate2)) return false;
-    const positionCount = marketSnapshot.positionCounts.get(fa.position) ?? 0;
-    const weakestExisting = marketSnapshot.weakestByPosition.get(fa.position);
-    const hasShortage = positionCount < minCounts[fa.position];
-    const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
-    const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
-    return hasShortage || needsSquadBody || isUpgrade && _canAddBalancedDepth(squad, fa.position);
-  }).sort((a, b) => {
-    const needA = needsFA.find((n) => n.position === a.position);
-    const needB = needsFA.find((n) => n.position === b.position);
-    const scoreA = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needA?.urgency }) + _getRecruitmentReputationBonus(a, 3, needA);
-    const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
-    return scoreB - scoreA || a.age - b.age;
+  const needsByPosition = new Map(needsFA.map((need) => [need.position, need]));
+  const positionContexts = /* @__PURE__ */ new Map();
+  needsFA.forEach((need) => {
+    const position = need.position;
+    const positionCount = marketSnapshot.positionCounts.get(position) ?? 0;
+    const isQuantityNeed = _isQuantityDepthNeed(need, squad, position, marketSnapshot.positionCounts);
+    const canAddBalancedDepth = _canAddBalancedDepth(squad, position, marketSnapshot.positionCounts);
+    positionContexts.set(position, {
+      need,
+      qualityFloor: _getAiMarketQualityFloor(club, squad, position, need, marketSnapshot),
+      minOverall: isQuantityNeed ? 45 : need.urgency === "CRITICAL" ? idealOvr - 16 : idealOvr - 12,
+      maxOverall: isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7,
+      hasShortage: positionCount < minCounts[position],
+      needsSquadBody: (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && canAddBalancedDepth,
+      canAddBalancedDepth,
+      weakestExisting: marketSnapshot.weakestByPosition.get(position)
+    });
   });
+  const candidates = [];
+  for (const fa of pool) {
+    if (fa.transferPendingClubId) continue;
+    const context = positionContexts.get(fa.position);
+    if (!context) continue;
+    const prestigeRoll = Math.random();
+    if (fa.overallRating < context.qualityFloor) continue;
+    if (fa.overallRating > context.maxOverall || fa.overallRating < context.minOverall) continue;
+    if (fa.aiNegotiationClubId) continue;
+    if (fa.freeAgentClubLockouts?.[club.id] && FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate2)) continue;
+    const isUpgrade = !!context.weakestExisting && fa.overallRating >= context.weakestExisting.overallRating + 2;
+    if (!context.hasShortage && !context.needsSquadBody && !(isUpgrade && context.canAddBalancedDepth)) continue;
+    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club, 0, prestigeRoll)) continue;
+    candidates.push(fa);
+  }
+  return candidates.map((player) => {
+    const need = needsByPosition.get(player.position);
+    return {
+      player,
+      score: AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: need?.urgency }) + _getRecruitmentReputationBonus(player, 3, need)
+    };
+  }).sort((a, b) => b.score - a.score || a.player.age - b.player.age).map((entry) => entry.player);
 };
 var _protectPendingTransferPlayerFromMarket = (player) => {
   if (!player.transferPendingClubId) return player;
@@ -23877,6 +23892,12 @@ var AiContractService = {
     if (freeAgents.length === 0) return { updatedClubs, updatedPlayers: updatedPlayersMap, newOffers, logEntries };
     const clubMap = new Map(updatedClubs.map((c) => [c.id, c]));
     const freeAgentsById = new Map(freeAgents.map((fa) => [fa.id, fa]));
+    const freeAgentIndexById = /* @__PURE__ */ new Map();
+    freeAgents.forEach((freeAgent, index) => {
+      if (!freeAgentIndexById.has(freeAgent.id)) freeAgentIndexById.set(freeAgent.id, index);
+    });
+    let currentFreeAgents = updatedPlayersMap["FREE_AGENTS"] || rawFreeAgents;
+    let ownsCurrentFreeAgentArray = currentFreeAgents !== rawFreeAgents;
     const negotiatingClubIds = new Set(
       freeAgents.filter((fa) => fa.aiNegotiationClubId).map((fa) => fa.aiNegotiationClubId)
     );
@@ -23949,12 +23970,18 @@ var AiContractService = {
       const responseDate = new Date(currentDate2);
       responseDate.setDate(responseDate.getDate() + (gulfStarCandidate ? 2 : 4));
       const gulfStarOffer = candidate === gulfStarCandidate ? _buildGulfStarOffer(candidate, club, currentDate2) : null;
-      const faList = updatedPlayersMap["FREE_AGENTS"];
-      const idx = faList.findIndex((p) => p.id === candidate.id);
+      const idx = freeAgentIndexById.get(candidate.id) ?? -1;
       if (idx !== -1) {
-        updatedPlayersMap["FREE_AGENTS"] = faList.map(
-          (p, i) => i === idx ? { ...p, aiNegotiationClubId: club.id, aiNegotiationResponseDate: responseDate.toISOString() } : p
-        );
+        if (!ownsCurrentFreeAgentArray) {
+          currentFreeAgents = [...currentFreeAgents];
+          ownsCurrentFreeAgentArray = true;
+        }
+        currentFreeAgents[idx] = {
+          ...currentFreeAgents[idx],
+          aiNegotiationClubId: club.id,
+          aiNegotiationResponseDate: responseDate.toISOString()
+        };
+        updatedPlayersMap["FREE_AGENTS"] = currentFreeAgents;
       }
       if (gulfStarOffer) {
         const previousClub = _getGulfMegaOfferPreviousClub(candidate, clubMap);
@@ -33707,7 +33734,15 @@ var ensureFourthLeagueSquads = (clubs, playersMap, userTeamId) => {
   return changed ? nextPlayers : playersMap;
 };
 var BackgroundMatchProcessor = {
-  processLeagueEvent: (currentDate2, userTeamId, fixtures2, clubs, playersMap, lineups, seasonNumber, coaches, sessionSeed = 0) => {
+  processLeagueEvent: (currentDate2, userTeamId, fixtures2, clubs, playersMap, lineups, seasonNumber, coaches, sessionSeed = 0, timingObserver) => {
+    const measurePhase = (label, operation) => {
+      const startedAt = performance.now();
+      try {
+        return operation();
+      } finally {
+        timingObserver?.(label, performance.now() - startedAt);
+      }
+    };
     const dateStr = currentDate2.toDateString();
     const CL_COMPETITION_IDS = /* @__PURE__ */ new Set([
       "CL_R1Q" /* CL_R1Q */,
@@ -33772,13 +33807,22 @@ var BackgroundMatchProcessor = {
       (f) => f.date.toDateString() === dateStr && f.status === "SCHEDULED" /* SCHEDULED */ && !CL_COMPETITION_IDS.has(f.leagueId)
     );
     DebugLoggerService.log("BMP", `processLeagueEvent: ${dateStr} | SCHEDULED: ${todayFixtures.length} | TOTAL fixtures: ${fixtures2.length}`, true);
-    const playersAfterFourthLeagueEnsure = ensureFourthLeagueSquads(clubs, playersMap, userTeamId);
-    const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures2, currentDate2, userTeamId);
-    const internalSquadMovement = ReserveTeamSquadMovementService.processDailyAiMovements(
-      clubs,
-      playersAfterEmergencyGoalkeepers,
-      currentDate2,
-      userTeamId
+    const playersAfterFourthLeagueEnsure = measurePhase(
+      "Przygotowanie kadr IV ligi",
+      () => ensureFourthLeagueSquads(clubs, playersMap, userTeamId)
+    );
+    const playersAfterEmergencyGoalkeepers = measurePhase(
+      "Kontrola bramkarzy awaryjnych",
+      () => ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures2, currentDate2, userTeamId)
+    );
+    const internalSquadMovement = measurePhase(
+      "Ruchy mi\u0119dzy pierwsz\u0105 dru\u017Cyn\u0105 i rezerwami",
+      () => ReserveTeamSquadMovementService.processDailyAiMovements(
+        clubs,
+        playersAfterEmergencyGoalkeepers,
+        currentDate2,
+        userTeamId
+      )
     );
     internalSquadMovement.movements.forEach((movement) => {
       DebugLoggerService.log(
@@ -33789,26 +33833,59 @@ var BackgroundMatchProcessor = {
     });
     const clubsAfterInternalMovement = internalSquadMovement.updatedClubs;
     const playersAfterInternalMovement = internalSquadMovement.updatedPlayers;
-    const newLineups = AiMatchPreparationService.prepareAllTeams(
-      clubsAfterInternalMovement,
-      playersAfterInternalMovement,
-      lineups,
-      userTeamId,
-      coaches,
-      fixtures2,
-      currentDate2
+    const newLineups = measurePhase(
+      "Przygotowanie sk\u0142ad\xF3w i jedenastek AI",
+      () => AiMatchPreparationService.prepareAllTeams(
+        clubsAfterInternalMovement,
+        playersAfterInternalMovement,
+        lineups,
+        userTeamId,
+        coaches,
+        fixtures2,
+        currentDate2
+      )
     );
     if (todayFixtures.length === 0) {
-      const contractUpdate = AiContractService.processClubsContracts(clubsAfterInternalMovement, playersAfterInternalMovement, currentDate2, userTeamId);
-      const preContractUpdate = AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate2, userTeamId);
-      const depthUpdate = AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, preContractUpdate.updatedPlayers, currentDate2, userTeamId);
-      const recruitmentUpdate = AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate2, userTeamId);
-      const resolvedUpdate = AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate2, userTeamId);
-      const financingUpdate = AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate2, userTeamId);
-      const transferSigningsUpdate = AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate2, userTeamId, coaches);
-      const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate2, userTeamId, coaches);
-      const deadlineAcademyFallback = AiContractService.processAiDeadlineAcademyFallback(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate2, userTeamId);
-      const transferResolvedUpdate = AiContractService.resolveAiTransferPending(deadlineAcademyFallback.updatedClubs, deadlineAcademyFallback.updatedPlayers, currentDate2, userTeamId);
+      const contractUpdate = measurePhase(
+        "Kontrakty klub\xF3w AI",
+        () => AiContractService.processClubsContracts(clubsAfterInternalMovement, playersAfterInternalMovement, currentDate2, userTeamId)
+      );
+      const preContractUpdate = measurePhase(
+        "Prekontrakty zawodnik\xF3w",
+        () => AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate2, userTeamId)
+      );
+      const depthUpdate = measurePhase(
+        "Kontrola g\u0142\u0119bi sk\u0142ad\xF3w AI",
+        () => AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, preContractUpdate.updatedPlayers, currentDate2, userTeamId)
+      );
+      const recruitmentUpdate = measurePhase(
+        "Rekrutacja wolnych agent\xF3w przez AI",
+        () => AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate2, userTeamId)
+      );
+      const resolvedUpdate = measurePhase(
+        "Negocjacje z wolnymi agentami",
+        () => AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate2, userTeamId)
+      );
+      const financingUpdate = measurePhase(
+        "Finanse i zwalnianie miejsca w kadrach AI",
+        () => AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate2, userTeamId)
+      );
+      const transferSigningsUpdate = measurePhase(
+        "Zakupy z list transferowych",
+        () => AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate2, userTeamId, coaches)
+      );
+      const interestedTargetingUpdate = measurePhase(
+        "Obserwowani zawodnicy i oferty AI",
+        () => AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate2, userTeamId, coaches)
+      );
+      const deadlineAcademyFallback = measurePhase(
+        "Awaryjne uzupe\u0142nienia akademii AI",
+        () => AiContractService.processAiDeadlineAcademyFallback(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate2, userTeamId)
+      );
+      const transferResolvedUpdate = measurePhase(
+        "Finalizacja oczekuj\u0105cych transfer\xF3w",
+        () => AiContractService.resolveAiTransferPending(deadlineAcademyFallback.updatedClubs, deadlineAcademyFallback.updatedPlayers, currentDate2, userTeamId)
+      );
       const aiTransferLogEntries = [
         ...recruitmentUpdate.logEntries,
         ...resolvedUpdate.logEntries,
@@ -33821,19 +33898,25 @@ var BackgroundMatchProcessor = {
       let scoutedPlayers = transferResolvedUpdate.updatedPlayers;
       const isScoutingDay = currentDate2.getDate() === 1 || currentDate2.getMonth() === 0 && currentDate2.getDate() === 12;
       if (isScoutingDay) {
-        scoutedPlayers = AiScoutingService.updateTransferInterests(
-          scoutedClubs,
-          scoutedPlayers,
-          currentDate2,
-          userTeamId,
-          sessionSeed
+        scoutedPlayers = measurePhase(
+          "Miesi\u0119czny skauting rynku transferowego",
+          () => AiScoutingService.updateTransferInterests(
+            scoutedClubs,
+            scoutedPlayers,
+            currentDate2,
+            userTeamId,
+            sessionSeed
+          )
         );
-        scoutedPlayers = AiContractService.processMonthlyPlayerReview(
-          scoutedClubs,
-          scoutedPlayers,
-          currentDate2,
-          userTeamId
-        ).updatedPlayers;
+        scoutedPlayers = measurePhase(
+          "Miesi\u0119czny przegl\u0105d zawodnik\xF3w AI",
+          () => AiContractService.processMonthlyPlayerReview(
+            scoutedClubs,
+            scoutedPlayers,
+            currentDate2,
+            userTeamId
+          ).updatedPlayers
+        );
       }
       if (deadlineAcademyFallback.generatedCount > 0) {
         DebugLoggerService.log("SQUAD_REVIEW", `Awaryjny nab\xF3r akademii AI po rynku (${currentDate2.toLocaleDateString("pl-PL")}): ${deadlineAcademyFallback.generatedCount} nowych zawodnik\xF3w.`, true);
@@ -33891,6 +33974,7 @@ var BackgroundMatchProcessor = {
       // therefore reveal them on demand without creating detailed reports.
       thirdLeagueResults: Object.fromEntries(THIRD_LEAGUE_GROUP_IDS.map((groupId) => [groupId, []]))
     };
+    const matchSimulationStartedAt = performance.now();
     todayFixtures.forEach((fixture) => {
       if (fixture.homeTeamId === userTeamId || fixture.awayTeamId === userTeamId) return;
       const home = currentClubs.find((c) => c.id === fixture.homeTeamId);
@@ -34321,16 +34405,47 @@ var BackgroundMatchProcessor = {
         }
       }
     });
-    const contractResult = AiContractService.processClubsContracts(currentClubs, currentPlayers, currentDate2, userTeamId);
-    const preContractFinal = AiContractService.processAiPreContractOpportunities(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate2, userTeamId);
-    const depthFinal = AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, preContractFinal.updatedPlayers, currentDate2, userTeamId);
-    const finalUpdate = AiContractService.processAiRecruitment(depthFinal.updatedClubs, depthFinal.updatedPlayers, currentDate2, userTeamId);
-    const resolvedFinal = AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate2, userTeamId);
-    const financingFinal = AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate2, userTeamId);
-    const transferSigningsFinal = AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate2, userTeamId, coaches);
-    const interestedTargetingFinal = AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate2, userTeamId, coaches);
-    const deadlineAcademyFallbackMatch = AiContractService.processAiDeadlineAcademyFallback(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate2, userTeamId);
-    const transferResolvedFinal = AiContractService.resolveAiTransferPending(deadlineAcademyFallbackMatch.updatedClubs, deadlineAcademyFallbackMatch.updatedPlayers, currentDate2, userTeamId);
+    timingObserver?.("Symulacja i rozliczenie mecz\xF3w ligowych", performance.now() - matchSimulationStartedAt);
+    const contractResult = measurePhase(
+      "Kontrakty klub\xF3w AI",
+      () => AiContractService.processClubsContracts(currentClubs, currentPlayers, currentDate2, userTeamId)
+    );
+    const preContractFinal = measurePhase(
+      "Prekontrakty zawodnik\xF3w",
+      () => AiContractService.processAiPreContractOpportunities(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate2, userTeamId)
+    );
+    const depthFinal = measurePhase(
+      "Kontrola g\u0142\u0119bi sk\u0142ad\xF3w AI",
+      () => AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, preContractFinal.updatedPlayers, currentDate2, userTeamId)
+    );
+    const finalUpdate = measurePhase(
+      "Rekrutacja wolnych agent\xF3w przez AI",
+      () => AiContractService.processAiRecruitment(depthFinal.updatedClubs, depthFinal.updatedPlayers, currentDate2, userTeamId)
+    );
+    const resolvedFinal = measurePhase(
+      "Negocjacje z wolnymi agentami",
+      () => AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate2, userTeamId)
+    );
+    const financingFinal = measurePhase(
+      "Finanse i zwalnianie miejsca w kadrach AI",
+      () => AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate2, userTeamId)
+    );
+    const transferSigningsFinal = measurePhase(
+      "Zakupy z list transferowych",
+      () => AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate2, userTeamId, coaches)
+    );
+    const interestedTargetingFinal = measurePhase(
+      "Obserwowani zawodnicy i oferty AI",
+      () => AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate2, userTeamId, coaches)
+    );
+    const deadlineAcademyFallbackMatch = measurePhase(
+      "Awaryjne uzupe\u0142nienia akademii AI",
+      () => AiContractService.processAiDeadlineAcademyFallback(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate2, userTeamId)
+    );
+    const transferResolvedFinal = measurePhase(
+      "Finalizacja oczekuj\u0105cych transfer\xF3w",
+      () => AiContractService.resolveAiTransferPending(deadlineAcademyFallbackMatch.updatedClubs, deadlineAcademyFallbackMatch.updatedPlayers, currentDate2, userTeamId)
+    );
     const aiTransferLogEntriesMatch = [
       ...finalUpdate.logEntries,
       ...resolvedFinal.logEntries,
@@ -34347,19 +34462,25 @@ var BackgroundMatchProcessor = {
     const newOffers = finalUpdate.newOffers;
     const isScoutingDayMatch = currentDate2.getDate() === 1 || currentDate2.getMonth() === 0 && currentDate2.getDate() === 12;
     if (isScoutingDayMatch) {
-      currentPlayers = AiScoutingService.updateTransferInterests(
-        currentClubs,
-        currentPlayers,
-        currentDate2,
-        userTeamId,
-        sessionSeed
+      currentPlayers = measurePhase(
+        "Miesi\u0119czny skauting rynku transferowego",
+        () => AiScoutingService.updateTransferInterests(
+          currentClubs,
+          currentPlayers,
+          currentDate2,
+          userTeamId,
+          sessionSeed
+        )
       );
-      currentPlayers = AiContractService.processMonthlyPlayerReview(
-        currentClubs,
-        currentPlayers,
-        currentDate2,
-        userTeamId
-      ).updatedPlayers;
+      currentPlayers = measurePhase(
+        "Miesi\u0119czny przegl\u0105d zawodnik\xF3w AI",
+        () => AiContractService.processMonthlyPlayerReview(
+          currentClubs,
+          currentPlayers,
+          currentDate2,
+          userTeamId
+        ).updatedPlayers
+      );
     }
     if (currentDate2.getMonth() === 0 && currentDate2.getDate() === 12) {
       const weakReviewWinterMatch = AiContractService.processWeakPlayerContractCuts(currentClubs, currentPlayers, currentDate2, userTeamId);
@@ -35405,6 +35526,7 @@ var reviveIsoDates = (_key, value) => {
 };
 var loadStartedAt = import_node_perf_hooks.performance.now();
 var compressed = (0, import_node_fs.readFileSync)(savePath);
+var saveFileHash = (0, import_node_crypto.createHash)("sha256").update(compressed).digest("hex");
 var decompressed = (0, import_node_zlib.gunzipSync)(compressed).toString("utf8");
 var parsed = JSON.parse(decompressed, reviveIsoDates);
 var normalizeStartedAt = import_node_perf_hooks.performance.now();
@@ -35428,22 +35550,35 @@ var scheduledFixturesOnProfiledDay = fixtures.filter(
   (fixture) => fixture.status !== "FINISHED" && new Date(fixture.date).toDateString() === currentDate.toDateString()
 ).length;
 var playerCountBefore = Object.values(state.players).reduce((total, squad) => total + squad.length, 0);
+var deterministicRandomState = 1597463007;
+var originalRandom = Math.random;
+Math.random = () => {
+  deterministicRandomState = Math.imul(deterministicRandomState, 1664525) + 1013904223 >>> 0;
+  return deterministicRandomState / 4294967296;
+};
 PerfProfilerService.reset();
 PerfProfilerService.instrument(AiContractService, "AiContractService");
 PerfProfilerService.instrument(AiMatchPreparationService, "AiMatchPreparationService");
 PerfProfilerService.instrument(ReserveTeamSquadMovementService, "ReserveTeamSquadMovementService");
 var processStartedAt = import_node_perf_hooks.performance.now();
-var result = BackgroundMatchProcessor.processLeagueEvent(
-  currentDate,
-  state.userTeamId,
-  fixtures,
-  state.clubs,
-  state.players,
-  state.lineups,
-  state.seasonNumber,
-  state.coaches,
-  state.sessionSeed
-);
+var phaseTimings = [];
+var result;
+try {
+  result = BackgroundMatchProcessor.processLeagueEvent(
+    currentDate,
+    state.userTeamId,
+    fixtures,
+    state.clubs,
+    state.players,
+    state.lineups,
+    state.seasonNumber,
+    state.coaches,
+    state.sessionSeed,
+    (label, elapsedMs) => phaseTimings.push({ label, elapsedMs })
+  );
+} finally {
+  Math.random = originalRandom;
+}
 var processMs = import_node_perf_hooks.performance.now() - processStartedAt;
 var playerCountAfter = Object.values(result.updatedPlayers).reduce((total, squad) => total + squad.length, 0);
 var pendingSignature = Object.entries(result.updatedPlayers).flatMap(
@@ -35458,9 +35593,31 @@ var pendingSignature = Object.entries(result.updatedPlayers).flatMap(
   ].join("|"))
 ).sort();
 var signatureHash = (values) => (0, import_node_crypto.createHash)("sha256").update(values.join("\n")).digest("hex");
+var freeAgentNegotiationSignature = (result.updatedPlayers.FREE_AGENTS ?? []).map((player) => [
+  player.id,
+  player.aiNegotiationClubId ?? "",
+  player.aiNegotiationResponseDate ?? "",
+  player.transferPendingClubId ?? ""
+].join("|"));
+var scoutingCacheSignature = result.updatedClubs.map((club) => [
+  club.id,
+  club.aiScoutedTargets?.lastRefreshDate ?? "",
+  ...club.aiScoutedTargets?.freeAgentIds ?? []
+].join("|"));
+var aiTransferLogHash = signatureHash(result.aiTransferLogEntries.map((entry) => entry.id).sort());
+var pendingTransferHash = signatureHash(pendingSignature);
+var freeAgentNegotiationHash = signatureHash(freeAgentNegotiationSignature);
+var scoutingCacheHash = signatureHash(scoutingCacheSignature);
 import_node_assert.strict.equal(playerCountAfter, playerCountBefore, "profilowanie dnia nie mo\u017Ce zgubi\u0107 ani powieli\u0107 zawodnik\xF3w");
+if (saveFileHash === "6fadc2f2e076bc20e074352231f808c715b4029c20901ae9175f83c364e3b9bd") {
+  import_node_assert.strict.equal(aiTransferLogHash, "f786a686d1bf4c9755b299acc3f46ea05b2c59850bee4917ef86979c49e67d57");
+  import_node_assert.strict.equal(pendingTransferHash, "e9ddd6ae4c30edfa170fd9886cddfd2099f4a42afab1f85560bbb6e5d1990e6f");
+  import_node_assert.strict.equal(freeAgentNegotiationHash, "b4bfcb1da8bc39e7d190513ad8067ce071fbad74b4be51d236784bf6884df428");
+  import_node_assert.strict.equal(scoutingCacheHash, "2c6aff24528c9d6b79e80f3b00b6f5ce114bcb765cbb2d994e330553a4f09e52");
+}
 console.log(JSON.stringify({
   savePath,
+  saveFileHash,
   date: currentDate.toISOString(),
   compressedMB: +(compressed.byteLength / 1048576).toFixed(2),
   decompressedMB: +(Buffer.byteLength(decompressed) / 1048576).toFixed(2),
@@ -35472,9 +35629,12 @@ console.log(JSON.stringify({
   normalizeMs: +normalizeMs.toFixed(1),
   backgroundDayMs: +processMs.toFixed(1),
   aiTransferLogCount: result.aiTransferLogEntries.length,
-  aiTransferLogHash: signatureHash(result.aiTransferLogEntries.map((entry) => entry.id).sort()),
+  aiTransferLogHash,
   pendingTransferCount: pendingSignature.length,
-  pendingTransferHash: signatureHash(pendingSignature),
+  pendingTransferHash,
+  freeAgentNegotiationHash,
+  scoutingCacheHash,
+  processingPhases: phaseTimings.sort((left, right) => right.elapsedMs - left.elapsedMs).map((phase) => ({ label: phase.label, elapsedMs: +phase.elapsedMs.toFixed(1) })),
   slowestServices: PerfProfilerService.report().slice(0, 30).map((row) => ({
     label: row.label,
     calls: row.count,

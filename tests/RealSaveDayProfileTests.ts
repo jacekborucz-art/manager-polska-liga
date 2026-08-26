@@ -22,6 +22,7 @@ const reviveIsoDates = (_key: string, value: unknown): unknown => {
 
 const loadStartedAt = performance.now();
 const compressed = readFileSync(savePath!);
+const saveFileHash = createHash('sha256').update(compressed).digest('hex');
 const decompressed = gunzipSync(compressed).toString('utf8');
 const parsed = JSON.parse(decompressed, reviveIsoDates) as SaveState;
 const normalizeStartedAt = performance.now();
@@ -52,6 +53,16 @@ const scheduledFixturesOnProfiledDay = fixtures.filter(fixture =>
 ).length;
 const playerCountBefore = Object.values(state.players).reduce((total, squad) => total + squad.length, 0);
 
+// A fixed test-only generator turns the real-save profile into a behavioural
+// fingerprint. Performance refactors must preserve both the number and order
+// of random draws, otherwise the hashes below change even when totals look sane.
+let deterministicRandomState = 0x5f3759df;
+const originalRandom = Math.random;
+Math.random = () => {
+  deterministicRandomState = (Math.imul(deterministicRandomState, 1664525) + 1013904223) >>> 0;
+  return deterministicRandomState / 0x1_0000_0000;
+};
+
 // This test runs the real production processor against a copy loaded into the
 // Node process. Instrumentation is diagnostic only and never changes the save.
 // Wrapping the service objects reveals which daily phase consumes the wall time
@@ -62,17 +73,24 @@ PerfProfilerService.instrument(AiMatchPreparationService, 'AiMatchPreparationSer
 PerfProfilerService.instrument(ReserveTeamSquadMovementService, 'ReserveTeamSquadMovementService');
 
 const processStartedAt = performance.now();
-const result = BackgroundMatchProcessor.processLeagueEvent(
-  currentDate,
-  state.userTeamId,
-  fixtures,
-  state.clubs,
-  state.players,
-  state.lineups,
-  state.seasonNumber,
-  state.coaches,
-  state.sessionSeed
-);
+const phaseTimings: Array<{ label: string; elapsedMs: number }> = [];
+let result: ReturnType<typeof BackgroundMatchProcessor.processLeagueEvent>;
+try {
+  result = BackgroundMatchProcessor.processLeagueEvent(
+    currentDate,
+    state.userTeamId,
+    fixtures,
+    state.clubs,
+    state.players,
+    state.lineups,
+    state.seasonNumber,
+    state.coaches,
+    state.sessionSeed,
+    (label, elapsedMs) => phaseTimings.push({ label, elapsedMs })
+  );
+} finally {
+  Math.random = originalRandom;
+}
 const processMs = performance.now() - processStartedAt;
 const playerCountAfter = Object.values(result.updatedPlayers).reduce((total, squad) => total + squad.length, 0);
 const pendingSignature = Object.entries(result.updatedPlayers).flatMap(([sellerClubId, squad]) =>
@@ -89,10 +107,32 @@ const pendingSignature = Object.entries(result.updatedPlayers).flatMap(([sellerC
     ].join('|'))
 ).sort();
 const signatureHash = (values: string[]) => createHash('sha256').update(values.join('\n')).digest('hex');
+const freeAgentNegotiationSignature = (result.updatedPlayers.FREE_AGENTS ?? []).map(player => [
+  player.id,
+  player.aiNegotiationClubId ?? '',
+  player.aiNegotiationResponseDate ?? '',
+  player.transferPendingClubId ?? '',
+].join('|'));
+const scoutingCacheSignature = result.updatedClubs.map(club => [
+  club.id,
+  club.aiScoutedTargets?.lastRefreshDate ?? '',
+  ...(club.aiScoutedTargets?.freeAgentIds ?? []),
+].join('|'));
+const aiTransferLogHash = signatureHash(result.aiTransferLogEntries.map(entry => entry.id).sort());
+const pendingTransferHash = signatureHash(pendingSignature);
+const freeAgentNegotiationHash = signatureHash(freeAgentNegotiationSignature);
+const scoutingCacheHash = signatureHash(scoutingCacheSignature);
 
 assert.equal(playerCountAfter, playerCountBefore, 'profilowanie dnia nie może zgubić ani powielić zawodników');
+if (saveFileHash === '6fadc2f2e076bc20e074352231f808c715b4029c20901ae9175f83c364e3b9bd') {
+  assert.equal(aiTransferLogHash, 'f786a686d1bf4c9755b299acc3f46ea05b2c59850bee4917ef86979c49e67d57');
+  assert.equal(pendingTransferHash, 'e9ddd6ae4c30edfa170fd9886cddfd2099f4a42afab1f85560bbb6e5d1990e6f');
+  assert.equal(freeAgentNegotiationHash, 'b4bfcb1da8bc39e7d190513ad8067ce071fbad74b4be51d236784bf6884df428');
+  assert.equal(scoutingCacheHash, '2c6aff24528c9d6b79e80f3b00b6f5ce114bcb765cbb2d994e330553a4f09e52');
+}
 console.log(JSON.stringify({
   savePath,
+  saveFileHash,
   date: currentDate.toISOString(),
   compressedMB: +(compressed.byteLength / 1_048_576).toFixed(2),
   decompressedMB: +(Buffer.byteLength(decompressed) / 1_048_576).toFixed(2),
@@ -104,9 +144,14 @@ console.log(JSON.stringify({
   normalizeMs: +normalizeMs.toFixed(1),
   backgroundDayMs: +processMs.toFixed(1),
   aiTransferLogCount: result.aiTransferLogEntries.length,
-  aiTransferLogHash: signatureHash(result.aiTransferLogEntries.map(entry => entry.id).sort()),
+  aiTransferLogHash,
   pendingTransferCount: pendingSignature.length,
-  pendingTransferHash: signatureHash(pendingSignature),
+  pendingTransferHash,
+  freeAgentNegotiationHash,
+  scoutingCacheHash,
+  processingPhases: phaseTimings
+    .sort((left, right) => right.elapsedMs - left.elapsedMs)
+    .map(phase => ({ label: phase.label, elapsedMs: +phase.elapsedMs.toFixed(1) })),
   slowestServices: PerfProfilerService.report().slice(0, 30).map(row => ({
     label: row.label,
     calls: row.count,

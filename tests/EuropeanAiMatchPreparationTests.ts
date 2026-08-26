@@ -7,6 +7,7 @@ import {
 } from '../services/BackgroundMatchProcessorCL';
 import { BackgroundMatchUEFASuperCup } from '../services/BackgroundMatchUEFASuperCup';
 import { LineupService } from '../services/LineupService';
+import { RefereeService } from '../services/RefereeService';
 import { TacticRepository } from '../resources/tactics_db';
 import { Club, Coach, CompetitionType, Fixture, HealthStatus, InjurySeverity, MatchStatus, Player, PlayerPosition } from '../types';
 
@@ -150,6 +151,41 @@ const fixture: Fixture = {
 };
 const strongSquad = makeSquad('strong', 84);
 const weakSquad = makeSquad('weak', 68);
+
+// An idle calendar day must be a true no-op. This regression guard verifies
+// both the public preflight gate used by GameContext and the processor's own
+// defensive early return. In particular, the large referee pool must not be
+// generated until an eligible European match actually exists.
+const idleDate = new Date(2025, 7, 8);
+const idleFixtures = [fixture];
+const idlePlayers = { [strongClub.id]: strongSquad, [weakClub.id]: weakSquad };
+RefereeService.pool.length = 0;
+assert.equal(
+  BackgroundMatchProcessorCL.hasMatchesToProcess(idleDate, null, idleFixtures),
+  false,
+  'dzień bez europejskiego meczu nie może uruchamiać symulacji w tle'
+);
+assert.equal(
+  BackgroundMatchProcessorCL.hasMatchesToProcess(new Date(fixture.date), null, [fixture]),
+  true,
+  'termin europejskiego meczu musi przejść kontrolę kalendarza'
+);
+const idleEuropeanResult = BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+  idleDate,
+  null,
+  idleFixtures,
+  [strongClub, weakClub],
+  idlePlayers,
+  {},
+  1,
+  123456,
+  coaches
+);
+assert.equal(idleEuropeanResult.updatedFixtures, idleFixtures, 'bezczynny dzień musi zachować terminarz przez referencję');
+assert.equal(idleEuropeanResult.updatedPlayers, idlePlayers, 'bezczynny dzień musi zachować mapę zawodników przez referencję');
+assert.equal(idleEuropeanResult.matchHistoryEntries.length, 0, 'bezczynny dzień nie może tworzyć raportów meczowych');
+assert.equal(RefereeService.pool.length, 0, 'bezczynny dzień nie może generować puli sędziów');
+
 const strongLineup = AiMatchPreparationService.prepareTeamForMatch(
   strongClub,
   weakClub,

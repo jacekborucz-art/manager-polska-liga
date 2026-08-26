@@ -249,3 +249,36 @@ Szybsze wyszukiwanie prekontraktów przez kluby AI
 - Zachowano dotychczasowe zasady, kolejność klubów oraz losowy element decyzji zawodnika.
 - Na sprawdzonym zapisie główne obliczenia dnia skróciły się z około 39 sekund do około 10 sekund.
 - Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Monitor czasu przetwarzania dnia
+
+- Podczas zmiany dnia okno oczekiwania pokazuje, jakie elementy gry są właśnie przetwarzane.
+- Zakończone elementy otrzymują zielony znacznik oraz informację, ile sekund trwały.
+- Osobno widoczne są między innymi kalendarz, mecze, kontrakty, rynek transferowy, regeneracja, wypożyczenia, trening, IV liga, tabele i europejskie puchary.
+- Kontrakty i rynek klubów sterowanych przez komputer zostały podzielone na dokładniejsze pozycje, aby łatwo znaleźć najwolniejszą część.
+- Sprawdzenie zapisu z 15 sierpnia wykazało, że najwięcej czasu zajmuje obecnie wybieranie wolnych zawodników przez kluby sterowane przez komputer.
+- Monitor nie zmienia wyników, transferów ani danych kariery i działa na istniejących zapisach gry.
+
+Szybsze wybieranie wolnych zawodników przez kluby
+
+- Kluby sterowane przez komputer szybciej odrzucają zawodników, którzy nie pasują poziomem, pozycją albo są już w trakcie negocjacji.
+- Te same potrzeby kadrowe i oceny kandydatów nie są już niepotrzebnie obliczane wiele razy.
+- Przy składaniu kilku ofert gra nie kopiuje ponownie całej dużej listy wolnych zawodników.
+- Na sprawdzonym zapisie czas tej części zmniejszył się z około 27 sekund do około 12 sekund.
+- Zachowano te same oferty, negocjacje, listy obserwowanych zawodników i element losowy decyzji.
+- Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Europejskie puchary tylko w odpowiednie dni
+
+- Gra nie pokazuje już informacji o rozgrywaniu europejskich pucharów w dni bez takich meczów.
+- W zwykłe dni pomijane są niepotrzebne sprawdzenia i aktualizacje związane z europejskimi pucharami.
+- Mecze Ligi Mistrzów, Ligi Europy i Ligi Konferencji nadal są rozgrywane zgodnie z terminarzem.
+- Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Naprawa Pucharu Polski 14 września
+
+- Usunięto błąd, który blokował rozegranie rundy Pucharu Polski 14 września.
+- Puchar Polski zawsze uzupełnia teraz początkową stawkę do 128 klubów drużynami z IV lig wojewódzkich.
+- Jeżeli w starszym zapisie w rundzie pozostanie nieparzysta liczba klubów, jeden zespół otrzyma wolny los zamiast nieprawidłowej pary.
+- Wolny los nie tworzy fikcyjnego meczu ani statystyk zawodników.
+- Poprawka naprawia istniejący zapis gry; nie trzeba rozpoczynać nowej kariery.

@@ -1027,35 +1027,85 @@ const _buildFreeAgentCandidates = (
   currentDate: Date
 ): Player[] => {
   const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
-  return pool.filter(fa => {
+  const needsByPosition = new Map(needsFA.map(need => [need.position, need]));
+
+  /**
+   * Everything in this context depends only on the buyer and one of the four
+   * positions. The old full scan recomputed it for every free agent, although
+   * the buyer squad cannot change while offers are merely marked as pending.
+   */
+  const positionContexts = new Map<PlayerPosition, {
+    need: ReturnType<typeof _assessClubNeeds>[number];
+    qualityFloor: number;
+    minOverall: number;
+    maxOverall: number;
+    hasShortage: boolean;
+    needsSquadBody: boolean;
+    canAddBalancedDepth: boolean;
+    weakestExisting?: Player;
+  }>();
+  needsFA.forEach(need => {
+    const position = need.position;
+    const positionCount = marketSnapshot.positionCounts.get(position) ?? 0;
+    const isQuantityNeed = _isQuantityDepthNeed(need, squad, position, marketSnapshot.positionCounts);
+    const canAddBalancedDepth = _canAddBalancedDepth(squad, position, marketSnapshot.positionCounts);
+    positionContexts.set(position, {
+      need,
+      qualityFloor: _getAiMarketQualityFloor(club, squad, position, need, marketSnapshot),
+      minOverall: isQuantityNeed ? 45 : need.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12,
+      maxOverall: isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7,
+      hasShortage: positionCount < minCounts[position],
+      needsSquadBody: (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && canAddBalancedDepth,
+      canAddBalancedDepth,
+      weakestExisting: marketSnapshot.weakestByPosition.get(position),
+    });
+  });
+
+  const candidates: Player[] = [];
+  for (const fa of pool) {
     // Wolny agent z podpisaną umową nie wraca na rynek. Może znajdować się w
     // FREE_AGENTS tylko przejściowo, do daty zameldowania w nowym klubie.
-    if (fa.transferPendingClubId) return false;
-    const needFA = needsFA.find(n => n.position === fa.position);
-    if (!needFA) return false;
-    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club)) return false;
-    if (_isBelowAiMarketQualityFloor(fa, club, squad, needFA, marketSnapshot)) return false;
-    const isQuantityNeed = _isQuantityDepthNeed(needFA, squad, fa.position);
-    const faMinOvr = isQuantityNeed ? 45 : needFA.urgency === 'CRITICAL' ? idealOvr - 16 : idealOvr - 12;
-    const faMaxOvr = isQuantityNeed ? Math.max(idealOvr + 12, 99) : idealOvr + 7;
-    if (fa.overallRating > faMaxOvr || fa.overallRating < faMinOvr) return false;
-    if (fa.aiNegotiationClubId) return false;
-    if (FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)) return false;
+    if (fa.transferPendingClubId) continue;
+    const context = positionContexts.get(fa.position);
+    if (!context) continue;
 
-    const positionCount = marketSnapshot.positionCounts.get(fa.position) ?? 0;
-    const weakestExisting = marketSnapshot.weakestByPosition.get(fa.position);
-    const hasShortage = positionCount < minCounts[fa.position];
-    const needsSquadBody = (isQuantityNeed || squad.length < AI_MIN_SQUAD_SIZE) && _canAddBalancedDepth(squad, fa.position);
-    const isUpgrade = !!weakestExisting && fa.overallRating >= weakestExisting.overallRating + 2;
+    // The legacy order consumed one global RNG draw immediately after finding
+    // a positional need. Capture it at exactly the same point, then postpone
+    // the expensive prestige calculation until deterministic rules prove that
+    // the player can actually help this club. Passing the captured roll below
+    // preserves the exact RNG count, order and decision.
+    const prestigeRoll = Math.random();
 
-    return hasShortage || needsSquadBody || (isUpgrade && _canAddBalancedDepth(squad, fa.position));
-  }).sort((a, b) => {
-    const needA = needsFA.find(n => n.position === a.position);
-    const needB = needsFA.find(n => n.position === b.position);
-    const scoreA = AiClubTransferStrategyService.candidateScore(a, club, aiStrategy, { needUrgency: needA?.urgency }) + _getRecruitmentReputationBonus(a, 3, needA);
-    const scoreB = AiClubTransferStrategyService.candidateScore(b, club, aiStrategy, { needUrgency: needB?.urgency }) + _getRecruitmentReputationBonus(b, 3, needB);
-    return scoreB - scoreA || a.age - b.age;
-  });
+    if (fa.overallRating < context.qualityFloor) continue;
+    if (fa.overallRating > context.maxOverall || fa.overallRating < context.minOverall) continue;
+    if (fa.aiNegotiationClubId) continue;
+    if (
+      fa.freeAgentClubLockouts?.[club.id] &&
+      FreeAgentNegotiationService.isClubLockedOut(fa, club.id, currentDate)
+    ) continue;
+
+    const isUpgrade = !!context.weakestExisting && fa.overallRating >= context.weakestExisting.overallRating + 2;
+    if (!context.hasShortage && !context.needsSquadBody && !(isUpgrade && context.canAddBalancedDepth)) continue;
+
+    if (!PrestigeTransferGuardService.shouldConsiderDestination(fa, club, 0, prestigeRoll)) continue;
+
+    candidates.push(fa);
+  }
+
+  // The old comparator recalculated the same deterministic score many times
+  // during sort. Cache one score per accepted candidate while retaining the
+  // original stable order whenever score and age are equal.
+  return candidates
+    .map(player => {
+      const need = needsByPosition.get(player.position);
+      return {
+        player,
+        score: AiClubTransferStrategyService.candidateScore(player, club, aiStrategy, { needUrgency: need?.urgency }) +
+          _getRecruitmentReputationBonus(player, 3, need),
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.player.age - b.player.age)
+    .map(entry => entry.player);
 };
 
 const _protectPendingTransferPlayerFromMarket = (player: Player): Player => {
@@ -2324,6 +2374,14 @@ processAiRecruitment: (
     // sprawdzenie "czy klub już negocjuje z jakimś wolnym agentem" nie wymagały
     // skanowania całej (rosnącej z sezonu na sezon) puli FREE_AGENTS dla każdego klubu.
     const freeAgentsById = new Map(freeAgents.map(fa => [fa.id, fa]));
+    const freeAgentIndexById = new Map<string, number>();
+    freeAgents.forEach((freeAgent, index) => {
+      // findIndex previously selected the first occurrence in malformed legacy
+      // saves containing duplicate ids. Preserve that behaviour deliberately.
+      if (!freeAgentIndexById.has(freeAgent.id)) freeAgentIndexById.set(freeAgent.id, index);
+    });
+    let currentFreeAgents = updatedPlayersMap['FREE_AGENTS'] || rawFreeAgents;
+    let ownsCurrentFreeAgentArray = currentFreeAgents !== rawFreeAgents;
     const negotiatingClubIds = new Set(
       freeAgents.filter(fa => fa.aiNegotiationClubId).map(fa => fa.aiNegotiationClubId as string)
     );
@@ -2450,14 +2508,21 @@ processAiRecruitment: (
         ? _buildGulfStarOffer(candidate, club, currentDate)
         : null;
 
-      const faList = updatedPlayersMap['FREE_AGENTS'];
-      const idx = faList.findIndex(p => p.id === candidate.id);
+      const idx = freeAgentIndexById.get(candidate.id) ?? -1;
       if (idx !== -1) {
-        updatedPlayersMap['FREE_AGENTS'] = faList.map((p, i) =>
-          i === idx
-            ? { ...p, aiNegotiationClubId: club.id, aiNegotiationResponseDate: responseDate.toISOString() }
-            : p
-        );
+        // Copy the large pool only once on the first offer, then replace only
+        // the selected slot. The previous implementation copied all 15k+ free
+        // agents and searched them again for every AI offer made that day.
+        if (!ownsCurrentFreeAgentArray) {
+          currentFreeAgents = [...currentFreeAgents];
+          ownsCurrentFreeAgentArray = true;
+        }
+        currentFreeAgents[idx] = {
+          ...currentFreeAgents[idx],
+          aiNegotiationClubId: club.id,
+          aiNegotiationResponseDate: responseDate.toISOString(),
+        };
+        updatedPlayersMap['FREE_AGENTS'] = currentFreeAgents;
       }
 
       if (gulfStarOffer) {

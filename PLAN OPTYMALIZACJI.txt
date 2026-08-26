@@ -294,6 +294,135 @@ Kompatybilność zapisu Etapu 3C:
 Zmiana korzysta wyłącznie z tymczasowych danych w RAM. Istniejący zapis jest zgodny i jest
 właściwym materiałem do testu; nie trzeba rozpoczynać nowej kariery.
 
+ETAP 3D - monitor czasu przetwarzania dnia
+------------------------------------------
+
+Cel:
+
+1. Pokazać graczowi, który rzeczywisty etap odpowiada za długie oczekiwanie.
+2. Oddzielić czas kalendarza, meczów, kontraktów, rynku AI, regeneracji, wypożyczeń,
+   treningu, IV lig, aktualizacji tabel i europejskich pucharów.
+3. Rozbić wspólny etap kontraktów i rynku na dokładne podprocesy: kontrakty klubów,
+   prekontrakty, wolnych agentów, negocjacje, finanse, listę transferową, obserwowanych
+   zawodników, akademie i finalizację transferów.
+
+Implementacja:
+
+1. Podczas zmiany dnia okno oczekiwania pokazuje listę wykonywanych etapów.
+2. Aktywny etap ma znacznik pracy, a ukończony zielony znacznik i dokładny czas w sekundach.
+3. Przed rozpoczęciem dużego synchronicznego etapu gra oddaje przeglądarce dwie klatki,
+   aby nazwa procesu została wyświetlona przed ciężkim obliczeniem.
+4. Wewnętrzne czasy silnika ligowego są dopisywane do listy po zakończeniu obliczeń.
+5. Pomiar tylko obserwuje istniejące wywołania. Nie zmienia ich kolejności, argumentów,
+   wyników losowania, danych świata ani formatu zapisu.
+6. Wyniki pozostają na ekranie krótko po zakończeniu dnia, aby można je było odczytać.
+
+Test końca etapu:
+
+1. Uruchomić pełną budowę produkcyjną.
+2. Uruchomić profiler na rzeczywistym zapisie dla 15 sierpnia 2026.
+3. Potwierdzić brak utraty i powielania zawodników.
+4. Sprawdzić testy rynku AI, wypożyczeń i skautingu.
+5. W grze przejść tym samym zapisem przez 14 i 15 sierpnia i zanotować najdłuższy wiersz.
+
+Wynik self-testu na zapisie „vrs 2-0.gz”, 15 sierpnia 2026:
+
+1. Pełna budowa produkcyjna przeszła poprawnie (3107 modułów).
+2. Profil rzeczywistego zapisu nie zgubił ani nie powielił zawodników: 36 374 przed i po.
+3. Główny proces ligowy trwał około 37,7 sekundy.
+4. Rekrutacja wolnych agentów przez AI zajęła około 29,3 sekundy.
+5. Obserwowani zawodnicy i oferty AI zajęły około 6,4 sekundy.
+6. Prekontrakty zajęły około 1,4 sekundy, a zwykła obsługa kontraktów około 0,3 sekundy.
+7. Testy rynku zainteresowanych zawodników, wypożyczeń, skautingu i okresowych danych
+   zawodników zakończyły się powodzeniem.
+8. Następny etap optymalizacji powinien skupić się na rekrutacji wolnych agentów przez AI.
+
+Kompatybilność zapisu Etapu 3D:
+Monitor nie zapisuje dodatkowych danych w świecie gry. Działa na istniejącej karierze;
+nie trzeba rozpoczynać nowej gry.
+
+ETAP 3E - szybsza rekrutacja wolnych agentów przez AI
+-----------------------------------------------------
+
+Diagnoza na zapisie „vrs 2-0.gz”, 15 sierpnia 2026:
+
+1. Pula zawierała 15 474 wolnych agentów.
+2. Rekrutacja wolnych agentów zajmowała około 27,4 sekundy z około 35,2 sekundy
+   głównego procesu dnia.
+3. Kosztowna ocena prestiżu była wykonywana przed odrzuceniem zawodników o
+   niewłaściwym poziomie, pozycji albo statusie negocjacji.
+4. Przy każdej nowej ofercie gra ponownie wyszukiwała zawodnika i kopiowała całą
+   listę ponad 15 tysięcy wolnych agentów.
+5. Sortowanie kandydatów wielokrotnie obliczało ten sam wynik oceny zawodnika.
+
+Implementacja:
+
+1. Dla każdego klubu informacje zależne wyłącznie od pozycji są liczone raz.
+2. Los RNG jest pobierany w tym samym miejscu i w tej samej kolejności co wcześniej,
+   ale kosztowna ocena prestiżu jest wykonywana dopiero po tanich, pewnych filtrach.
+3. Wynik oceny każdego zaakceptowanego kandydata jest liczony raz przed sortowaniem.
+4. Indeks wolnych agentów pozwala odnaleźć wybranego zawodnika bez kolejnego skanowania.
+5. Duża lista wolnych agentów jest kopiowana najwyżej raz podczas całego procesu,
+   a kolejne oferty podmieniają tylko wybraną pozycję.
+6. Zachowano zachowanie pierwszego wystąpienia powielonego identyfikatora w starych,
+   uszkodzonych zapisach.
+
+Self-test na identycznym zapisie i deterministycznym RNG:
+
+1. Rekrutacja wolnych agentów: około 27,4 s -> około 12,4 s.
+2. Główny proces dnia: około 35,2 s -> około 21,0 s.
+3. Liczba zawodników pozostała identyczna: 36 374 przed i po.
+4. Identyczne pozostały cztery odciski: log transferów, oczekujące transfery,
+   negocjacje wolnych agentów oraz listy skautingowe klubów.
+5. Testy umów wolnych agentów, decyzji zarządu, oczekujących transferów, skautingu,
+   rynku zainteresowanych zawodników oraz build produkcyjny przeszły poprawnie.
+6. Szerszy test lipcowy zakończył obliczenia poprawnie, ale zatrzymał się na istniejącym
+   limicie wielkości próbnego zapisu: 61,49 MB przy progu 50 MB. Rekrutacja zajęła w tym
+   teście 1 ms, więc błąd limitu nie został spowodowany przez tę optymalizację.
+
+Kompatybilność zapisu Etapu 3E:
+Zmiana nie dodaje pól do zapisu. Można i należy testować ją na istniejącej karierze.
+Nie trzeba rozpoczynać nowej gry.
+
+ETAP 3F - pomijanie bezczynnych dni europejskich pucharów
+----------------------------------------------------------
+
+Diagnoza:
+
+1. Wiersz „Europejskie puchary rozgrywane w tle” był uruchamiany każdego dnia,
+   również wtedy, gdy terminarz nie zawierał żadnego spotkania UEFA.
+2. Czas wiersza obejmował oczekiwanie na odświeżenie Reacta, dlatego mógł przejmować
+   część kosztu aktualizacji wykonanych bezpośrednio przed nim.
+3. Procesor skanował cały terminarz, a następnie kod przygotowywał mapę terminarza
+   i sprawdzał doświadczenie trenerów nawet dla pustego wyniku.
+4. Przy pierwszym takim wywołaniu mogła zostać utworzona duża pula sędziów, mimo że
+   tego dnia żaden sędzia europejski nie był potrzebny.
+
+Implementacja:
+
+1. Dodano wspólną, tylko do odczytu kontrolę terminarza dla LM, LE i LK.
+2. W dniu bez kwalifikującego się meczu nie jest otwierany etap monitora UEFA.
+3. W pustym dniu nie są tworzone kopie terminarza, aktualizacje zawodników ani
+   przeliczenia doświadczenia trenerów związane z europejskimi pucharami.
+4. Pula sędziów jest przygotowywana dopiero po znalezieniu rzeczywistego meczu.
+5. Dzień meczowy korzysta z tego samego zestawu zasad co wcześniej: mecze gracza w
+   LM i LE pozostają do rozegrania na żywo, a mecze LK i finały są symulowane w tle.
+
+Self-test:
+
+1. Test bezczynnego dnia potwierdził zachowanie tych samych referencji terminarza
+   i zawodników, brak raportów meczowych oraz brak generowania puli sędziów.
+2. Test dnia meczowego potwierdził wykrycie spotkania i utworzenie pełnego raportu.
+3. Pełna budowa produkcyjna przeszła poprawnie (3107 modułów).
+4. W rzeczywistym zapisie „vrs 2-0.gz” 14 i 15 sierpnia nie zawierają żadnego
+   zaplanowanego meczu europejskiego, więc wiersz UEFA nie powinien się pojawić.
+5. Kontrolny skan 3058 spotkań z tego zapisu trwał średnio poniżej 0,1 ms, więc
+   sama bramka kalendarza nie jest zauważalnym kosztem zmiany dnia.
+
+Kompatybilność zapisu Etapu 3F:
+Zmiana nie dodaje ani nie usuwa danych zapisu. Należy ją testować na istniejącej
+karierze; nie trzeba rozpoczynać nowej gry.
+
 ETAP 4 - lekki widok rynku i aktywacja po kliknięciu
 ---------------------------------------------------
 

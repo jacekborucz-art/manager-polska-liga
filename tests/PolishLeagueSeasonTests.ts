@@ -3,7 +3,8 @@ import { STATIC_CLUBS } from '../constants';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
 import { ReserveTeamFinanceService } from '../services/ReserveTeamFinanceService';
-import { PolishCupDrawService } from '../services/PolishCupDrawService';
+import { PolishCupDrawService, POLISH_CUP_BYE_TEAM_ID } from '../services/PolishCupDrawService';
+import { MatchStatus } from '../types';
 
 const clubs2025 = PolishLeagueSeasonService.buildClubsForCareerStart(STATIC_CLUBS, 2025);
 assert.equal(clubs2025.filter(club => club.leagueId === 'L_PL_1').length, 18);
@@ -343,5 +344,24 @@ assert.notDeepEqual(
   cupParticipantsSeedB.slice(guaranteedCupClubIds.length),
   'inna kariera powinna losować inny zestaw klubów z L_PL_4'
 );
+
+// Existing careers can already contain an odd cup field after the old
+// four-group third-league selector returned only 126 initial participants.
+// The draw must preserve every real club and express the unmatched club as a
+// completed bye instead of writing an undefined team id into the save.
+const oddCupParticipants = cupParticipantsSeedA.slice(0, 63);
+const oddCupPairs = PolishCupDrawService.drawPairs(
+  oddCupParticipants,
+  clubs2025,
+  new Date(2026, 8, 14),
+  'Puchar Polski: 1/32',
+  12345
+);
+const byePairs = oddCupPairs.filter(pair => pair.awayTeamId === POLISH_CUP_BYE_TEAM_ID);
+assert.equal(oddCupPairs.length, 32, '63 uczestników musi utworzyć 31 meczów i jeden wolny los');
+assert.equal(byePairs.length, 1, 'nieparzysta runda musi zawierać dokładnie jeden wolny los');
+assert.equal(byePairs[0].status, MatchStatus.FINISHED, 'wolny los nie może oczekiwać na symulację meczu');
+assert.equal(byePairs[0].homeScore, 1, 'wolny los musi jednoznacznie wskazywać awansujący klub');
+assert.ok(oddCupParticipants.includes(byePairs[0].homeTeamId), 'wolny los musi należeć do prawdziwego uczestnika rundy');
 
 console.log('PolishLeagueSeasonTests: OK');

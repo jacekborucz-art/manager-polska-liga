@@ -4,6 +4,7 @@ import {
   getPolishCupCoachMatchProfile,
 } from '../services/BackgroundMatchProcessorPolishCup';
 import { MatchHistoryService } from '../services/MatchHistoryService';
+import { POLISH_CUP_BYE_TEAM_ID } from '../services/PolishCupDrawService';
 import { TacticRepository } from '../resources/tactics_db';
 import {
   Club,
@@ -182,6 +183,35 @@ const report = MatchHistoryService.getAll().find(entry => entry.matchId === fixt
 assert.ok(report, 'mecz Pucharu Polski w tle musi utworzyć raport');
 assert.equal(report?.homeStartingTacticId, '4-2-3-1', 'raport musi zapisać rzeczywistą formację startową trenera');
 assert.equal(report?.homeTacticId, '4-2-3-1', 'raport nie może wrócić do domyślnego 4-4-2');
+
+// Regression for the 14 September save blocker: an old draw with 63 clubs
+// stored an undefined awayTeamId. The processor must close it as a bye without
+// fabricating a match report, touching players or eliminating the valid club.
+const brokenByeFixture = {
+  ...fixture,
+  id: 'POLISH_CUP_BROKEN_BYE_TEST',
+  date: new Date(2025, 8, 14),
+  awayTeamId: undefined as unknown as string,
+};
+const byeHomeClub = { ...homeClub, isInPolishCup: true };
+const brokenByeResult = BackgroundMatchProcessorPolishCup.processCupEvent(
+  new Date(brokenByeFixture.date),
+  null,
+  [brokenByeFixture],
+  [byeHomeClub, awayClub],
+  { [homeClub.id]: homePlayers, [awayClub.id]: awayPlayers },
+  {},
+  123456,
+  1,
+  coaches
+);
+const repairedByeFixture = brokenByeResult.updatedFixtures[0];
+assert.equal(repairedByeFixture.status, MatchStatus.FINISHED, 'niepełna para musi zostać zamknięta jako wolny los');
+assert.equal(repairedByeFixture.homeTeamId, homeClub.id, 'istniejący klub musi pozostać zwycięzcą wolnego losu');
+assert.equal(repairedByeFixture.awayTeamId, POLISH_CUP_BYE_TEAM_ID, 'brakujący identyfikator musi zostać zastąpiony stabilnym znacznikiem');
+assert.equal(repairedByeFixture.homeScore, 1, 'wolny los musi mieć techniczny wynik pozwalający zamknąć terminarz');
+assert.equal(brokenByeResult.updatedClubs.find(club => club.id === homeClub.id)?.isInPolishCup, true, 'wolny los nie może wyeliminować istniejącego klubu');
+assert.equal(MatchHistoryService.getAll().some(entry => entry.matchId === brokenByeFixture.id), false, 'wolny los nie może tworzyć fikcyjnego raportu meczu');
 
 const eliteProfile = getPolishCupCoachMatchProfile(homeCoach);
 const weakProfile = getPolishCupCoachMatchProfile(makeCoach('WEAK_COACH', 'WEAK_CLUB', 10, homeCoach.favoriteTactics));

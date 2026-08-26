@@ -1402,7 +1402,86 @@ const simulateCLMatchFull = (
 // ============================================================
 //  GŁÓWNY PROCESOR CL / EL / CONF
 // ============================================================
+
+/**
+ * Competition ids handled by this background processor. Keeping the list in
+ * one place prevents the cheap calendar probe and the actual simulation from
+ * drifting apart when another European round is added later.
+ */
+const BACKGROUND_EUROPEAN_COMPETITIONS = new Set<string>([
+  CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
+  CompetitionType.CL_R2Q, CompetitionType.CL_R2Q_RETURN,
+  CompetitionType.CL_GROUP_STAGE,
+  CompetitionType.CL_R16, CompetitionType.CL_R16_RETURN,
+  CompetitionType.CL_QF, CompetitionType.CL_QF_RETURN,
+  CompetitionType.CL_SF, CompetitionType.CL_SF_RETURN,
+  CompetitionType.CL_FINAL,
+  CompetitionType.EL_R1Q, CompetitionType.EL_R1Q_RETURN,
+  CompetitionType.EL_R2Q, CompetitionType.EL_R2Q_RETURN,
+  CompetitionType.EL_GROUP_STAGE,
+  CompetitionType.EL_R16, CompetitionType.EL_R16_RETURN,
+  CompetitionType.EL_QF, CompetitionType.EL_QF_RETURN,
+  CompetitionType.EL_SF, CompetitionType.EL_SF_RETURN,
+  CompetitionType.EL_FINAL,
+  CompetitionType.CONF_R1Q, CompetitionType.CONF_R1Q_RETURN,
+  CompetitionType.CONF_R2Q, CompetitionType.CONF_R2Q_RETURN,
+  CompetitionType.CONF_GROUP_STAGE,
+  CompetitionType.CONF_R16, CompetitionType.CONF_R16_RETURN,
+  CompetitionType.CONF_QF, CompetitionType.CONF_QF_RETURN,
+  CompetitionType.CONF_SF, CompetitionType.CONF_SF_RETURN,
+  CompetitionType.CONF_FINAL,
+]);
+
+const BACKGROUND_CONFERENCE_COMPETITIONS = new Set<string>([
+  CompetitionType.CONF_R1Q, CompetitionType.CONF_R1Q_RETURN,
+  CompetitionType.CONF_R2Q, CompetitionType.CONF_R2Q_RETURN,
+  CompetitionType.CONF_GROUP_STAGE,
+  CompetitionType.CONF_R16, CompetitionType.CONF_R16_RETURN,
+  CompetitionType.CONF_QF, CompetitionType.CONF_QF_RETURN,
+  CompetitionType.CONF_SF, CompetitionType.CONF_SF_RETURN,
+  CompetitionType.CONF_FINAL,
+]);
+
+/**
+ * This predicate is intentionally shared by the UI-side preflight check and
+ * the simulator itself. It contains only read-only comparisons, consumes no
+ * RNG and cannot mutate the save. Conference League games and CL/EL finals are
+ * always background matches; other CL/EL rounds omit the user's live fixture.
+ */
+const isEuropeanBackgroundMatchForDate = (
+  fixture: Fixture,
+  dateStr: string,
+  userTeamId: string | null
+): boolean => {
+  if (
+    fixture.date.toDateString() !== dateStr ||
+    fixture.status !== MatchStatus.SCHEDULED ||
+    !BACKGROUND_EUROPEAN_COMPETITIONS.has(fixture.leagueId as string)
+  ) {
+    return false;
+  }
+
+  return BACKGROUND_CONFERENCE_COMPETITIONS.has(fixture.leagueId as string) ||
+    fixture.leagueId === CompetitionType.CL_FINAL ||
+    fixture.leagueId === CompetitionType.EL_FINAL ||
+    (fixture.homeTeamId !== userTeamId && fixture.awayTeamId !== userTeamId);
+};
+
 export const BackgroundMatchProcessorCL = {
+
+  /**
+   * Fast, allocation-free calendar gate used before opening a visible day
+   * processing phase. On ordinary days `.some()` returns after a read-only scan
+   * and avoids referee setup, fixture/player copies and React state updates.
+   */
+  hasMatchesToProcess: (
+    currentDate: Date,
+    userTeamId: string | null,
+    fixtures: Fixture[]
+  ): boolean => {
+    const dateStr = currentDate.toDateString();
+    return fixtures.some(fixture => isEuropeanBackgroundMatchForDate(fixture, dateStr, userTeamId));
+  },
 
   processChampionsLeagueEvent: (
     currentDate: Date,
@@ -1415,53 +1494,17 @@ export const BackgroundMatchProcessorCL = {
     sessionSeed: number,
     coaches: Record<string, Coach> = {}
   ): { updatedFixtures: Fixture[]; updatedPlayers: Record<string, Player[]>; matchHistoryEntries: MatchHistoryEntry[] } => {
-    RefereeService.initializePool();
-
     const dateStr = currentDate.toDateString();
-
-    const todayMatches = fixtures.filter(f =>
-      f.date.toDateString() === dateStr &&
-      f.status === MatchStatus.SCHEDULED &&
-           (f.leagueId === CompetitionType.CL_R1Q || f.leagueId === CompetitionType.CL_R1Q_RETURN ||
-       f.leagueId === CompetitionType.CL_R2Q || f.leagueId === CompetitionType.CL_R2Q_RETURN ||
-       f.leagueId === CompetitionType.CL_GROUP_STAGE ||
-       f.leagueId === CompetitionType.CL_R16 || f.leagueId === CompetitionType.CL_R16_RETURN ||
-             f.leagueId === CompetitionType.CL_QF || f.leagueId === CompetitionType.CL_QF_RETURN ||
-             f.leagueId === CompetitionType.CL_SF || f.leagueId === CompetitionType.CL_SF_RETURN ||
-       f.leagueId === CompetitionType.CL_FINAL ||
-       // ── Liga Europy ────────────────────────────────────────────────────────
-       f.leagueId === CompetitionType.EL_R1Q || f.leagueId === CompetitionType.EL_R1Q_RETURN ||
-       f.leagueId === CompetitionType.EL_R2Q || f.leagueId === CompetitionType.EL_R2Q_RETURN ||
-       f.leagueId === CompetitionType.EL_GROUP_STAGE ||
-       f.leagueId === CompetitionType.EL_R16 || f.leagueId === CompetitionType.EL_R16_RETURN ||
-       f.leagueId === CompetitionType.EL_QF || f.leagueId === CompetitionType.EL_QF_RETURN ||
-       f.leagueId === CompetitionType.EL_SF || f.leagueId === CompetitionType.EL_SF_RETURN ||
-       f.leagueId === CompetitionType.EL_FINAL ||       // ── Liga Konferencji ───────────────────────────────────────────────────
-       f.leagueId === CompetitionType.CONF_R1Q || f.leagueId === CompetitionType.CONF_R1Q_RETURN ||
-       f.leagueId === CompetitionType.CONF_R2Q || f.leagueId === CompetitionType.CONF_R2Q_RETURN ||
-       f.leagueId === CompetitionType.CONF_GROUP_STAGE ||
-       f.leagueId === CompetitionType.CONF_R16 || f.leagueId === CompetitionType.CONF_R16_RETURN ||
-       f.leagueId === CompetitionType.CONF_QF || f.leagueId === CompetitionType.CONF_QF_RETURN ||
-       f.leagueId === CompetitionType.CONF_SF || f.leagueId === CompetitionType.CONF_SF_RETURN ||
-       f.leagueId === CompetitionType.CONF_FINAL) &&
-      (
-        // CONF: ZAWSZE symulowane w tle (nawet jeśli gra drużyna gracza)
-        f.leagueId === CompetitionType.CONF_R1Q    || f.leagueId === CompetitionType.CONF_R1Q_RETURN ||
-        f.leagueId === CompetitionType.CONF_R2Q    || f.leagueId === CompetitionType.CONF_R2Q_RETURN ||
-        f.leagueId === CompetitionType.CONF_GROUP_STAGE ||
-        f.leagueId === CompetitionType.CONF_R16    || f.leagueId === CompetitionType.CONF_R16_RETURN ||
-        f.leagueId === CompetitionType.CONF_QF     || f.leagueId === CompetitionType.CONF_QF_RETURN  ||
-        f.leagueId === CompetitionType.CONF_SF     || f.leagueId === CompetitionType.CONF_SF_RETURN  ||
-        f.leagueId === CompetitionType.CONF_FINAL  ||
-        // CL i EL FINAŁ: zawsze symulowany (mecz 1-mecz finałowy, brak live)
-        f.leagueId === CompetitionType.CL_FINAL    ||
-        f.leagueId === CompetitionType.EL_FINAL    ||
-        // CL i EL pozostałe rundy: pomijamy mecze drużyny gracza (on gra live)
-        (f.homeTeamId !== userTeamId && f.awayTeamId !== userTeamId)
-      )
+    const todayMatches = fixtures.filter(fixture =>
+      isEuropeanBackgroundMatchForDate(fixture, dateStr, userTeamId)
     );
 
     if (todayMatches.length === 0) return { updatedFixtures: fixtures, updatedPlayers: players, matchHistoryEntries: [] };
+
+    // Referees are needed only after the calendar gate found a real match. This
+    // avoids constructing the large international pool on an otherwise idle
+    // European-cup day check.
+    RefereeService.initializePool();
 
     let updatedFixtures = [...fixtures];
     let updatedPlayersMap = { ...players };
