@@ -149,34 +149,38 @@ var RAW_PL_CLUBS = [
   // 2026/27 career. They intentionally live in the normal Polish club database:
   // the regular squad, finance, transfer and injury systems can then treat them
   // exactly like every other AI club instead of relying on special placeholders.
-  { name: "Widzew \u0141\xF3d\u017A II", tier: 4, colors: ["#C8102E", "#FFFFFF"], stadium: "O\u015Brodek Treningowy Widzewa", capacity: 1e3, reputation: 2 },
+  // Reserve teams deliberately reuse their parent club's logo file. Some screens
+  // render Club.logoFile directly instead of calling the shared getClubLogo()
+  // helper, so keeping this relationship in the database guarantees the same
+  // crest in tables, match studios, club details and editor/datapack exports.
+  { name: "Widzew \u0141\xF3d\u017A II", tier: 4, colors: ["#C8102E", "#FFFFFF"], stadium: "O\u015Brodek Treningowy Widzewa", capacity: 1e3, reputation: 2, logoFile: "widzew-lodz.png" },
   { name: "Pelikan \u0141owicz", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w \u0141owiczu", capacity: 2100, reputation: 2 },
-  { name: "Wis\u0142a P\u0142ock II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Wis\u0142y II", capacity: 1e3, reputation: 2 },
-  { name: "Jagiellonia Bia\u0142ystok II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "O\u015Brodek Treningowy Jagiellonii", capacity: 1e3, reputation: 2 },
+  { name: "Wis\u0142a P\u0142ock II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Wis\u0142y II", capacity: 1e3, reputation: 2, logoFile: "wisla-plock-2006-logo.png" },
+  { name: "Jagiellonia Bia\u0142ystok II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "O\u015Brodek Treningowy Jagiellonii", capacity: 1e3, reputation: 2, logoFile: "jagiellonia-bialystok-2024-logo.png" },
   { name: "Polonia Lidzbark Warmi\u0144ski", tier: 4, colors: ["#000000", "#FFFFFF", "#D71920"], stadium: "Stadion Miejski w Lidzbarku Warmi\u0144skim", capacity: 1200, reputation: 1 },
   { name: "Wik\u0119d Luzino", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Gminny w Luzinie", capacity: 1e3, reputation: 1 },
-  { name: "Lech Pozna\u0144 II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Akademii Lecha", capacity: 1500, reputation: 3 },
+  { name: "Lech Pozna\u0144 II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Akademii Lecha", capacity: 1500, reputation: 3, logoFile: "lech-poznan-2022-logo.png" },
   { name: "Gedania Gda\u0144sk", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Gedanii", capacity: 1e3, reputation: 1 },
   { name: "Chemik Bydgoszcz", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion im. Czes\u0142awa Kobusa", capacity: 1500, reputation: 1 },
   { name: "Ba\u0142tyk Koszalin", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Ba\u0142tyku", capacity: 1500, reputation: 1 },
   { name: "Grom Nowy Staw", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w Nowym Stawie", capacity: 800, reputation: 1 },
   { name: "Kotwica K\xF3rnik", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w K\xF3rniku", capacity: 1e3, reputation: 1 },
   { name: "Odra Bytom Odrza\u0144ski", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Bytomiu Odrza\u0144skim", capacity: 1e3, reputation: 1 },
-  { name: "Zag\u0142\u0119bie Lubin II", tier: 4, colors: ["#F58220", "#FFFFFF", "#00843D"], stadium: "Akademia Zag\u0142\u0119bia Lubin", capacity: 1e3, reputation: 3 },
+  { name: "Zag\u0142\u0119bie Lubin II", tier: 4, colors: ["#F58220", "#FFFFFF", "#00843D"], stadium: "Akademia Zag\u0142\u0119bia Lubin", capacity: 1e3, reputation: 3, logoFile: "zaglebie-lubin-2022-logo.png" },
   { name: "Barycz Su\u0142\xF3w", tier: 4, colors: ["#000000", "#FFFFFF"], stadium: "Stadion w Su\u0142owie", capacity: 800, reputation: 1 },
   { name: "ROW Rybnik", tier: 4, colors: ["#00843D", "#000000"], stadium: "Stadion Miejski w Rybniku", capacity: 1e4, reputation: 3 },
   { name: "Stal Brzeg", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Brzegu", capacity: 2500, reputation: 2 },
   { name: "Stilon Gorz\xF3w", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion OSiR w Gorzowie Wielkopolskim", capacity: 5e3, reputation: 3 },
-  { name: "Mied\u017A Legnica II", tier: 4, colors: ["#00843D", "#D71920", "#0057B8"], stadium: "Akademia Miedzi Legnica", capacity: 1e3, reputation: 2 },
-  { name: "Rak\xF3w Cz\u0119stochowa II", tier: 4, colors: ["#0057B8", "#D71920"], stadium: "Centrum Treningowe Rakowa", capacity: 1e3, reputation: 3 },
+  { name: "Mied\u017A Legnica II", tier: 4, colors: ["#00843D", "#D71920", "#0057B8"], stadium: "Akademia Miedzi Legnica", capacity: 1e3, reputation: 2, logoFile: "miedz-legnica-2022-logo.png" },
+  { name: "Rak\xF3w Cz\u0119stochowa II", tier: 4, colors: ["#0057B8", "#D71920"], stadium: "Centrum Treningowe Rakowa", capacity: 1e3, reputation: 3, logoFile: "rakow-czestochowa-2014-logo.png" },
   { name: "Wi\u015Blanie Skawina", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Miejski w Skawinie", capacity: 1e3, reputation: 1 },
-  { name: "Wis\u0142a Krak\xF3w II", tier: 4, colors: ["#D71920", "#0057B8", "#FFFFFF"], stadium: "Baza Treningowa Wis\u0142y", capacity: 1e3, reputation: 3 },
-  { name: "Wieczysta Krak\xF3w II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Stadion Pr\u0105dniczanki", capacity: 1e3, reputation: 2 },
+  { name: "Wis\u0142a Krak\xF3w II", tier: 4, colors: ["#D71920", "#0057B8", "#FFFFFF"], stadium: "Baza Treningowa Wis\u0142y", capacity: 1e3, reputation: 3, logoFile: "wisla-krakow-logo.png" },
+  { name: "Wieczysta Krak\xF3w II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Stadion Pr\u0105dniczanki", capacity: 1e3, reputation: 2, logoFile: "wieczysta-krakow-logo.png" },
   { name: "JKS Jaros\u0142aw", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Jaros\u0142awiu", capacity: 2500, reputation: 2 },
   { name: "Hetman Zamo\u015B\u0107", tier: 4, colors: ["#00843D", "#D71920", "#FFFFFF"], stadium: "Stadion OSiR w Zamo\u015Bciu", capacity: 16e3, reputation: 3 },
   { name: "Moravia Morawica", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Morawicy", capacity: 1e3, reputation: 1 },
   { name: "AKS 1947 Busko-Zdr\xF3j", tier: 4, colors: ["#D71920", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Busku-Zdroju", capacity: 1500, reputation: 1 },
-  { name: "Korona Kielce II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Centrum Treningowe Korony", capacity: 1e3, reputation: 2 },
+  { name: "Korona Kielce II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Centrum Treningowe Korony", capacity: 1e3, reputation: 2, logoFile: "korona-kielce-2024-logo.png" },
   { name: "Wis\u0142a Pu\u0142awy", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion MOSiR w Pu\u0142awach", capacity: 4418, reputation: 3 }
 ];
 
@@ -3837,9 +3841,840 @@ var PolishThirdLeagueService = {
   },
   getPolishTier(leagueId) {
     if (this.isThirdLeagueId(leagueId) || leagueId === "L_PL_4") return 4;
-    if (leagueId === "L_PL_5") return 5;
+    if (leagueId === "L_PL_5" || /^L_PL_5_/.test(leagueId ?? "")) return 5;
+    if (/^L_PL_6_/.test(leagueId ?? "")) return 6;
     const match = /^L_PL_([1-3])$/.exec(leagueId ?? "");
     return match ? Number(match[1]) : null;
+  }
+};
+
+// resources/static_db/clubs/pl_fourth_league_2026.ts
+var POLISH_FOURTH_LEAGUE_2026 = {
+  "dolno\u015Bl\u0105skie": [
+    "Cement Raciborowice",
+    "Piast \u017Bmigr\xF3d",
+    "Moto-Jelcz O\u0142awa",
+    "AKS Strzegom",
+    "Iskra Ksi\u0119ginice",
+    "Polonia Bielany Wroc\u0142awskie",
+    "WKS Wierzbice",
+    "GKS Mirk\xF3w/D\u0142ugo\u0142\u0119ka",
+    "G\xF3rnik Z\u0142otoryja",
+    "Chrobry II G\u0142og\xF3w",
+    "Lechia Dzier\u017Coni\xF3w",
+    "Piast Nowa Ruda",
+    "B\u0142yskawica Ga\u0107",
+    "Orze\u0142 Z\u0105bkowice \u015Al\u0105skie",
+    "Polonia \u015Aroda \u015Al\u0105ska",
+    "Odra \u015Acinawa",
+    "Polonia-Stal \u015Awidnica",
+    "Prochowiczanka Prochowice"
+  ],
+  "kujawsko-pomorskie": [
+    "Pogo\u0144 Mogilno",
+    "T\u0142uchowia T\u0142uchowo",
+    "Unia Solec Kujawski",
+    "Pomorzanin Toru\u0144",
+    "Unia W\u0105brze\u017Ano",
+    "Mustang Ostaszewo",
+    "Victoria Czernikowo",
+    "Kujawiak Kowal",
+    "Wis\u0142a Dobrzy\u0144 nad Wis\u0142\u0105",
+    "Lech Rypin",
+    "Sparta Brodnica",
+    "Skrwa Skrwilno",
+    "Rawys Raci\u0105\u017C",
+    "Start Pruszcz",
+    "Orl\u0119ta Aleksandr\xF3w Kujawski",
+    "Note\u0107 G\u0119bice",
+    "Cuiavia Inowroc\u0142aw",
+    "\u0141okietek Brze\u015B\u0107 Kujawski"
+  ],
+  "lubelskie": [
+    "Lublinianka Lublin",
+    "Avia II \u015Awidnik",
+    "\u0141ada Bi\u0142goraj",
+    "Orl\u0119ta Radzy\u0144 Podlaski",
+    "Victoria \u0141ukowa",
+    "Tur Milej\xF3w",
+    "Granit Bychawa",
+    "Tomasovia Tomasz\xF3w Lubelski",
+    "Powi\u015Blak Ko\u0144skowola",
+    "Bug Hanna",
+    "MKS Ryki",
+    "Lewart Lubart\xF3w",
+    "Orl\u0119ta \u0141uk\xF3w",
+    "Janowianka Jan\xF3w Lubelski",
+    "\u015Awidniczanka \u015Awidnik",
+    "G\xF3rnik II \u0141\u0119czna"
+  ],
+  "lubuskie": [
+    "Victoria Szczaniec",
+    "Korona Ko\u017Cuch\xF3w",
+    "Czarni \u017Baga\u0144",
+    "Polonia S\u0142ubice",
+    "Ilanka Rzepin",
+    "Odra Nietk\xF3w",
+    "Piast Karnin",
+    "Celuloza Kostrzyn",
+    "R\xF3\u017Ca R\xF3\u017Canki",
+    "Pogo\u0144 Skwierzyna",
+    "Pogo\u0144 \u015Awiebodzin",
+    "Piast I\u0142owa",
+    "\u0141ucznik Strzelce Kraje\u0144skie",
+    "Promie\u0144 \u017Bary",
+    "Sprotavia Szprotawa",
+    "Lechia II Zielona G\xF3ra",
+    "Dozamet Nowa S\xF3l",
+    "Stal Sul\u0119cin"
+  ],
+  "\u0142\xF3dzkie": [
+    "RKS Radomsko",
+    "Zjednoczeni Stryk\xF3w",
+    "Polonia Piotrk\xF3w Trybunalski",
+    "Boruta Zgierz",
+    "Orkan Buczek",
+    "AKS SMS \u0141\xF3d\u017A",
+    "Ceramika Opoczno",
+    "Stal G\u0142owno",
+    "W\u0142\xF3kniarz Pabianice",
+    "GKS Be\u0142chat\xF3w",
+    "Sok\xF3\u0142 Aleksandr\xF3w \u0141\xF3dzki",
+    "Zryw Wygoda",
+    "KS Kutno",
+    "Orze\u0142 Parz\u0119czew",
+    "\u0141KS III \u0141\xF3d\u017A",
+    "Concordia Piotrk\xF3w Trybunalski",
+    "Ekolog Wojs\u0142awice",
+    "LZS Justyn\xF3w"
+  ],
+  "ma\u0142opolskie": [
+    "Cracovia II",
+    "Unia Tarn\xF3w",
+    "Boche\u0144ski KS",
+    "Victoria Jaworzno",
+    "Wolania Wola Rz\u0119dzi\u0144ska",
+    "Poprad Muszyna",
+    "Glinik Gorlice",
+    "Beskid Andrych\xF3w",
+    "Kalwarianka Kalwaria Zebrzydowska",
+    "Termalica II Nieciecza",
+    "Pcimianka Pcim",
+    "B\u0142\u0119kitni Modlnica",
+    "Luba\u0144 Maniowy",
+    "Dalin My\u015Blenice",
+    "Orze\u0142 Rycz\xF3w",
+    "Hutnik II Krak\xF3w",
+    "Limanovia Limanowa",
+    "Watra Bia\u0142ka Tatrza\u0144ska"
+  ],
+  "mazowieckie": [
+    "Hutnik Warszawa",
+    "Legionovia Legionowo",
+    "Podlasie Soko\u0142\xF3w Podlaski",
+    "Polonia II Warszawa",
+    "Bro\u0144 Radom",
+    "Makowianka Mak\xF3w Mazowiecki",
+    "Mazur Karczew",
+    "Ursus Warszawa",
+    "Mszczonowianka Mszczon\xF3w",
+    "MKS Piaseczno",
+    "Energia Kozienice",
+    "Talent Warszawa",
+    "B\u0142onianka B\u0142onie",
+    "KS \u0141omianki",
+    "Victoria Sulej\xF3wek",
+    "Oskar Przysucha",
+    "Nadnarwianka Pu\u0142tusk",
+    "MKS Przasnysz"
+  ],
+  "opolskie": [
+    "Odra II Opole",
+    "Ruch Zdzieszowice",
+    "LZS Domaszkowice",
+    "LZS Staro\u015Bcin",
+    "LZS Starowice Dolne",
+    "Start Namys\u0142\xF3w",
+    "Victoria \u017Byrowa",
+    "\u015Al\u0105sk \u0141ubniany",
+    "Ma\u0142apanew Ozimek",
+    "LKS Kad\u0142ub",
+    "MKS Gogolin",
+    "Stal Zawadzkie",
+    "Fortuna G\u0142og\xF3wek",
+    "Porawie Wi\u0119kszyce"
+  ],
+  "podkarpackie": [
+    "Igloopol D\u0119bica",
+    "KS Wi\u0105zownica",
+    "Ekoball Sanok",
+    "Izolator Boguchwa\u0142a",
+    "B\u0142\u0119kitni Ropczyce",
+    "Sok\xF3\u0142 Nisko",
+    "Polonia Przemy\u015Bl",
+    "Stal II Rzesz\xF3w",
+    "Legion Pilzno",
+    "Czarni Jas\u0142o",
+    "Sok\xF3\u0142 Sieniawa",
+    "Pogo\u0144-Sok\xF3\u0142 II Lubacz\xF3w",
+    "G\xF3rnik Strachocina",
+    "Wis\u0142ok Wi\u015Bniowa",
+    "Radomy\u015Blanka Radomy\u015Bl",
+    "Pogo\u0144 Le\u017Cajsk",
+    "Strug Tyczyn",
+    "Stal \u0141a\u0144cut"
+  ],
+  "podlaskie": [
+    "Warmia Grajewo",
+    "KS Wasilk\xF3w",
+    "Promie\u0144 Mo\u0144ki",
+    "Wissa Szczuczyn",
+    "\u0141KS II \u0141om\u017Ca",
+    "KS Micha\u0142owo",
+    "Hetman Tykocin",
+    "Pionier Bra\u0144sk",
+    "Tur Bielsk Podlaski",
+    "Czarni Czarna Bia\u0142ostocka",
+    "Supra\u015Blanka Supra\u015Bl",
+    "Krypnianka Krypno",
+    "KS \u015Aniadowo",
+    "Ruch Wysokie Mazowieckie",
+    "Pomorzanka Sejny",
+    "LZS Krynki"
+  ],
+  "pomorskie": [
+    "Arka II Gdynia",
+    "Pogo\u0144 L\u0119bork",
+    "Czarni Pruszcz Gda\u0144ski",
+    "Sok\xF3\u0142 Bo\u017Cepole Wielkie",
+    "Gryf Wejherowo",
+    "Jaguar Gda\u0144sk",
+    "Cartusia Kartuzy",
+    "KP Starogard Gda\u0144ski",
+    "Gryf S\u0142upsk",
+    "Wierzyca Pelplin",
+    "Radunia St\u0119\u017Cyca",
+    "Stoczniowiec Gda\u0144sk",
+    "Anio\u0142y Garczegorze",
+    "Powi\u015Ble Dzierzgo\u0144",
+    "Stolem Gniewino",
+    "Dolina Speranda Niepogl\u0119dzie",
+    "Chojniczanka II Chojnice",
+    "Sparta Sycewice"
+  ],
+  "\u015Bl\u0105skie": [
+    "GKS II Katowice",
+    "MRKS Czechowice-Dziedzice",
+    "Przemsza Siewierz",
+    "Ruch Radzionk\xF3w",
+    "Ruch II Chorz\xF3w",
+    "Unia Turza \u015Al\u0105ska",
+    "Podlesianka Katowice",
+    "Szombierki Bytom",
+    "Sp\xF3jnia Landek",
+    "Podbeskidzie II",
+    "Polonia \u0141aziska G\xF3rne",
+    "Drama Zbros\u0142awice",
+    "Rozw\xF3j Katowice",
+    "Ku\u017Ania Ustro\u0144",
+    "Piast II Gliwice",
+    "LKS Be\u0142k",
+    "Gwarek Tarnowskie G\xF3ry",
+    "Victoria Cz\u0119stochowa"
+  ],
+  "\u015Bwi\u0119tokrzyskie": [
+    "Victoria Skalbmierz",
+    "Orl\u0119ta Kielce",
+    "Arka Paw\u0142\xF3w",
+    "Sparta Kazimierza Wielka",
+    "Neptun Ko\u0144skie",
+    "Korona III Kielce",
+    "KKP Korona Kielce",
+    "Spartakus Daleszyce",
+    "GKS Rudki",
+    "Wicher Miedziana G\xF3ra",
+    "OKS Opat\xF3w",
+    "Klimontowianka Klimont\xF3w",
+    "Granat Skar\u017Cysko-Kamienna",
+    "GKS Nowiny",
+    "Hetman W\u0142oszczowa",
+    "Alit O\u017Car\xF3w",
+    "Wierna Ma\u0142ogoszcz",
+    "Orlicz Suchedni\xF3w"
+  ],
+  "warmi\u0144sko-mazurskie": [
+    "Stomil Olsztyn",
+    "Granica K\u0119trzyn",
+    "Rominta Go\u0142dap",
+    "Concordia Elbl\u0105g",
+    "Znicz Bia\u0142a Piska",
+    "Pisa Barczewo",
+    "T\u0119cza Biskupiec",
+    "Mazur E\u0142k",
+    "GKS Wikielec",
+    "Start Nidzica",
+    "Sok\xF3\u0142 Ostr\xF3da",
+    "Mamry Gi\u017Cycko",
+    "Naki Olsztyn",
+    "DKS Dobre Miasto",
+    "Zatoka Braniewo",
+    "Polonia Pas\u0142\u0119k"
+  ],
+  "wielkopolskie": [
+    "Polonia Golina",
+    "Piast Kobylnica",
+    "Pogo\u0144 Nowe Skalmierzyce",
+    "Obra Ko\u015Bcian",
+    "Polonia Leszno",
+    "Kania Gosty\u0144",
+    "LKS Go\u0142uch\xF3w",
+    "Nielba W\u0105growiec",
+    "Polonia Chodzie\u017C",
+    "G\xF3rnik Konin",
+    "Astra Krotoszyn",
+    "Warta \u015Arem",
+    "Mieszko Gniezno",
+    "Avia Kamionki",
+    "Ostrovia Ostr\xF3w Wlkp.",
+    "K\u0142os Budzy\u0144",
+    "Meblorz Swarz\u0119dz",
+    "Huragan Pobiedziska"
+  ],
+  "zachodniopomorskie": [
+    "Pogo\u0144 II Szczecin",
+    "Kotwica Ko\u0142obrzeg",
+    "Biali S\u0105d\xF3w",
+    "D\u0105b D\u0119bno",
+    "Arkonia Szczecin",
+    "\u015Awit II Szczecin",
+    "Astra Ustronie Morskie",
+    "Chemik Police",
+    "Iskierka Szczecin",
+    "Wybrze\u017Ce Rewalskie Rewal",
+    "Gwardia Koszalin",
+    "CRS Barlinek",
+    "Sparta Gryfice",
+    "GKS Manowo",
+    "Ina I\u0144sko",
+    "Orze\u0142 Wa\u0142cz"
+  ]
+};
+
+// services/PolishFourthLeagueService.ts
+var FOURTH_LEAGUE_IDS = [
+  "L_PL_5_DS",
+  "L_PL_5_KP",
+  "L_PL_5_LU",
+  "L_PL_5_LB",
+  "L_PL_5_LD",
+  "L_PL_5_MA",
+  "L_PL_5_MZ",
+  "L_PL_5_OP",
+  "L_PL_5_PK",
+  "L_PL_5_PD",
+  "L_PL_5_PM",
+  "L_PL_5_SL",
+  "L_PL_5_SK",
+  "L_PL_5_WM",
+  "L_PL_5_WP",
+  "L_PL_5_ZP"
+];
+var FOURTH_LEAGUE_FEEDER_IDS = [
+  "L_PL_6_DS",
+  "L_PL_6_KP",
+  "L_PL_6_LU",
+  "L_PL_6_LB",
+  "L_PL_6_LD",
+  "L_PL_6_MA",
+  "L_PL_6_MZ",
+  "L_PL_6_OP",
+  "L_PL_6_PK",
+  "L_PL_6_PD",
+  "L_PL_6_PM",
+  "L_PL_6_SL",
+  "L_PL_6_SK",
+  "L_PL_6_WM",
+  "L_PL_6_WP",
+  "L_PL_6_ZP"
+];
+var FOURTH_LEAGUE_BY_VOIVODESHIP = {
+  "dolno\u015Bl\u0105skie": "L_PL_5_DS",
+  "kujawsko-pomorskie": "L_PL_5_KP",
+  "lubelskie": "L_PL_5_LU",
+  "lubuskie": "L_PL_5_LB",
+  "\u0142\xF3dzkie": "L_PL_5_LD",
+  "ma\u0142opolskie": "L_PL_5_MA",
+  "mazowieckie": "L_PL_5_MZ",
+  "opolskie": "L_PL_5_OP",
+  "podkarpackie": "L_PL_5_PK",
+  "podlaskie": "L_PL_5_PD",
+  "pomorskie": "L_PL_5_PM",
+  "\u015Bl\u0105skie": "L_PL_5_SL",
+  "\u015Bwi\u0119tokrzyskie": "L_PL_5_SK",
+  "warmi\u0144sko-mazurskie": "L_PL_5_WM",
+  "wielkopolskie": "L_PL_5_WP",
+  "zachodniopomorskie": "L_PL_5_ZP"
+};
+var FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP = {
+  "dolno\u015Bl\u0105skie": "L_PL_6_DS",
+  "kujawsko-pomorskie": "L_PL_6_KP",
+  "lubelskie": "L_PL_6_LU",
+  "lubuskie": "L_PL_6_LB",
+  "\u0142\xF3dzkie": "L_PL_6_LD",
+  "ma\u0142opolskie": "L_PL_6_MA",
+  "mazowieckie": "L_PL_6_MZ",
+  "opolskie": "L_PL_6_OP",
+  "podkarpackie": "L_PL_6_PK",
+  "podlaskie": "L_PL_6_PD",
+  "pomorskie": "L_PL_6_PM",
+  "\u015Bl\u0105skie": "L_PL_6_SL",
+  "\u015Bwi\u0119tokrzyskie": "L_PL_6_SK",
+  "warmi\u0144sko-mazurskie": "L_PL_6_WM",
+  "wielkopolskie": "L_PL_6_WP",
+  "zachodniopomorskie": "L_PL_6_ZP"
+};
+var EMPTY_STATS = () => ({
+  points: 0,
+  wins: 0,
+  draws: 0,
+  losses: 0,
+  goalsFor: 0,
+  goalsAgainst: 0,
+  goalDifference: 0,
+  played: 0,
+  form: []
+});
+var hash = (value) => {
+  let result = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    result ^= value.charCodeAt(index);
+    result = Math.imul(result, 16777619);
+  }
+  return result >>> 0;
+};
+var rngFor = (seed, key) => {
+  let state = (seed ^ hash(key)) >>> 0;
+  return () => {
+    state = state * 1664525 + 1013904223 >>> 0;
+    return state / 4294967296;
+  };
+};
+var shuffled = (values, seed, key) => {
+  const result = [...values];
+  const rng = rngFor(seed, key);
+  for (let index = result.length - 1; index > 0; index--) {
+    const other = Math.floor(rng() * (index + 1));
+    [result[index], result[other]] = [result[other], result[index]];
+  }
+  return result;
+};
+var poisson = (expected, rng) => {
+  const limit = Math.exp(-expected);
+  let product = 1;
+  let count = 0;
+  do {
+    count++;
+    product *= rng();
+  } while (product > limit && count < 9);
+  return count - 1;
+};
+var FIRST_NAMES = ["Jakub", "Kacper", "Mateusz", "Micha\u0142", "Bartosz", "Patryk", "Szymon", "Dawid", "Pawe\u0142", "Piotr", "Tomasz"];
+var LAST_NAMES = ["Kowalski", "Nowak", "Wi\u015Bniewski", "W\xF3jcik", "Kami\u0144ski", "Lewandowski", "Zieli\u0144ski", "Szyma\u0144ski", "Wo\u017Aniak", "D\u0105browski", "Koz\u0142owski"];
+var makePlayerStats = (leagueId, clubs) => clubs.flatMap((club) => Array.from({ length: 11 }, (_, index) => {
+  const nameSeed = hash(`${club.id}|${index}`);
+  return {
+    id: `IV_STAT_${club.id}_${index}`,
+    clubId: club.id,
+    name: `${FIRST_NAMES[(nameSeed + index) % FIRST_NAMES.length]} ${LAST_NAMES[(nameSeed >>> 5) % LAST_NAMES.length]}`,
+    appearances: 0,
+    goals: 0,
+    assists: 0,
+    yellowCards: 0,
+    redCards: 0,
+    ratingTotal: 0
+  };
+}));
+var createSchedule = (leagueId, clubIds, template, seed) => {
+  const ids = shuffled(clubIds, seed, leagueId);
+  const fixed = ids[0];
+  let rotating = ids.slice(1);
+  const firstHalf = [];
+  for (let round = 0; round < ids.length - 1; round++) {
+    const pairs = [];
+    const fixedOpponent = rotating[rotating.length - 1];
+    pairs.push(round % 2 === 0 ? { home: fixed, away: fixedOpponent } : { home: fixedOpponent, away: fixed });
+    for (let index = 0; index < ids.length / 2 - 1; index++) {
+      const left = rotating[index];
+      const right = rotating[rotating.length - 2 - index];
+      pairs.push(round % 2 === 0 ? { home: left, away: right } : { home: right, away: left });
+    }
+    firstHalf.push(pairs);
+    rotating = [rotating[rotating.length - 1], ...rotating.slice(0, -1)];
+  }
+  const leagueSlots = template.slots.filter((slot) => String(slot.competition) === "LEAGUE").sort((left, right) => left.start.getTime() - right.start.getTime());
+  const roundCount = (ids.length - 1) * 2;
+  if (leagueSlots.length < roundCount) {
+    throw new Error(`${leagueId} requires ${roundCount} league dates; only ${leagueSlots.length} are available.`);
+  }
+  const lastSlotExclusive = ids.length < 18 ? 33 : 34;
+  const firstSlotIndex = lastSlotExclusive - roundCount;
+  const scheduledLeagueSlots = leagueSlots.slice(firstSlotIndex, lastSlotExclusive);
+  return Array.from({ length: roundCount }, (_, roundIndex) => {
+    const secondHalf = roundIndex >= ids.length - 1;
+    const base = firstHalf[roundIndex % (ids.length - 1)];
+    return base.map((pair, matchIndex) => ({
+      id: `IV_${template.seasonStartYear}_${leagueId}_R${roundIndex + 1}_M${matchIndex + 1}`,
+      leagueId,
+      round: roundIndex + 1,
+      date: scheduledLeagueSlots[roundIndex].start.toISOString(),
+      homeClubId: secondHalf ? pair.away : pair.home,
+      awayClubId: secondHalf ? pair.home : pair.away,
+      homeGoals: null,
+      awayGoals: null,
+      status: "SCHEDULED"
+    }));
+  }).flat();
+};
+var updateTable = (club, goalsFor, goalsAgainst) => {
+  const win = goalsFor > goalsAgainst;
+  const draw = goalsFor === goalsAgainst;
+  const form = win ? "W" : draw ? "R" : "P";
+  return {
+    ...club,
+    stats: {
+      ...club.stats,
+      played: club.stats.played + 1,
+      wins: club.stats.wins + (win ? 1 : 0),
+      draws: club.stats.draws + (draw ? 1 : 0),
+      losses: club.stats.losses + (!win && !draw ? 1 : 0),
+      goalsFor: club.stats.goalsFor + goalsFor,
+      goalsAgainst: club.stats.goalsAgainst + goalsAgainst,
+      goalDifference: club.stats.goalDifference + goalsFor - goalsAgainst,
+      points: club.stats.points + (win ? 3 : draw ? 1 : 0),
+      form: [...club.stats.form ?? [], form].slice(-5)
+    }
+  };
+};
+var applyPlayerStats = (rows, clubId, goals, conceded, rng) => {
+  const clubRows = rows.filter((row) => row.clubId === clubId);
+  const changed = new Map(clubRows.map((row) => [row.id, {
+    ...row,
+    appearances: row.appearances + 1,
+    ratingTotal: row.ratingTotal + Math.max(5.2, Math.min(8.8, 6.45 + goals * 0.18 - conceded * 0.1 + (rng() - 0.5) * 0.8))
+  }]));
+  for (let goal = 0; goal < goals; goal++) {
+    const scorer = clubRows[Math.floor(rng() * Math.min(8, clubRows.length))];
+    const assist = clubRows[Math.floor(rng() * clubRows.length)];
+    changed.get(scorer.id).goals += 1;
+    if (assist.id !== scorer.id && rng() > 0.14) changed.get(assist.id).assists += 1;
+  }
+  const yellowCount = rng() < 0.72 ? 1 + Math.floor(rng() * 3) : 0;
+  for (let card = 0; card < yellowCount; card++) {
+    changed.get(clubRows[Math.floor(rng() * clubRows.length)].id).yellowCards += 1;
+  }
+  if (rng() < 0.055) changed.get(clubRows[Math.floor(rng() * clubRows.length)].id).redCards += 1;
+  return rows.map((row) => changed.get(row.id) ?? row);
+};
+var reserveParentName = (name) => {
+  const stripped = name.replace(/\s+(II|III)$/i, "").replace(/^(.+?)\s+(?:II|III)\s+(.+)$/i, "$1 $2").trim();
+  return stripped === name ? null : stripped;
+};
+var createRegionalPoolClub = (voivodeship, poolId, seasonStartYear, number, occupiedIds) => {
+  let ordinal = number;
+  let id = `PL_DISTRICT_${poolId}_${seasonStartYear}_${ordinal}`;
+  while (occupiedIds.has(id)) {
+    ordinal++;
+    id = `PL_DISTRICT_${poolId}_${seasonStartYear}_${ordinal}`;
+  }
+  occupiedIds.add(id);
+  const name = `Klub okr\u0119gowy ${voivodeship} ${ordinal}`;
+  const reputation = 1 + hash(id) % 3;
+  const budget = FinanceService.calculateInitialBudget(6, reputation);
+  return {
+    id,
+    name,
+    shortName: `KO${ordinal}`,
+    leagueId: poolId,
+    tier: 6,
+    colorsHex: ["#183a5a", "#ffffff"],
+    colorPrimary: "#183a5a",
+    colorSecondary: "#ffffff",
+    stadiumName: `Stadion okr\u0119gowy ${ordinal}`,
+    stadiumCapacity: 500 + hash(`${id}|stadium`) % 1001,
+    reputation,
+    country: "Polska",
+    polishVoivodeship: voivodeship,
+    isDefaultActive: false,
+    rosterIds: [],
+    stats: EMPTY_STATS(),
+    budget,
+    transferBudget: 0,
+    reserveBudget: 0,
+    boardStrictness: 5,
+    signingBonusPool: 0,
+    boardConfidence: 70
+  };
+};
+var PolishFourthLeagueService = {
+  isFourthLeagueId(value) {
+    return FOURTH_LEAGUE_IDS.includes(value);
+  },
+  isFourthLeagueFeederId(value) {
+    return FOURTH_LEAGUE_FEEDER_IDS.includes(value);
+  },
+  isLightweightRegionalLeagueId(value) {
+    return this.isFourthLeagueId(value) || this.isFourthLeagueFeederId(value);
+  },
+  getLeagueForVoivodeship(voivodeship) {
+    return FOURTH_LEAGUE_BY_VOIVODESHIP[voivodeship];
+  },
+  getFeederLeagueForVoivodeship(voivodeship) {
+    return FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship];
+  },
+  getVoivodeshipForFeederLeague(leagueId) {
+    const match = Object.entries(FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP).find(([, candidateLeagueId]) => candidateLeagueId === leagueId);
+    if (!match) throw new Error(`Unknown Polish district-pool id: ${leagueId}.`);
+    return match[0];
+  },
+  getVoivodeshipForLeague(leagueId) {
+    const match = Object.entries(FOURTH_LEAGUE_BY_VOIVODESHIP).find(([, candidateLeagueId]) => candidateLeagueId === leagueId);
+    if (!match) throw new Error(`Unknown Polish IV-liga id: ${leagueId}.`);
+    return match[0];
+  },
+  /**
+   * Merges the researched 2026/27 membership with existing database/datapack
+   * clubs. Existing ids win, so a datapack can improve a club's crest, stadium
+   * or strength without breaking the regional competition. Missing teams are
+   * represented by deliberately inactive lightweight Club records.
+   */
+  mergeCareerClubs(sourceClubs, startYear) {
+    if (startYear !== 2026) return sourceClubs;
+    const result = sourceClubs.map((club) => ({ ...club }));
+    const byId = new Map(result.map((club) => [club.id, club]));
+    const byName = new Map(result.map((club) => [club.name.toLocaleLowerCase("pl-PL"), club]));
+    Object.entries(POLISH_FOURTH_LEAGUE_2026).forEach(([voivodeship, names]) => {
+      const leagueId = FOURTH_LEAGUE_BY_VOIVODESHIP[voivodeship];
+      names.forEach((name, index) => {
+        const generatedId = generateClubId(name);
+        const existing = byId.get(generatedId) ?? byName.get(name.toLocaleLowerCase("pl-PL"));
+        if (existing) {
+          existing.leagueId = leagueId;
+          existing.tier = 5;
+          existing.polishVoivodeship = voivodeship;
+          existing.isDefaultActive = false;
+          existing.stats = EMPTY_STATS();
+          return;
+        }
+        const reputation = 1 + hash(`${voivodeship}|${name}`) % 3;
+        const budget = FinanceService.calculateInitialBudget(5, reputation);
+        const club = {
+          id: generatedId,
+          name,
+          shortName: name.replace(/[^A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g, "").slice(0, 4).toUpperCase(),
+          leagueId,
+          tier: 5,
+          colorsHex: ["#17345f", "#ffffff", "#d9273e"],
+          colorPrimary: "#17345f",
+          colorSecondary: "#ffffff",
+          stadiumName: `Stadion ${name}`,
+          stadiumCapacity: 800 + hash(name) % 2201,
+          reputation,
+          country: "Polska",
+          polishVoivodeship: voivodeship,
+          // Inactive here means "not part of the full playable-world engine".
+          // The dedicated IV-liga service still simulates and displays the club.
+          isDefaultActive: false,
+          rosterIds: [],
+          stats: EMPTY_STATS(),
+          budget,
+          transferBudget: 0,
+          reserveBudget: 0,
+          boardStrictness: 5,
+          signingBonusPool: 0,
+          boardConfidence: 70
+        };
+        result.push(club);
+        byId.set(club.id, club);
+        byName.set(name.toLocaleLowerCase("pl-PL"), club);
+      });
+    });
+    return result;
+  },
+  /**
+   * Creates one private, 18-club promotion pool for every voivodeship. Existing
+   * database or datapack clubs are preferred whenever their regional metadata
+   * is available; deterministic placeholders only fill genuine database gaps.
+   * The pool has no fixtures of its own and exists solely to provide stable,
+   * region-correct candidates for promotion to the appropriate IV liga.
+   */
+  ensureRegionalFeederPools(clubs, seasonStartYear) {
+    let result = clubs.map((club) => ({ ...club }));
+    const occupiedIds = new Set(result.map((club) => club.id));
+    Object.keys(FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP).forEach((voivodeship) => {
+      const poolId = FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship];
+      let poolSize = result.filter((club) => club.leagueId === poolId).length;
+      if (poolSize < 18) {
+        const candidates = result.filter((club) => club.leagueId === "L_PL_5" && club.polishVoivodeship === voivodeship).sort(
+          (left, right) => right.reputation - left.reputation || hash(`${seasonStartYear}|${voivodeship}|${left.id}`) - hash(`${seasonStartYear}|${voivodeship}|${right.id}`)
+        ).slice(0, 18 - poolSize);
+        const selectedIds = new Set(candidates.map((club) => club.id));
+        result = result.map((club) => selectedIds.has(club.id) ? { ...club, leagueId: poolId, tier: 6, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+        poolSize += candidates.length;
+      }
+      while (poolSize < 18) {
+        result.push(createRegionalPoolClub(voivodeship, poolId, seasonStartYear, poolSize + 1, occupiedIds));
+        poolSize++;
+      }
+    });
+    return result;
+  },
+  createSeason(clubs, template, seed) {
+    const resetClubs = clubs.map((club) => this.isFourthLeagueId(club.leagueId) ? { ...club, tier: 5, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+    const fixtures = {};
+    const playerStats = {};
+    FOURTH_LEAGUE_IDS.forEach((leagueId, index) => {
+      const leagueClubs = resetClubs.filter((club) => club.leagueId === leagueId);
+      if (![14, 16, 18].includes(leagueClubs.length)) {
+        throw new Error(`${leagueId} must contain 14, 16 or 18 clubs; received ${leagueClubs.length}.`);
+      }
+      fixtures[leagueId] = createSchedule(leagueId, leagueClubs.map((club) => club.id), template, seed + 500 + index);
+      playerStats[leagueId] = makePlayerStats(leagueId, leagueClubs);
+    });
+    return { state: { seasonStartYear: template.seasonStartYear, fixtures, playerStats }, clubs: resetClubs };
+  },
+  rebalanceForNextSeason(clubs, seasonStartYear, seed) {
+    let result = this.ensureRegionalFeederPools(clubs, seasonStartYear);
+    const reserveConflictIds = new Set(result.filter((club) => this.isFourthLeagueId(club.leagueId)).filter((club) => {
+      const parentName = reserveParentName(club.name);
+      if (!parentName) return false;
+      const normalizedParentName = parentName.toLocaleLowerCase("pl-PL");
+      return result.some(
+        (candidate) => candidate.id !== club.id && this.isFourthLeagueId(candidate.leagueId) && (candidate.name.toLocaleLowerCase("pl-PL") === normalizedParentName || normalizedParentName.length >= 5 && candidate.name.toLocaleLowerCase("pl-PL").includes(normalizedParentName))
+      );
+    }).map((club) => club.id));
+    if (reserveConflictIds.size > 0) {
+      result = result.map((club) => {
+        if (!reserveConflictIds.has(club.id)) return club;
+        const voivodeship = club.polishVoivodeship ?? this.getVoivodeshipForLeague(club.leagueId);
+        return {
+          ...club,
+          leagueId: FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship],
+          tier: 6,
+          isDefaultActive: false,
+          stats: EMPTY_STATS()
+        };
+      });
+    }
+    Object.entries(POLISH_FOURTH_LEAGUE_2026).forEach(([voivodeship, baseline]) => {
+      const leagueId = FOURTH_LEAGUE_BY_VOIVODESHIP[voivodeship];
+      const poolId = FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship];
+      const targetSize = baseline.length;
+      const current = this.getTable(result, leagueId);
+      const promotionCandidates = result.filter((club) => club.leagueId === poolId && !reserveConflictIds.has(club.id)).filter((club) => this.canReserveEnterFourthLeague(club, result)).map((club) => {
+        const rng = rngFor(seed, `IV_POOL_DRAW|${seasonStartYear}|${poolId}|${club.id}`);
+        const strength = Math.max(0, Math.min(1, (club.reputation - 1) / 19));
+        return { club, score: rng() * 0.7 + strength * 0.3 };
+      }).sort((left, right) => right.score - left.score || left.club.id.localeCompare(right.club.id));
+      if (promotionCandidates.length < 4) {
+        throw new Error(`${poolId} has fewer than four eligible promotion candidates.`);
+      }
+      const promotedIds = new Set(promotionCandidates.slice(0, 4).map((candidate) => candidate.club.id));
+      const relegationCount = Math.max(0, current.length + promotedIds.size - targetSize);
+      const relegatedIds = new Set(current.slice(Math.max(0, current.length - relegationCount)).map((club) => club.id));
+      result = result.map((club) => {
+        if (promotedIds.has(club.id)) {
+          return { ...club, leagueId, tier: 5, isDefaultActive: false, stats: EMPTY_STATS() };
+        }
+        if (relegatedIds.has(club.id)) {
+          return { ...club, leagueId: poolId, tier: 6, isDefaultActive: false, stats: EMPTY_STATS() };
+        }
+        return club;
+      });
+      let poolClubs = result.filter((club) => club.leagueId === poolId);
+      if (poolClubs.length > 18) {
+        const surplusCount = poolClubs.length - 18;
+        const surplusIds = new Set(poolClubs.filter((club) => !relegatedIds.has(club.id)).sort(
+          (left, right) => left.reputation - right.reputation || hash(`${seed}|POOL_SURPLUS|${left.id}`) - hash(`${seed}|POOL_SURPLUS|${right.id}`)
+        ).slice(0, surplusCount).map((club) => club.id));
+        result = result.map((club) => surplusIds.has(club.id) ? { ...club, leagueId: "L_PL_5", tier: 6, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+      }
+      poolClubs = result.filter((club) => club.leagueId === poolId);
+      if (poolClubs.length < 18) {
+        const replacements = result.filter((club) => club.leagueId === "L_PL_5" && club.polishVoivodeship === voivodeship).sort(
+          (left, right) => right.reputation - left.reputation || hash(`${seed}|POOL_REFILL|${left.id}`) - hash(`${seed}|POOL_REFILL|${right.id}`)
+        ).slice(0, 18 - poolClubs.length);
+        const replacementIds = new Set(replacements.map((club) => club.id));
+        result = result.map((club) => replacementIds.has(club.id) ? { ...club, leagueId: poolId, tier: 6, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+      }
+      const occupiedIds = new Set(result.map((club) => club.id));
+      let missing = 18 - result.filter((club) => club.leagueId === poolId).length;
+      while (missing > 0) {
+        const ordinal = 19 - missing;
+        result.push(createRegionalPoolClub(voivodeship, poolId, seasonStartYear, ordinal, occupiedIds));
+        missing--;
+      }
+    });
+    return result;
+  },
+  processDate(state, clubs, date, seed) {
+    if (!state) return { state, clubs, played: 0 };
+    const cutoff = date.getTime();
+    const clubById = new Map(clubs.map((club) => [club.id, club]));
+    const nextFixtures = { ...state.fixtures };
+    const nextPlayerStats = { ...state.playerStats };
+    let played = 0;
+    FOURTH_LEAGUE_IDS.forEach((leagueId) => {
+      let statsRows = nextPlayerStats[leagueId];
+      nextFixtures[leagueId] = state.fixtures[leagueId].map((fixture) => {
+        if (fixture.status === "FINISHED" || new Date(fixture.date).getTime() > cutoff) return fixture;
+        const home = clubById.get(fixture.homeClubId);
+        const away = clubById.get(fixture.awayClubId);
+        if (!home || !away) return fixture;
+        const rng = rngFor(seed, fixture.id);
+        const strengthDifference = (home.reputation - away.reputation) * 2.2;
+        const homeGoals = poisson(Math.max(0.25, Math.min(3.25, 1.48 + strengthDifference / 10)), rng);
+        const awayGoals = poisson(Math.max(0.2, Math.min(3, 1.14 - strengthDifference / 10)), rng);
+        clubById.set(home.id, updateTable(home, homeGoals, awayGoals));
+        clubById.set(away.id, updateTable(away, awayGoals, homeGoals));
+        statsRows = applyPlayerStats(statsRows, home.id, homeGoals, awayGoals, rng);
+        statsRows = applyPlayerStats(statsRows, away.id, awayGoals, homeGoals, rng);
+        played++;
+        return { ...fixture, homeGoals, awayGoals, status: "FINISHED" };
+      });
+      nextPlayerStats[leagueId] = statsRows;
+    });
+    if (played === 0) return { state, clubs, played: 0 };
+    return {
+      state: { ...state, fixtures: nextFixtures, playerStats: nextPlayerStats },
+      clubs: clubs.map((club) => clubById.get(club.id) ?? club),
+      played
+    };
+  },
+  getTable(clubs, leagueId) {
+    return clubs.filter((club) => club.leagueId === leagueId).sort(
+      (left, right) => right.stats.points - left.stats.points || right.stats.goalDifference - left.stats.goalDifference || right.stats.goalsFor - left.stats.goalsFor || left.name.localeCompare(right.name, "pl")
+    );
+  },
+  canReserveEnterThirdLeague(club, clubs) {
+    const parentName = reserveParentName(club.name);
+    if (!parentName) return true;
+    const normalizedParentName = parentName.toLocaleLowerCase("pl-PL");
+    const parent = clubs.find((candidate) => {
+      const candidateName = candidate.name.toLocaleLowerCase("pl-PL");
+      return candidateName === normalizedParentName || normalizedParentName.length >= 5 && candidateName.includes(normalizedParentName);
+    });
+    return !parent || !/^L_PL_4(?:_|$)/.test(parent.leagueId);
+  },
+  canReserveEnterFourthLeague(club, clubs) {
+    const parentName = reserveParentName(club.name);
+    if (!parentName) return true;
+    const normalizedParentName = parentName.toLocaleLowerCase("pl-PL");
+    const parent = clubs.find((candidate) => {
+      if (candidate.id === club.id) return false;
+      const candidateName = candidate.name.toLocaleLowerCase("pl-PL");
+      return candidateName === normalizedParentName || normalizedParentName.length >= 5 && candidateName.includes(normalizedParentName);
+    });
+    return !parent || !this.isFourthLeagueId(parent.leagueId);
   }
 };
 
@@ -4155,7 +4990,8 @@ var PolishLeagueSeasonService = {
   buildClubsForCareerStart(sourceClubs, startYear) {
     const membership = this.getMembership(startYear);
     if (!membership) return sourceClubs.map((club) => ({ ...club }));
-    const clubById = new Map(sourceClubs.map((club) => [club.id, club]));
+    const careerSourceClubs = PolishFourthLeagueService.mergeCareerClubs(sourceClubs, startYear);
+    const clubById = new Map(careerSourceClubs.map((club) => [club.id, club]));
     const configuredIds = Object.values(membership).flatMap((clubIds) => clubIds ?? []);
     const uniqueConfiguredIds = new Set(configuredIds);
     if (uniqueConfiguredIds.size !== configuredIds.length) {
@@ -4175,17 +5011,23 @@ var PolishLeagueSeasonService = {
         isDefaultActive: true
       };
     }));
-    const remainingClubs = sourceClubs.filter((club) => !uniqueConfiguredIds.has(club.id)).map((club) => ({
+    const remainingClubs = careerSourceClubs.filter((club) => !uniqueConfiguredIds.has(club.id)).map((club) => ({
       ...club,
       polishVoivodeship: CLUB_VOIVODESHIPS[club.id] ?? club.polishVoivodeship,
       // Only the 72 configured clubs receive a full III-liga schedule in a
       // 2026/27 career. Every other regional club is retained as a transfer
       // and future-promotion candidate in the lightweight feeder pool.
-      leagueId: startYear >= 2026 ? "L_PL_5" : "L_PL_4",
-      tier: startYear >= 2026 ? 5 : 4,
-      isDefaultActive: true
+      leagueId: startYear >= 2026 && PolishFourthLeagueService.isFourthLeagueId(club.leagueId) ? club.leagueId : startYear >= 2026 ? "L_PL_5" : "L_PL_4",
+      tier: startYear >= 2026 ? PolishFourthLeagueService.isFourthLeagueId(club.leagueId) ? 5 : 6 : 4,
+      // Exact IV-league members are simulated by the lightweight regional
+      // engine. Keeping them inactive prevents full squads, coaches and AI
+      // transfer processing from being allocated to hundreds of background
+      // clubs. The deeper regional candidates are equally lightweight and
+      // therefore must not receive full squads, coaches or transfer AI.
+      isDefaultActive: startYear >= 2026 ? false : true
     }));
-    return [...configuredClubs, ...remainingClubs];
+    const configuredWorld = [...configuredClubs, ...remainingClubs];
+    return startYear === 2026 ? PolishFourthLeagueService.ensureRegionalFeederPools(configuredWorld, startYear) : configuredWorld;
   }
 };
 

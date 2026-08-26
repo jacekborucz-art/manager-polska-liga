@@ -363,10 +363,16 @@ const _getTargetDepthCount = (position: PlayerPosition): number =>
   MIN_SQUAD_POSITION_COUNTS[position];
 
 // Rekrutacja AI może uzupełniać braki i rozsądną rotację, ale nie powinna dalej pompować przepełnionej pozycji.
-const _canAddBalancedDepth = (squad: Player[], position: PlayerPosition): boolean => {
-  const counts = _countByPosition(squad);
-  if (counts[position] < MIN_SQUAD_POSITION_COUNTS[position]) return true;
-  return counts[position] < AI_SOFT_MAX_POSITION_COUNTS[position];
+const _canAddBalancedDepth = (
+  squad: Player[],
+  position: PlayerPosition,
+  cachedPositionCounts?: Map<PlayerPosition, number>
+): boolean => {
+  // Market scans evaluate many candidates against the same buyer squad. Reuse
+  // its immutable snapshot instead of recounting all 20-30 players per candidate.
+  const positionCount = cachedPositionCounts?.get(position) ?? _countByPosition(squad)[position];
+  if (positionCount < MIN_SQUAD_POSITION_COUNTS[position]) return true;
+  return positionCount < AI_SOFT_MAX_POSITION_COUNTS[position];
 };
 
 // Seasonal position limits stay flexible, allowing one extra player in a line without creating unrealistic stockpiles.
@@ -428,10 +434,13 @@ const _chooseAiSurplusExit = (
 const _isQuantityDepthNeed = (
   need: ClubNeedAssessment,
   squad: Player[],
-  position: PlayerPosition
+  position: PlayerPosition,
+  cachedPositionCounts?: Map<PlayerPosition, number>
 ): boolean => {
   if (need.reason !== 'SHORTAGE') return false;
-  const positionCount = squad.filter(player => player.position === position).length;
+  // The optional count comes from AiMarketSquadSnapshot and is identical to the
+  // previous squad.filter result for the duration of one buyer pass.
+  const positionCount = cachedPositionCounts?.get(position) ?? squad.filter(player => player.position === position).length;
   return (
     squad.length < AI_MIN_SQUAD_SIZE ||
     positionCount < MIN_SQUAD_POSITION_COUNTS[position] ||
@@ -1076,7 +1085,7 @@ const _protectPendingTransferPlayerFromMarket = (player: Player): Player => {
 // skanowanie), albo mała, cache'owana lista (club.aiScoutedTargets.interestedPlayerIds).
 // Jedyne miejsce z tą logiką filtrowania — zero duplikacji.
 const _buildInterestedPlayerTargets = (
-  pool: Player[],
+  pool: Array<{ player: Player; sourceClubId: string }>,
   club: Club,
   squad: Player[],
   needsITMap: Map<string, ReturnType<typeof _assessClubNeeds>[number]>,
@@ -1084,51 +1093,108 @@ const _buildInterestedPlayerTargets = (
   isGulfStarHunter: boolean,
   windowOpen: boolean,
   currentDate: Date,
-  sellerClubMap: Map<string, Club>
+  sellerClubMap: Map<string, Club>,
+  options: {
+    prevalidatedForDate?: boolean;
+    newlyPendingPlayerIds?: Set<string>;
+  } = {}
 ): Player[] => {
   const marketSnapshot = _buildAiMarketSquadSnapshot(squad);
-  return pool.filter(p => {
-    if (p.loan) return false;
+
+  /**
+   * Every value below depends only on the buyer squad and one of four positions.
+   * The previous implementation recalculated these values for every player in
+   * the entire world. Building four tiny contexts once removes repeated squad
+   * scans without changing any transfer threshold.
+   */
+  const positionContexts = new Map<PlayerPosition, {
+    need: ReturnType<typeof _assessClubNeeds>[number];
+    qualityFloor: number;
+    canAddBalancedDepth: boolean;
+    buyerPositionAverage: number;
+    isQuantityNeed: boolean;
+    low: number;
+    openMarketHigh: number;
+    shortlistedHigh: number;
+  }>();
+  needsITMap.forEach(need => {
+    const position = need.position;
+    const isQuantityNeed = _isQuantityDepthNeed(
+      need,
+      squad,
+      position,
+      marketSnapshot.positionCounts
+    );
+    const ovrCap = Math.min(idealOvr, 95);
+    positionContexts.set(position, {
+      need,
+      qualityFloor: _getAiMarketQualityFloor(club, squad, position, need, marketSnapshot),
+      canAddBalancedDepth: _canAddBalancedDepth(squad, position, marketSnapshot.positionCounts),
+      buyerPositionAverage: marketSnapshot.positionAverages.get(position) ?? 0,
+      isQuantityNeed,
+      low: isQuantityNeed ? 45 : need.urgency === 'CRITICAL' ? ovrCap - 14 : ovrCap - 8,
+      openMarketHigh: isQuantityNeed ? Math.max(ovrCap + 12, 99) : ovrCap + 8,
+      shortlistedHigh: isQuantityNeed ? Math.max(ovrCap + 12, 99) : ovrCap + 12,
+    });
+  });
+
+  const targets: Player[] = [];
+  for (const { player: p, sourceClubId } of pool) {
+    // A shared full-market index includes the buyer's own squad so that it can
+    // be built only once. The old Object.entries(...).filter(...) path removed
+    // that squad before candidate evaluation, therefore we reject it here before
+    // any RNG is consumed and preserve the old traversal semantics.
+    if (sourceClubId === club.id) continue;
+    if (options.newlyPendingPlayerIds?.has(p.id)) continue;
+
+    if (!options.prevalidatedForDate && p.loan) continue;
     // Apply the club-structure rule before any quality, reputation or budget
     // calculations. This prevents a first team from treating a player from
     // its own reserves as an external market target and keeps the scouting
     // cache free of an offer that can never be legally completed.
-    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(club.id, p.clubId || 'FREE_AGENTS')) return false;
-    if (_hasActiveTransferLockout(p, currentDate)) return false;
-    if (_hasActiveTransferOfferBan(p, currentDate)) return false;
-    if (p.isOnTransferList || p.transferPendingClubId) return false;
-    const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
-    if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return false;
-    if (!PrestigeTransferGuardService.shouldConsiderDestination(p, club)) return false;
+    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(club.id, p.clubId || 'FREE_AGENTS')) continue;
+    if (!options.prevalidatedForDate) {
+      if (_hasActiveTransferLockout(p, currentDate)) continue;
+      if (_hasActiveTransferOfferBan(p, currentDate)) continue;
+      if (p.isOnTransferList || p.transferPendingClubId) continue;
+      const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
+      if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) continue;
+    }
+
+    // Preserve the old RNG sequence exactly: every player reaching this point
+    // consumed one Math.random() in shouldConsiderDestination. We capture that
+    // roll now even when a later deterministic rule rejects the player. Only the
+    // expensive prestige assessment is deferred until it can affect the result.
+    const prestigeRoll = Math.random();
 
     const sellerClub = sellerClubMap.get(p.clubId || '');
     const isGulfVeteranStarTarget = !!sellerClub &&
       isGulfStarHunter &&
       _isExpiringBigClubVeteranStar(p, sellerClub, currentDate);
-    if (isGulfVeteranStarTarget) return true;
 
     const isShortlisted = (p.interestedClubs || []).includes(club.id);
-    const need = needsITMap.get(p.position);
-    if (!need) return false;
-    if (_isBelowAiMarketQualityFloor(p, club, squad, need, marketSnapshot)) return false;
-    if (!_canAddBalancedDepth(squad, p.position) && need.reason !== 'SHORTAGE') return false;
-
-    const buyerPositionAverage = marketSnapshot.positionAverages.get(p.position) ?? 0;
-    const isQuantityNeed = _isQuantityDepthNeed(need, squad, p.position);
-    const isOpenMarketTarget =
-      !isShortlisted &&
+    const context = positionContexts.get(p.position);
+    const passesNormalMarketRules = !!context &&
+      p.overallRating >= context.qualityFloor &&
+      (context.canAddBalancedDepth || context.need.reason === 'SHORTAGE') &&
       (
-        isQuantityNeed ||
-        p.overallRating >= buyerPositionAverage + (need.starterRequired ? 2 : 3) ||
-        (club.reputation >= (sellerClub?.reputation ?? 0) + 2 && p.overallRating >= buyerPositionAverage + 1)
-      );
-    if (!isShortlisted && !isOpenMarketTarget) return false;
+        isShortlisted ||
+        context.isQuantityNeed ||
+        p.overallRating >= context.buyerPositionAverage + (context.need.starterRequired ? 2 : 3) ||
+        (
+          club.reputation >= (sellerClub?.reputation ?? 0) + 2 &&
+          p.overallRating >= context.buyerPositionAverage + 1
+        )
+      ) &&
+      p.overallRating >= context.low &&
+      p.overallRating <= (isShortlisted ? context.shortlistedHigh : context.openMarketHigh);
 
-    const ovrCap = Math.min(idealOvr, 95);
-    const low = isQuantityNeed ? 45 : need.urgency === 'CRITICAL' ? ovrCap - 14 : ovrCap - 8;
-    const high = isQuantityNeed ? Math.max(ovrCap + 12, 99) : ovrCap + (isShortlisted ? 12 : 8);
-    return p.overallRating >= low && p.overallRating <= high;
-  });
+    if (!isGulfVeteranStarTarget && !passesNormalMarketRules) continue;
+    if (PrestigeTransferGuardService.shouldConsiderDestination(p, club, 0, prestigeRoll)) {
+      targets.push(p);
+    }
+  }
+  return targets;
 };
 
 const _roundContractMoney = (value: number): number =>
@@ -1194,7 +1260,9 @@ const _getAiMarketQualityFloor = (
   const coreAverage = snapshot?.coreAverage ?? _getCoreSquadAverageOverall(squad);
   const positionAverage = snapshot?.positionAverages.get(position) ?? _getPositionAverageOverall(squad, position);
   const referenceAverage = Math.max(coreAverage, positionAverage || coreAverage);
-  const isQuantityNeed = need ? _isQuantityDepthNeed(need, squad, position) : false;
+  const isQuantityNeed = need
+    ? _isQuantityDepthNeed(need, squad, position, snapshot?.positionCounts)
+    : false;
   const tolerance =
     club.reputation >= 18 ? (isQuantityNeed ? 8 : 6) :
     club.reputation >= 15 ? (isQuantityNeed ? 10 : 8) :
@@ -3064,10 +3132,28 @@ processAiRecruitment: (
     // FREE_AGENTS) wykonywany dla każdego sprawdzanego klubu.
     const otherClubPlayersById = new Map<string, Player>();
     const buyingClubIds = new Set<string>();
+    const paidTransferEffectiveDate = windowOpen ? currentDate : _getNextWindowStart(currentDate);
+    const fullScanMarketIndex: Array<{ player: Player; sourceClubId: string }> = [];
+    const newlyPendingPlayerIds = new Set<string>();
     Object.entries(updatedPlayersMap).forEach(([cId, squadList]) => {
       squadList.forEach(p => {
         if (p.transferPendingClubId) buyingClubIds.add(p.transferPendingClubId);
-        if (cId !== 'FREE_AGENTS' && cId !== userTeamId) otherClubPlayersById.set(p.id, p);
+        if (cId === 'FREE_AGENTS' || cId === userTeamId) return;
+        otherClubPlayersById.set(p.id, p);
+
+        /**
+         * These checks depend only on the player and today's date, not on the
+         * buying club. Previously every full-scan buyer repeated the same Date
+         * parsing and contract checks for every player in the world. Keeping one
+         * ordered index preserves the original Object.entries + squad order.
+         * Buyer-specific reserve rules and all RNG remain inside the buyer pass.
+         */
+        if (p.loan) return;
+        if (_hasActiveTransferLockout(p, currentDate)) return;
+        if (_hasActiveTransferOfferBan(p, currentDate)) return;
+        if (p.isOnTransferList || p.transferPendingClubId) return;
+        if (_shouldUsePreContractInsteadOfPaidTransfer(p, currentDate, paidTransferEffectiveDate)) return;
+        fullScanMarketIndex.push({ player: p, sourceClubId: cId });
       });
     });
 
@@ -3113,16 +3199,24 @@ processAiRecruitment: (
       const useFullScan = hasCriticalShortageIT || isGulfStarHunter || cacheStale;
 
       const targetPool = useFullScan
-        ? Object.entries(updatedPlayersMap)
-            .filter(([cId]) => cId !== 'FREE_AGENTS' && cId !== club.id && cId !== userTeamId)
-            .flatMap(([, sq]) => sq)
+        ? fullScanMarketIndex
         : (scoutCache?.interestedPlayerIds ?? [])
             .map(id => otherClubPlayersById.get(id))
-            .filter((p): p is Player => !!p && p.clubId !== club.id);
+            .filter((p): p is Player => !!p && p.clubId !== club.id)
+            .map(player => ({ player, sourceClubId: player.clubId || '' }));
 
       // Kandydaci: gracze z interestedClubs zawierającym ten klub, niewystawieni na listę
       const targets = _buildInterestedPlayerTargets(
-        targetPool, club, squad, needsITMap, idealOvr, isGulfStarHunter, windowOpen, currentDate, sellerClubMap
+        targetPool,
+        club,
+        squad,
+        needsITMap,
+        idealOvr,
+        isGulfStarHunter,
+        windowOpen,
+        currentDate,
+        sellerClubMap,
+        { prevalidatedForDate: useFullScan, newlyPendingPlayerIds }
       );
 
       // Odświeżenie cache TYLKO gdy faktycznie wygasł — nie przy każdym pełnym skanie
@@ -3276,6 +3370,11 @@ processAiRecruitment: (
             }
           : p
       );
+      // The shared index intentionally keeps immutable player references for the
+      // duration of this pass. Mark a completed target separately so subsequent
+      // buyers observe the same transferPending exclusion as the old freshly
+      // rebuilt world array (and cached paths cannot create a duplicate offer).
+      newlyPendingPlayerIds.add(target.id);
 
       logEntries.push({
         id: `IT_OFFER_${target.id}_${club.id}_${currentDate.getTime()}`,
@@ -3331,6 +3430,82 @@ processAiRecruitment: (
     );
     const signedPlayerIds = new Set<string>();
 
+    /**
+     * PERFORMANCE: a real 2026/27 SAVE contained 3,567 players inside the
+     * pre-contract window and 1,214 clubs. The legacy nested loop rebuilt the
+     * buyer strategy, positional averages and transfer needs for roughly 4.3
+     * million seller-player-buyer combinations. On 11 August that single phase
+     * took about 30.8 seconds.
+     *
+     * None of the values below changes while this pre-contract pass runs: an
+     * agreement only marks a seller's player as pending and does not add him to
+     * the buyer squad yet. Build the immutable buyer profile once, then retain
+     * the original per-player stagger, sorting and deterministic RNG below.
+     */
+    const positions: PlayerPosition[] = [
+      PlayerPosition.GK,
+      PlayerPosition.DEF,
+      PlayerPosition.MID,
+      PlayerPosition.FWD,
+    ];
+    const signedHash = (value: string): number => {
+      let hash = 0;
+      for (let index = 0; index < value.length; index += 1) {
+        hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+      }
+      return hash;
+    };
+    const powerOf31 = (length: number): number => {
+      let value = 1;
+      for (let index = 0; index < length; index += 1) value = Math.imul(value, 31);
+      return value;
+    };
+    const clubById = new Map(clubs.map(club => [club.id, club]));
+    const buyerContexts = clubs
+      .filter(buyer => buyer.id !== userTeamId && buyer.id !== 'FREE_AGENTS')
+      .map(buyerClub => {
+        const buyerSquad = updatedPlayersMap[buyerClub.id] || [];
+        const strategy = AiClubTransferStrategyService.buildStrategy(buyerClub);
+        const needs = _assessClubNeeds(buyerClub, buyerSquad, currentDate, strategy);
+        const needPositions = new Set(needs.map(need => need.position));
+        const positionAverages = new Map<PlayerPosition, number>();
+        const balancedDepth = new Map<PlayerPosition, boolean>();
+        positions.forEach(position => {
+          positionAverages.set(position, _getPositionAverageOverall(buyerSquad, position));
+          balancedDepth.set(position, _canAddBalancedDepth(buyerSquad, position));
+        });
+
+        return {
+          buyerClub,
+          buyerSquad,
+          needPositions,
+          positionAverages,
+          balancedDepth,
+          // Hashing `${buyer.id}_${player.id}` character by character for 4.3
+          // million pairs was the largest remaining cost after squad-profile
+          // caching. Store the prefix hash and combine it with the player hash
+          // through the exact same 32-bit polynomial formula.
+          staggerHashPrefix: signedHash(`${buyerClub.id}_`),
+          hasCriticalDepthShortage: _hasCriticalDepthShortage(buyerSquad),
+          canMonitorEliteWatchlist: buyerClub.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION,
+        };
+      });
+
+    // Parent/reserve eligibility depends on the club pair, not on a player.
+    // Cache each seller's permitted buyers while preserving the source club
+    // order used by stable Array.sort tie-breaking in the legacy path.
+    const buyerContextsBySellerId = new Map<string, typeof buyerContexts>();
+    const getBuyerContextsForSeller = (sellerClubId: string) => {
+      const cached = buyerContextsBySellerId.get(sellerClubId);
+      if (cached) return cached;
+      const eligible = buyerContexts.filter(({ buyerClub }) =>
+        buyerClub.id !== sellerClubId &&
+        ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClubId)
+      );
+      buyerContextsBySellerId.set(sellerClubId, eligible);
+      return eligible;
+    };
+
     for (const sellerClub of clubs) {
       if (sellerClub.id === userTeamId || sellerClub.id === 'FREE_AGENTS') continue;
       const sellerSquad = updatedPlayersMap[sellerClub.id] || [];
@@ -3345,15 +3520,20 @@ processAiRecruitment: (
         const daysLeft = Math.floor((new Date(player.contractEndDate).getTime() - currentDate.getTime()) / 86_400_000);
         if (daysLeft <= 0 || daysLeft > PRE_CONTRACT_PRIORITY_DAYS) continue;
         const isEliteWatchlistOpportunity = _isElitePreContractWatchlistPlayer(player, currentDate);
+        const interestedClubIds = new Set(player.interestedClubs || []);
+        const interestedClubs = (player.interestedClubs || [])
+          .map(clubId => clubById.get(clubId))
+          .filter((club): club is Club => !!club);
+        const playerIdHash = signedHash(player.id);
+        const playerIdHashMultiplier = powerOf31(player.id.length);
 
         // Pre-contracts are also market transactions, even when the fee is
         // zero. Use the same source-specific rule so an expiring contract in
         // the reserve team cannot cause its parent first team to create a
         // market agreement instead of a future internal squad movement.
-        const candidateBuyers = clubs
-          .filter(buyer => buyer.id !== userTeamId && buyer.id !== sellerClub.id && buyer.id !== 'FREE_AGENTS')
-          .filter(buyer => ReserveTeamLeagueService.canRecruitPlayerFrom(buyer.id, sellerClub.id))
-          .filter(buyer => {
+        const candidateBuyerContexts = getBuyerContextsForSeller(sellerClub.id)
+          .filter(context => {
+            const { buyerClub: buyer, buyerSquad } = context;
             // PERF (2026-07-30): stagger przeniesiony na sam początek callbacku — dokładnie
             // ten sam warunek co wcześniej (dayOfYear + hash(buyer_player), modulo 3/9),
             // zero zmiany w tym KTO/KIEDY zostaje dopasowany. Wcześniej stagger był
@@ -3365,44 +3545,48 @@ processAiRecruitment: (
             // będą wolni (długoterminowe skautowanie), nie wypełniania bieżącej luki
             // w składzie, więc taki bypass nie miałby tu uzasadnienia.
             const stagger = isEliteWatchlistOpportunity ? 3 : 9;
-            if ((dayOfYear + _hashString(`${buyer.id}_${player.id}`)) % stagger !== 0) return false;
+            const combinedStaggerHash = Math.abs(
+              (Math.imul(context.staggerHashPrefix, playerIdHashMultiplier) + playerIdHash) | 0
+            );
+            if ((dayOfYear + combinedStaggerHash) % stagger !== 0) return false;
 
-            const buyerSquad = updatedPlayersMap[buyer.id] || [];
-            const buyerStrategy = AiClubTransferStrategyService.buildStrategy(buyer);
-            const canMonitorEliteWatchlist = buyer.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION;
-            if (isEliteWatchlistOpportunity && !canMonitorEliteWatchlist) return false;
-            if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !_hasCriticalDepthShortage(buyerSquad)) return false;
+            if (isEliteWatchlistOpportunity && !context.canMonitorEliteWatchlist) return false;
+            if (!isEliteWatchlistOpportunity && buyerSquad.length >= AI_MAX_SQUAD_SIZE && !context.hasCriticalDepthShortage) return false;
 
-            const needs = _assessClubNeeds(buyer, buyerSquad, currentDate, buyerStrategy);
-            const hasPosNeed = needs.some(need => need.position === player.position);
-            const isShortlisted = (player.interestedClubs || []).includes(buyer.id);
-            const buyerPositionAverage = _getPositionAverageOverall(buyerSquad, player.position);
+            const hasPosNeed = context.needPositions.has(player.position);
+            const isShortlisted = interestedClubIds.has(buyer.id);
+            const buyerPositionAverage = context.positionAverages.get(player.position) ?? 0;
             const sportingUpgrade = player.overallRating >= buyerPositionAverage + 1;
             const stepUp = buyer.reputation >= sellerClub.reputation + 1;
 
             if (isEliteWatchlistOpportunity) return player.overallRating >= buyerPositionAverage - 2;
-            if (!_canAddBalancedDepth(buyerSquad, player.position) && !hasPosNeed) return false;
+            if (!context.balancedDepth.get(player.position) && !hasPosNeed) return false;
             return (hasPosNeed || isShortlisted || stepUp) && sportingUpgrade;
           })
           .sort((a, b) => {
-            const aShortlisted = (player.interestedClubs || []).includes(a.id) ? 8 : 0;
-            const bShortlisted = (player.interestedClubs || []).includes(b.id) ? 8 : 0;
-            const aEliteBonus = isEliteWatchlistOpportunity && a.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION ? 40 : 0;
-            const bEliteBonus = isEliteWatchlistOpportunity && b.reputation >= ELITE_PRE_CONTRACT_WATCHLIST_MIN_REPUTATION ? 40 : 0;
-            return (b.reputation + bShortlisted + bEliteBonus) - (a.reputation + aShortlisted + aEliteBonus);
+            const aShortlisted = interestedClubIds.has(a.buyerClub.id) ? 8 : 0;
+            const bShortlisted = interestedClubIds.has(b.buyerClub.id) ? 8 : 0;
+            const aEliteBonus = isEliteWatchlistOpportunity && a.canMonitorEliteWatchlist ? 40 : 0;
+            const bEliteBonus = isEliteWatchlistOpportunity && b.canMonitorEliteWatchlist ? 40 : 0;
+            return (b.buyerClub.reputation + bShortlisted + bEliteBonus) -
+              (a.buyerClub.reputation + aShortlisted + aEliteBonus);
           });
 
-        for (const buyerClub of candidateBuyers) {
-          const buyerSquad = updatedPlayersMap[buyerClub.id] || [];
+        for (const context of candidateBuyerContexts) {
+          const buyerClub = context.buyerClub;
+          // A previous agreement may have replaced this array to mark one of
+          // the buyer's own players as pending. Re-read it for mindflow parity;
+          // positional counts and ratings remain identical to the cached profile.
+          const buyerSquad = updatedPlayersMap[buyerClub.id] || context.buyerSquad;
           const seedBase = `AI_PRECONTRACT_${todayKey}_${sellerClub.id}_${buyerClub.id}_${player.id}`;
-          const isShortlisted = (player.interestedClubs || []).includes(buyerClub.id);
+          const isShortlisted = interestedClubIds.has(buyerClub.id);
           const repDelta = buyerClub.reputation - sellerClub.reputation;
           const contractMindflow = PlayerContractMindflowService.evaluate({
             player,
             currentClub: sellerClub,
             currentSquad: sellerSquad,
             currentDate,
-            interestedClubs: _getInterestedClubs(player, clubs),
+            interestedClubs,
             targetClub: buyerClub,
             targetSquad: buyerSquad,
           });

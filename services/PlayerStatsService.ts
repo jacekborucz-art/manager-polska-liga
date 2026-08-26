@@ -29,13 +29,40 @@ const withCompetitionStats = (
   };
 };
 
-export const PlayerStatsService = {
-  applyGoal: (players: Record<string, Player[]>, scorerId: string, assistId?: string, competitionId?: string): Record<string, Player[]> => {
-    const newPlayers = { ...players };
+/**
+ * Returns the smallest stable set of squad buckets that should be searched for
+ * a match event. Match processors already know the two participating clubs, so
+ * scanning every squad in the world (including FREE_AGENTS) after every goal or
+ * card is unnecessary. The unscoped fallback is intentionally preserved for
+ * older callers and non-standard competitions which cannot provide club ids.
+ */
+const getEventSearchClubIds = (
+  players: Record<string, Player[]>,
+  scopedClubIds?: readonly string[]
+): string[] => {
+  if (!scopedClubIds || scopedClubIds.length === 0) return Object.keys(players);
+  return Array.from(new Set(scopedClubIds)).filter(clubId => Array.isArray(players[clubId]));
+};
 
-    for (const clubId in newPlayers) {
-      newPlayers[clubId] = newPlayers[clubId].map(p => {
+export const PlayerStatsService = {
+  applyGoal: (
+    players: Record<string, Player[]>,
+    scorerId: string,
+    assistId?: string,
+    competitionId?: string,
+    scopedClubIds?: readonly string[]
+  ): Record<string, Player[]> => {
+    let newPlayers = players;
+    const foundPlayerIds = new Set<string>();
+
+    const updateClub = (clubId: string): void => {
+      const squad = newPlayers[clubId];
+      if (!squad) return;
+      let changed = false;
+      const updatedSquad = squad.map(p => {
         if (p.id === scorerId) {
+          foundPlayerIds.add(scorerId);
+          changed = true;
           const aggregated = {
             ...p,
             stats: { ...p.stats, goals: p.stats.goals + 1 }
@@ -47,6 +74,8 @@ export const PlayerStatsService = {
           ));
         }
         if (assistId && p.id === assistId) {
+          foundPlayerIds.add(assistId);
+          changed = true;
           const aggregated = {
             ...p,
             stats: { ...p.stats, assists: p.stats.assists + 1 }
@@ -59,17 +88,51 @@ export const PlayerStatsService = {
         }
         return p;
       });
+
+      if (changed) {
+        if (newPlayers === players) newPlayers = { ...players };
+        newPlayers[clubId] = updatedSquad;
+      }
+    };
+
+    const primaryClubIds = getEventSearchClubIds(players, scopedClubIds);
+    primaryClubIds.forEach(updateClub);
+
+    // Defensive compatibility fallback: malformed or legacy match data can
+    // occasionally point at a player outside the supplied fixture squads. In
+    // that rare case, search the remaining buckets so statistics are never
+    // silently lost. Normal matches never enter this branch.
+    const requiredPlayerIds = new Set([scorerId, ...(assistId ? [assistId] : [])]);
+    if (scopedClubIds && [...requiredPlayerIds].some(id => !foundPlayerIds.has(id))) {
+      const primarySet = new Set(primaryClubIds);
+      for (const clubId of Object.keys(players)) {
+        if (primarySet.has(clubId)) continue;
+        updateClub(clubId);
+        if ([...requiredPlayerIds].every(id => foundPlayerIds.has(id))) break;
+      }
     }
 
     return newPlayers;
   },
 
-  applyCard: (players: Record<string, Player[]>, playerId: string, type: MatchEventType, competitionId?: string): Record<string, Player[]> => {
-    const newPlayers = { ...players };
+  applyCard: (
+    players: Record<string, Player[]>,
+    playerId: string,
+    type: MatchEventType,
+    competitionId?: string,
+    scopedClubIds?: readonly string[]
+  ): Record<string, Player[]> => {
+    let newPlayers = players;
+    let playerFound = false;
 
-    for (const clubId in newPlayers) {
-      newPlayers[clubId] = newPlayers[clubId].map(p => {
+    const updateClub = (clubId: string): void => {
+      const squad = newPlayers[clubId];
+      if (!squad) return;
+      let changed = false;
+      const updatedSquad = squad.map(p => {
         if (p.id === playerId) {
+          playerFound = true;
+          changed = true;
           let yellowCards = p.stats.yellowCards;
           let redCards = p.stats.redCards;
           let suspensionMatches = p.suspensionMatches;
@@ -103,6 +166,25 @@ export const PlayerStatsService = {
         }
         return p;
       });
+
+      if (changed) {
+        if (newPlayers === players) newPlayers = { ...players };
+        newPlayers[clubId] = updatedSquad;
+      }
+    };
+
+    const primaryClubIds = getEventSearchClubIds(players, scopedClubIds);
+    primaryClubIds.forEach(updateClub);
+
+    // Keep the legacy world-search behaviour as a safety net for old saves or
+    // unusual fixtures whose player ownership data is temporarily inconsistent.
+    if (scopedClubIds && !playerFound) {
+      const primarySet = new Set(primaryClubIds);
+      for (const clubId of Object.keys(players)) {
+        if (primarySet.has(clubId)) continue;
+        updateClub(clubId);
+        if (playerFound) break;
+      }
     }
 
     return newPlayers;

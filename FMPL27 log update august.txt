@@ -207,3 +207,45 @@ Opcjonalna diagnostyka gry
 - Diagnostykę można włączyć lub wyłączyć skrótem Ctrl+Alt+D.
 - Po użyciu skrótu gra pokazuje krótkie potwierdzenie aktualnego stanu diagnostyki.
 - Włączona diagnostyka pozostaje aktywna po przeładowaniu strony w tej samej sesji przeglądarki, aby ułatwić sprawdzanie awarii.
+
+Szybsze zapisywanie statystyk meczowych
+
+- Po bramce, asyście lub kartce gra sprawdza teraz tylko drużyny uczestniczące w danym meczu.
+- Pozostałe kluby i wolni zawodnicy nie są niepotrzebnie przeglądani po każdym zdarzeniu meczowym.
+- Zachowano dotychczasowe naliczanie statystyk, formy i zawieszeń.
+- Dodano zabezpieczenie, które nadal odnajdzie zawodnika w nietypowym lub starszym zapisie gry.
+- Zmiana działa w meczach gracza, spotkaniach ligowych rozgrywanych w tle oraz w 3. lidze.
+
+Szybsza codzienna regeneracja
+
+- Gra nie tworzy już nowych kopii danych zawodników, jeżeli ich stan danego dnia się nie zmienił.
+- Po sprawdzeniu w pełni zdrowi i nieaktywni wolni zawodnicy mogą zostać pominięci w kolejnych dniach.
+- Transfer, zwolnienie, kontuzja, negocjacja lub inne ważne zdarzenie automatycznie przywraca zawodnika do codziennych obliczeń.
+- Nie zmieniono zasad kondycji, zmęczenia, leczenia kontuzji ani wygasania blokad negocjacyjnych.
+- Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Szybszy rynek transferowy klubów AI
+
+- Kluby sterowane przez komputer korzystają teraz ze wspólnej listy zawodników dostępnych na rynku.
+- Gra nie przygotowuje już tej samej ogromnej listy osobno dla każdego klubu.
+- Dane o potrzebach kadrowych i obsadzie pozycji są liczone raz, a następnie wykorzystywane przy ocenie kandydatów.
+- Zachowano dotychczasowe wymagania klubów, zasady prestiżu, ograniczenia drużyn rezerwowych oraz losowy element decyzji.
+- Zawodnik z uzgodnionym transferem nie może otrzymać drugiej oferty tego samego dnia.
+- W teście obejmującym ponad 1200 klubów czas tej części rynku spadł z około 11,7 sekundy do około 1,5-1,8 sekundy.
+- Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Szybszy rynek wypożyczeń między klubami AI
+
+- Gra nie analizuje już od początku tej samej kadry przy każdym sprawdzanym zawodniku.
+- Potrzeby klubu na każdej pozycji są ustalane raz i używane przy kolejnych propozycjach wypożyczeń.
+- Zasady dotyczące poziomu lig, regionu i drużyn rezerwowych są sprawdzane raz dla danej pary klubów.
+- Zachowano dotychczasowe zasady, kolejność ofert oraz losowy element decyzji klubów i zawodników.
+- Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Szybsze wyszukiwanie prekontraktów przez kluby AI
+
+- Kluby nie obliczają już od początku tych samych potrzeb kadrowych dla każdego zawodnika z wygasającą umową.
+- Informacje o brakach na pozycjach i poziomie drużyny są przygotowywane raz i wykorzystywane przy kolejnych porównaniach.
+- Zachowano dotychczasowe zasady, kolejność klubów oraz losowy element decyzji zawodnika.
+- Na sprawdzonym zapisie główne obliczenia dnia skróciły się z około 39 sekund do około 10 sekund.
+- Poprawka działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.

@@ -5357,19 +5357,51 @@ return {
        const pFound = g.scorerId
          ? ctx.homePlayers.find(px => px.id === g.scorerId)
          : ctx.homePlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId, liveCompetitionId);
+       if (pFound) {
+         updatedPlayers = PlayerStatsService.applyGoal(
+           updatedPlayers,
+           pFound.id,
+           g.assistantId,
+           liveCompetitionId,
+           [ctx.homeClub.id]
+         );
+       }
     });
     matchState.awayGoals.filter(g => !g.varDisallowed && !g.isOwnGoal).forEach(g => {
        const pFound = g.scorerId
          ? ctx.awayPlayers.find(px => px.id === g.scorerId)
          : ctx.awayPlayers.find(px => px.lastName === g.playerName);
-       if (pFound) updatedPlayers = PlayerStatsService.applyGoal(updatedPlayers, pFound.id, g.assistantId, liveCompetitionId);
+       if (pFound) {
+         updatedPlayers = PlayerStatsService.applyGoal(
+           updatedPlayers,
+           pFound.id,
+           g.assistantId,
+           liveCompetitionId,
+           [ctx.awayClub.id]
+         );
+       }
     });
 
     Object.entries(matchState.playerYellowCards).forEach(([pId, count]) => {
-       for (let i = 0; i < (count as number); i++) updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.YELLOW_CARD, liveCompetitionId);
+       for (let i = 0; i < (count as number); i++) {
+         updatedPlayers = PlayerStatsService.applyCard(
+           updatedPlayers,
+           pId,
+           MatchEventType.YELLOW_CARD,
+           liveCompetitionId,
+           [ctx.homeClub.id, ctx.awayClub.id]
+         );
+       }
     });
-    matchState.sentOffIds.forEach(pId => updatedPlayers = PlayerStatsService.applyCard(updatedPlayers, pId, MatchEventType.RED_CARD, liveCompetitionId));
+    matchState.sentOffIds.forEach(pId => {
+      updatedPlayers = PlayerStatsService.applyCard(
+        updatedPlayers,
+        pId,
+        MatchEventType.RED_CARD,
+        liveCompetitionId,
+        [ctx.homeClub.id, ctx.awayClub.id]
+      );
+    });
 
     const applyInjuriesToSquad = (squad: Player[], sideInjuries: Record<string, InjurySeverity>, sideInMins: Record<string, number>) => {
       return squad.map(p => {

@@ -476,7 +476,8 @@ export const BackgroundMatchProcessor = {
     coaches: Record<string, Coach>,
     // Opcjonalne ziarno sesji — używane przez scouting transferowy.
     // Jeśli nie podane, scouting działa z seed=0 (mniej różnorodny, ale funkcjonalny).
-    sessionSeed: number = 0
+    sessionSeed: number = 0,
+    timingObserver?: (label: string, elapsedMs: number) => void
   ): {
     updatedFixtures: Fixture[],
     updatedClubs: Club[],
@@ -488,8 +489,21 @@ export const BackgroundMatchProcessor = {
     ratings: Record<string, number>,
     aiTransferLogEntries: AiTransferLogEntry[],
   } => {
-    
-       const dateStr = currentDate.toDateString();
+    /**
+     * Diagnostic timing is deliberately observational. It wraps the existing
+     * synchronous calls without changing their order, arguments, random draws
+     * or returned objects, so enabling the day monitor cannot alter the world.
+     */
+    const measurePhase = <T,>(label: string, operation: () => T): T => {
+      const startedAt = performance.now();
+      try {
+        return operation();
+      } finally {
+        timingObserver?.(label, performance.now() - startedAt);
+      }
+    };
+
+    const dateStr = currentDate.toDateString();
     const CL_COMPETITION_IDS = new Set([
       CompetitionType.CL_R1Q, CompetitionType.CL_R1Q_RETURN,
       CompetitionType.CL_R2Q, CompetitionType.CL_R2Q_RETURN,
@@ -523,18 +537,27 @@ export const BackgroundMatchProcessor = {
     
     // DEBUG
     DebugLoggerService.log('BMP', `processLeagueEvent: ${dateStr} | SCHEDULED: ${todayFixtures.length} | TOTAL fixtures: ${fixtures.length}`, true);
-    const playersAfterFourthLeagueEnsure = ensureFourthLeagueSquads(clubs, playersMap, userTeamId);
-    const playersAfterEmergencyGoalkeepers = ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures, currentDate, userTeamId);
+    const playersAfterFourthLeagueEnsure = measurePhase(
+      'Przygotowanie kadr IV ligi',
+      () => ensureFourthLeagueSquads(clubs, playersMap, userTeamId)
+    );
+    const playersAfterEmergencyGoalkeepers = measurePhase(
+      'Kontrola bramkarzy awaryjnych',
+      () => ensureEmergencyGoalkeepers(clubs, playersAfterFourthLeagueEnsure, fixtures, currentDate, userTeamId)
+    );
     // Internal parent/reserve movement must run before AI lineup preparation.
     // This guarantees that an emergency call-up is available for today's match
     // and that both source and destination lineups are rebuilt from the updated
     // squads. The service is idempotent, so this common hook safely covers both
     // match days and days without scheduled fixtures.
-    const internalSquadMovement = ReserveTeamSquadMovementService.processDailyAiMovements(
-      clubs,
-      playersAfterEmergencyGoalkeepers,
-      currentDate,
-      userTeamId
+    const internalSquadMovement = measurePhase(
+      'Ruchy między pierwszą drużyną i rezerwami',
+      () => ReserveTeamSquadMovementService.processDailyAiMovements(
+        clubs,
+        playersAfterEmergencyGoalkeepers,
+        currentDate,
+        userTeamId
+      )
     );
     internalSquadMovement.movements.forEach(movement => {
       DebugLoggerService.log(
@@ -545,26 +568,59 @@ export const BackgroundMatchProcessor = {
     });
     const clubsAfterInternalMovement = internalSquadMovement.updatedClubs;
     const playersAfterInternalMovement = internalSquadMovement.updatedPlayers;
-    const newLineups = AiMatchPreparationService.prepareAllTeams(
-      clubsAfterInternalMovement,
-      playersAfterInternalMovement,
-      lineups,
-      userTeamId,
-      coaches,
-      fixtures,
-      currentDate
+    const newLineups = measurePhase(
+      'Przygotowanie składów i jedenastek AI',
+      () => AiMatchPreparationService.prepareAllTeams(
+        clubsAfterInternalMovement,
+        playersAfterInternalMovement,
+        lineups,
+        userTeamId,
+        coaches,
+        fixtures,
+        currentDate
+      )
     );
 if (todayFixtures.length === 0) {
-      const contractUpdate = AiContractService.processClubsContracts(clubsAfterInternalMovement, playersAfterInternalMovement, currentDate, userTeamId);
-      const preContractUpdate = AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId);
-      const depthUpdate = AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, preContractUpdate.updatedPlayers, currentDate, userTeamId);
-      const recruitmentUpdate = AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate, userTeamId);
-      const resolvedUpdate = AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate, userTeamId);
-      const financingUpdate = AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate, userTeamId);
-      const transferSigningsUpdate = AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate, userTeamId, coaches);
-      const interestedTargetingUpdate = AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId, coaches);
-      const deadlineAcademyFallback = AiContractService.processAiDeadlineAcademyFallback(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId);
-      const transferResolvedUpdate = AiContractService.resolveAiTransferPending(deadlineAcademyFallback.updatedClubs, deadlineAcademyFallback.updatedPlayers, currentDate, userTeamId);
+      const contractUpdate = measurePhase(
+        'Kontrakty klubów AI',
+        () => AiContractService.processClubsContracts(clubsAfterInternalMovement, playersAfterInternalMovement, currentDate, userTeamId)
+      );
+      const preContractUpdate = measurePhase(
+        'Prekontrakty zawodników',
+        () => AiContractService.processAiPreContractOpportunities(contractUpdate.updatedClubs, contractUpdate.updatedPlayers, currentDate, userTeamId)
+      );
+      const depthUpdate = measurePhase(
+        'Kontrola głębi składów AI',
+        () => AiContractService.processAiPrioritySquadDepth(contractUpdate.updatedClubs, preContractUpdate.updatedPlayers, currentDate, userTeamId)
+      );
+      const recruitmentUpdate = measurePhase(
+        'Rekrutacja wolnych agentów przez AI',
+        () => AiContractService.processAiRecruitment(depthUpdate.updatedClubs, depthUpdate.updatedPlayers, currentDate, userTeamId)
+      );
+      const resolvedUpdate = measurePhase(
+        'Negocjacje z wolnymi agentami',
+        () => AiContractService.resolveAiFreeAgentNegotiations(recruitmentUpdate.updatedClubs, recruitmentUpdate.updatedPlayers, currentDate, userTeamId)
+      );
+      const financingUpdate = measurePhase(
+        'Finanse i zwalnianie miejsca w kadrach AI',
+        () => AiContractService.processAiSquadFinancing(resolvedUpdate.updatedClubs, resolvedUpdate.updatedPlayers, currentDate, userTeamId)
+      );
+      const transferSigningsUpdate = measurePhase(
+        'Zakupy z list transferowych',
+        () => AiContractService.processAiTransferListSignings(financingUpdate.updatedClubs, financingUpdate.updatedPlayers, currentDate, userTeamId, coaches)
+      );
+      const interestedTargetingUpdate = measurePhase(
+        'Obserwowani zawodnicy i oferty AI',
+        () => AiContractService.processAiInterestedPlayerTargeting(transferSigningsUpdate.updatedClubs, transferSigningsUpdate.updatedPlayers, currentDate, userTeamId, coaches)
+      );
+      const deadlineAcademyFallback = measurePhase(
+        'Awaryjne uzupełnienia akademii AI',
+        () => AiContractService.processAiDeadlineAcademyFallback(interestedTargetingUpdate.updatedClubs, interestedTargetingUpdate.updatedPlayers, currentDate, userTeamId)
+      );
+      const transferResolvedUpdate = measurePhase(
+        'Finalizacja oczekujących transferów',
+        () => AiContractService.resolveAiTransferPending(deadlineAcademyFallback.updatedClubs, deadlineAcademyFallback.updatedPlayers, currentDate, userTeamId)
+      );
 
       const aiTransferLogEntries: AiTransferLogEntry[] = [
         ...recruitmentUpdate.logEntries,
@@ -581,19 +637,25 @@ if (todayFixtures.length === 0) {
       let scoutedPlayers = transferResolvedUpdate.updatedPlayers;
       const isScoutingDay = currentDate.getDate() === 1 || (currentDate.getMonth() === 0 && currentDate.getDate() === 12);
       if (isScoutingDay) {
-        scoutedPlayers = AiScoutingService.updateTransferInterests(
-          scoutedClubs,
-          scoutedPlayers,
-          currentDate,
-          userTeamId,
-          sessionSeed
+        scoutedPlayers = measurePhase(
+          'Miesięczny skauting rynku transferowego',
+          () => AiScoutingService.updateTransferInterests(
+            scoutedClubs,
+            scoutedPlayers,
+            currentDate,
+            userTeamId,
+            sessionSeed
+          )
         );
-        scoutedPlayers = AiContractService.processMonthlyPlayerReview(
-          scoutedClubs,
-          scoutedPlayers,
-          currentDate,
-          userTeamId
-        ).updatedPlayers;
+        scoutedPlayers = measurePhase(
+          'Miesięczny przegląd zawodników AI',
+          () => AiContractService.processMonthlyPlayerReview(
+            scoutedClubs,
+            scoutedPlayers,
+            currentDate,
+            userTeamId
+          ).updatedPlayers
+        );
       }
       if (deadlineAcademyFallback.generatedCount > 0) {
         DebugLoggerService.log('SQUAD_REVIEW', `Awaryjny nabór akademii AI po rynku (${currentDate.toLocaleDateString('pl-PL')}): ${deadlineAcademyFallback.generatedCount} nowych zawodników.`, true);
@@ -666,6 +728,7 @@ if (todayFixtures.length === 0) {
       thirdLeagueResults: Object.fromEntries(THIRD_LEAGUE_GROUP_IDS.map(groupId => [groupId, []]))
     };
 
+    const matchSimulationStartedAt = performance.now();
     todayFixtures.forEach(fixture => {
       // Pomiń mecz gracza (widok MatchLiveView sam o to dba)
       if (fixture.homeTeamId === userTeamId || fixture.awayTeamId === userTeamId) return;
@@ -1043,11 +1106,26 @@ if (todayFixtures.length === 0) {
       );
       
       result.scorers.filter(s => !s.isMiss && !s.varDisallowed).forEach(s => {
-        currentPlayers = PlayerStatsService.applyGoal(currentPlayers, s.playerId, s.assistId, competitionId);
+        // The fixture already identifies the only two squads which can own the
+        // scorer and assistant. Supplying them prevents every goal from walking
+        // the entire player world and the unrelated FREE_AGENTS pool.
+        currentPlayers = PlayerStatsService.applyGoal(
+          currentPlayers,
+          s.playerId,
+          s.assistId,
+          competitionId,
+          [home.id, away.id]
+        );
       });
 
       result.cards.forEach(card => {
-        currentPlayers = PlayerStatsService.applyCard(currentPlayers, card.playerId, card.type, competitionId);
+        currentPlayers = PlayerStatsService.applyCard(
+          currentPlayers,
+          card.playerId,
+          card.type,
+          competitionId,
+          [home.id, away.id]
+        );
       });
 
       const homeResultChar: 'W' | 'R' | 'P' = result.homeScore > result.awayScore ? 'W' : result.homeScore === result.awayScore ? 'R' : 'P';
@@ -1145,18 +1223,49 @@ if (todayFixtures.length === 0) {
         }
       }
     });
+    timingObserver?.('Symulacja i rozliczenie meczów ligowych', performance.now() - matchSimulationStartedAt);
 
-    const contractResult = AiContractService.processClubsContracts(currentClubs, currentPlayers, currentDate, userTeamId);
+    const contractResult = measurePhase(
+      'Kontrakty klubów AI',
+      () => AiContractService.processClubsContracts(currentClubs, currentPlayers, currentDate, userTeamId)
+    );
 
-    const preContractFinal = AiContractService.processAiPreContractOpportunities(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId);
-    const depthFinal = AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, preContractFinal.updatedPlayers, currentDate, userTeamId);
-    const finalUpdate = AiContractService.processAiRecruitment(depthFinal.updatedClubs, depthFinal.updatedPlayers, currentDate, userTeamId);
-    const resolvedFinal = AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate, userTeamId);
-    const financingFinal = AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate, userTeamId);
-    const transferSigningsFinal = AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate, userTeamId, coaches);
-    const interestedTargetingFinal = AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate, userTeamId, coaches);
-    const deadlineAcademyFallbackMatch = AiContractService.processAiDeadlineAcademyFallback(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId);
-    const transferResolvedFinal = AiContractService.resolveAiTransferPending(deadlineAcademyFallbackMatch.updatedClubs, deadlineAcademyFallbackMatch.updatedPlayers, currentDate, userTeamId);
+    const preContractFinal = measurePhase(
+      'Prekontrakty zawodników',
+      () => AiContractService.processAiPreContractOpportunities(contractResult.updatedClubs, contractResult.updatedPlayers, currentDate, userTeamId)
+    );
+    const depthFinal = measurePhase(
+      'Kontrola głębi składów AI',
+      () => AiContractService.processAiPrioritySquadDepth(contractResult.updatedClubs, preContractFinal.updatedPlayers, currentDate, userTeamId)
+    );
+    const finalUpdate = measurePhase(
+      'Rekrutacja wolnych agentów przez AI',
+      () => AiContractService.processAiRecruitment(depthFinal.updatedClubs, depthFinal.updatedPlayers, currentDate, userTeamId)
+    );
+    const resolvedFinal = measurePhase(
+      'Negocjacje z wolnymi agentami',
+      () => AiContractService.resolveAiFreeAgentNegotiations(finalUpdate.updatedClubs, finalUpdate.updatedPlayers, currentDate, userTeamId)
+    );
+    const financingFinal = measurePhase(
+      'Finanse i zwalnianie miejsca w kadrach AI',
+      () => AiContractService.processAiSquadFinancing(resolvedFinal.updatedClubs, resolvedFinal.updatedPlayers, currentDate, userTeamId)
+    );
+    const transferSigningsFinal = measurePhase(
+      'Zakupy z list transferowych',
+      () => AiContractService.processAiTransferListSignings(financingFinal.updatedClubs, financingFinal.updatedPlayers, currentDate, userTeamId, coaches)
+    );
+    const interestedTargetingFinal = measurePhase(
+      'Obserwowani zawodnicy i oferty AI',
+      () => AiContractService.processAiInterestedPlayerTargeting(transferSigningsFinal.updatedClubs, transferSigningsFinal.updatedPlayers, currentDate, userTeamId, coaches)
+    );
+    const deadlineAcademyFallbackMatch = measurePhase(
+      'Awaryjne uzupełnienia akademii AI',
+      () => AiContractService.processAiDeadlineAcademyFallback(interestedTargetingFinal.updatedClubs, interestedTargetingFinal.updatedPlayers, currentDate, userTeamId)
+    );
+    const transferResolvedFinal = measurePhase(
+      'Finalizacja oczekujących transferów',
+      () => AiContractService.resolveAiTransferPending(deadlineAcademyFallbackMatch.updatedClubs, deadlineAcademyFallbackMatch.updatedPlayers, currentDate, userTeamId)
+    );
 
     const aiTransferLogEntriesMatch: AiTransferLogEntry[] = [
       ...finalUpdate.logEntries,
@@ -1177,19 +1286,25 @@ if (todayFixtures.length === 0) {
     // Aktualizacja zainteresowań transferowych — dotyczy też dni meczowych.
     const isScoutingDayMatch = currentDate.getDate() === 1 || (currentDate.getMonth() === 0 && currentDate.getDate() === 12);
     if (isScoutingDayMatch) {
-      currentPlayers = AiScoutingService.updateTransferInterests(
-        currentClubs,
-        currentPlayers,
-        currentDate,
-        userTeamId,
-        sessionSeed
+      currentPlayers = measurePhase(
+        'Miesięczny skauting rynku transferowego',
+        () => AiScoutingService.updateTransferInterests(
+          currentClubs,
+          currentPlayers,
+          currentDate,
+          userTeamId,
+          sessionSeed
+        )
       );
-      currentPlayers = AiContractService.processMonthlyPlayerReview(
-        currentClubs,
-        currentPlayers,
-        currentDate,
-        userTeamId
-      ).updatedPlayers;
+      currentPlayers = measurePhase(
+        'Miesięczny przegląd zawodników AI',
+        () => AiContractService.processMonthlyPlayerReview(
+          currentClubs,
+          currentPlayers,
+          currentDate,
+          userTeamId
+        ).updatedPlayers
+      );
     }
     if (currentDate.getMonth() === 0 && currentDate.getDate() === 12) {
       const weakReviewWinterMatch = AiContractService.processWeakPlayerContractCuts(currentClubs, currentPlayers, currentDate, userTeamId);

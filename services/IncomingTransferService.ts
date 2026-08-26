@@ -17,6 +17,18 @@ export type PolishLowerLeagueLoanSource =
   | 'ELITE_ONE_IN_MILLION'
   | 'INELIGIBLE';
 
+export interface LoanSquadNeedSnapshot {
+  squadAverage: number;
+  byPosition: Record<PlayerPosition, {
+    count: number;
+    average: number;
+    best: number;
+    ratingsDescending: number[];
+  }>;
+}
+
+export type LoanBuyerCategory = 'LOWER_LEAGUE' | 'SAME_LEAGUE' | 'FOREIGN_LOWER_REP';
+
 const TIMING_LABELS: Record<TransferTiming, string> = {
   [TransferTiming.IMMEDIATE]: 'Natychmiast',
   [TransferTiming.IN_SIX_MONTHS]: 'Na kolejne okno transferowe',
@@ -204,24 +216,29 @@ export const IncomingTransferService = {
 
   getLoanSquadNeed(
     player: Player,
-    buyerSquad?: Player[]
+    buyerSquad?: Player[],
+    snapshot?: LoanSquadNeedSnapshot
   ): { fits: boolean; needScore: number; positionGap: number; squadGap: number } {
     if (!buyerSquad || buyerSquad.length === 0) {
       return { fits: true, needScore: 9, positionGap: 9, squadGap: 9 };
     }
 
-    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad);
-    const samePosition = buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
-    const positionAverage = samePosition.length > 0
-      ? IncomingTransferService.getSquadAverageOverall(samePosition)
+    const squadAverage = snapshot?.squadAverage ?? IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const positionSnapshot = snapshot?.byPosition[player.position];
+    const samePosition = positionSnapshot
+      ? undefined
+      : buyerSquad.filter(squadPlayer => squadPlayer.position === player.position);
+    const positionCount = positionSnapshot?.count ?? samePosition!.length;
+    const positionAverage = positionCount > 0
+      ? (positionSnapshot?.average ?? IncomingTransferService.getSquadAverageOverall(samePosition!))
       : squadAverage - 3;
-    const bestInPosition = samePosition.length > 0
-      ? Math.max(...samePosition.map(squadPlayer => squadPlayer.overallRating))
+    const bestInPosition = positionCount > 0
+      ? (positionSnapshot?.best ?? Math.max(...samePosition!.map(squadPlayer => squadPlayer.overallRating)))
       : squadAverage - 4;
     const positionGap = player.overallRating - positionAverage;
     const bestGap = player.overallRating - bestInPosition;
     const squadGap = player.overallRating - squadAverage;
-    const thinPositionBonus = samePosition.length <= 2 ? 2 : 0;
+    const thinPositionBonus = positionCount <= 2 ? 2 : 0;
 
     // LOAN FIT: wypożyczenie musi mieć sens na konkretnej pozycji, a nie tylko
     // względem średniej całej kadry. Wcześniej mocny klub użytkownika prawie
@@ -235,18 +252,21 @@ export const IncomingTransferService = {
       [PlayerPosition.FWD]: 2,
     };
     const matchdayRotationLimit = positionSlots[player.position] + 3;
-    const strongerOrEqualInPosition = samePosition.filter(
-      squadPlayer => squadPlayer.overallRating >= player.overallRating
-    ).length;
-    const isInsidePositionRotation = strongerOrEqualInPosition < matchdayRotationLimit;
+    const strongerOrEqualInPosition = positionSnapshot
+      ? positionSnapshot.ratingsDescending.findIndex(rating => rating < player.overallRating)
+      : samePosition!.filter(squadPlayer => squadPlayer.overallRating >= player.overallRating).length;
+    const normalizedStrongerOrEqual = strongerOrEqualInPosition === -1
+      ? positionCount
+      : strongerOrEqualInPosition;
+    const isInsidePositionRotation = normalizedStrongerOrEqual < matchdayRotationLimit;
     const isCloseToPositionLevel = player.overallRating >= positionAverage - 2;
-    const isThinPosition = samePosition.length <= positionSlots[player.position] + 1;
+    const isThinPosition = positionCount <= positionSlots[player.position] + 1;
     const isDevelopmentLoan =
       player.age <= 23 &&
       player.overallRating >= positionAverage - 4 &&
-      strongerOrEqualInPosition < matchdayRotationLimit + 2;
+      normalizedStrongerOrEqual < matchdayRotationLimit + 2;
     const rotationScore = isInsidePositionRotation
-      ? Math.max(3, matchdayRotationLimit - strongerOrEqualInPosition)
+      ? Math.max(3, matchdayRotationLimit - normalizedStrongerOrEqual)
       : 0;
     const needScore = Math.max(positionGap + thinPositionBonus, bestGap * 1.5, squadGap, rotationScore);
 
@@ -260,6 +280,30 @@ export const IncomingTransferService = {
       positionGap,
       squadGap,
     };
+  },
+
+  /**
+   * Builds the immutable values reused while many loan candidates are compared
+   * with the same buyer squad. The daily AI-to-AI market used to filter and
+   * average the entire squad several times for every seller-player-buyer tuple.
+   */
+  buildLoanSquadNeedSnapshot(buyerSquad: Player[]): LoanSquadNeedSnapshot {
+    const positions: PlayerPosition[] = [PlayerPosition.GK, PlayerPosition.DEF, PlayerPosition.MID, PlayerPosition.FWD];
+    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const byPosition = Object.fromEntries(positions.map(position => {
+      const ratingsDescending = buyerSquad
+        .filter(player => player.position === position)
+        .map(player => player.overallRating)
+        .sort((left, right) => right - left);
+      const total = ratingsDescending.reduce((sum, rating) => sum + rating, 0);
+      return [position, {
+        count: ratingsDescending.length,
+        average: ratingsDescending.length > 0 ? total / ratingsDescending.length : 0,
+        best: ratingsDescending[0] ?? 0,
+        ratingsDescending,
+      }];
+    })) as LoanSquadNeedSnapshot['byPosition'];
+    return { squadAverage, byPosition };
   },
 
   getLoanBuyerCategory(
@@ -346,16 +390,23 @@ export const IncomingTransferService = {
     activeIncomingOffers: IncomingTransferOffer[],
     seed: number,
     currentDate: Date | string,
-    buyerPlayers?: Player[]
-  ): { shouldGenerate: boolean; category: 'LOWER_LEAGUE' | 'SAME_LEAGUE' | 'FOREIGN_LOWER_REP' | null } {
+    buyerPlayers?: Player[],
+    optimization?: {
+      prevalidatedCategory?: LoanBuyerCategory;
+      activeOfferConflictAlreadyChecked?: boolean;
+      loanNeedSnapshot?: LoanSquadNeedSnapshot;
+    }
+  ): { shouldGenerate: boolean; category: LoanBuyerCategory | null } {
     // Validate the relationship between buyer and seller before calculating
     // squad need or generating loan terms. This blocks both reserve-team buyers
     // and a parent first team attempting to loan from its own reserve team.
-    if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
-      return { shouldGenerate: false, category: null };
-    }
-    if (!IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(buyerClub, sellerClub, currentDate)) {
-      return { shouldGenerate: false, category: null };
+    if (!optimization?.prevalidatedCategory) {
+      if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
+        return { shouldGenerate: false, category: null };
+      }
+      if (!IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(buyerClub, sellerClub, currentDate)) {
+        return { shouldGenerate: false, category: null };
+      }
     }
     if (!IncomingTransferService.passesLoanRealismGate(buyerClub, sellerClub, seed)) {
       return { shouldGenerate: false, category: null };
@@ -368,18 +419,20 @@ export const IncomingTransferService = {
       return { shouldGenerate: false, category: null };
     }
 
-    const category = IncomingTransferService.getLoanBuyerCategory(buyerClub, sellerClub);
+    const category = optimization?.prevalidatedCategory ?? IncomingTransferService.getLoanBuyerCategory(buyerClub, sellerClub);
     if (!category) return { shouldGenerate: false, category: null };
 
-    const hasActiveLoanOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, 'LOAN');
-    const hasActiveSaleOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, 'TRANSFER');
-    if (hasActiveLoanOffer || hasActiveSaleOffer) return { shouldGenerate: false, category: null };
+    if (!optimization?.activeOfferConflictAlreadyChecked) {
+      const hasActiveLoanOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, 'LOAN');
+      const hasActiveSaleOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, 'TRANSFER');
+      if (hasActiveLoanOffer || hasActiveSaleOffer) return { shouldGenerate: false, category: null };
+    }
 
     if (IncomingTransferService.hasRecentIncomingOfferNoise(player, buyerClub, activeIncomingOffers, currentDate)) {
       return { shouldGenerate: false, category: null };
     }
 
-    const need = IncomingTransferService.getLoanSquadNeed(player, buyerPlayers);
+    const need = IncomingTransferService.getLoanSquadNeed(player, buyerPlayers, optimization?.loanNeedSnapshot);
     if (!need.fits) return { shouldGenerate: false, category: null };
 
     const categoryWeight = category === 'LOWER_LEAGUE'
@@ -1049,11 +1102,12 @@ export const IncomingTransferService = {
     buyerClub: Club,
     sellerClub: Club,
     buyerSquad: Player[] | undefined,
-    seed: number
+    seed: number,
+    loanNeedSnapshot?: LoanSquadNeedSnapshot
   ): 'accepted' | 'refused' {
     const rng = IncomingTransferService.seededRandom(seed);
     const repDelta = buyerClub.reputation - sellerClub.reputation;
-    const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad);
+    const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad, loanNeedSnapshot);
 
     let acceptChance = 0.48;
     if (repDelta >= 0) acceptChance += 0.18;

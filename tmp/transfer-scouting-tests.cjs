@@ -14961,10 +14961,10 @@ var PrestigeTransferGuardService = {
   isAllowedDestinationForHighPrestigePlayer: (player, targetClub) => {
     return !PrestigeTransferGuardService.evaluateDestination(player, targetClub).blocksNegotiation;
   },
-  shouldConsiderDestination: (player, targetClub, managerChanceAdjustment = 0) => {
+  shouldConsiderDestination: (player, targetClub, managerChanceAdjustment = 0, randomRoll) => {
     const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
     const chance = getChanceWithManagerInfluence(assessment, managerChanceAdjustment);
-    return Math.random() <= chance;
+    return (randomRoll ?? Math.random()) <= chance;
   },
   getAcceptanceChanceCap: (player, targetClub) => {
     const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);

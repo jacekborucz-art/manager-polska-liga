@@ -156,7 +156,7 @@ import {
   TransferPlayerDecisionService,
 } from '../services/TransferPlayerDecisionService';
 import { TransferExecutionService } from '../services/TransferExecutionService';
-import { IncomingTransferService } from '../services/IncomingTransferService';
+import { IncomingTransferService, LoanBuyerCategory } from '../services/IncomingTransferService';
 import { FreeAgentNegotiationService } from '../services/FreeAgentNegotiationService';
 import { PrestigeTransferGuardService } from '../services/PrestigeTransferGuardService';
 import { NationalTeamSimulator } from '../services/NationalTeamSimulator';
@@ -699,6 +699,14 @@ const processAiToAiLoanMoves = (
 
   const aiClubs = clubs.filter(club => club.id !== userTeamId);
   const clubById = new Map(clubs.map(club => [club.id, club]));
+  const buyerLoanContexts = aiClubs.map(buyerClub => {
+    const buyerSquad = players[buyerClub.id] || [];
+    return {
+      buyerClub,
+      buyerSquad,
+      loanNeedSnapshot: IncomingTransferService.buildLoanSquadNeedSnapshot(buyerSquad),
+    };
+  });
   const loanCandidates: Array<{
     player: Player;
     sellerClub: Club;
@@ -740,24 +748,34 @@ const processAiToAiLoanMoves = (
   aiClubs.forEach(sellerClub => {
     if ((dayOfYear + IncomingTransferService.hashString(sellerClub.id)) % 3 !== 0) return;
     const sellerSquad = players[sellerClub.id] || [];
-    sellerSquad
-      .filter(player =>
-        player.isAvailableForLoan &&
-        !player.loan &&
-        !player.transferPendingClubId &&
-        !hasActiveTransferConflict(player.id, transferOffers) &&
-        !hasActiveIncomingConflict(player.id, incomingOffers)
-      )
-      .forEach(player => {
-        aiClubs.forEach(buyerClub => {
-          if (buyerClub.id === sellerClub.id) return;
-          // AI-to-AI loans must follow the same ownership rule as permanent
-          // transfers. In particular, a parent first team cannot loan a player
-          // from its own reserves through the external loan market.
-          if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) return;
-          const buyerSquad = players[buyerClub.id] || [];
+    const sellerLoanPlayers = sellerSquad.filter(player =>
+      player.isAvailableForLoan &&
+      !player.loan &&
+      !player.transferPendingClubId &&
+      !hasActiveTransferConflict(player.id, transferOffers) &&
+      !hasActiveIncomingConflict(player.id, incomingOffers)
+    );
+    if (sellerLoanPlayers.length === 0) return;
+
+    /**
+     * All rules in this block depend only on the buyer/seller club pair. The
+     * old triple loop repeated them for every listed player from the same seller.
+     * Keeping the original buyer order guarantees that offer seeds, tie-breaking
+     * and the final best-offer selection remain unchanged.
+     */
+    const eligibleBuyerContexts = buyerLoanContexts.flatMap(context => {
+      const { buyerClub, buyerSquad } = context;
+      if (buyerClub.id === sellerClub.id || buyerSquad.length >= 32) return [];
+      if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) return [];
+      if (!IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(buyerClub, sellerClub, currentDate)) return [];
+      const category = IncomingTransferService.getLoanBuyerCategory(buyerClub, sellerClub);
+      if (!category) return [];
+      return [{ ...context, category: category as LoanBuyerCategory }];
+    });
+
+    sellerLoanPlayers.forEach(player => {
+        eligibleBuyerContexts.forEach(({ buyerClub, buyerSquad, loanNeedSnapshot, category }) => {
           if (buyerSquad.some(squadPlayer => squadPlayer.id === player.id)) return;
-          if (buyerSquad.length >= 32) return;
 
           const seed = IncomingTransferService.buildOfferSeed(
             currentDate,
@@ -771,7 +789,12 @@ const processAiToAiLoanMoves = (
             incomingOffers,
             seed,
             currentDate,
-            buyerSquad
+            buyerSquad,
+            {
+              prevalidatedCategory: category,
+              activeOfferConflictAlreadyChecked: true,
+              loanNeedSnapshot,
+            }
           );
           if (!decision.shouldGenerate) return;
 
@@ -783,7 +806,8 @@ const processAiToAiLoanMoves = (
             buyerClub,
             sellerClub,
             buyerSquad,
-            seed + 419
+            seed + 419,
+            loanNeedSnapshot
           );
           if (playerDecision === 'refused') return;
 
@@ -797,7 +821,7 @@ const processAiToAiLoanMoves = (
           const wageSaving = Math.round((player.annualSalary || 0) * (wageCoveragePercent / 100) * (loanDays / 365));
           const financialScore = Math.min(60, (loanFee + wageSaving) / 5000);
           const reputationScore = Math.max(0, buyerClub.reputation) * 6;
-          const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad);
+          const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad, loanNeedSnapshot);
           const squadNeedScore = Math.max(0, need.needScore) * 7;
           const sameCountryBonus = buyerClub.country === sellerClub.country ? 4 : 0;
           const score = financialScore + reputationScore + squadNeedScore + sameCountryBonus;
@@ -1373,7 +1397,13 @@ finalizeFreeAgentContract: (mailId: string) => void;
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { runWithProcessing } = useProcessing();
+  const {
+    runWithProcessing,
+    beginProcessingStep,
+    completeProcessingStep,
+    recordProcessingStep,
+    runProcessingStep,
+  } = useProcessing();
   const [currentDate, setCurrentDate] = useState<Date>(START_DATE);
   const [sessionSeed, setSessionSeed] = useState<number>(() => generateRuntimeSeed());
   const [runtimeSimulationSeed, setRuntimeSimulationSeed] = useState<number>(() => generateRuntimeSeed());
@@ -7878,10 +7908,15 @@ setMessages(prev => [
     setSummerCampProgramPending(false);
   }, [userTeamId]);
 
-  const advanceDay = useCallback(() => {
+  const advanceDay = useCallback(async () => {
     if (viewState === ViewState.CUP_DRAW || viewState === ViewState.CL_DRAW || viewState === ViewState.EL_DRAW || viewState === ViewState.EL_R2Q_DRAW || viewState === ViewState.CONF_DRAW || viewState === ViewState.CONF_R2Q_DRAW || viewState === ViewState.CONF_GROUP_DRAW || viewState === ViewState.CONF_R16_DRAW || viewState === ViewState.CONF_QF_DRAW || viewState === ViewState.CONF_SF_DRAW || viewState === ViewState.PLAYOFF_DRAW || viewState === ViewState.NATIONS_LEAGUE_DRAW) return;
 
     const dateToProcess = new Date(currentDate);
+    // The processing overlay is not cosmetic: this open step yields before the
+    // large calendar block, allowing React to paint its label. It is closed
+    // immediately before league simulation; an early return is finalized by the
+    // provider so draw/match interruptions never leave a hanging row.
+    const calendarProcessingStep = await beginProcessingStep('Kalendarz, wiadomości i wydarzenia dnia');
     // Czy to automatyczny skok (jumpToDate/jumpToNextEvent) — NIE ręczny klik gracza?
     const isAutoJumping = targetJumpTime !== null;
 
@@ -11309,8 +11344,23 @@ Asystent`,
       }
     }
 
+    await completeProcessingStep(calendarProcessingStep);
     DebugLoggerService.checkpoint('DAY_PHASE', `LEAGUE_BEFORE ${dateToProcess.toDateString()}`);
-    const simulation = BackgroundMatchProcessor.processLeagueEvent(dateToProcess, userTeamId, allFixtures, clubs, playersAfterWorldCup, lineups, seasonNumber, coaches, matchSimulationSeed);
+    const simulation = await runProcessingStep(
+      'Mecze ligowe, kontrakty i rynek transferowy AI',
+      () => BackgroundMatchProcessor.processLeagueEvent(
+        dateToProcess,
+        userTeamId,
+        allFixtures,
+        clubs,
+        playersAfterWorldCup,
+        lineups,
+        seasonNumber,
+        coaches,
+        matchSimulationSeed,
+        (label, elapsedMs) => recordProcessingStep(`↳ ${label}`, elapsedMs)
+      )
+    );
     DebugLoggerService.checkpoint('DAY_PHASE', `LEAGUE_AFTER ${dateToProcess.toDateString()}`);
 
     if (userTeamId && !celebrationAlreadyFiredRef.current) {
@@ -11384,7 +11434,18 @@ Asystent`,
         ? Math.round(qualityValues.reduce((a, b) => a + b, 0) / qualityValues.length)
         : undefined;
     })();
-    const recoveredPlayers = RecoveryService.applyDailyRecovery(simulation.updatedPlayers, dateToProcess, activeIntensity, recoveryDelta, recoveryBoost, medicalQuality, userTeamId ?? undefined);
+    const recoveredPlayers = await runProcessingStep(
+      'Kondycja, zmęczenie i kontuzje zawodników',
+      () => RecoveryService.applyDailyRecovery(
+        simulation.updatedPlayers,
+        dateToProcess,
+        activeIntensity,
+        recoveryDelta,
+        recoveryBoost,
+        medicalQuality,
+        userTeamId ?? undefined
+      )
+    );
 
     // 3. Budowanie finalnego wyniku
     // 2 lipca: automatyczny przegląd składów AI na początku sezonu
@@ -11415,25 +11476,27 @@ Asystent`,
      * deliberately not copied into the main state until the user opens the club.
      */
     if (dateToProcess.getDate() === 1 || dateToProcess.getDate() === 15) {
-      const nextPlayers = { ...postReviewPlayers };
-      let stateSquadChanged = false;
+      await runProcessingStep('Statystyki zawodników lig zagranicznych', () => {
+        const nextPlayers = { ...postReviewPlayers };
+        let stateSquadChanged = false;
 
-      postReviewClubs
-        .filter(isForeignBackgroundStatsClub)
-        .forEach(club => {
-          const stateSquad = postReviewPlayers[club.id];
-          const squad = stateSquad ?? generatedSquadCacheRef.current[club.id];
-          if (!squad?.length) return;
+        postReviewClubs
+          .filter(isForeignBackgroundStatsClub)
+          .forEach(club => {
+            const stateSquad = postReviewPlayers[club.id];
+            const squad = stateSquad ?? generatedSquadCacheRef.current[club.id];
+            if (!squad?.length) return;
 
-          const updatedSquad = applyForeignBackgroundForm(squad, club, dateToProcess);
-          generatedSquadCacheRef.current[club.id] = updatedSquad;
-          if (stateSquad) {
-            nextPlayers[club.id] = updatedSquad;
-            stateSquadChanged = true;
-          }
-        });
+            const updatedSquad = applyForeignBackgroundForm(squad, club, dateToProcess);
+            generatedSquadCacheRef.current[club.id] = updatedSquad;
+            if (stateSquad) {
+              nextPlayers[club.id] = updatedSquad;
+              stateSquadChanged = true;
+            }
+          });
 
-      if (stateSquadChanged) postReviewPlayers = nextPlayers;
+        if (stateSquadChanged) postReviewPlayers = nextPlayers;
+      });
     }
 
     if (dateToProcess.getDate() === 1) {
@@ -11800,22 +11863,26 @@ Asystent`,
       }
     }
 
-    const aiAiLoanMoves = processAiToAiLoanMoves(
-      postReviewClubs,
-      postReviewPlayers,
-      postLoanLineups,
-      coaches,
-      dateToProcess,
-      sessionSeed,
-      userTeamId,
-      incomingOffers,
-      transferOffers
+    const aiAiLoanMoves = await runProcessingStep(
+      'Rynek wypożyczeń między klubami AI',
+      () => processAiToAiLoanMoves(
+        postReviewClubs,
+        postReviewPlayers,
+        postLoanLineups,
+        coaches,
+        dateToProcess,
+        sessionSeed,
+        userTeamId,
+        incomingOffers,
+        transferOffers
+      )
     );
     postReviewClubs = aiAiLoanMoves.updatedClubs;
     postReviewPlayers = aiAiLoanMoves.updatedPlayers;
     postLoanLineups = aiAiLoanMoves.updatedLineups;
 
     // Wygasłe kontrakty (mid-season) → wolni agenci, każdy klub
+    const contractProcessingStep = await beginProcessingStep('Wygasające kontrakty i ruchy kadrowe');
     DebugLoggerService.checkpoint('DAY_PHASE', `CONTRACT_EXPIRY_BEFORE ${dateToProcess.toDateString()}`);
     const contractExpiryMails: MailMessage[] = [];
     {
@@ -11973,17 +12040,19 @@ Asystent`,
       }
     }
     DebugLoggerService.checkpoint('DAY_PHASE', `CONTRACT_EXPIRY_AFTER ${dateToProcess.toDateString()}`);
+    await completeProcessingStep(contractProcessingStep);
 
+    const trainingProcessingStep = await beginProcessingStep('Trening, rozwój i aklimatyzacja zawodników');
     const aiTrainingEarly = AiWeeklyTrainingService.processWeeklyTraining(
-      postReviewPlayers,
-      postReviewClubs,
-      coaches,
-      userTeamId,
-      dateToProcess,
-      simulation.updatedFixtures,
-      sessionSeed,
-      staffMembers
-    );
+        postReviewPlayers,
+        postReviewClubs,
+        coaches,
+        userTeamId,
+        dateToProcess,
+        simulation.updatedFixtures,
+        sessionSeed,
+        staffMembers
+      );
     postReviewPlayers = aiTrainingEarly.updatedPlayers;
     postReviewClubs = aiTrainingEarly.updatedClubs;
 
@@ -12007,16 +12076,20 @@ Asystent`,
       if (anyAdaptationChanged) postReviewPlayers = nextPlayersAdapt;
     }
     DebugLoggerService.checkpoint('DAY_PHASE', `ADAPTATION_AFTER ${dateToProcess.toDateString()}`);
+    await completeProcessingStep(trainingProcessingStep);
 
     // IV liga deliberately bypasses the full match engine. On a regional
     // matchday this updates only compact fixtures, club tables and generated
     // statistical leaders. It is deterministic and idempotent: a FINISHED
     // fixture can never be applied to the table twice after a reload or jump.
-    const fourthLeagueSimulation = PolishFourthLeagueService.processDate(
-      fourthLeagueState,
-      postReviewClubs,
-      dateToProcess,
-      sessionSeed
+    const fourthLeagueSimulation = await runProcessingStep(
+      'Rozgrywki IV lig wojewódzkich',
+      () => PolishFourthLeagueService.processDate(
+        fourthLeagueState,
+        postReviewClubs,
+        dateToProcess,
+        sessionSeed
+      )
     );
     if (fourthLeagueSimulation.played > 0) {
       postReviewClubs = fourthLeagueSimulation.clubs;
@@ -12039,7 +12112,10 @@ const finalResult: SimulationOutput = {
     
     // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
        // 4. Aktualizacja wszystkich stanów za jednym razem (applySimulationResult)
-    applySimulationResult(finalResult);
+    await runProcessingStep(
+      'Aktualizacja składów, formy i tabel',
+      () => applySimulationResult(finalResult)
+    );
 
     if (shouldCommitLegacyReservePromotion) {
       setLegacyReserves(postReviewLegacyReserves);
@@ -12209,11 +12285,14 @@ const finalResult: SimulationOutput = {
     // 4b. Symulacja meczów CL w tle (11 i 15 lipca)
     // Pomijamy dzień UEFA_SUPER_CUP — mecz jest przetwarzany bezpośrednio w case CompetitionType.UEFA_SUPER_CUP
     const isUEFASuperCupDay = primaryEvent?.slot.competition === CompetitionType.UEFA_SUPER_CUP;
-    const clResult = isUEFASuperCupDay
-      ? { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] }
-      : BackgroundMatchProcessorCL.processChampionsLeagueEvent(
-          dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, matchSimulationSeed, coaches
-        );
+    const clResult = await runProcessingStep(
+      'Europejskie puchary rozgrywane w tle',
+      () => isUEFASuperCupDay
+        ? { updatedFixtures: allFixtures, updatedPlayers: postReviewPlayers, matchHistoryEntries: [] as MatchHistoryEntry[] }
+        : BackgroundMatchProcessorCL.processChampionsLeagueEvent(
+            dateToProcess, userTeamId, allFixtures, clubs, postReviewPlayers, lineups, seasonNumber, matchSimulationSeed, coaches
+          )
+    );
     // WAŻNE: używamy functional update + porównania, aby nie nadpisać wyników ligowych
     // (clResult.updatedFixtures zawiera WSZYSTKIE fixtures ze starego allFixtures)
     // Pomijamy aktualizację fixtures i graczy z clResult gdy to dzień UEFA Super Cup,
@@ -15168,7 +15247,7 @@ const finalResult: SimulationOutput = {
     DebugLoggerService.checkpoint('DAY_PHASE', `DAY_END ${dateToProcess.toDateString()}`);
     setCurrentDate(nextDay);
     setLastRecoveryDate(new Date(dateToProcess));
-  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, fourthLeagueState, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, buildFriendlyPlanningReminder, prependUniqueMessages, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState]);
+  }, [currentDate, userTeamId, allFixtures, applySimulationResult, startNextSeason, viewState, seasonTemplate, cupParticipants, clubs, processedDrawIds, navigateTo, globalFixtures, targetJumpTime, leagues, incomingOffers, messages, mediaRelationships, sentUnfriendlyPressMonths, sentFriendlyPressMonths, activePlayoffDraw, relegationPlayoffFirstLegResults, relegationPlayoffFinalResult, promotionPlayoffSemiResults, promotionPlayoffFinalResults, sessionSeed, matchSimulationSeed, fourthLeagueState, academy, players, reserves, managedReserveClubId, reserveReleaseDirective, releaseReservePlayersByBoard, showGameNotification, isResigned, activeTrainingId, buildContractStaffAlert, buildFriendlyPlanningReminder, prependUniqueMessages, transferOffers, lineups, nationalTeams, nationsLeagueState, nationsLeagueArchive, euroHostAnnouncements, euroQualifiersState, worldCupQualifiersState, euroState, uefaNationalRankingState, beginProcessingStep, completeProcessingStep, recordProcessingStep, runProcessingStep]);
 
   const advanceDayWithProcessing = useCallback(() => {
     const processingDay = currentDate.getDate();

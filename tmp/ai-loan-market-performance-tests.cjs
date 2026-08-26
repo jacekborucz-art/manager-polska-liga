@@ -1,14 +1,6 @@
-// tests/LoanRealismTests.ts
+// tests/AiLoanMarketPerformanceTests.ts
 var import_node_assert = require("node:assert");
-
-// types.ts
-var PlayerPosition = /* @__PURE__ */ ((PlayerPosition2) => {
-  PlayerPosition2["GK"] = "GK";
-  PlayerPosition2["DEF"] = "DEF";
-  PlayerPosition2["MID"] = "MID";
-  PlayerPosition2["FWD"] = "FWD";
-  return PlayerPosition2;
-})(PlayerPosition || {});
+var import_node_perf_hooks = require("node:perf_hooks");
 
 // services/ManagerNegotiationInfluenceService.ts
 var clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -153,7 +145,7 @@ var EUROPEAN_CLUB_REVENUE_OVERRIDE_PLN = {
   "Benfica Lizbona": eurMillionsToPln(283.4)
 };
 var EUROPEAN_COMMERCIAL_LEAGUES = /* @__PURE__ */ new Set(["L_CL", "L_EL", "L_CONF"]);
-var isEuropeanCommercialClub = (club2) => EUROPEAN_COMMERCIAL_LEAGUES.has(club2.leagueId);
+var isEuropeanCommercialClub = (club) => EUROPEAN_COMMERCIAL_LEAGUES.has(club.leagueId);
 var clamp2 = (value, min, max) => Math.max(min, Math.min(max, value));
 var POLISH_MARKET_CAP_BY_TIER = {
   1: 21e6,
@@ -162,7 +154,7 @@ var POLISH_MARKET_CAP_BY_TIER = {
   4: 35e4,
   5: 175e3
 };
-var getPolishAgeMarketCap = (player2, tier) => {
+var getPolishAgeMarketCap = (player, tier) => {
   const tierScale = {
     1: 1,
     2: 0.34,
@@ -171,41 +163,41 @@ var getPolishAgeMarketCap = (player2, tier) => {
     5: 0.018
   }[tier] ?? 0.018;
   let ekstraklasaCap = 0;
-  switch (player2.position) {
+  switch (player.position) {
     case "GK" /* GK */:
-      if (player2.age <= 23) ekstraklasaCap = 8e6;
-      else if (player2.age <= 29) ekstraklasaCap = 11e6;
-      else if (player2.age <= 32) ekstraklasaCap = 65e5;
-      else if (player2.age <= 34) ekstraklasaCap = 38e5;
+      if (player.age <= 23) ekstraklasaCap = 8e6;
+      else if (player.age <= 29) ekstraklasaCap = 11e6;
+      else if (player.age <= 32) ekstraklasaCap = 65e5;
+      else if (player.age <= 34) ekstraklasaCap = 38e5;
       else ekstraklasaCap = 22e5;
       break;
     case "DEF" /* DEF */:
-      if (player2.age <= 21) ekstraklasaCap = 1e7;
-      else if (player2.age <= 24) ekstraklasaCap = 13e6;
-      else if (player2.age <= 29) ekstraklasaCap = 11e6;
-      else if (player2.age <= 32) ekstraklasaCap = 65e5;
-      else if (player2.age <= 34) ekstraklasaCap = 38e5;
+      if (player.age <= 21) ekstraklasaCap = 1e7;
+      else if (player.age <= 24) ekstraklasaCap = 13e6;
+      else if (player.age <= 29) ekstraklasaCap = 11e6;
+      else if (player.age <= 32) ekstraklasaCap = 65e5;
+      else if (player.age <= 34) ekstraklasaCap = 38e5;
       else ekstraklasaCap = 22e5;
       break;
     default:
-      if (player2.age <= 21) ekstraklasaCap = 16e6;
-      else if (player2.age <= 24) ekstraklasaCap = 18e6;
-      else if (player2.age <= 29) ekstraklasaCap = 14e6;
-      else if (player2.age <= 32) ekstraklasaCap = 55e5;
-      else if (player2.age <= 34) ekstraklasaCap = 28e5;
+      if (player.age <= 21) ekstraklasaCap = 16e6;
+      else if (player.age <= 24) ekstraklasaCap = 18e6;
+      else if (player.age <= 29) ekstraklasaCap = 14e6;
+      else if (player.age <= 32) ekstraklasaCap = 55e5;
+      else if (player.age <= 34) ekstraklasaCap = 28e5;
       else ekstraklasaCap = 17e5;
       break;
   }
   return ekstraklasaCap * tierScale;
 };
-var getRecentAverageRating = (player2, sampleSize = 10) => {
-  const history = player2.stats?.ratingHistory?.slice(-sampleSize) ?? [];
+var getRecentAverageRating = (player, sampleSize = 10) => {
+  const history = player.stats?.ratingHistory?.slice(-sampleSize) ?? [];
   if (history.length === 0) return null;
   return history.reduce((sum, rating) => sum + rating, 0) / history.length;
 };
-var getCareerMatches = (player2) => {
-  const currentMatches = player2.stats?.matchesPlayed || 0;
-  const historicalMatches = (player2.history || []).reduce(
+var getCareerMatches = (player) => {
+  const currentMatches = player.stats?.matchesPlayed || 0;
+  const historicalMatches = (player.history || []).reduce(
     (sum, entry) => sum + (entry.statsSnapshot?.matchesPlayed || 0),
     0
   );
@@ -220,50 +212,50 @@ var getPolishBaseMarketValue = (ovr) => {
   if (ovr >= 60) return 65e4 + (ovr - 60) * 21e4;
   return 1e5 + Math.max(0, ovr - 40) * 27500;
 };
-var getPolishAgeFactor = (player2) => {
-  switch (player2.position) {
+var getPolishAgeFactor = (player) => {
+  switch (player.position) {
     case "DEF" /* DEF */:
-      if (player2.age <= 20) return 0.94;
-      if (player2.age <= 23) return 1;
-      if (player2.age <= 27) return 1.08;
-      if (player2.age <= 30) return 1.02;
-      if (player2.age === 31) return 0.92;
-      if (player2.age === 32) return 0.8;
-      if (player2.age === 33) return 0.68;
-      if (player2.age === 34) return 0.56;
-      if (player2.age === 35) return 0.46;
-      if (player2.age === 36) return 0.36;
+      if (player.age <= 20) return 0.94;
+      if (player.age <= 23) return 1;
+      if (player.age <= 27) return 1.08;
+      if (player.age <= 30) return 1.02;
+      if (player.age === 31) return 0.92;
+      if (player.age === 32) return 0.8;
+      if (player.age === 33) return 0.68;
+      if (player.age === 34) return 0.56;
+      if (player.age === 35) return 0.46;
+      if (player.age === 36) return 0.36;
       return 0.28;
     case "GK" /* GK */:
-      if (player2.age <= 21) return 0.96;
-      if (player2.age <= 25) return 1;
-      if (player2.age <= 30) return 1.06;
-      if (player2.age <= 32) return 1.02;
-      if (player2.age === 33) return 0.94;
-      if (player2.age === 34) return 0.84;
-      if (player2.age === 35) return 0.74;
-      if (player2.age === 36) return 0.62;
-      if (player2.age === 37) return 0.5;
+      if (player.age <= 21) return 0.96;
+      if (player.age <= 25) return 1;
+      if (player.age <= 30) return 1.06;
+      if (player.age <= 32) return 1.02;
+      if (player.age === 33) return 0.94;
+      if (player.age === 34) return 0.84;
+      if (player.age === 35) return 0.74;
+      if (player.age === 36) return 0.62;
+      if (player.age === 37) return 0.5;
       return 0.4;
     default:
-      if (player2.age <= 19) return 1.16;
-      if (player2.age <= 21) return 1.12;
-      if (player2.age <= 24) return 1.08;
-      if (player2.age <= 28) return 1;
-      if (player2.age === 29) return 0.94;
-      if (player2.age === 30) return 0.86;
-      if (player2.age === 31) return 0.74;
-      if (player2.age === 32) return 0.6;
-      if (player2.age === 33) return 0.48;
-      if (player2.age === 34) return 0.36;
-      if (player2.age === 35) return 0.27;
-      if (player2.age === 36) return 0.2;
+      if (player.age <= 19) return 1.16;
+      if (player.age <= 21) return 1.12;
+      if (player.age <= 24) return 1.08;
+      if (player.age <= 28) return 1;
+      if (player.age === 29) return 0.94;
+      if (player.age === 30) return 0.86;
+      if (player.age === 31) return 0.74;
+      if (player.age === 32) return 0.6;
+      if (player.age === 33) return 0.48;
+      if (player.age === 34) return 0.36;
+      if (player.age === 35) return 0.27;
+      if (player.age === 36) return 0.2;
       return 0.15;
   }
 };
-var getPolishExperienceFactor = (player2) => {
-  const careerMatches = getCareerMatches(player2);
-  switch (player2.position) {
+var getPolishExperienceFactor = (player) => {
+  const careerMatches = getCareerMatches(player);
+  switch (player.position) {
     case "DEF" /* DEF */:
       return 0.94 + clamp2(careerMatches / 260, 0, 1) * 0.2;
     case "GK" /* GK */:
@@ -272,10 +264,10 @@ var getPolishExperienceFactor = (player2) => {
       return 0.94 + clamp2(careerMatches / 260, 0, 1) * 0.08;
   }
 };
-var getPolishVeteranUsageFactor = (player2) => {
-  const minutesPlayed = Math.max(0, player2.stats?.minutesPlayed || 0);
-  if (player2.age <= 32) return 1;
-  switch (player2.position) {
+var getPolishVeteranUsageFactor = (player) => {
+  const minutesPlayed = Math.max(0, player.stats?.minutesPlayed || 0);
+  if (player.age <= 32) return 1;
+  switch (player.position) {
     case "GK" /* GK */:
     case "DEF" /* DEF */:
       if (minutesPlayed >= 1800) return 1;
@@ -289,16 +281,16 @@ var getPolishVeteranUsageFactor = (player2) => {
       return 0.55;
   }
 };
-var getPolishPerformanceFactor = (player2) => {
-  const minutesPlayed = Math.max(0, player2.stats?.minutesPlayed || 0);
-  const matchesPlayed = Math.max(0, player2.stats?.matchesPlayed || 0);
-  const goals = Math.max(0, player2.stats?.goals || 0);
-  const assists = Math.max(0, player2.stats?.assists || 0);
-  const averageRating = getRecentAverageRating(player2);
+var getPolishPerformanceFactor = (player) => {
+  const minutesPlayed = Math.max(0, player.stats?.minutesPlayed || 0);
+  const matchesPlayed = Math.max(0, player.stats?.matchesPlayed || 0);
+  const goals = Math.max(0, player.stats?.goals || 0);
+  const assists = Math.max(0, player.stats?.assists || 0);
+  const averageRating = getRecentAverageRating(player);
   const fullMatches = Math.max(1, minutesPlayed / 90);
   const sampleFactor = clamp2(minutesPlayed / 900, 0, 1);
   const ratingDelta = averageRating === null ? 0 : averageRating - 6.7;
-  switch (player2.position) {
+  switch (player.position) {
     case "FWD" /* FWD */: {
       const goalsPer90 = goals / fullMatches;
       const assistsPer90 = assists / fullMatches;
@@ -317,13 +309,13 @@ var getPolishPerformanceFactor = (player2) => {
     }
     case "DEF" /* DEF */: {
       const matchFactor = clamp2(matchesPlayed / 30, 0, 1) * 0.1;
-      const experienceBoost = clamp2(getCareerMatches(player2) / 260, 0, 1) * 0.12;
+      const experienceBoost = clamp2(getCareerMatches(player) / 260, 0, 1) * 0.12;
       const ratingBoost = averageRating === null ? 0 : clamp2((averageRating - 6.6) * 0.18, -0.1, 0.22) * clamp2(matchesPlayed / 10, 0, 1);
       return 1 + clamp2(matchFactor + experienceBoost + ratingBoost, -0.1, 0.42);
     }
     case "GK" /* GK */: {
       const matchFactor = clamp2(matchesPlayed / 30, 0, 1) * 0.1;
-      const experienceBoost = clamp2(getCareerMatches(player2) / 240, 0, 1) * 0.14;
+      const experienceBoost = clamp2(getCareerMatches(player) / 240, 0, 1) * 0.14;
       const ratingBoost = averageRating === null ? 0 : clamp2((averageRating - 6.6) * 0.22, -0.1, 0.24) * clamp2(matchesPlayed / 8, 0, 1);
       return 1 + clamp2(matchFactor + experienceBoost + ratingBoost, -0.12, 0.46);
     }
@@ -331,8 +323,8 @@ var getPolishPerformanceFactor = (player2) => {
       return 1;
   }
 };
-var calculatePolishMarketValue = (player2, reputation, tier) => {
-  const baseValue = getPolishBaseMarketValue(player2.overallRating);
+var calculatePolishMarketValue = (player, reputation, tier) => {
+  const baseValue = getPolishBaseMarketValue(player.overallRating);
   const tierMultiplier = {
     1: 1,
     2: 0.38,
@@ -341,26 +333,26 @@ var calculatePolishMarketValue = (player2, reputation, tier) => {
     5: 0.025
   }[tier] ?? 0.05;
   const reputationFactor = 0.88 + clamp2(reputation, 1, 10) * 0.025;
-  const ageFactor = getPolishAgeFactor(player2);
-  const experienceFactor = getPolishExperienceFactor(player2);
-  const performanceFactor = getPolishPerformanceFactor(player2);
-  const veteranUsageFactor = getPolishVeteranUsageFactor(player2);
+  const ageFactor = getPolishAgeFactor(player);
+  const experienceFactor = getPolishExperienceFactor(player);
+  const performanceFactor = getPolishPerformanceFactor(player);
+  const veteranUsageFactor = getPolishVeteranUsageFactor(player);
   const randomFactor = 0.985 + Math.random() * 0.03;
   const tierCap = Math.min(
     POLISH_MARKET_CAP_BY_TIER[tier] ?? 175e3,
-    getPolishAgeMarketCap(player2, tier)
+    getPolishAgeMarketCap(player, tier)
   );
   const rawValue = baseValue * tierMultiplier * reputationFactor * ageFactor * experienceFactor * performanceFactor * veteranUsageFactor * randomFactor;
   const cappedValue = Math.min(rawValue, tierCap);
   const step = cappedValue >= 1e7 ? 25e4 : cappedValue >= 1e6 ? 1e5 : cappedValue >= 1e5 ? 25e3 : 1e4;
   return Math.round(cappedValue / step) * step;
 };
-var getEuropeanCommercialIndex = (club2) => {
-  const countryFactorRaw = EUROPEAN_COUNTRY_FINANCE_FACTOR[club2.country || ""] ?? 0.1;
+var getEuropeanCommercialIndex = (club) => {
+  const countryFactorRaw = EUROPEAN_COUNTRY_FINANCE_FACTOR[club.country || ""] ?? 0.1;
   const countryFactor = 0.4 + Math.sqrt(Math.max(0.01, countryFactorRaw));
-  const reputationFactor = 0.7 + Math.pow(Math.max(1, Math.min(20, club2.reputation)) / 20, 1.2) * 0.9;
-  const stadiumFactor = 0.78 + Math.pow(Math.max(2e3, Math.min(1e5, club2.stadiumCapacity)) / 1e5, 0.8) * 0.42;
-  const competitionFactor = club2.leagueId === "L_CL" ? 1.12 : club2.leagueId === "L_EL" ? 1 : 0.92;
+  const reputationFactor = 0.7 + Math.pow(Math.max(1, Math.min(20, club.reputation)) / 20, 1.2) * 0.9;
+  const stadiumFactor = 0.78 + Math.pow(Math.max(2e3, Math.min(1e5, club.stadiumCapacity)) / 1e5, 0.8) * 0.42;
+  const competitionFactor = club.leagueId === "L_CL" ? 1.12 : club.leagueId === "L_EL" ? 1 : 0.92;
   return clamp2(countryFactor * reputationFactor * stadiumFactor * competitionFactor / 1.45, 0.45, 2.6);
 };
 var INTERNATIONAL_DEFAULT_TIER_CAPS = {
@@ -595,39 +587,39 @@ var getInternationalBaseMarketValue = (ovr) => {
   if (ovr >= 60) return 35e4 + (ovr - 60) * 18e4;
   return 5e4 + Math.max(0, ovr - 40) * 15e3;
 };
-var getInternationalAgeFactor = (player2) => {
-  switch (player2.position) {
+var getInternationalAgeFactor = (player) => {
+  switch (player.position) {
     case "DEF" /* DEF */:
-      if (player2.age <= 20) return 1.08;
-      if (player2.age <= 24) return 1.04;
-      if (player2.age <= 29) return 1;
-      if (player2.age <= 31) return 0.94;
-      if (player2.age <= 33) return 0.82;
-      if (player2.age <= 35) return 0.68;
-      if (player2.age <= 37) return 0.52;
+      if (player.age <= 20) return 1.08;
+      if (player.age <= 24) return 1.04;
+      if (player.age <= 29) return 1;
+      if (player.age <= 31) return 0.94;
+      if (player.age <= 33) return 0.82;
+      if (player.age <= 35) return 0.68;
+      if (player.age <= 37) return 0.52;
       return 0.4;
     case "GK" /* GK */:
-      if (player2.age <= 21) return 1.02;
-      if (player2.age <= 25) return 1;
-      if (player2.age <= 31) return 1.05;
-      if (player2.age <= 34) return 0.96;
-      if (player2.age <= 36) return 0.82;
-      if (player2.age <= 38) return 0.66;
+      if (player.age <= 21) return 1.02;
+      if (player.age <= 25) return 1;
+      if (player.age <= 31) return 1.05;
+      if (player.age <= 34) return 0.96;
+      if (player.age <= 36) return 0.82;
+      if (player.age <= 38) return 0.66;
       return 0.52;
     default:
-      if (player2.age <= 20) return 1.18;
-      if (player2.age <= 23) return 1.1;
-      if (player2.age <= 27) return 1;
-      if (player2.age <= 29) return 0.94;
-      if (player2.age <= 31) return 0.82;
-      if (player2.age <= 33) return 0.68;
-      if (player2.age <= 35) return 0.54;
-      if (player2.age <= 37) return 0.4;
+      if (player.age <= 20) return 1.18;
+      if (player.age <= 23) return 1.1;
+      if (player.age <= 27) return 1;
+      if (player.age <= 29) return 0.94;
+      if (player.age <= 31) return 0.82;
+      if (player.age <= 33) return 0.68;
+      if (player.age <= 35) return 0.54;
+      if (player.age <= 37) return 0.4;
       return 0.28;
   }
 };
-var calculateInternationalMarketValue = (player2, reputation, tier, country) => {
-  const baseValue = getInternationalBaseMarketValue(player2.overallRating);
+var calculateInternationalMarketValue = (player, reputation, tier, country) => {
+  const baseValue = getInternationalBaseMarketValue(player.overallRating);
   const tierMultiplier = {
     1: 1,
     2: 0.36,
@@ -636,7 +628,7 @@ var calculateInternationalMarketValue = (player2, reputation, tier, country) => 
     5: 0.03
   }[tier] ?? 0.08;
   const reputationFactor = 0.9 + clamp2(reputation, 1, 20) * 0.015;
-  const ageFactor = getInternationalAgeFactor(player2);
+  const ageFactor = getInternationalAgeFactor(player);
   const marketProfile = getInternationalMarketProfile(country);
   const randomFactor = 0.97 + Math.random() * 0.06;
   const tierCap = marketProfile.tierCaps[tier] ?? INTERNATIONAL_DEFAULT_TIER_CAPS[5];
@@ -705,12 +697,12 @@ var FinanceService = {
     const cap = FinanceService.calculateTransferBudgetCap(budget, reputation, wageBill);
     return Math.max(0, Math.min(Math.floor(transferBudget || 0), cap));
   },
-  getClubTier: (club2) => {
-    if (!club2) return 4;
-    if (typeof club2.tier === "number" && Number.isFinite(club2.tier)) {
-      return club2.tier;
+  getClubTier: (club) => {
+    if (!club) return 4;
+    if (typeof club.tier === "number" && Number.isFinite(club.tier)) {
+      return club.tier;
     }
-    const parsedTier = parseInt((club2.leagueId || "").split("_")[2] || "4", 10);
+    const parsedTier = parseInt((club.leagueId || "").split("_")[2] || "4", 10);
     return Number.isFinite(parsedTier) ? parsedTier : 4;
   },
   calculateEuropeanInitialBudget: (tier, reputation, country, clubName, stadiumCapacity = 15e3) => {
@@ -772,44 +764,44 @@ var FinanceService = {
   },
   // Koszty organizacji meczu — progresywna formuła wg. ligi, reputacji i frekwencji
   // attendance (opcjonalne) — liczba kibiców na trybunach (dla meczów u siebie)
-  calculateMatchdayExpenses: (club2, isHome, attendance) => {
-    const cfoFactor = 1.15 - (club2.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20 * 0.3;
-    if (isEuropeanCommercialClub(club2)) {
-      const marketIndex = getEuropeanCommercialIndex(club2);
+  calculateMatchdayExpenses: (club, isHome, attendance) => {
+    const cfoFactor = 1.15 - (club.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20 * 0.3;
+    if (isEuropeanCommercialClub(club)) {
+      const marketIndex = getEuropeanCommercialIndex(club);
       if (isHome) {
         const att = attendance ?? 0;
-        const fillRate = club2.stadiumCapacity > 0 ? att / club2.stadiumCapacity : 0;
+        const fillRate = club.stadiumCapacity > 0 ? att / club.stadiumCapacity : 0;
         const fillMultiplier = fillRate >= 0.95 ? 1.3 : fillRate >= 0.85 ? 1.18 : fillRate >= 0.7 ? 1.08 : 1;
-        const rawCost2 = (18e4 + club2.stadiumCapacity * (5.5 + marketIndex * 1.8) + att * (7 + marketIndex * 2.4) + club2.reputation * (16e3 + marketIndex * 8e3)) * fillMultiplier * cfoFactor;
-        const minFloor = 18e4 + club2.stadiumCapacity * (2 + marketIndex * 0.8);
-        const maxCap = 35e4 + club2.stadiumCapacity * (14 + marketIndex * 4);
+        const rawCost2 = (18e4 + club.stadiumCapacity * (5.5 + marketIndex * 1.8) + att * (7 + marketIndex * 2.4) + club.reputation * (16e3 + marketIndex * 8e3)) * fillMultiplier * cfoFactor;
+        const minFloor = 18e4 + club.stadiumCapacity * (2 + marketIndex * 0.8);
+        const maxCap = 35e4 + club.stadiumCapacity * (14 + marketIndex * 4);
         return Math.round(clamp2(rawCost2, minFloor, maxCap));
       }
-      const awayRaw = (12e4 + club2.stadiumCapacity * (1 + marketIndex * 0.35) + club2.reputation * (7e3 + marketIndex * 3e3)) * cfoFactor;
-      const awayCap = 22e4 + club2.stadiumCapacity * (3.5 + marketIndex);
+      const awayRaw = (12e4 + club.stadiumCapacity * (1 + marketIndex * 0.35) + club.reputation * (7e3 + marketIndex * 3e3)) * cfoFactor;
+      const awayCap = 22e4 + club.stadiumCapacity * (3.5 + marketIndex);
       return Math.round(Math.min(awayRaw, awayCap));
     }
-    const tier = Math.min(4, Math.max(1, parseInt(club2.leagueId.split("_")[2] || "4")));
+    const tier = Math.min(4, Math.max(1, parseInt(club.leagueId.split("_")[2] || "4")));
     const p = MATCHDAY_COST_PARAMS;
     if (isHome) {
       const att = attendance ?? 0;
-      const fillRate = club2.stadiumCapacity > 0 ? att / club2.stadiumCapacity : 0;
+      const fillRate = club.stadiumCapacity > 0 ? att / club.stadiumCapacity : 0;
       const fillMultiplier = fillRate >= 0.95 ? 1.5 : fillRate >= 0.85 ? 1.3 : fillRate >= 0.7 ? 1.1 : 1;
-      const rawCost2 = (p.home.baseCost[tier] + att * p.home.perFanCost[tier] + club2.reputation * p.home.repScale[tier]) * fillMultiplier * cfoFactor;
+      const rawCost2 = (p.home.baseCost[tier] + att * p.home.perFanCost[tier] + club.reputation * p.home.repScale[tier]) * fillMultiplier * cfoFactor;
       return Math.min(
         p.home.maxCap[tier],
         Math.max(p.home.minFloor[tier], Math.floor(rawCost2))
       );
     }
-    const rawCost = (p.away.baseCost[tier] + club2.reputation * p.away.repScale[tier]) * cfoFactor;
+    const rawCost = (p.away.baseCost[tier] + club.reputation * p.away.repScale[tier]) * cfoFactor;
     return Math.min(p.away.maxCap[tier], Math.floor(rawCost));
   },
-  calculateManagementMonthlySalary: (club2) => {
-    if (!club2.management) return 0;
-    const { owner, ceo, cfo, coo, marketingDirector, academyDirector } = club2.management;
+  calculateManagementMonthlySalary: (club) => {
+    if (!club.management) return 0;
+    const { owner, ceo, cfo, coo, marketingDirector, academyDirector } = club.management;
     return owner.monthlySalary + (ceo?.monthlySalary ?? 0) + cfo.monthlySalary + coo.monthlySalary + marketingDirector.monthlySalary + (academyDirector?.monthlySalary ?? 0);
   },
-  calculateMonthlyOperationalCosts: (club2) => {
+  calculateMonthlyOperationalCosts: (club) => {
     const KOMPETENCJA_MULTIPLIER = {
       bardzo_niska: 1.35,
       niska: 1.2,
@@ -817,18 +809,18 @@ var FinanceService = {
       wysoka: 0.95,
       bardzo_wysoka: 0.85
     };
-    const kompetencja = club2.board?.kompetencja ?? "przecietna";
+    const kompetencja = club.board?.kompetencja ?? "przecietna";
     const kompetencjaFactor = KOMPETENCJA_MULTIPLIER[kompetencja] ?? 1.05;
-    const cfoFactor = 1.15 - (club2.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20 * 0.3;
-    if (isEuropeanCommercialClub(club2)) {
-      const tier2 = Math.min(4, Math.max(1, club2.tier ?? 1));
+    const cfoFactor = 1.15 - (club.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20 * 0.3;
+    if (isEuropeanCommercialClub(club)) {
+      const tier2 = Math.min(4, Math.max(1, club.tier ?? 1));
       const monthlyFactor = { 1: 0.015, 2: 0.012, 3: 0.01, 4: 8e-3 }[tier2] ?? 0.01;
-      const rawCost2 = club2.budget * monthlyFactor * kompetencjaFactor * cfoFactor;
+      const rawCost2 = club.budget * monthlyFactor * kompetencjaFactor * cfoFactor;
       return Math.round(clamp2(rawCost2, 5e4, 8e7) / 1e3) * 1e3;
     }
-    const tier = Math.min(4, Math.max(1, parseInt(club2.leagueId.split("_")[2] || "4")));
-    const cappedCapacity = Math.max(500, Math.min(8e4, club2.stadiumCapacity));
-    const cappedRep = Math.max(1, Math.min(10, club2.reputation));
+    const tier = Math.min(4, Math.max(1, parseInt(club.leagueId.split("_")[2] || "4")));
+    const cappedCapacity = Math.max(500, Math.min(8e4, club.stadiumCapacity));
+    const cappedRep = Math.max(1, Math.min(10, club.reputation));
     const costPerSeat = { 1: 18, 2: 9, 3: 4.5, 4: 2 }[tier] ?? 2;
     const opsBase = { 1: 35e4, 2: 65e3, 3: 16e3, 4: 5e3 }[tier] ?? 5e3;
     const opsPerRep = { 1: 65e3, 2: 16e3, 3: 4500, 4: 1500 }[tier] ?? 1500;
@@ -858,42 +850,42 @@ var FinanceService = {
     const prizeMoney = Math.max(0, (19 - rank) * 15e5);
     return Math.floor(tvRights + sponsorship + prizeMoney);
   },
-  calculateMarketValue: (player2, reputation, tier, clubCountry) => {
-    const playerClubId = player2.clubId ?? "";
+  calculateMarketValue: (player, reputation, tier, clubCountry) => {
+    const playerClubId = player.clubId ?? "";
     if (playerClubId === "FREE_AGENTS") return 0;
-    const ovr = player2.overallRating;
+    const ovr = player.overallRating;
     const normalizedCountry = normalizeMarketCountry(clubCountry);
     const isPolishClub = playerClubId.startsWith("PL_") || normalizedCountry === "POL";
     if (isPolishClub) {
-      return calculatePolishMarketValue(player2, reputation, tier);
+      return calculatePolishMarketValue(player, reputation, tier);
     }
-    return calculateInternationalMarketValue(player2, reputation, tier, normalizedCountry);
+    return calculateInternationalMarketValue(player, reputation, tier, normalizedCountry);
   },
   /**
    * Board Intervention Engine (BIE)
    * Oblicza WOZ (Wskaźnik Oporu Zarządu)
    */
-  evaluateReleaseRequest: (player2, club2, squad) => {
-    const penalty = Math.floor(player2.annualSalary * 0.4);
-    const budget = club2.budget;
+  evaluateReleaseRequest: (player, club, squad) => {
+    const penalty = Math.floor(player.annualSalary * 0.4);
+    const budget = club.budget;
     const financialPain = penalty / budget * 100;
     let financialScore = financialPain * 4;
     if (financialPain > 20) financialScore += 50;
     const avgOvr = squad.reduce((acc, p) => acc + p.overallRating, 0) / squad.length;
-    const starGap = player2.overallRating - avgOvr;
+    const starGap = player.overallRating - avgOvr;
     let sportScore = 0;
     if (starGap > 10) sportScore = 95;
     else if (starGap > 5) sportScore = 50;
     else if (starGap < -5) sportScore = -20;
-    const strictnessScore = (club2.boardStrictness - 5) * 10;
+    const strictnessScore = (club.boardStrictness - 5) * 10;
     const chaosScore = Math.random() * 20 - 10;
     let woz = Math.max(0, Math.min(100, financialScore * 0.45 + sportScore * 0.4 + strictnessScore * 0.1 + chaosScore));
     const top11Ids = [...squad].sort((a, b) => b.overallRating - a.overallRating).slice(0, 11).map((p) => p.id);
-    const isPillar = top11Ids.includes(player2.id);
+    const isPillar = top11Ids.includes(player.id);
     if (isPillar && Math.random() > 0.05) {
       woz = Math.max(woz, 90);
     }
-    if (player2.isUntouchable && Math.random() > 0.01) {
+    if (player.isUntouchable && Math.random() > 0.01) {
       woz = 100;
     }
     if (woz < 30) return { status: "APPROVED", woz, reason: "Zarz\u0105d akceptuje Pana decyzj\u0119. Koszty s\u0105 akceptowalne, a zawodnik nie jest kluczowy dla wizerunku klubu." };
@@ -912,9 +904,9 @@ var FinanceService = {
   /**
    * Oblicza ile zawodnik żąda za sam podpis (25-100% pensji)
    */
-  calculatePlayerBonusDemand: (player2, proposedSalary, clubReputation) => {
-    const salaryBase = player2.annualSalary > 0 ? player2.annualSalary : proposedSalary;
-    const ovr = player2.overallRating;
+  calculatePlayerBonusDemand: (player, proposedSalary, clubReputation) => {
+    const salaryBase = player.annualSalary > 0 ? player.annualSalary : proposedSalary;
+    const ovr = player.overallRating;
     let baseMultiplier;
     if (ovr >= 90) baseMultiplier = 2.1;
     else if (ovr >= 85) baseMultiplier = 1.7;
@@ -923,13 +915,13 @@ var FinanceService = {
     else if (ovr >= 70) baseMultiplier = 0.95;
     else if (ovr >= 65) baseMultiplier = 0.8;
     else baseMultiplier = 0.6;
-    const age = player2.age;
+    const age = player.age;
     let ageModifier;
     if (age >= 34) ageModifier = 1.35;
     else if (age >= 30) ageModifier = 1.15;
     else if (age <= 22) ageModifier = 0.75;
     else ageModifier = 1;
-    const personality = player2.moralePersonality;
+    const personality = player.moralePersonality;
     let personalityModifier = 1;
     if (personality === "EGOIST") personalityModifier = 1.35;
     else if (personality === "AMBITIOUS") personalityModifier = 1.2;
@@ -952,17 +944,17 @@ var FinanceService = {
   /**
    * Główny silnik prawdopodobieństwa akceptacji (FM HARDCORE MODE)
    */
-  evaluateContractLogic: (player2, newSalary, newBonus, newEndDate, currentDate, clubReputation, clubTier, managerProfile) => {
+  evaluateContractLogic: (player, newSalary, newBonus, newEndDate, currentDate, clubReputation, clubTier, managerProfile) => {
     const now = currentDate.getTime();
-    const currentEnd = new Date(player2.contractEndDate).getTime();
+    const currentEnd = new Date(player.contractEndDate).getTime();
     const newEnd = new Date(newEndDate).getTime();
-    const rawExpectedSalary = player2.annualSalary > 0 ? player2.annualSalary : FinanceService.getFairMarketSalary(player2.overallRating);
+    const rawExpectedSalary = player.annualSalary > 0 ? player.annualSalary : FinanceService.getFairMarketSalary(player.overallRating);
     const salaryCeiling = clubTier ? FinanceService.calculatePolishLeagueSalaryCeiling(clubTier, clubReputation) : null;
     const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
     const managerExpectationMultiplier = managerProfile ? managerInfluence.expectationMultiplier : 1;
     const expectedSalaryBase = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
     const expectedSalary = Math.max(5e4, Math.round(expectedSalaryBase * managerExpectationMultiplier / 5e3) * 5e3);
-    const expectedBonus = Math.max(0, Math.round(FinanceService.calculatePlayerBonusDemand(player2, expectedSalary, clubReputation) * managerExpectationMultiplier / 5e3) * 5e3);
+    const expectedBonus = Math.max(0, Math.round(FinanceService.calculatePlayerBonusDemand(player, expectedSalary, clubReputation) * managerExpectationMultiplier / 5e3) * 5e3);
     const isSalaryWithin15Percent = newSalary >= expectedSalary * 0.85;
     const isBonusWithin15Percent = newBonus >= expectedBonus * 0.85;
     if (isSalaryWithin15Percent && isBonusWithin15Percent && Math.random() < 0.1) {
@@ -993,11 +985,11 @@ var FinanceService = {
       };
     }
     let wSal = 0.6, wBon = 0.3, wLen = 0.1;
-    if (player2.age >= 32) {
+    if (player.age >= 32) {
       wSal = 0.4;
       wBon = 0.5;
       wLen = 0.1;
-    } else if (player2.age <= 23) {
+    } else if (player.age <= 23) {
       wSal = 0.7;
       wBon = 0.1;
       wLen = 0.2;
@@ -1006,7 +998,7 @@ var FinanceService = {
     const remainingYears = (currentEnd - now) / (365 * 24 * 60 * 60 * 1e3);
     let lengthScore = 1;
     if (proposedYears < remainingYears) lengthScore = 0.5;
-    if (player2.age > 33 && proposedYears >= 2) lengthScore = 1.3;
+    if (player.age > 33 && proposedYears >= 2) lengthScore = 1.3;
     const finalScore = effectiveSalaryScore * wSal + effectiveBonusScore * wBon + lengthScore * wLen;
     const isDemandingHigher = Math.random() < 0.9;
     let demandSalary = expectedSalary;
@@ -1065,19 +1057,19 @@ var FinanceService = {
     const step = base >= 1e6 ? 1e5 : base >= 1e5 ? 1e4 : 5e3;
     return Math.round(base / step) * step;
   },
-  calculateFAExpectations: (player2, clubReputation, avgSquadSalary) => {
-    const base = Math.pow(player2.overallRating, 2.9) * 0.45;
+  calculateFAExpectations: (player, clubReputation, avgSquadSalary) => {
+    const base = Math.pow(player.overallRating, 2.9) * 0.45;
     const repTax = (10 - clubReputation) * 0.05;
     const anchor = avgSquadSalary * 0.3 + base * 0.7;
     const chaos = 0.85 + Math.random() * 0.3;
     return Math.floor(anchor * (1 + repTax) * chaos);
   },
-  evaluateFASigningBoardDecision: (player2, proposedSalary, proposedBonus, squad, club2) => {
-    const tier = FinanceService.getClubTier(club2);
+  evaluateFASigningBoardDecision: (player, proposedSalary, proposedBonus, squad, club) => {
+    const tier = FinanceService.getClubTier(club);
     const wageBill = FinanceService.calculateTotalSalaries(squad);
     const projectedWageBill = wageBill + Math.max(0, proposedSalary);
-    const liquiditySalaryCap = club2.budget * (tier >= 3 ? 0.35 : 0.3);
-    const projectedWagePressure = projectedWageBill / Math.max(1, club2.budget);
+    const liquiditySalaryCap = club.budget * (tier >= 3 ? 0.35 : 0.3);
+    const projectedWagePressure = projectedWageBill / Math.max(1, club.budget);
     if (proposedSalary > liquiditySalaryCap || projectedWagePressure > 0.82) {
       return {
         approved: false,
@@ -1087,11 +1079,11 @@ var FinanceService = {
       };
     }
     const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
-    const averageOverall = squad.length > 0 ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length : player2.overallRating;
-    const bestSamePositionOverall = squad.filter((squadPlayer) => squadPlayer.position === player2.position).reduce((best, squadPlayer) => Math.max(best, squadPlayer.overallRating), 0);
-    const isClearSportingUpgrade = player2.overallRating >= averageOverall + 4 || player2.overallRating >= bestSamePositionOverall + 2;
-    const hierarchyMultiplier = isClearSportingUpgrade ? tier >= 3 ? 3.5 : 3.1 : player2.overallRating >= averageOverall ? tier >= 3 ? 2.75 : 2.55 : tier >= 3 ? 2.4 : 2.25;
-    const financialStructureFloor = club2.budget * (tier === 1 ? 0.045 : tier === 2 ? 0.035 : tier === 3 ? 0.025 : 0.02);
+    const averageOverall = squad.length > 0 ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length : player.overallRating;
+    const bestSamePositionOverall = squad.filter((squadPlayer) => squadPlayer.position === player.position).reduce((best, squadPlayer) => Math.max(best, squadPlayer.overallRating), 0);
+    const isClearSportingUpgrade = player.overallRating >= averageOverall + 4 || player.overallRating >= bestSamePositionOverall + 2;
+    const hierarchyMultiplier = isClearSportingUpgrade ? tier >= 3 ? 3.5 : 3.1 : player.overallRating >= averageOverall ? tier >= 3 ? 2.75 : 2.55 : tier >= 3 ? 2.4 : 2.25;
+    const financialStructureFloor = club.budget * (tier === 1 ? 0.045 : tier === 2 ? 0.035 : tier === 3 ? 0.025 : 0.02);
     const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, financialStructureFloor);
     if (highestSalary > 0 && proposedSalary > hierarchySalaryCap) {
       return {
@@ -1101,7 +1093,7 @@ var FinanceService = {
         appealable: true
       };
     }
-    if (proposedBonus > club2.budget * 0.5) {
+    if (proposedBonus > club.budget * 0.5) {
       return {
         approved: false,
         reason: "Zarz\u0105d uwa\u017Ca, \u017Ce jednorazowy bonus za podpis jest zbyt wysoki w stosunku do wolnych \u015Brodk\xF3w klubu.",
@@ -1111,32 +1103,32 @@ var FinanceService = {
     }
     return { approved: true, reason: "" };
   },
-  evaluateRenewalBoardDecision: (player2, proposedSalary, proposedBonus, squad, club2) => {
+  evaluateRenewalBoardDecision: (player, proposedSalary, proposedBonus, squad, club) => {
     if (Math.random() < 1 / 365) {
       return { approved: true, reason: "PREZES: Wiecie co, id\u0119 na ca\u0142o\u015B\u0107. Podpisujemy!" };
     }
     const currentWageBill = FinanceService.calculateCurrentWageBill(squad);
-    const wageBillAfter = currentWageBill - player2.annualSalary + proposedSalary;
-    if (wageBillAfter > club2.budget * 0.65) {
+    const wageBillAfter = currentWageBill - player.annualSalary + proposedSalary;
+    if (wageBillAfter > club.budget * 0.65) {
       return {
         approved: false,
         reason: "DYREKTOR FINANSOWY: \u0141\u0105czny fundusz p\u0142ac po tej podwy\u017Cce przekroczy\u0142by nasze mo\u017Cliwo\u015Bci bud\u017Cetowe."
       };
     }
-    if (proposedSalary > player2.annualSalary * 2 && player2.annualSalary > 0) {
+    if (proposedSalary > player.annualSalary * 2 && player.annualSalary > 0) {
       return {
         approved: false,
-        reason: `PREZES: Podwojenie pensji to za du\u017Cy skok naraz. Zawodnik zarabia teraz ${player2.annualSalary.toLocaleString()} PLN \u2014 wr\xF3\u0107cie z rozs\u0105dniejsz\u0105 propozycj\u0105.`
+        reason: `PREZES: Podwojenie pensji to za du\u017Cy skok naraz. Zawodnik zarabia teraz ${player.annualSalary.toLocaleString()} PLN \u2014 wr\xF3\u0107cie z rozs\u0105dniejsz\u0105 propozycj\u0105.`
       };
     }
     const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
-    if (proposedSalary > highestSalary * 1.5 && highestSalary > 0 && player2.overallRating < 80) {
+    if (proposedSalary > highestSalary * 1.5 && highestSalary > 0 && player.overallRating < 80) {
       return {
         approved: false,
         reason: `PREZES: Ten zawodnik zarabia\u0142by wi\u0119cej ni\u017C 1.5x tyle co najlepiej op\u0142acany gracz w zespole (${highestSalary.toLocaleString()} PLN). Szatnia tego nie zaakceptuje.`
       };
     }
-    if (proposedBonus > club2.budget * 0.3) {
+    if (proposedBonus > club.budget * 0.3) {
       return {
         approved: false,
         reason: "DYREKTOR FINANSOWY: Bonus za podpis jest zbyt wysoki wobec aktualnych rezerw got\xF3wkowych klubu."
@@ -1163,10 +1155,10 @@ var FinanceService = {
       return scoreB - scoreA;
     })[0];
   },
-  evaluateReleaseVsList: (player2) => {
-    const marketValue = player2.marketValue || 0;
-    const releaseCost = player2.annualSalary * 0.4;
-    if (marketValue > player2.annualSalary * 0.5) {
+  evaluateReleaseVsList: (player) => {
+    const marketValue = player.marketValue || 0;
+    const releaseCost = player.annualSalary * 0.4;
+    if (marketValue > player.annualSalary * 0.5) {
       return "TRANSFER_LIST";
     }
     return "RELEASE";
@@ -1197,13 +1189,13 @@ var FinanceService = {
     }
     return Math.floor(basePrice);
   },
-  calculateTicketPriceForClub: (club2) => {
-    if (!isEuropeanCommercialClub(club2)) {
-      const tier = FinanceService.getClubTier(club2);
-      return FinanceService.calculateTicketPrice(tier, club2.reputation);
+  calculateTicketPriceForClub: (club) => {
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      return FinanceService.calculateTicketPrice(tier, club.reputation);
     }
-    const marketIndex = getEuropeanCommercialIndex(club2);
-    const maxPrice = 18 + marketIndex * 110 + club2.reputation / 20 * 85;
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const maxPrice = 18 + marketIndex * 110 + club.reputation / 20 * 85;
     return Math.round(clamp2(maxPrice, 45, 420));
   },
   // Przychód z biletów jednorazowych
@@ -1213,12 +1205,12 @@ var FinanceService = {
     const avgPrice = maxPrice <= minPrice ? maxPrice : Math.floor(minPrice + Math.random() * (maxPrice - minPrice));
     return { revenue: Math.floor(attendance * avgPrice), avgPrice };
   },
-  calculateMatchTicketRevenueForClub: (attendance, club2) => {
-    if (!isEuropeanCommercialClub(club2)) {
-      const tier = FinanceService.getClubTier(club2);
-      return FinanceService.calculateMatchTicketRevenue(attendance, tier, club2.reputation);
+  calculateMatchTicketRevenueForClub: (attendance, club) => {
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      return FinanceService.calculateMatchTicketRevenue(attendance, tier, club.reputation);
     }
-    const maxPrice = FinanceService.calculateTicketPriceForClub(club2);
+    const maxPrice = FinanceService.calculateTicketPriceForClub(club);
     const avgPrice = Math.round(maxPrice * (0.58 + Math.random() * 0.2));
     return { revenue: Math.floor(attendance * avgPrice), avgPrice };
   },
@@ -1234,19 +1226,19 @@ var FinanceService = {
     const seasonTicketsSold = Math.floor(stadiumCapacity * percentageOfCapacity);
     return Math.floor(seasonTicketsSold * finalSeasonPrice);
   },
-  calculateSeasonTicketPackageForClub: (club2) => {
-    if (!isEuropeanCommercialClub(club2)) {
-      const tier = FinanceService.getClubTier(club2);
-      const revenue = FinanceService.calculateSeasonTicketRevenue(club2.stadiumCapacity, club2.reputation, tier);
-      const ticketsSold2 = Math.floor(club2.stadiumCapacity * (0.1 + club2.reputation / 10 * 0.2));
-      const ticketPrice = FinanceService.calculateTicketPrice(tier, club2.reputation);
+  calculateSeasonTicketPackageForClub: (club) => {
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      const revenue = FinanceService.calculateSeasonTicketRevenue(club.stadiumCapacity, club.reputation, tier);
+      const ticketsSold2 = Math.floor(club.stadiumCapacity * (0.1 + club.reputation / 10 * 0.2));
+      const ticketPrice = FinanceService.calculateTicketPrice(tier, club.reputation);
       const seasonTicketPrice2 = Math.max(200, Math.min(1300, ticketPrice * 19));
       return { revenue, ticketsSold: ticketsSold2, seasonTicketPrice: seasonTicketPrice2 };
     }
-    const marketIndex = getEuropeanCommercialIndex(club2);
-    const seasonTicketShare = clamp2(0.14 + marketIndex * 0.1 + club2.reputation / 20 * 0.18, 0.16, 0.65);
-    const ticketsSold = Math.floor(club2.stadiumCapacity * seasonTicketShare);
-    const singleMatchPrice = FinanceService.calculateTicketPriceForClub(club2);
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const seasonTicketShare = clamp2(0.14 + marketIndex * 0.1 + club.reputation / 20 * 0.18, 0.16, 0.65);
+    const ticketsSold = Math.floor(club.stadiumCapacity * seasonTicketShare);
+    const singleMatchPrice = FinanceService.calculateTicketPriceForClub(club);
     const seasonDiscount = clamp2(0.68 + marketIndex * 0.05, 0.7, 0.82);
     const seasonTicketPrice = Math.round(clamp2(singleMatchPrice * 19 * seasonDiscount, 900, 8500));
     return {
@@ -1268,11 +1260,11 @@ var FinanceService = {
     const parking = Math.floor(attendance * p.parkingPerFan[t] * repMultiplier * rand());
     return { catering, merchandising, programs, parking };
   },
-  calculateMatchdayAdditionalRevenuesForClub: (attendance, club2) => {
-    const mktFactor = 0.85 + (club2.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20 * 0.3;
-    if (!isEuropeanCommercialClub(club2)) {
-      const tier = FinanceService.getClubTier(club2);
-      const base = FinanceService.calculateMatchdayAdditionalRevenues(attendance, tier, club2.reputation);
+  calculateMatchdayAdditionalRevenuesForClub: (attendance, club) => {
+    const mktFactor = 0.85 + (club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20 * 0.3;
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      const base = FinanceService.calculateMatchdayAdditionalRevenues(attendance, tier, club.reputation);
       return {
         catering: Math.floor(base.catering * mktFactor),
         merchandising: Math.floor(base.merchandising * mktFactor),
@@ -1280,8 +1272,8 @@ var FinanceService = {
         parking: Math.floor(base.parking * mktFactor)
       };
     }
-    const marketIndex = getEuropeanCommercialIndex(club2);
-    const repMultiplier = 0.9 + club2.reputation / 20 * 0.45;
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const repMultiplier = 0.9 + club.reputation / 20 * 0.45;
     const rand = () => 0.82 + Math.random() * 0.36;
     const catering = Math.floor(attendance * (2.5 + marketIndex * 2.6) * repMultiplier * rand() * mktFactor);
     const merchandising = Math.floor(attendance * (0.9 + marketIndex * 1.4) * repMultiplier * rand() * mktFactor);
@@ -1297,18 +1289,18 @@ var FinanceService = {
     const jitter = 0.85 + Math.random() * 0.3;
     return Math.min(p.maxRevenue, Math.max(p.minRevenue, Math.floor(raw * jitter)));
   },
-  calculateVIPBoxRevenueForClub: (club2) => {
-    const mktFactor = 0.85 + (club2.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20 * 0.3;
-    if (!isEuropeanCommercialClub(club2)) {
-      const tier = FinanceService.getClubTier(club2);
-      if (tier !== 1 || club2.stadiumCapacity <= 15e3) return 0;
-      return Math.floor(FinanceService.calculateVIPBoxRevenue(club2.stadiumCapacity, club2.reputation) * mktFactor);
+  calculateVIPBoxRevenueForClub: (club) => {
+    const mktFactor = 0.85 + (club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20 * 0.3;
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      if (tier !== 1 || club.stadiumCapacity <= 15e3) return 0;
+      return Math.floor(FinanceService.calculateVIPBoxRevenue(club.stadiumCapacity, club.reputation) * mktFactor);
     }
-    if (club2.stadiumCapacity < 4e3) return 0;
-    const marketIndex = getEuropeanCommercialIndex(club2);
-    const suitesSold = Math.max(4, Math.round(club2.stadiumCapacity / 2200));
-    const avgSuitePrice = 25e3 + marketIndex * 12e4 + club2.reputation / 20 * 1e5;
-    const occupancyFactor = club2.leagueId === "L_CL" ? 1 : club2.leagueId === "L_EL" ? 0.92 : 0.86;
+    if (club.stadiumCapacity < 4e3) return 0;
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const suitesSold = Math.max(4, Math.round(club.stadiumCapacity / 2200));
+    const avgSuitePrice = 25e3 + marketIndex * 12e4 + club.reputation / 20 * 1e5;
+    const occupancyFactor = club.leagueId === "L_CL" ? 1 : club.leagueId === "L_EL" ? 0.92 : 0.86;
     const jitter = 0.9 + Math.random() * 0.2;
     return Math.round(suitesSold * avgSuitePrice * occupancyFactor * jitter * mktFactor);
   },
@@ -1538,17 +1530,17 @@ var PolishThirdLeagueService = {
   isThirdLeagueId(leagueId) {
     return THIRD_LEAGUE_GROUP_IDS.includes(leagueId);
   },
-  isThirdLeagueClub(club2) {
-    return this.isThirdLeagueId(club2.leagueId);
+  isThirdLeagueClub(club) {
+    return this.isThirdLeagueId(club.leagueId);
   },
   getGroupForVoivodeship(voivodeship) {
     return GROUP_BY_VOIVODESHIP[voivodeship];
   },
-  getGroupForClub(club2) {
-    if (!club2.polishVoivodeship) {
-      throw new Error(`Club ${club2.id} cannot be routed to III liga: polishVoivodeship is missing.`);
+  getGroupForClub(club) {
+    if (!club.polishVoivodeship) {
+      throw new Error(`Club ${club.id} cannot be routed to III liga: polishVoivodeship is missing.`);
     }
-    return GROUP_BY_VOIVODESHIP[club2.polishVoivodeship];
+    return GROUP_BY_VOIVODESHIP[club.polishVoivodeship];
   },
   getPolishTier(leagueId) {
     if (this.isThirdLeagueId(leagueId) || leagueId === "L_PL_4") return 4;
@@ -1581,10 +1573,10 @@ var PLAYABLE_POLISH_LEAGUE_IDS = /* @__PURE__ */ new Set([
   "L_PL_3",
   ...THIRD_LEAGUE_GROUP_IDS
 ]);
-var getLeagueId = (clubId, clubs, projectedLeagueByClubId) => projectedLeagueByClubId?.get(clubId) ?? clubs.find((club2) => club2.id === clubId)?.leagueId;
+var getLeagueId = (clubId, clubs, projectedLeagueByClubId) => projectedLeagueByClubId?.get(clubId) ?? clubs.find((club) => club.id === clubId)?.leagueId;
 var ReserveTeamLeagueService = {
   createLeagueProjection(clubs, changes = []) {
-    const projection = new Map(clubs.map((club2) => [club2.id, club2.leagueId]));
+    const projection = new Map(clubs.map((club) => [club.id, club.leagueId]));
     changes.forEach((change) => {
       for (const clubId of change.clubIds) projection.set(clubId, change.targetLeagueId);
     });
@@ -1621,7 +1613,7 @@ var ReserveTeamLeagueService = {
   getPlayableReserveClubId(parentClubId, clubs) {
     const reserveClubId = this.getReserveClubId(parentClubId);
     if (!reserveClubId) return null;
-    const reserveClub = clubs.find((club2) => club2.id === reserveClubId);
+    const reserveClub = clubs.find((club) => club.id === reserveClubId);
     if (!reserveClub || !PLAYABLE_POLISH_LEAGUE_IDS.has(reserveClub.leagueId)) return null;
     return reserveClubId;
   },
@@ -1694,7 +1686,7 @@ var ReserveTeamLeagueService = {
     };
   },
   getEligibleCandidates(standings, targetLeagueId, clubs, projectedLeagueByClubId) {
-    return standings.map((club2, index) => ({ club: club2, tablePosition: index + 1 })).filter((candidate) => this.canEnterLeague(candidate.club.id, targetLeagueId, clubs, projectedLeagueByClubId));
+    return standings.map((club, index) => ({ club, tablePosition: index + 1 })).filter((candidate) => this.canEnterLeague(candidate.club.id, targetLeagueId, clubs, projectedLeagueByClubId));
   },
   findSameLeagueConflicts(clubs, projectedLeagueByClubId) {
     return Object.entries(RESERVE_PARENT_CLUB_BY_ID).flatMap(([reserveClubId, parentClubId]) => {
@@ -1747,8 +1739,8 @@ var IncomingTransferService = {
       (offer) => offer.playerId === playerId && IncomingTransferService.isActiveIncomingOfferStatus(offer.status) && (!kind || (offer.kind ?? "TRANSFER") === kind)
     );
   },
-  getClubTier(club2) {
-    return FinanceService.getClubTier(club2);
+  getClubTier(club) {
+    return FinanceService.getClubTier(club);
   },
   /**
    * Ogranicza nierealne wypożyczenia z klubów europejskiej czołówki do Polski.
@@ -1808,51 +1800,51 @@ var IncomingTransferService = {
     const preferredSource = IncomingTransferService.seededRandom(sourceSeed + 85015) < 0.85 ? "POLISH_HIGHER_LEAGUE" : "FOREIGN_EUROPE_REP_10_MAX";
     return source === preferredSource;
   },
-  getBuyerIdealOverall(club2) {
-    return Math.min(95, 30 + club2.reputation * 4.5);
+  getBuyerIdealOverall(club) {
+    return Math.min(95, 30 + club.reputation * 4.5);
   },
-  getBuyerMinimumTargetOverall(player2, buyerClub) {
+  getBuyerMinimumTargetOverall(player, buyerClub) {
     const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
     let tolerance = 24;
     if (buyerClub.reputation >= 18) tolerance = 15;
     else if (buyerClub.reputation >= 15) tolerance = 17;
     else if (buyerClub.reputation >= 12) tolerance = 19;
     else if (buyerClub.reputation >= 8) tolerance = 22;
-    if (player2.isOnTransferList) tolerance += 2;
-    if (player2.age <= 21) tolerance += 2;
+    if (player.isOnTransferList) tolerance += 2;
+    if (player.age <= 21) tolerance += 2;
     return idealOvr - tolerance;
   },
   getSquadAverageOverall(squad) {
     if (squad.length === 0) return 0;
     return squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length;
   },
-  getBuyerSquadFit(player2, buyerSquad2) {
-    if (!buyerSquad2 || buyerSquad2.length === 0) return { fits: true, multiplier: 1 };
-    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad2);
-    if (player2.overallRating < squadAverage) {
+  getBuyerSquadFit(player, buyerSquad) {
+    if (!buyerSquad || buyerSquad.length === 0) return { fits: true, multiplier: 1 };
+    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    if (player.overallRating < squadAverage) {
       return { fits: false, multiplier: 0 };
     }
-    const samePosition = buyerSquad2.filter((squadPlayer) => squadPlayer.position === player2.position);
+    const samePosition = buyerSquad.filter((squadPlayer) => squadPlayer.position === player.position);
     const positionAverage = samePosition.length > 0 ? IncomingTransferService.getSquadAverageOverall(samePosition) : squadAverage;
-    const positionGap = player2.overallRating - positionAverage;
-    const squadGap = player2.overallRating - squadAverage;
+    const positionGap = player.overallRating - positionAverage;
+    const squadGap = player.overallRating - squadAverage;
     if (positionGap >= 4 || squadGap >= 5) return { fits: true, multiplier: 1.2 };
     if (positionGap >= 1 || squadGap >= 2) return { fits: true, multiplier: 1.05 };
     return { fits: true, multiplier: 0.85 };
   },
-  getLoanSquadNeed(player2, buyerSquad2, snapshot) {
-    if (!buyerSquad2 || buyerSquad2.length === 0) {
+  getLoanSquadNeed(player, buyerSquad, snapshot) {
+    if (!buyerSquad || buyerSquad.length === 0) {
       return { fits: true, needScore: 9, positionGap: 9, squadGap: 9 };
     }
-    const squadAverage = snapshot?.squadAverage ?? IncomingTransferService.getSquadAverageOverall(buyerSquad2);
-    const positionSnapshot = snapshot?.byPosition[player2.position];
-    const samePosition = positionSnapshot ? void 0 : buyerSquad2.filter((squadPlayer) => squadPlayer.position === player2.position);
+    const squadAverage = snapshot?.squadAverage ?? IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const positionSnapshot = snapshot?.byPosition[player.position];
+    const samePosition = positionSnapshot ? void 0 : buyerSquad.filter((squadPlayer) => squadPlayer.position === player.position);
     const positionCount = positionSnapshot?.count ?? samePosition.length;
     const positionAverage = positionCount > 0 ? positionSnapshot?.average ?? IncomingTransferService.getSquadAverageOverall(samePosition) : squadAverage - 3;
     const bestInPosition = positionCount > 0 ? positionSnapshot?.best ?? Math.max(...samePosition.map((squadPlayer) => squadPlayer.overallRating)) : squadAverage - 4;
-    const positionGap = player2.overallRating - positionAverage;
-    const bestGap = player2.overallRating - bestInPosition;
-    const squadGap = player2.overallRating - squadAverage;
+    const positionGap = player.overallRating - positionAverage;
+    const bestGap = player.overallRating - bestInPosition;
+    const squadGap = player.overallRating - squadAverage;
     const thinPositionBonus = positionCount <= 2 ? 2 : 0;
     const positionSlots = {
       ["GK" /* GK */]: 1,
@@ -1860,13 +1852,13 @@ var IncomingTransferService = {
       ["MID" /* MID */]: 4,
       ["FWD" /* FWD */]: 2
     };
-    const matchdayRotationLimit = positionSlots[player2.position] + 3;
-    const strongerOrEqualInPosition = positionSnapshot ? positionSnapshot.ratingsDescending.findIndex((rating) => rating < player2.overallRating) : samePosition.filter((squadPlayer) => squadPlayer.overallRating >= player2.overallRating).length;
+    const matchdayRotationLimit = positionSlots[player.position] + 3;
+    const strongerOrEqualInPosition = positionSnapshot ? positionSnapshot.ratingsDescending.findIndex((rating) => rating < player.overallRating) : samePosition.filter((squadPlayer) => squadPlayer.overallRating >= player.overallRating).length;
     const normalizedStrongerOrEqual = strongerOrEqualInPosition === -1 ? positionCount : strongerOrEqualInPosition;
     const isInsidePositionRotation = normalizedStrongerOrEqual < matchdayRotationLimit;
-    const isCloseToPositionLevel = player2.overallRating >= positionAverage - 2;
-    const isThinPosition = positionCount <= positionSlots[player2.position] + 1;
-    const isDevelopmentLoan = player2.age <= 23 && player2.overallRating >= positionAverage - 4 && normalizedStrongerOrEqual < matchdayRotationLimit + 2;
+    const isCloseToPositionLevel = player.overallRating >= positionAverage - 2;
+    const isThinPosition = positionCount <= positionSlots[player.position] + 1;
+    const isDevelopmentLoan = player.age <= 23 && player.overallRating >= positionAverage - 4 && normalizedStrongerOrEqual < matchdayRotationLimit + 2;
     const rotationScore = isInsidePositionRotation ? Math.max(3, matchdayRotationLimit - normalizedStrongerOrEqual) : 0;
     const needScore = Math.max(positionGap + thinPositionBonus, bestGap * 1.5, squadGap, rotationScore);
     return {
@@ -1881,11 +1873,11 @@ var IncomingTransferService = {
    * with the same buyer squad. The daily AI-to-AI market used to filter and
    * average the entire squad several times for every seller-player-buyer tuple.
    */
-  buildLoanSquadNeedSnapshot(buyerSquad2) {
-    const positions = ["GK" /* GK */, "DEF" /* DEF */, "MID" /* MID */, "FWD" /* FWD */];
-    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad2);
-    const byPosition = Object.fromEntries(positions.map((position) => {
-      const ratingsDescending = buyerSquad2.filter((player2) => player2.position === position).map((player2) => player2.overallRating).sort((left, right) => right - left);
+  buildLoanSquadNeedSnapshot(buyerSquad) {
+    const positions2 = ["GK" /* GK */, "DEF" /* DEF */, "MID" /* MID */, "FWD" /* FWD */];
+    const squadAverage = IncomingTransferService.getSquadAverageOverall(buyerSquad);
+    const byPosition = Object.fromEntries(positions2.map((position) => {
+      const ratingsDescending = buyerSquad.filter((player) => player.position === position).map((player) => player.overallRating).sort((left, right) => right - left);
       const total = ratingsDescending.reduce((sum, rating) => sum + rating, 0);
       return [position, {
         count: ratingsDescending.length,
@@ -1934,14 +1926,14 @@ var IncomingTransferService = {
     }
     return endDate.toISOString().split("T")[0];
   },
-  calculateLoanTotalCost(player2, loanFee, wageCoveragePercent, startDate, endDate) {
+  calculateLoanTotalCost(player, loanFee, wageCoveragePercent, startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const days = Math.max(30, Math.ceil((end.getTime() - start.getTime()) / 864e5));
-    const wageCost = player2.annualSalary * (wageCoveragePercent / 100) * (days / 365);
+    const wageCost = player.annualSalary * (wageCoveragePercent / 100) * (days / 365);
     return Math.round((loanFee + wageCost) / 1e3) * 1e3;
   },
-  shouldGenerateLoanOffer(player2, buyerClub, sellerClub, activeIncomingOffers, seed, currentDate, buyerPlayers, optimization) {
+  shouldGenerateLoanOffer(player, buyerClub, sellerClub, activeIncomingOffers, seed, currentDate, buyerPlayers, optimization) {
     if (!optimization?.prevalidatedCategory) {
       if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
         return { shouldGenerate: false, category: null };
@@ -1953,7 +1945,7 @@ var IncomingTransferService = {
     if (!IncomingTransferService.passesLoanRealismGate(buyerClub, sellerClub, seed)) {
       return { shouldGenerate: false, category: null };
     }
-    if (!player2.isAvailableForLoan || player2.loan || player2.transferPendingClubId) {
+    if (!player.isAvailableForLoan || player.loan || player.transferPendingClubId) {
       return { shouldGenerate: false, category: null };
     }
     const buyerSquadSize = buyerPlayers?.length ?? buyerClub.rosterIds.length;
@@ -1963,14 +1955,14 @@ var IncomingTransferService = {
     const category = optimization?.prevalidatedCategory ?? IncomingTransferService.getLoanBuyerCategory(buyerClub, sellerClub);
     if (!category) return { shouldGenerate: false, category: null };
     if (!optimization?.activeOfferConflictAlreadyChecked) {
-      const hasActiveLoanOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player2.id, activeIncomingOffers, "LOAN");
-      const hasActiveSaleOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player2.id, activeIncomingOffers, "TRANSFER");
+      const hasActiveLoanOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, "LOAN");
+      const hasActiveSaleOffer = IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, "TRANSFER");
       if (hasActiveLoanOffer || hasActiveSaleOffer) return { shouldGenerate: false, category: null };
     }
-    if (IncomingTransferService.hasRecentIncomingOfferNoise(player2, buyerClub, activeIncomingOffers, currentDate)) {
+    if (IncomingTransferService.hasRecentIncomingOfferNoise(player, buyerClub, activeIncomingOffers, currentDate)) {
       return { shouldGenerate: false, category: null };
     }
-    const need = IncomingTransferService.getLoanSquadNeed(player2, buyerPlayers, optimization?.loanNeedSnapshot);
+    const need = IncomingTransferService.getLoanSquadNeed(player, buyerPlayers, optimization?.loanNeedSnapshot);
     if (!need.fits) return { shouldGenerate: false, category: null };
     const categoryWeight = category === "LOWER_LEAGUE" ? 0.85 : category === "SAME_LEAGUE" ? 0.18 : 0.09;
     const repGap = sellerClub.reputation - buyerClub.reputation;
@@ -1979,14 +1971,14 @@ var IncomingTransferService = {
     else if (need.needScore >= 6) chance *= 1.45;
     if (category === "SAME_LEAGUE") chance *= 0.85;
     if (category === "FOREIGN_LOWER_REP" && repGap > 3.5) chance *= 0.65;
-    if (player2.age <= 23) chance *= 1.25;
-    if (player2.annualSalary > buyerClub.transferBudget * 0.45) chance *= 0.35;
+    if (player.age <= 23) chance *= 1.25;
+    if (player.annualSalary > buyerClub.transferBudget * 0.45) chance *= 0.35;
     return {
       shouldGenerate: IncomingTransferService.seededRandom(seed + 2201) < Math.min(0.16, chance),
       category
     };
   },
-  calculateLoanOffer(player2, buyerClub, sellerClub, currentDate, seed) {
+  calculateLoanOffer(player, buyerClub, sellerClub, currentDate, seed) {
     const rng1 = IncomingTransferService.seededRandom(seed + 3001);
     const rng2 = IncomingTransferService.seededRandom(seed + 3002);
     const rng3 = IncomingTransferService.seededRandom(seed + 3003);
@@ -1997,15 +1989,15 @@ var IncomingTransferService = {
     const coverageOptions = repGap >= 4 ? [35, 45, 55] : repGap >= 2 ? [45, 55, 65] : [50, 65, 80];
     const wageCoveragePercent = coverageOptions[Math.min(coverageOptions.length - 1, Math.floor(rng2 * coverageOptions.length))];
     const marketValue = FinanceService.calculateMarketValue(
-      player2,
+      player,
       sellerClub.reputation,
       IncomingTransferService.getClubTier(sellerClub),
       sellerClub.country
     );
-    const wantsFee = rng3 > 0.65 || player2.overallRating >= IncomingTransferService.getBuyerIdealOverall(buyerClub) + 4;
-    const rawLoanFee = wantsFee ? Math.max(player2.annualSalary * (0.04 + rng3 * 0.08), marketValue * (15e-4 + rng3 * 45e-4)) : 0;
+    const wantsFee = rng3 > 0.65 || player.overallRating >= IncomingTransferService.getBuyerIdealOverall(buyerClub) + 4;
+    const rawLoanFee = wantsFee ? Math.max(player.annualSalary * (0.04 + rng3 * 0.08), marketValue * (15e-4 + rng3 * 45e-4)) : 0;
     const loanFee = Math.round(rawLoanFee / 1e3) * 1e3;
-    const totalCost = IncomingTransferService.calculateLoanTotalCost(player2, loanFee, wageCoveragePercent, startDate, endDate);
+    const totalCost = IncomingTransferService.calculateLoanTotalCost(player, loanFee, wageCoveragePercent, startDate, endDate);
     const budgetCeiling = Math.max(0, Math.min(buyerClub.transferBudget, buyerClub.budget * 0.4));
     if (totalCost > budgetCeiling || loanFee > buyerClub.transferBudget) return null;
     const urgency = rng1 < 0.25 ? 3 : rng1 < 0.7 ? 2 : 1;
@@ -2021,17 +2013,17 @@ var IncomingTransferService = {
       loanFee,
       loanTotalCost: totalCost,
       loanPlayerCanBeForced: true,
-      promisedPlayingTime: player2.age <= 23 && rng1 < 0.68 ? "FIRST_TEAM" : rng2 < 0.48 ? "FIRST_TEAM" : "ROTATION"
+      promisedPlayingTime: player.age <= 23 && rng1 < 0.68 ? "FIRST_TEAM" : rng2 < 0.48 ? "FIRST_TEAM" : "ROTATION"
     };
   },
-  evaluateLoanCounterOffer(player2, buyerClub, offer, currentDate, requested) {
+  evaluateLoanCounterOffer(player, buyerClub, offer, currentDate, requested) {
     const startDate = offer.loanStartDate || (typeof currentDate === "string" ? currentDate : currentDate.toISOString().split("T")[0]);
     const requestedDuration = requested.loanDuration;
     const requestedEndDate = IncomingTransferService.resolveLoanEndDate(currentDate, requestedDuration);
     const requestedFee = Math.max(0, Math.round(requested.loanFee / 1e3) * 1e3);
     const requestedCoverage = Math.max(0, Math.min(100, Math.round(requested.wageCoveragePercent / 5) * 5));
     const requestedTotalCost = IncomingTransferService.calculateLoanTotalCost(
-      player2,
+      player,
       requestedFee,
       requestedCoverage,
       startDate,
@@ -2083,7 +2075,7 @@ var IncomingTransferService = {
       Math.min(requestedCoverage, requestedCoverage >= 100 ? 75 : requestedCoverage)
     );
     const counterTotalCost = IncomingTransferService.calculateLoanTotalCost(
-      player2,
+      player,
       counterFee,
       counterCoverage,
       startDate,
@@ -2100,30 +2092,30 @@ var IncomingTransferService = {
       note: "Klub nie przyj\u0105\u0142 pe\u0142nej kontroferty, ale przedstawi\u0142 kompromis mieszcz\u0105cy si\u0119 bli\u017Cej ich bud\u017Cetu."
     };
   },
-  isPlausibleBuyerForPlayer(player2, buyerClub, buyerSquad2) {
-    const squadFit = IncomingTransferService.getBuyerSquadFit(player2, buyerSquad2);
+  isPlausibleBuyerForPlayer(player, buyerClub, buyerSquad) {
+    const squadFit = IncomingTransferService.getBuyerSquadFit(player, buyerSquad);
     if (!squadFit.fits) return false;
-    const minOvr = IncomingTransferService.getBuyerMinimumTargetOverall(player2, buyerClub);
-    if (player2.overallRating >= minOvr) return true;
+    const minOvr = IncomingTransferService.getBuyerMinimumTargetOverall(player, buyerClub);
+    if (player.overallRating >= minOvr) return true;
     const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
-    const talent = player2.attributes?.talent ?? player2.overallRating;
-    const highUpsideYoungster = player2.age <= 21 && talent >= idealOvr - 2 && player2.overallRating >= minOvr - 8;
+    const talent = player.attributes?.talent ?? player.overallRating;
+    const highUpsideYoungster = player.age <= 21 && talent >= idealOvr - 2 && player.overallRating >= minOvr - 8;
     if (highUpsideYoungster) return true;
-    const strongRecentForm = player2.age <= 28 && IncomingTransferService.getAvgRating(player2) >= 8 && player2.overallRating >= minOvr - 4;
+    const strongRecentForm = player.age <= 28 && IncomingTransferService.getAvgRating(player) >= 8 && player.overallRating >= minOvr - 4;
     return strongRecentForm;
   },
-  getStrongForeignBuyerPolishLowOvrMultiplier(player2, buyerClub, sellerClub) {
-    const isPolishPlayer = player2.nationality === "POLAND" /* POLAND */ || player2.nationalityCountry === "Polska" || player2.nationalityCountry === "Poland";
+  getStrongForeignBuyerPolishLowOvrMultiplier(player, buyerClub, sellerClub) {
+    const isPolishPlayer = player.nationality === "POLAND" /* POLAND */ || player.nationalityCountry === "Polska" || player.nationalityCountry === "Poland";
     const isForeignBuyer = !!buyerClub.country && !!sellerClub.country && buyerClub.country !== sellerClub.country;
-    if (isPolishPlayer && isForeignBuyer && buyerClub.reputation > 9 && player2.overallRating < 65) {
+    if (isPolishPlayer && isForeignBuyer && buyerClub.reputation > 9 && player.overallRating < 65) {
       return 0.08;
     }
     return 1;
   },
-  getBuyerFitProbabilityMultiplier(player2, buyerClub, buyerSquad2) {
+  getBuyerFitProbabilityMultiplier(player, buyerClub, buyerSquad) {
     const idealOvr = IncomingTransferService.getBuyerIdealOverall(buyerClub);
-    const ovrDelta = player2.overallRating - idealOvr;
-    const squadFit = IncomingTransferService.getBuyerSquadFit(player2, buyerSquad2);
+    const ovrDelta = player.overallRating - idealOvr;
+    const squadFit = IncomingTransferService.getBuyerSquadFit(player, buyerSquad);
     let multiplier = 0.3;
     if (ovrDelta >= -2) multiplier = 1.15;
     else if (ovrDelta >= -6) multiplier = 1;
@@ -2131,15 +2123,15 @@ var IncomingTransferService = {
     else if (ovrDelta >= -16) multiplier = 0.5;
     return multiplier * squadFit.multiplier;
   },
-  hasRecentIncomingOfferNoise(player2, buyerClub, incomingOffers, currentDate) {
+  hasRecentIncomingOfferNoise(player, buyerClub, incomingOffers, currentDate) {
     const today = new Date(currentDate);
-    const playerOffers = incomingOffers.filter((offer) => offer.playerId === player2.id);
+    const playerOffers = incomingOffers.filter((offer) => offer.playerId === player.id);
     return playerOffers.some((offer) => {
       const offerDate = new Date(offer.createdAt || offer.emailSentAt);
       const daysSinceOffer = IncomingTransferService.daysBetween(offerDate, today);
       if (daysSinceOffer < 0) return false;
       if (offer.buyerClubId === buyerClub.id && daysSinceOffer < 60) return true;
-      if (player2.isOnTransferList) {
+      if (player.isOnTransferList) {
         return daysSinceOffer < 4;
       }
       switch (offer.status) {
@@ -2156,100 +2148,100 @@ var IncomingTransferService = {
       }
     });
   },
-  getPlayerLoyalty(player2) {
-    return Math.max(1, Math.min(99, Math.round(player2.lojalnosc ?? 50)));
+  getPlayerLoyalty(player) {
+    return Math.max(1, Math.min(99, Math.round(player.lojalnosc ?? 50)));
   },
-  isTransferLoyaltySoftened(player2) {
-    return !!player2.isOnTransferList || !player2.squadRole;
+  isTransferLoyaltySoftened(player) {
+    return !!player.isOnTransferList || !player.squadRole;
   },
   isMajorReputationStepUp(buyerClub, sellerClub) {
     return buyerClub.reputation >= sellerClub.reputation + 5;
   },
-  getTransferLoyaltyInterestMultiplier(player2, buyerClub, sellerClub) {
-    if (IncomingTransferService.isTransferLoyaltySoftened(player2) || IncomingTransferService.isMajorReputationStepUp(buyerClub, sellerClub)) {
+  getTransferLoyaltyInterestMultiplier(player, buyerClub, sellerClub) {
+    if (IncomingTransferService.isTransferLoyaltySoftened(player) || IncomingTransferService.isMajorReputationStepUp(buyerClub, sellerClub)) {
       return 1;
     }
-    const loyalty = IncomingTransferService.getPlayerLoyalty(player2);
+    const loyalty = IncomingTransferService.getPlayerLoyalty(player);
     const resistance = Math.max(0, (loyalty - 55) / 44);
     return Math.max(0.16, 1 - resistance * 0.84);
   },
-  isProtectedFromLowerReputationBuyer(player2, buyerClub, sellerClub, sellerPlayers) {
-    if (player2.isOnTransferList) return false;
+  isProtectedFromLowerReputationBuyer(player, buyerClub, sellerClub, sellerPlayers) {
+    if (player.isOnTransferList) return false;
     const reputationGap = sellerClub.reputation - buyerClub.reputation;
     if (reputationGap <= 1) return false;
-    const matchesPlayed = player2.stats?.matchesPlayed ?? 0;
-    const minutesPlayed = player2.stats?.minutesPlayed ?? 0;
-    const goals = player2.stats?.goals ?? 0;
-    const assists = player2.stats?.assists ?? 0;
+    const matchesPlayed = player.stats?.matchesPlayed ?? 0;
+    const minutesPlayed = player.stats?.minutesPlayed ?? 0;
+    const goals = player.stats?.goals ?? 0;
+    const assists = player.stats?.assists ?? 0;
     const goalContributions = goals + assists;
-    const avgRating = IncomingTransferService.getAvgRating(player2);
+    const avgRating = IncomingTransferService.getAvgRating(player);
     const gamesSample = Math.max(matchesPlayed, minutesPlayed / 90);
     const regularPlayer = matchesPlayed >= 6 || minutesPlayed >= 450;
     const goodRecentForm = gamesSample >= 5 && avgRating >= 7.2;
-    const productiveForward = player2.position === "FWD" /* FWD */ && gamesSample >= 5 && (goals >= 5 || goals / gamesSample >= 0.25);
-    const productiveMidfielder = player2.position === "MID" /* MID */ && gamesSample >= 5 && (goalContributions >= 6 || goalContributions / gamesSample >= 0.25);
+    const productiveForward = player.position === "FWD" /* FWD */ && gamesSample >= 5 && (goals >= 5 || goals / gamesSample >= 0.25);
+    const productiveMidfielder = player.position === "MID" /* MID */ && gamesSample >= 5 && (goalContributions >= 6 || goalContributions / gamesSample >= 0.25);
     const productiveSeason = goals >= 8 || goalContributions >= 10;
-    const importantRole = player2.isUntouchable || player2.squadRole === "KEY_PLAYER" || player2.squadRole === "STARTER";
+    const importantRole = player.isUntouchable || player.squadRole === "KEY_PLAYER" || player.squadRole === "STARTER";
     let importantInSquad = false;
     if (sellerPlayers && sellerPlayers.length > 0) {
       const sortedSquad = [...sellerPlayers].sort((a, b) => b.overallRating - a.overallRating);
-      const playerRank = sortedSquad.findIndex((squadPlayer) => squadPlayer.id === player2.id);
+      const playerRank = sortedSquad.findIndex((squadPlayer) => squadPlayer.id === player.id);
       const squadAverage = IncomingTransferService.getSquadAverageOverall(sellerPlayers);
-      importantInSquad = playerRank >= 0 && playerRank <= 10 || player2.overallRating >= squadAverage + 2;
+      importantInSquad = playerRank >= 0 && playerRank <= 10 || player.overallRating >= squadAverage + 2;
     }
     const sellerLevelOverall = Math.max(60, IncomingTransferService.getBuyerIdealOverall(sellerClub) - 7);
-    const strongForSellerLevel = player2.overallRating >= sellerLevelOverall;
+    const strongForSellerLevel = player.overallRating >= sellerLevelOverall;
     const isValuableRegular = regularPlayer && (strongForSellerLevel || importantRole || importantInSquad || goodRecentForm);
     return importantRole || importantInSquad || isValuableRegular || goodRecentForm || productiveForward || productiveMidfielder || productiveSeason;
   },
-  shouldGenerateOffer(player2, buyerClub, sellerClub, activeIncomingOffers, seed, currentDate, sellerPlayers, buyerPlayers) {
+  shouldGenerateOffer(player, buyerClub, sellerClub, activeIncomingOffers, seed, currentDate, sellerPlayers, buyerPlayers) {
     if (!ReserveTeamLeagueService.canRecruitPlayerFrom(buyerClub.id, sellerClub.id)) {
       return { shouldGenerate: false, source: null };
     }
     const hasActiveOffer = activeIncomingOffers.some(
-      (o) => o.playerId === player2.id && o.buyerClubId === buyerClub.id && IncomingTransferService.isActiveIncomingOfferStatus(o.status)
+      (o) => o.playerId === player.id && o.buyerClubId === buyerClub.id && IncomingTransferService.isActiveIncomingOfferStatus(o.status)
     );
     if (hasActiveOffer) return { shouldGenerate: false, source: null };
-    if (IncomingTransferService.hasActiveIncomingOfferForPlayer(player2.id, activeIncomingOffers, "LOAN")) {
+    if (IncomingTransferService.hasActiveIncomingOfferForPlayer(player.id, activeIncomingOffers, "LOAN")) {
       return { shouldGenerate: false, source: null };
     }
-    if (player2.loan) {
+    if (player.loan) {
       return { shouldGenerate: false, source: null };
     }
-    if (IncomingTransferService.hasRecentIncomingOfferNoise(player2, buyerClub, activeIncomingOffers, currentDate)) {
+    if (IncomingTransferService.hasRecentIncomingOfferNoise(player, buyerClub, activeIncomingOffers, currentDate)) {
       return { shouldGenerate: false, source: null };
     }
-    if (player2.transferLockoutUntil && new Date(currentDate) < new Date(player2.transferLockoutUntil)) {
+    if (player.transferLockoutUntil && new Date(currentDate) < new Date(player.transferLockoutUntil)) {
       return { shouldGenerate: false, source: null };
     }
-    if (player2.transferOfferBanUntil && new Date(currentDate) < new Date(player2.transferOfferBanUntil)) {
+    if (player.transferOfferBanUntil && new Date(currentDate) < new Date(player.transferOfferBanUntil)) {
       return { shouldGenerate: false, source: null };
     }
-    if (player2.transferPendingClubId) {
+    if (player.transferPendingClubId) {
       return { shouldGenerate: false, source: null };
     }
     if (buyerClub.rosterIds.length >= 30) return { shouldGenerate: false, source: null };
     if (buyerClub.id === sellerClub.id) return { shouldGenerate: false, source: null };
-    if (!IncomingTransferService.isPlausibleBuyerForPlayer(player2, buyerClub, buyerPlayers)) {
+    if (!IncomingTransferService.isPlausibleBuyerForPlayer(player, buyerClub, buyerPlayers)) {
       return { shouldGenerate: false, source: null };
     }
-    if (IncomingTransferService.isProtectedFromLowerReputationBuyer(player2, buyerClub, sellerClub, sellerPlayers)) {
+    if (IncomingTransferService.isProtectedFromLowerReputationBuyer(player, buyerClub, sellerClub, sellerPlayers)) {
       return { shouldGenerate: false, source: null };
     }
-    if (player2.squadRole === "KEY_PLAYER") {
-      const avgRating = IncomingTransferService.getAvgRating(player2);
-      const isExceptional = player2.overallRating >= 75 && avgRating > 7.6;
+    if (player.squadRole === "KEY_PLAYER") {
+      const avgRating = IncomingTransferService.getAvgRating(player);
+      const isExceptional = player.overallRating >= 75 && avgRating > 7.6;
       if (!isExceptional) return { shouldGenerate: false, source: null };
     }
-    const isShortlisted = !!player2.interestedClubs?.includes(buyerClub.id);
+    const isShortlisted = !!player.interestedClubs?.includes(buyerClub.id);
     const priority = IncomingTransferService.isExceptionalSpontaneousTarget(
-      player2,
+      player,
       buyerClub,
       sellerClub,
       currentDate,
       sellerPlayers
     );
-    if (player2.isUntouchable && !player2.isOnTransferList) {
+    if (player.isUntouchable && !player.isOnTransferList) {
       const buyerIsClearStepUp = buyerClub.reputation >= sellerClub.reputation + 2;
       const eliteInterest = priority === 1 || priority === 2;
       if (!buyerIsClearStepUp || !eliteInterest) {
@@ -2265,12 +2257,12 @@ var IncomingTransferService = {
     };
     let prob = priority !== false ? PRIORITY_PROB[priority] : 0;
     let source = null;
-    prob *= IncomingTransferService.getBuyerFitProbabilityMultiplier(player2, buyerClub, buyerPlayers);
-    prob *= IncomingTransferService.getTransferLoyaltyInterestMultiplier(player2, buyerClub, sellerClub);
-    if (player2.isOnTransferList) prob *= 4;
-    if (player2.isUntouchable && !player2.isOnTransferList) prob *= 0.18;
-    if (player2.contractEndDate) {
-      const daysLeft = IncomingTransferService.daysUntil(player2.contractEndDate, currentDate);
+    prob *= IncomingTransferService.getBuyerFitProbabilityMultiplier(player, buyerClub, buyerPlayers);
+    prob *= IncomingTransferService.getTransferLoyaltyInterestMultiplier(player, buyerClub, sellerClub);
+    if (player.isOnTransferList) prob *= 4;
+    if (player.isUntouchable && !player.isOnTransferList) prob *= 0.18;
+    if (player.contractEndDate) {
+      const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
       if (daysLeft < 180) prob *= 1.8;
     }
     if (buyerClub.reputation > sellerClub.reputation) prob *= 1.3;
@@ -2290,8 +2282,8 @@ var IncomingTransferService = {
       }
       source = "SPONTANEOUS";
     }
-    if (player2.squadRole === "KEY_PLAYER") prob = Math.min(prob, 0.05);
-    prob *= IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(player2, buyerClub, sellerClub);
+    if (player.squadRole === "KEY_PLAYER") prob = Math.min(prob, 0.05);
+    prob *= IncomingTransferService.getStrongForeignBuyerPolishLowOvrMultiplier(player, buyerClub, sellerClub);
     const rng = IncomingTransferService.seededRandom(seed);
     const shouldGenerate = rng < prob;
     return {
@@ -2299,9 +2291,9 @@ var IncomingTransferService = {
       source: shouldGenerate ? source : null
     };
   },
-  calculateOffer(player2, buyerClub, sellerClub, isInsideTransferWindow, seed) {
+  calculateOffer(player, buyerClub, sellerClub, isInsideTransferWindow, seed) {
     const sellerTier = IncomingTransferService.getClubTier(sellerClub);
-    const marketValue = FinanceService.calculateMarketValue(player2, sellerClub.reputation, sellerTier, sellerClub.country);
+    const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier, sellerClub.country);
     const rng1 = IncomingTransferService.seededRandom(seed + 1);
     const rng2 = IncomingTransferService.seededRandom(seed + 2);
     const rng3 = IncomingTransferService.seededRandom(seed + 3);
@@ -2318,7 +2310,7 @@ var IncomingTransferService = {
       feeMin = 1.15;
       feeMax = 1.6;
     }
-    if (player2.isUntouchable && !player2.isOnTransferList) {
+    if (player.isUntouchable && !player.isOnTransferList) {
       if (urgency === 1) {
         feeMin = 1.35;
         feeMax = 1.7;
@@ -2351,12 +2343,12 @@ var IncomingTransferService = {
     if (rng2 < 0.55) return "IN_SIX_MONTHS" /* IN_SIX_MONTHS */;
     return "IN_TWELVE_MONTHS" /* IN_TWELVE_MONTHS */;
   },
-  evaluateBoardPressure(offer, player2, sellerClub, buyerClub, seed) {
+  evaluateBoardPressure(offer, player, sellerClub, buyerClub, seed) {
     const sellerTier = IncomingTransferService.getClubTier(sellerClub);
     if (sellerClub.budget < 0) return true;
-    const marketValue = FinanceService.calculateMarketValue(player2, sellerClub.reputation, sellerTier, sellerClub.country);
+    const marketValue = FinanceService.calculateMarketValue(player, sellerClub.reputation, sellerTier, sellerClub.country);
     if (offer.fee > marketValue * 1.8) return true;
-    if (player2.isOnTransferList && buyerClub && seed !== void 0 && buyerClub.reputation < sellerClub.reputation && offer.fee < marketValue) {
+    if (player.isOnTransferList && buyerClub && seed !== void 0 && buyerClub.reputation < sellerClub.reputation && offer.fee < marketValue) {
       if (IncomingTransferService.seededRandom(seed + 99) < 0.4) return true;
     }
     return false;
@@ -2383,7 +2375,7 @@ var IncomingTransferService = {
     }
     return { verdict: "REJECT" };
   },
-  simulatePlayerNegotiation(player2, buyerClub, sellerClub, seed, currentDate) {
+  simulatePlayerNegotiation(player, buyerClub, sellerClub, seed, currentDate) {
     const rng = IncomingTransferService.seededRandom(seed);
     const repDelta = buyerClub.reputation - sellerClub.reputation;
     let acceptChance = 0.55;
@@ -2392,12 +2384,12 @@ var IncomingTransferService = {
     else if (repDelta === 0) acceptChance = 0.55;
     else if (repDelta === -1) acceptChance = 0.4;
     else acceptChance = 0.25;
-    if (player2.isOnTransferList) acceptChance += 0.15;
-    if (!player2.squadRole) acceptChance += 0.08;
-    const daysLeft = IncomingTransferService.daysUntil(player2.contractEndDate, currentDate);
+    if (player.isOnTransferList) acceptChance += 0.15;
+    if (!player.squadRole) acceptChance += 0.08;
+    const daysLeft = IncomingTransferService.daysUntil(player.contractEndDate, currentDate);
     if (daysLeft < 180) acceptChance += 0.1;
-    if (!IncomingTransferService.isTransferLoyaltySoftened(player2) && !IncomingTransferService.isMajorReputationStepUp(buyerClub, sellerClub)) {
-      const loyalty = IncomingTransferService.getPlayerLoyalty(player2);
+    if (!IncomingTransferService.isTransferLoyaltySoftened(player) && !IncomingTransferService.isMajorReputationStepUp(buyerClub, sellerClub)) {
+      const loyalty = IncomingTransferService.getPlayerLoyalty(player);
       const loyaltyResistance = Math.max(0, (loyalty - 50) / 49);
       acceptChance -= loyaltyResistance * 0.46;
       if (loyalty >= 85) acceptChance *= 0.72;
@@ -2405,10 +2397,10 @@ var IncomingTransferService = {
     acceptChance = Math.min(0.95, Math.max(0.05, acceptChance));
     return rng < acceptChance ? "accepted" : "refused";
   },
-  simulateLoanPlayerDecision(player2, buyerClub, sellerClub, buyerSquad2, seed, loanNeedSnapshot2) {
+  simulateLoanPlayerDecision(player, buyerClub, sellerClub, buyerSquad, seed, loanNeedSnapshot) {
     const rng = IncomingTransferService.seededRandom(seed);
     const repDelta = buyerClub.reputation - sellerClub.reputation;
-    const need = IncomingTransferService.getLoanSquadNeed(player2, buyerSquad2, loanNeedSnapshot2);
+    const need = IncomingTransferService.getLoanSquadNeed(player, buyerSquad, loanNeedSnapshot);
     let acceptChance = 0.48;
     if (repDelta >= 0) acceptChance += 0.18;
     else if (repDelta === -1) acceptChance += 0.04;
@@ -2416,9 +2408,9 @@ var IncomingTransferService = {
     else acceptChance -= 0.22;
     if (need.needScore >= 8) acceptChance += 0.18;
     else if (need.needScore >= 6) acceptChance += 0.1;
-    if (player2.age <= 23) acceptChance += 0.12;
-    if (player2.stats.matchesPlayed <= 3 && player2.stats.minutesPlayed < 300) acceptChance += 0.1;
-    if (player2.squadRole === "KEY_PLAYER" || player2.squadRole === "STARTER") acceptChance -= 0.2;
+    if (player.age <= 23) acceptChance += 0.12;
+    if (player.stats.matchesPlayed <= 3 && player.stats.minutesPlayed < 300) acceptChance += 0.1;
+    if (player.squadRole === "KEY_PLAYER" || player.squadRole === "STARTER") acceptChance -= 0.2;
     acceptChance = Math.min(0.92, Math.max(0.08, acceptChance));
     return rng < acceptChance ? "accepted" : "refused";
   },
@@ -2473,28 +2465,28 @@ var IncomingTransferService = {
     d.setDate(d.getDate() + days);
     return d.toISOString().split("T")[0];
   },
-  getAvgRating(player2) {
-    const h = player2.stats.ratingHistory;
+  getAvgRating(player) {
+    const h = player.stats.ratingHistory;
     if (!h || h.length === 0) return 0;
     return h.reduce((s, r) => s + r, 0) / h.length;
   },
-  isExceptionalSpontaneousTarget(player2, buyerClub, sellerClub, currentDate, sellerPlayers) {
-    if (player2.isOnTransferList) {
+  isExceptionalSpontaneousTarget(player, buyerClub, sellerClub, currentDate, sellerPlayers) {
+    if (player.isOnTransferList) {
       let isBestPlayerListed = false;
       if (sellerPlayers) {
         const squadBestOvr = Math.max(...sellerPlayers.map((p) => p.overallRating));
-        isBestPlayerListed = player2.overallRating >= squadBestOvr;
+        isBestPlayerListed = player.overallRating >= squadBestOvr;
       }
       return isBestPlayerListed ? 1 : 3;
     }
-    const ovr = player2.overallRating;
-    const age = player2.age;
-    const avgRating = IncomingTransferService.getAvgRating(player2);
-    const goals = player2.stats.goals;
-    const assists = player2.stats.assists;
-    const talent = player2.attributes.talent;
-    const isFwd = player2.position === "FWD" /* FWD */;
-    const isMid = player2.position === "MID" /* MID */;
+    const ovr = player.overallRating;
+    const age = player.age;
+    const avgRating = IncomingTransferService.getAvgRating(player);
+    const goals = player.stats.goals;
+    const assists = player.stats.assists;
+    const talent = player.attributes.talent;
+    const isFwd = player.position === "FWD" /* FWD */;
+    const isMid = player.position === "MID" /* MID */;
     if (ovr >= 80 && talent >= 80 && age >= 16 && age <= 24) return 1;
     if (ovr >= 80 && age <= 28 && avgRating >= 7.5) return 2;
     if (isFwd && ovr >= 80 && age <= 30 && goals >= 10 && avgRating >= 7.2) return 3;
@@ -2515,33 +2507,13 @@ var IncomingTransferService = {
   }
 };
 
-// tests/LoanRealismTests.ts
-var club = (overrides) => ({
-  id: "CLUB",
-  name: "Klub",
-  shortName: "KLU",
-  leagueId: "L_PL_1",
-  tier: 1,
-  colorsHex: ["#000000", "#ffffff"],
-  stadiumName: "Stadion",
-  stadiumCapacity: 1e4,
-  reputation: 10,
-  country: "POL",
-  isDefaultActive: true,
-  rosterIds: [],
-  stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
-  budget: 1e6,
-  transferBudget: 5e5,
-  boardStrictness: 50,
-  signingBonusPool: 0,
-  ...overrides
-});
-var player = (id, position, overallRating, overrides = {}) => ({
+// tests/AiLoanMarketPerformanceTests.ts
+var makePlayer = (id, position, overallRating) => ({
   id,
-  firstName: "Jan",
+  firstName: "Test",
   lastName: id,
-  age: 21,
-  clubId: "SELLER",
+  age: 19 + overallRating % 15,
+  clubId: "BUYER",
   nationality: "POLAND" /* POLAND */,
   position,
   overallRating,
@@ -2560,7 +2532,7 @@ var player = (id, position, overallRating, overrides = {}) => ({
     positioning: 60,
     goalkeeping: 10,
     freeKicks: 50,
-    talent: 75,
+    talent: 70,
     penalties: 50,
     corners: 50,
     aggression: 50,
@@ -2584,201 +2556,63 @@ var player = (id, position, overallRating, overrides = {}) => ({
   condition: 100,
   suspensionMatches: 0,
   contractEndDate: "2052-06-30",
-  annualSalary: 12e4,
-  isAvailableForLoan: true,
+  annualSalary: 1e5,
   history: [],
   boardLockoutUntil: null,
   isUntouchable: false,
   negotiationStep: 0,
   negotiationLockoutUntil: null,
   contractLockoutUntil: null,
-  fatigueDebt: 0,
-  ...overrides
+  fatigueDebt: 0
 });
-var realMadrid = club({
-  id: "CL_REAL_MADRYT",
-  name: "Real Madryt",
-  leagueId: "L_CL",
-  country: "ESP",
-  reputation: 20
-});
-var firstLeagueClub = club({
-  id: "PL_FIRST_LEAGUE",
-  name: "Klub 1 Ligi",
-  leagueId: "L_PL_2",
-  tier: 2,
-  reputation: 9
-});
-import_node_assert.strict.equal(
-  IncomingTransferService.getEliteEuropeanToPolishLoanChance(
-    firstLeagueClub,
-    realMadrid
-  ),
-  1e-6,
-  "klub 1 Ligi mo\u017Ce wypo\u017Cyczy\u0107 zawodnika z europejskiej elity najwy\u017Cej raz na milion pr\xF3b"
+var positions = ["GK" /* GK */, "DEF" /* DEF */, "MID" /* MID */, "FWD" /* FWD */];
+var buyerSquads = Array.from(
+  { length: 1213 },
+  (_, clubIndex) => Array.from({ length: 24 }, (_2, playerIndex) => makePlayer(
+    `BUYER_${clubIndex}_${playerIndex}`,
+    positions[playerIndex % positions.length],
+    48 + (clubIndex * 7 + playerIndex * 3) % 35
+  ))
 );
-import_node_assert.strict.equal(
-  IncomingTransferService.getEliteEuropeanToPolishLoanChance(
-    club({ leagueId: "L_PL_3", tier: 3, reputation: 6 }),
-    realMadrid
-  ),
-  1e-6,
-  "klub 2 Ligi musi mie\u0107 ograniczenie jeden na milion"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getEliteEuropeanToPolishLoanChance(
-    club({ leagueId: "L_PL_1", reputation: 14 }),
-    realMadrid
-  ),
-  1e-4,
-  "Ekstraklasa poni\u017Cej reputacji 15 musi mie\u0107 bardzo ma\u0142\u0105 szans\u0119"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getEliteEuropeanToPolishLoanChance(
-    club({ leagueId: "L_PL_1", reputation: 15 }),
-    realMadrid
-  ),
-  null,
-  "polski klub z reputacj\u0105 15 mo\u017Ce korzysta\u0107 ze standardowej logiki wypo\u017Cycze\u0144"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getLoanBuyerCategory(
-    club({ leagueId: "L_PL_1", reputation: 15 }),
-    realMadrid
-  ),
-  "FOREIGN_LOWER_REP",
-  "pr\xF3g reputacji 15 musi faktycznie otwiera\u0107 \u015Bcie\u017Ck\u0119 oferty mimo du\u017Cej r\xF3\u017Cnicy reputacji"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getEliteEuropeanToPolishLoanChance(
-    club({ leagueId: "L_PL_2", reputation: 9 }),
-    club({ id: "CLUB_BRNO", leagueId: "L_CONF", country: "CZE", reputation: 12 })
-  ),
-  null,
-  "ograniczenie nie mo\u017Ce blokowa\u0107 zwyk\u0142ych wypo\u017Cycze\u0144 z klub\xF3w spoza europejskiej elity"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getPolishLowerLeagueLoanSource(
-    firstLeagueClub,
-    club({ id: "PL_EKSTRA", leagueId: "L_PL_1", tier: 1, reputation: 13 })
-  ),
-  "POLISH_HIGHER_LEAGUE",
-  "klub ni\u017Cszej ligi musi m\xF3c wypo\u017Cycza\u0107 z wy\u017Cszej ligi polskiej"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getPolishLowerLeagueLoanSource(
-    firstLeagueClub,
-    club({ id: "EU_LOW", leagueId: "L_CONF", country: "CZE", reputation: 10 })
-  ),
-  "FOREIGN_EUROPE_REP_10_MAX",
-  "zagraniczny klub europejski z reputacj\u0105 10 musi nale\u017Ce\u0107 do puli 15%"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getPolishLowerLeagueLoanSource(
-    firstLeagueClub,
-    club({ id: "EU_TOO_STRONG", leagueId: "L_CONF", country: "CZE", reputation: 11 })
-  ),
-  "INELIGIBLE",
-  "zagraniczny klub z reputacj\u0105 11-14 nie mo\u017Ce wypo\u017Cycza\u0107 do polskiej ni\u017Cszej ligi"
-);
-import_node_assert.strict.equal(
-  IncomingTransferService.getPolishLowerLeagueLoanSource(firstLeagueClub, realMadrid),
-  "ELITE_ONE_IN_MILLION",
-  "europejska elita zachowuje wy\u0142\u0105cznie wcze\u015Bniejszy wyj\u0105tek jeden na milion"
-);
-var polishSourceDraws = 0;
-var foreignSourceDraws = 0;
-var polishSeller = club({ id: "PL_EKSTRA_DRAW", leagueId: "L_PL_1", tier: 1, reputation: 13 });
-var foreignSeller = club({ id: "EU_LOW_DRAW", leagueId: "L_CONF", country: "CZE", reputation: 10 });
-for (let day = 1; day <= 1e4; day++) {
-  const date = new Date(2050, 0, 1);
-  date.setDate(day);
-  if (IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(firstLeagueClub, polishSeller, date)) {
-    polishSourceDraws += 1;
-  }
-  if (IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(firstLeagueClub, foreignSeller, date)) {
-    foreignSourceDraws += 1;
-  }
-}
-var polishShare = polishSourceDraws / (polishSourceDraws + foreignSourceDraws);
-import_node_assert.strict.ok(polishShare > 0.84 && polishShare < 0.86, `udzia\u0142 polskiej puli powinien wynosi\u0107 oko\u0142o 85%, otrzymano ${polishShare}`);
-var deterministicFirst = IncomingTransferService.passesLoanRealismGate(
-  club({ leagueId: "L_PL_3", reputation: 6 }),
-  realMadrid,
-  12345
-);
-var deterministicSecond = IncomingTransferService.passesLoanRealismGate(
-  club({ leagueId: "L_PL_3", reputation: 6 }),
-  realMadrid,
-  12345
-);
-import_node_assert.strict.equal(deterministicFirst, deterministicSecond, "ta sama oferta nie mo\u017Ce ponownie losowa\u0107 RNG");
-var buyerSquad = [
-  player("GK_1", "GK" /* GK */, 68),
-  player("GK_2", "GK" /* GK */, 62),
-  player("DEF_1", "DEF" /* DEF */, 72),
-  player("DEF_2", "DEF" /* DEF */, 68),
-  player("DEF_3", "DEF" /* DEF */, 68),
-  player("DEF_4", "DEF" /* DEF */, 61),
-  player("MID_1", "MID" /* MID */, 74),
-  player("MID_2", "MID" /* MID */, 69),
-  player("MID_3", "MID" /* MID */, 65)
-];
-var loanNeedSnapshot = IncomingTransferService.buildLoanSquadNeedSnapshot(buyerSquad);
-for (const position of Object.values(PlayerPosition)) {
-  for (const overall of [55, 61, 68, 69, 75, 90]) {
-    const candidate = player(`CANDIDATE_${position}_${overall}`, position, overall);
-    import_node_assert.strict.deepEqual(
-      IncomingTransferService.getLoanSquadNeed(candidate, buyerSquad, loanNeedSnapshot),
-      IncomingTransferService.getLoanSquadNeed(candidate, buyerSquad),
-      `snapshot potrzeb kadry musi zachowa\u0107 wynik dla ${position} OVR ${overall}`
-    );
-    import_node_assert.strict.equal(
-      IncomingTransferService.simulateLoanPlayerDecision(candidate, firstLeagueClub, polishSeller, buyerSquad, 75e3 + overall, loanNeedSnapshot),
-      IncomingTransferService.simulateLoanPlayerDecision(candidate, firstLeagueClub, polishSeller, buyerSquad, 75e3 + overall),
-      `snapshot nie mo\u017Ce zmieni\u0107 decyzji zawodnika dla ${position} OVR ${overall}`
-    );
-  }
-}
-var eligibleDate = Array.from({ length: 365 }, (_, index) => new Date(2050, 0, index + 1)).find((date) => IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(firstLeagueClub, polishSeller, date));
-import_node_assert.strict.ok(eligibleDate, "test musi znale\u017A\u0107 dzie\u0144 korzystaj\u0105cy z polskiej puli wypo\u017Cycze\u0144");
-var prevalidatedCategory = IncomingTransferService.getLoanBuyerCategory(firstLeagueClub, polishSeller);
-import_node_assert.strict.ok(prevalidatedCategory, "para klub\xF3w musi nale\u017Ce\u0107 do dozwolonej kategorii wypo\u017Cyczenia");
-for (const candidate of [
-  player("LOAN_GK", "GK" /* GK */, 70),
-  player("LOAN_DEF", "DEF" /* DEF */, 70),
-  player("LOAN_MID", "MID" /* MID */, 70),
-  player("LOAN_FWD", "FWD" /* FWD */, 70)
-]) {
-  for (let seed = 1; seed <= 500; seed += 1) {
-    const legacyDecision = IncomingTransferService.shouldGenerateLoanOffer(
+var candidates = Array.from({ length: 360 }, (_, index) => makePlayer(
+  `CANDIDATE_${index}`,
+  positions[index % positions.length],
+  52 + index * 11 % 35
+));
+var snapshots = buyerSquads.map((squad) => IncomingTransferService.buildLoanSquadNeedSnapshot(squad));
+var legacyChecksum = 0;
+var legacyStartedAt = import_node_perf_hooks.performance.now();
+for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+  const candidate = candidates[candidateIndex];
+  for (let buyerIndex = candidateIndex % 3; buyerIndex < buyerSquads.length; buyerIndex += 3) {
+    const result = IncomingTransferService.getLoanSquadNeed(
       candidate,
-      firstLeagueClub,
-      polishSeller,
-      [],
-      seed,
-      eligibleDate,
-      buyerSquad
+      buyerSquads[buyerIndex]
     );
-    const optimizedDecision = IncomingTransferService.shouldGenerateLoanOffer(
-      candidate,
-      firstLeagueClub,
-      polishSeller,
-      [],
-      seed,
-      eligibleDate,
-      buyerSquad,
-      {
-        prevalidatedCategory,
-        activeOfferConflictAlreadyChecked: true,
-        loanNeedSnapshot
-      }
-    );
-    import_node_assert.strict.deepEqual(
-      optimizedDecision,
-      legacyDecision,
-      `optymalizacja nie mo\u017Ce zmieni\u0107 decyzji oferty ${candidate.position}, seed ${seed}`
-    );
+    legacyChecksum += result.fits ? Math.round(result.needScore * 10) : -1;
   }
 }
-console.log("LoanRealismTests: OK");
+var legacyElapsedMs = import_node_perf_hooks.performance.now() - legacyStartedAt;
+var optimizedChecksum = 0;
+var optimizedStartedAt = import_node_perf_hooks.performance.now();
+for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+  const candidate = candidates[candidateIndex];
+  for (let buyerIndex = candidateIndex % 3; buyerIndex < buyerSquads.length; buyerIndex += 3) {
+    const result = IncomingTransferService.getLoanSquadNeed(
+      candidate,
+      buyerSquads[buyerIndex],
+      snapshots[buyerIndex]
+    );
+    optimizedChecksum += result.fits ? Math.round(result.needScore * 10) : -1;
+  }
+}
+var optimizedElapsedMs = import_node_perf_hooks.performance.now() - optimizedStartedAt;
+import_node_assert.strict.notEqual(optimizedChecksum, 0, "benchmark musi wykorzysta\u0107 wyniki oblicze\u0144, a nie zosta\u0107 pomini\u0119ty");
+import_node_assert.strict.equal(optimizedChecksum, legacyChecksum, "optymalizacja musi zachowa\u0107 dok\u0142adnie te same decyzje potrzeb kadry");
+import_node_assert.strict.ok(
+  optimizedElapsedMs < 1500,
+  `ponowne u\u017Cycie profilu kadry jest zbyt wolne: ${optimizedElapsedMs.toFixed(1)} ms`
+);
+console.log(
+  `AiLoanMarketPerformanceTests: OK (legacy ${legacyElapsedMs.toFixed(1)} ms, optimized ${optimizedElapsedMs.toFixed(1)} ms, checksum ${optimizedChecksum})`
+);

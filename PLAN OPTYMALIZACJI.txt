@@ -1,0 +1,335 @@
+PLAN OPTYMALIZACJI WYDAJNOŚCI FMPL27
+====================================
+
+Cel główny
+----------
+
+Skrócić czas przechodzenia między dniami bez zmiany zasad świata gry, wyników rozgrywek,
+transferów, powołań, kontuzji ani statystyk zawodników. Prace są dzielone na małe etapy,
+które można osobno przetestować i w razie potrzeby wycofać.
+
+Stan realizacji
+--------------
+
+- ETAP 0: rozpoczęty; utworzono pierwszy zestaw testów regresyjnych i wydajnościowych.
+- ETAP 1: zakończony 25 sierpnia 2026; self-testy zakończone powodzeniem.
+- ETAP 2A: zakończony 25 sierpnia 2026; self-testy zakończone powodzeniem.
+- ETAP 2B: oczekuje na pomiar Etapu 2A w normalnej rozgrywce.
+- ETAP 3A: zakończony 26 sierpnia 2026; self-testy zakończone powodzeniem.
+- ETAP 3B: oczekuje na pomiar Etapu 3A w normalnej rozgrywce.
+- ETAP 4: oczekuje.
+- ETAP 5: oczekuje.
+
+Najważniejsze zasady bezpieczeństwa
+-----------------------------------
+
+1. Najpierw usuwamy zbędne przeglądanie i kopiowanie danych. Nie zmieniamy wzorów ani RNG.
+2. Zachowujemy kolejność kandydatów i wywołań losowości w decyzjach transferowych AI.
+3. Wolny agent pozostaje dostępny dla gracza, AI i reprezentacji.
+4. Wolny agent może zostać aktywowany przez:
+   - otwarcie karty przez gracza,
+   - obserwację lub wybór przez AI,
+   - rozpoczęcie negocjacji,
+   - podpisany przyszły transfer,
+   - powołanie do reprezentacji.
+5. Każdy etap otrzymuje test regresji oraz test wydajnościowy.
+6. Dopóki osobny etap nie mówi inaczej, format zapisów gry pozostaje bez zmian.
+
+ETAP 0 - punkt odniesienia i zabezpieczenia
+------------------------------------------
+
+1. Ustalić zestaw testów wykonywanych po każdym etapie:
+   - budowa produkcyjna,
+   - testy wolnych agentów i przyszłych transferów,
+   - testy 3. i 4. ligi,
+   - testy reprezentacji,
+   - testy rynku AI,
+   - test przejścia dnia na pełnym świecie.
+2. Dodać małe testy sprawdzające tożsamość obiektów:
+   - niezmieniona drużyna zachowuje tę samą tablicę,
+   - pula FREE_AGENTS zachowuje tę samą tablicę, jeżeli zdarzenie jej nie dotyczy,
+   - statystyki aktualizuje wyłącznie właściwy zawodnik.
+3. Mierzyć osobno zwykły dzień, dzień z dużą liczbą meczów oraz 1-2 lipca.
+
+ETAP 1 - bezpośrednie aktualizowanie statystyk meczowych
+-------------------------------------------------------
+
+Problem:
+Po każdej bramce i kartce obecny serwis przegląda wszystkie kluby i wszystkich zawodników,
+w tym tysiące wolnych agentów. Na dużej kolejce operacja powtarza się wiele razy.
+
+Implementacja:
+
+1. Rozszerzyć aktualizację bramek i kartek o listę klubów uczestniczących w meczu.
+2. Dla meczu ligowego aktualizować tylko skład gospodarzy i gości.
+3. Dla meczu na żywo przekazywać właściwy klub strzelca; przy kartkach dopuszczać oba kluby.
+4. Zachować dotychczasową ścieżkę ogólną jako zgodny fallback dla starszych wywołań i testów.
+5. Nie kopiować tablic klubów, których zdarzenie nie dotyczy.
+6. Nie zmieniać naliczania bramek, asyst, kartek, zawieszeń, formy ani statystyk rozgrywek.
+
+Test końca etapu:
+
+1. Bramka i asysta trafiają do poprawnych zawodników.
+2. Kartka i zawieszenie trafiają do poprawnego zawodnika.
+3. Pula FREE_AGENTS i trzeci, niezwiązany klub zachowują tę samą referencję.
+4. Wynik starej i nowej ścieżki jest identyczny dla danych meczu.
+5. Test 3. ligi, pełna budowa i testy meczowe przechodzą bez błędów.
+
+Kompatybilność zapisu:
+Istniejący zapis gry jest zgodny. Nie trzeba zaczynać nowej kariery.
+
+ETAP 2 - uśpieni wolni agenci i leniwe rozliczanie czasu
+-------------------------------------------------------
+
+Problem:
+RecoveryService codziennie przegląda i kopiuje całą pulę wolnych agentów, mimo że większość
+nie gra, nie negocjuje i nie ma żadnego zdarzenia wymagającego aktualizacji.
+
+Implementacja:
+
+1. Wprowadzić centralną klasyfikację aktywności wolnego agenta.
+2. Za aktywnego uznawać zawodnika z powołaniem, negocjacją, przyszłym transferem, kontuzją
+   wymagającą bieżącej obsługi lub innym zaplanowanym zdarzeniem.
+3. Zapamiętywać datę ostatniego rozliczenia uśpionego wolnego agenta.
+4. Przy aktywacji nadrobić stan od ostatniej daty tylko dla tego zawodnika:
+   - kontuzję według dat bezwzględnych,
+   - kondycję i zmęczenie,
+   - wygasłe blokady negocjacji,
+   - regenerację po reprezentacji.
+5. Jeżeli dokładny wynik zależy od kolejnych dni, odtworzyć brakujące dni dla jednego
+   zawodnika zamiast stosować przybliżenie.
+6. Nie zmieniać końca kariery i sezonowego czyszczenia puli.
+
+Test końca etapu:
+
+1. Porównać codzienne i leniwe rozliczenie dla zdrowego oraz kontuzjowanego zawodnika.
+2. Sprawdzić aktywację po 1, 7, 30, 90 i 365 dniach.
+3. Sprawdzić powołanie wolnego agenta do reprezentacji.
+4. Sprawdzić negocjację gracza, negocjację AI i przyszły transfer.
+5. Sprawdzić zapis i ponowne wczytanie pomiędzy uśpieniem i aktywacją.
+
+Kompatybilność zapisu:
+Planowana migracja przy wczytaniu. Docelowo istniejące zapisy powinny działać, ale decyzja
+zostanie potwierdzona dopiero po testach migracji tego etapu.
+
+ETAP 2A - bezpieczne pomijanie niezmienionej regeneracji
+--------------------------------------------------------
+
+Zakres wdrożony przed pełnym Etapem 2:
+
+1. Regeneracja zwraca ten sam obiekt świata, tę samą tablicę drużyny i tego samego zawodnika,
+   jeżeli żadne pole związane z regeneracją faktycznie się nie zmieniło.
+2. W pełni zdrowa pula FREE_AGENTS bez aktywnych urazów, blokad, negocjacji i regeneracji
+   reprezentacyjnej jest oznaczana wyłącznie w pamięci RAM jako nieaktywna.
+3. Kolejny zwykły dzień może pominąć całą taką pulę bez odczytywania każdego zawodnika.
+4. Podpisanie, zwolnienie lub dodanie zawodnika tworzy nową tablicę i automatycznie unieważnia
+   oznaczenie. Uraz lub inne aktywne zdarzenie nie pozwala oznaczyć puli jako nieaktywną.
+5. Nie dodano żadnych pól do zapisu gry i nie zmieniono wzorów regeneracji ani kolejności RNG.
+6. Poprawiono także kopiowanie danych urazu, aby rozliczenie dnia nie zmieniało ukrycie
+   obiektu należącego do poprzedniego stanu gry.
+
+Self-test Etapu 2A:
+
+1. Stabilny świat zachowuje wszystkie referencje.
+2. Po pierwszej weryfikacji pula 15 000 wolnych agentów wykonuje zero odczytów następnego dnia.
+3. Zmiana puli automatycznie przywraca jej przeliczanie.
+4. Uraz i wygasająca blokada są nadal rozliczane prawidłowo.
+5. Testy przyszłych transferów wolnych agentów, regeneracji wiadomości zarządu i statystyk
+   meczowych zakończyły się powodzeniem.
+
+Kompatybilność zapisu Etapu 2A:
+Istniejące zapisy są zgodne. Pierwszy dzień po wczytaniu sprawdza pulę, a następne zwykłe dni
+mogą korzystać z oznaczenia przechowywanego w RAM.
+
+ETAP 3 - indeks rynku wolnych agentów dla AI
+--------------------------------------------
+
+Problem:
+AI korzysta już z list obserwacyjnych odświeżanych co 90 dni, ale nadal codziennie buduje
+mapy całej puli i przy zmianie jednego zawodnika potrafi kopiować całą listę.
+
+Implementacja:
+
+1. Zbudować nietrwały indeks ID -> wolny agent, odbudowywany po rozpoczęciu i wczytaniu gry.
+2. Prowadzić osobne indeksy:
+   - zawodników według pozycji,
+   - aktywnych negocjacji według klubu,
+   - negocjacji według daty odpowiedzi,
+   - przyszłych transferów według daty dołączenia,
+   - kandydatów specjalnych dla klubów zatokowych.
+3. Aktualizować indeks przy dodaniu, podpisaniu, usunięciu lub zmianie statusu zawodnika.
+4. Pełny skan co 90 dni wykonywać na lekkich danych rynku.
+5. Pełny obiekt zawodnika pobierać dopiero dla ostatecznych kandydatów.
+6. Zachować identyczną kolejność kandydatów oraz wywołań RNG.
+
+Test końca etapu:
+
+1. Stara i nowa wersja na identycznym świecie oraz kontrolowanym RNG wybierają tych samych
+   kandydatów, tworzą te same negocjacje i podpisują tych samych zawodników.
+2. Testy krytycznego braku pozycji i bogatych klubów zatokowych.
+3. Test 180 dni rynku: brak duplikatów, brak zaginionych zawodników, te same daty transferów.
+4. Pomiar na puli co najmniej 15 000 wolnych agentów.
+
+Kompatybilność zapisu:
+Indeksy nie są zapisywane, tylko odbudowywane z istniejących danych. Istniejący zapis gry
+powinien być zgodny.
+
+ETAP 3A - wspólny indeks zawodników innych klubów
+-------------------------------------------------
+
+Problem potwierdzony pomiarem:
+
+1. Pełna sekwencja testowa trwała około 11,8 sekundy.
+2. Samo wyszukiwanie zawodników innych klubów zajmowało około 11,7 sekundy.
+3. Każdy klub AI osobno budował tę samą listę kilkudziesięciu tysięcy zawodników.
+4. Dla każdego kandydata wielokrotnie liczono te same dane o strukturze kadry kupującego.
+
+Wdrożenie:
+
+1. Lista zawodników dostępnych do pełnego przeglądu rynku jest budowana raz na cały dzień.
+2. Stałe sprawdzenia kontraktu, wypożyczenia i blokad wykonywane są raz na zawodnika,
+   a nie ponownie dla każdego kupującego klubu.
+3. Liczebność pozycji, średnia siła formacji, próg jakości i wolne miejsce w kadrze są
+   obliczane raz dla klubu i pozycji.
+4. Klub nadal analizuje zawodników w tej samej kolejności.
+5. Zachowano tę samą liczbę i kolejność losowań RNG. Odrzucony kandydat nadal zużywa
+   należne mu losowanie, ale nie uruchamia już kosztownej analizy, jeżeli jej wynik nie
+   mógł wpłynąć na decyzję.
+6. Zawodnik z uzgodnionym transferem jest natychmiast usuwany z dalszych wyborów tego dnia.
+7. Indeks istnieje tylko w RAM przez czas jednego przeliczenia i nie zmienia zapisu gry.
+
+Self-test Etapu 3A:
+
+1. Pełny świat: 1213 klubów i 38 847 zawodników.
+2. Czas wyszukiwania spadł z około 11,7 sekundy do około 1,5-1,8 sekundy.
+3. Dwa przebiegi z identycznym RNG zużyły tę samą liczbę losowań i dały identyczne
+   transfery oraz wpisy dziennika.
+4. Nie zgubiono ani nie zduplikowano zawodników.
+5. Rezerwy nadal nie mogą kupować zawodników jako niezależny klub.
+6. Testy skautingu, rynku, przyszłych transferów i pełna budowa zakończyły się powodzeniem.
+
+Kompatybilność zapisu Etapu 3A:
+Istniejące zapisy są zgodne. Indeks jest odbudowywany przy każdym przeliczeniu rynku i nie
+wymaga migracji ani rozpoczęcia nowej kariery.
+
+ETAP 3B - ograniczenie powtarzanych obliczeń rynku wypożyczeń AI
+----------------------------------------------------------------
+
+Problem potwierdzony analizą:
+
+1. W dni okna transferowego rynek wypożyczeń sprawdzał układ sprzedający-zawodnik-kupujący.
+2. Dla każdego zawodnika ponownie analizowano tę samą kadrę kupującego: średnią całego
+   zespołu, liczebność pozycji, średnią pozycji i kolejność zawodników według siły.
+3. Reguły zależne wyłącznie od pary klubów były ponawiane dla każdego wystawionego zawodnika.
+4. Ten etap jest niezależny od rynku transferów definitywnych poprawionego w Etapie 3A i
+   nadal mógł obciążać zwykłe dni sierpniowego okna transferowego.
+
+Wdrożenie:
+
+1. Profil kadry potrzebny do oceny wypożyczenia jest budowany raz dla klubu kupującego.
+2. Do profilu należą średnia kadry oraz liczba, średnia, najlepsza ocena i uporządkowane
+   oceny dla każdej pozycji.
+3. Uprawnienia między pierwszą drużyną i rezerwami, źródło wypożyczenia oraz kategoria pary
+   klubów są sprawdzane raz dla sprzedającego i kupującego.
+4. Sprawdzenia zależne od konkretnego zawodnika, jego wieku, roli, poziomu i RNG pozostają
+   wykonywane osobno dla każdej oferty.
+5. Zachowano dotychczasową kolejność sprzedających, zawodników i kupujących oraz wszystkie
+   ziarna losowania.
+6. Indeksy istnieją tylko podczas przeliczania dnia i nie są dopisywane do zapisu gry.
+
+Self-test Etapu 3B:
+
+1. Porównano wszystkie cztery pozycje, różne poziomy OVR, identyczne oceny zawodników oraz
+   pozycję nieobsadzoną w kadrze.
+2. Stara i nowa ścieżka zwracają identyczną potrzebę kadry oraz identyczną decyzję zawodnika.
+3. Porównano 2000 decyzji generowania oferty przy różnych ziarnach RNG - wyniki są identyczne.
+4. Test wydajności wykonał ponad 145 tysięcy ocen dopasowania na świecie 1213 klubów.
+5. Samo obliczanie potrzeb kadry skróciło się w teście z około 97 ms do około 29 ms.
+6. Testy realizmu wypożyczeń, negocjacji, przenoszenia zawodników rezerw i pełna budowa
+   zakończyły się powodzeniem.
+
+Kompatybilność zapisu Etapu 3B:
+Istniejące zapisy są zgodne. Test należy wykonać na tym samym zapisie i tej samej dacie,
+bez rozpoczynania nowej kariery.
+
+ETAP 3C - prekontrakty AI zmierzone na rzeczywistym zapisie
+----------------------------------------------------------
+
+Diagnoza zapisu „vrs 2-0.gz” z 11 sierpnia 2026:
+
+1. Plik zajmuje 8,65 MB, ale po rozpakowaniu zawiera 138,94 MB danych.
+2. Dane 36 370 zawodników zajmują 121,06 MB.
+3. Pula 15 573 wolnych agentów zajmuje 50,82 MB.
+4. Sam odczyt, rozpakowanie i JSON.parse trwa około 1,2 sekundy. Pełna normalizacja
+   starego zapisu przy wczytaniu trwa dłużej, ale nie jest wykonywana przy zmianie dnia.
+5. Proces dnia został odtworzony bezpośrednio na kopii zapisu: 39,3-40,3 sekundy.
+6. Rekrutacja wolnych agentów zajmowała tylko około 0,8-0,9 sekundy.
+7. Główne wąskie gardło stanowiły prekontrakty AI: około 30,4-30,8 sekundy.
+
+Przyczyna:
+
+1. W zapisie 3567 zawodników miało kontrakt wygasający w przedziale prekontraktowym.
+2. System tworzył ponad 4,3 miliona połączeń zawodnik-klub kupujący.
+3. Dla każdego połączenia od nowa analizował strategię klubu, potrzeby kadry, liczebność
+   pozycji, średni OVR i pełną nazwę używaną do harmonogramu sprawdzania.
+4. Większość tej pracy dawała identyczny wynik dla tego samego klubu kupującego.
+
+Wdrożenie:
+
+1. Strategia, potrzeby, braki, średnie pozycji i limity kadry są liczone raz na klub.
+2. Dozwolone połączenia pierwsza drużyna-rezerwy są liczone raz na parę klubów.
+3. Lista zainteresowanych klubów zawodnika jest budowana raz na zawodnika.
+4. Hash harmonogramu zachowuje dokładny dotychczasowy wynik, ale łączy wcześniej obliczony
+   fragment klubu z fragmentem zawodnika zamiast ponownie czytać cały napis miliony razy.
+5. Zachowano kolejność kupujących, reguły sportowe, finansowe, prekontraktowe i ziarna RNG.
+
+Pomiar po zmianie na tym samym zapisie:
+
+1. Prekontrakty AI: około 30,4 sekundy -> około 1,5 sekundy.
+2. Cały główny proces dnia: około 39,3 sekundy -> około 10,2 sekundy.
+3. Wolni agenci pozostają ważnym składnikiem wielkości zapisu, ale nie byli przyczyną
+   40-sekundowego oczekiwania 11 sierpnia.
+
+Kompatybilność zapisu Etapu 3C:
+Zmiana korzysta wyłącznie z tymczasowych danych w RAM. Istniejący zapis jest zgodny i jest
+właściwym materiałem do testu; nie trzeba rozpoczynać nowej kariery.
+
+ETAP 4 - lekki widok rynku i aktywacja po kliknięciu
+---------------------------------------------------
+
+Problem:
+Widok rynku spłaszcza całą bazę zawodników i filtruje pełne obiekty przy każdej istotnej
+zmianie stanu.
+
+Implementacja:
+
+1. Przygotować lekkie rekordy przeznaczone do listy i filtrów rynku.
+2. Rekord musi zawierać wszystkie informacje widoczne przed otwarciem karty, aby żadna
+   istniejąca funkcja filtrowania nie zniknęła.
+3. Pełne dane pobierać dopiero po kliknięciu zawodnika albo rozpoczęciu negocjacji.
+4. Wirtualizować długą listę, aby React renderował tylko widoczne wiersze.
+5. Uniezależnić listę rynku od zmian kondycji zawodników w innych klubach.
+
+Test końca etapu:
+
+1. Wszystkie filtry zwracają ten sam zestaw i kolejność zawodników.
+2. Karta każdego zawodnika otwiera kompletne, aktualne dane.
+3. Rynek działa po transferze, zwolnieniu, wczytaniu zapisu i imporcie datapacka.
+
+ETAP 5 - ograniczenie kopiowania stanu dnia
+-------------------------------------------
+
+1. Serwisy bez zmian mają zwracać ten sam obiekt lub tę samą tablicę.
+2. Zebrać wynik dnia w jeden obiekt roboczy.
+3. Zatwierdzać końcowe kluby, zawodników, terminarz, składy i wiadomości raz na koniec dnia.
+4. Nie łączyć tego etapu z modyfikacją algorytmów meczowych ani transferowych.
+5. Testować osobno każdy typ dnia i granice miesiąca/sezonu.
+
+Kryterium zakończenia całości
+----------------------------
+
+1. Brak zmian w tabelach, statystykach, transferach i powołaniach przy kontrolowanym RNG.
+2. Brak duplikatów lub utraty zawodników po wielu sezonach.
+3. Zwykły dzień nie wykonuje pełnego skanu wolnych agentów bez konkretnego powodu.
+4. Bramka lub kartka nie uruchamia przeglądania całego świata.
+5. Każdy etap ma pomiar przed/po oraz instrukcję testu gracza na istniejącym albo nowym zapisie.

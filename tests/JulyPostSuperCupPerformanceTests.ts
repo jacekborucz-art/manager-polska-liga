@@ -14,6 +14,7 @@ import { AiContractService } from '../services/AiContractService';
 import { CoachService } from '../services/CoachService';
 import { EuropeanPlayerStatsService } from '../services/EuropeanPlayerStatsService';
 import { PolishLeagueSeasonService } from '../services/PolishLeagueSeasonService';
+import { PrestigeTransferGuardService } from '../services/PrestigeTransferGuardService';
 import { ReserveTeamLeagueService } from '../services/ReserveTeamLeagueService';
 import { SaveState, serializeSaveState } from '../services/SaveGameService';
 import { SquadGeneratorService } from '../services/SquadGeneratorService';
@@ -46,34 +47,54 @@ const coaches = CoachService.generateInitialCoaches(clubs).coaches;
 const julyFifteenth = new Date(2026, 6, 15);
 const playerCountBefore = Object.values(players).reduce((sum, squad) => sum + squad.length, 0);
 const startedAt = performance.now();
+const phaseTimings: Record<string, number> = {};
+let prestigeAssessmentCount = 0;
+const originalEvaluateDestination = PrestigeTransferGuardService.evaluateDestination;
+PrestigeTransferGuardService.evaluateDestination = (...args) => {
+  prestigeAssessmentCount += 1;
+  return originalEvaluateDestination(...args);
+};
+
+const measurePhase = <T>(label: string, run: () => T): T => {
+  const phaseStartedAt = performance.now();
+  const result = run();
+  phaseTimings[label] = performance.now() - phaseStartedAt;
+  return result;
+};
 
 // Use the same service order as BackgroundMatchProcessor. Recruitment refreshes
 // each club's compact scouting cache before paid-transfer targeting consumes it.
-const recruitment = AiContractService.processAiRecruitment(
-  updatedClubs,
-  players,
-  julyFifteenth,
-  USER_CLUB_ID
+const recruitment = measurePhase('free-agent recruitment', () =>
+  AiContractService.processAiRecruitment(
+    updatedClubs,
+    players,
+    julyFifteenth,
+    USER_CLUB_ID
+  )
 );
 updatedClubs = recruitment.updatedClubs;
 players = recruitment.updatedPlayers;
 
-const transferList = AiContractService.processAiTransferListSignings(
-  updatedClubs,
-  players,
-  julyFifteenth,
-  USER_CLUB_ID,
-  coaches
+const transferList = measurePhase('transfer-list signings', () =>
+  AiContractService.processAiTransferListSignings(
+    updatedClubs,
+    players,
+    julyFifteenth,
+    USER_CLUB_ID,
+    coaches
+  )
 );
 updatedClubs = transferList.updatedClubs;
 players = transferList.updatedPlayers;
 
-const interestedTargeting = AiContractService.processAiInterestedPlayerTargeting(
-  updatedClubs,
-  players,
-  julyFifteenth,
-  USER_CLUB_ID,
-  coaches
+const interestedTargeting = measurePhase('interested-player targeting', () =>
+  AiContractService.processAiInterestedPlayerTargeting(
+    updatedClubs,
+    players,
+    julyFifteenth,
+    USER_CLUB_ID,
+    coaches
+  )
 );
 updatedClubs = interestedTargeting.updatedClubs;
 players = interestedTargeting.updatedPlayers;
@@ -81,21 +102,27 @@ players = interestedTargeting.updatedPlayers;
 // The production code performs this update on the local postReviewPlayers map
 // and commits it once at the end of advanceDay. This loop measures the actual
 // statistics calculation without introducing an artificial React state copy.
-const refreshedPlayers = { ...players };
-for (const club of updatedClubs) {
-  if (!FOREIGN_BACKGROUND_LEAGUE_IDS.has(club.leagueId) || club.country === 'POL') continue;
-  const squad = players[club.id];
-  if (!squad?.length) continue;
-  refreshedPlayers[club.id] = EuropeanPlayerStatsService.applyBackgroundLeagueStatsToDate(
-    squad,
-    club,
-    julyFifteenth,
-    julyFifteenth.getFullYear()
-  );
-}
-players = refreshedPlayers;
+players = measurePhase('foreign background statistics', () => {
+  const refreshedPlayers = { ...players };
+  for (const club of updatedClubs) {
+    if (!FOREIGN_BACKGROUND_LEAGUE_IDS.has(club.leagueId) || club.country === 'POL') continue;
+    const squad = players[club.id];
+    if (!squad?.length) continue;
+    refreshedPlayers[club.id] = EuropeanPlayerStatsService.applyBackgroundLeagueStatsToDate(
+      squad,
+      club,
+      julyFifteenth,
+      julyFifteenth.getFullYear()
+    );
+  }
+  return refreshedPlayers;
+});
 
 const elapsedMs = performance.now() - startedAt;
+console.log('JulyPostSuperCupPerformanceTests phases:', Object.fromEntries(
+  Object.entries(phaseTimings).map(([label, milliseconds]) => [label, `${Math.round(milliseconds)}ms`])
+));
+console.log(`JulyPostSuperCupPerformanceTests prestige assessments: ${prestigeAssessmentCount}`);
 const playerCountAfter = Object.values(players).reduce((sum, squad) => sum + squad.length, 0);
 const reserveClubIds = new Set(
   updatedClubs.filter(club => ReserveTeamLeagueService.isReserveClub(club.id)).map(club => club.id)

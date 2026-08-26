@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { Club } from '../types';
+import { Club, HealthStatus, Player, PlayerPosition, Region } from '../types';
 import { IncomingTransferService } from '../services/IncomingTransferService';
 
 const club = (overrides: Partial<Club>): Club => ({
@@ -22,6 +22,46 @@ const club = (overrides: Partial<Club>): Club => ({
   signingBonusPool: 0,
   ...overrides,
 });
+
+const player = (
+  id: string,
+  position: PlayerPosition,
+  overallRating: number,
+  overrides: Partial<Player> = {}
+): Player => ({
+  id,
+  firstName: 'Jan',
+  lastName: id,
+  age: 21,
+  clubId: 'SELLER',
+  nationality: Region.POLAND,
+  position,
+  overallRating,
+  attributes: {
+    strength: 60, stamina: 60, pace: 60, defending: 60, passing: 60, attacking: 60,
+    finishing: 60, technique: 60, vision: 60, dribbling: 60, heading: 60, positioning: 60,
+    goalkeeping: 10, freeKicks: 50, talent: 75, penalties: 50, corners: 50, aggression: 50,
+    crossing: 50, leadership: 50, mentality: 60, workRate: 60,
+  },
+  stats: {
+    goals: 0, assists: 0, yellowCards: 0, redCards: 0, cleanSheets: 0,
+    matchesPlayed: 0, minutesPlayed: 0, seasonalChanges: {}, ratingHistory: [],
+  },
+  health: { status: HealthStatus.HEALTHY },
+  condition: 100,
+  suspensionMatches: 0,
+  contractEndDate: '2052-06-30',
+  annualSalary: 120_000,
+  isAvailableForLoan: true,
+  history: [],
+  boardLockoutUntil: null,
+  isUntouchable: false,
+  negotiationStep: 0,
+  negotiationLockoutUntil: null,
+  contractLockoutUntil: null,
+  fatigueDebt: 0,
+  ...overrides,
+} as Player);
 
 const realMadrid = club({
   id: 'CL_REAL_MADRYT',
@@ -145,5 +185,82 @@ const deterministicSecond = IncomingTransferService.passesLoanRealismGate(
   12345
 );
 assert.equal(deterministicFirst, deterministicSecond, 'ta sama oferta nie może ponownie losować RNG');
+
+// The optimized daily loan market reuses this snapshot for every candidate
+// considered by the same buyer. It must reproduce the exact legacy calculation,
+// including duplicate ratings and positions with no registered players.
+const buyerSquad = [
+  player('GK_1', PlayerPosition.GK, 68),
+  player('GK_2', PlayerPosition.GK, 62),
+  player('DEF_1', PlayerPosition.DEF, 72),
+  player('DEF_2', PlayerPosition.DEF, 68),
+  player('DEF_3', PlayerPosition.DEF, 68),
+  player('DEF_4', PlayerPosition.DEF, 61),
+  player('MID_1', PlayerPosition.MID, 74),
+  player('MID_2', PlayerPosition.MID, 69),
+  player('MID_3', PlayerPosition.MID, 65),
+];
+const loanNeedSnapshot = IncomingTransferService.buildLoanSquadNeedSnapshot(buyerSquad);
+for (const position of Object.values(PlayerPosition)) {
+  for (const overall of [55, 61, 68, 69, 75, 90]) {
+    const candidate = player(`CANDIDATE_${position}_${overall}`, position, overall);
+    assert.deepEqual(
+      IncomingTransferService.getLoanSquadNeed(candidate, buyerSquad, loanNeedSnapshot),
+      IncomingTransferService.getLoanSquadNeed(candidate, buyerSquad),
+      `snapshot potrzeb kadry musi zachować wynik dla ${position} OVR ${overall}`
+    );
+    assert.equal(
+      IncomingTransferService.simulateLoanPlayerDecision(candidate, firstLeagueClub, polishSeller, buyerSquad, 75_000 + overall, loanNeedSnapshot),
+      IncomingTransferService.simulateLoanPlayerDecision(candidate, firstLeagueClub, polishSeller, buyerSquad, 75_000 + overall),
+      `snapshot nie może zmienić decyzji zawodnika dla ${position} OVR ${overall}`
+    );
+  }
+}
+
+// Pair-level checks are now calculated once per seller and buyer, outside the
+// player loop. Passing their result back into the service must not alter offer
+// generation or consume a different deterministic random value.
+const eligibleDate = Array.from({ length: 365 }, (_, index) => new Date(2050, 0, index + 1))
+  .find(date => IncomingTransferService.matchesPolishLowerLeagueLoanSourceDraw(firstLeagueClub, polishSeller, date));
+assert.ok(eligibleDate, 'test musi znaleźć dzień korzystający z polskiej puli wypożyczeń');
+const prevalidatedCategory = IncomingTransferService.getLoanBuyerCategory(firstLeagueClub, polishSeller);
+assert.ok(prevalidatedCategory, 'para klubów musi należeć do dozwolonej kategorii wypożyczenia');
+for (const candidate of [
+  player('LOAN_GK', PlayerPosition.GK, 70),
+  player('LOAN_DEF', PlayerPosition.DEF, 70),
+  player('LOAN_MID', PlayerPosition.MID, 70),
+  player('LOAN_FWD', PlayerPosition.FWD, 70),
+]) {
+  for (let seed = 1; seed <= 500; seed += 1) {
+    const legacyDecision = IncomingTransferService.shouldGenerateLoanOffer(
+      candidate,
+      firstLeagueClub,
+      polishSeller,
+      [],
+      seed,
+      eligibleDate!,
+      buyerSquad
+    );
+    const optimizedDecision = IncomingTransferService.shouldGenerateLoanOffer(
+      candidate,
+      firstLeagueClub,
+      polishSeller,
+      [],
+      seed,
+      eligibleDate!,
+      buyerSquad,
+      {
+        prevalidatedCategory: prevalidatedCategory!,
+        activeOfferConflictAlreadyChecked: true,
+        loanNeedSnapshot,
+      }
+    );
+    assert.deepEqual(
+      optimizedDecision,
+      legacyDecision,
+      `optymalizacja nie może zmienić decyzji oferty ${candidate.position}, seed ${seed}`
+    );
+  }
+}
 
 console.log('LoanRealismTests: OK');

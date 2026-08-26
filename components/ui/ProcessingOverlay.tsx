@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { SoccerBall } from './SoccerBall';
 
 type ProcessingOptions = {
@@ -8,11 +8,25 @@ type ProcessingOptions = {
   minVisibleMs?: number;
 };
 
-type ProcessingState = Required<ProcessingOptions>;
+type ProcessingStep = {
+  id: string;
+  label: string;
+  status: 'ACTIVE' | 'DONE' | 'ERROR';
+  startedAt: number;
+  elapsedMs?: number;
+};
+
+type ProcessingState = Required<ProcessingOptions> & {
+  steps: ProcessingStep[];
+};
 
 type ProcessingContextValue = {
   isProcessing: boolean;
   runWithProcessing: <T>(task: () => T | Promise<T>, options?: ProcessingOptions) => Promise<T>;
+  beginProcessingStep: (label: string) => Promise<string | null>;
+  completeProcessingStep: (stepId: string | null, failed?: boolean) => Promise<void>;
+  recordProcessingStep: (label: string, elapsedMs: number, failed?: boolean) => void;
+  runProcessingStep: <T>(label: string, task: () => T | Promise<T>) => Promise<T>;
 };
 
 const ProcessingContext = createContext<ProcessingContextValue | undefined>(undefined);
@@ -140,6 +154,91 @@ const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(reso
 
 export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [processing, setProcessing] = useState<ProcessingState | null>(null);
+  const [clockNow, setClockNow] = useState(() => performance.now());
+  const sessionActiveRef = useRef(false);
+  const stepCounterRef = useRef(0);
+  const stepStartTimesRef = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    if (!processing) return;
+    const timer = window.setInterval(() => setClockNow(performance.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [processing !== null]);
+
+  const beginProcessingStep = useCallback(async (label: string): Promise<string | null> => {
+    if (!sessionActiveRef.current) return null;
+
+    const id = `processing-step-${++stepCounterRef.current}`;
+    const startedAt = performance.now();
+    stepStartTimesRef.current.set(id, startedAt);
+    setProcessing(previous => previous ? {
+      ...previous,
+      status: label,
+      steps: [
+        ...previous.steps.map(step => step.status === 'ACTIVE'
+          ? { ...step, status: 'DONE' as const, elapsedMs: performance.now() - step.startedAt }
+          : step),
+        { id, label, status: 'ACTIVE', startedAt },
+      ],
+    } : previous);
+
+    // React cannot paint while a long synchronous simulation owns the main
+    // thread. Yield for two frames before starting the phase so the player can
+    // actually see which operation is about to run.
+    await waitForPaint();
+    return id;
+  }, []);
+
+  const completeProcessingStep = useCallback(async (stepId: string | null, failed = false): Promise<void> => {
+    if (!stepId) return;
+    const finishedAt = performance.now();
+    const startedAt = stepStartTimesRef.current.get(stepId) ?? finishedAt;
+    stepStartTimesRef.current.delete(stepId);
+    setProcessing(previous => previous ? {
+      ...previous,
+      steps: previous.steps.map(step => step.id === stepId
+        ? { ...step, status: failed ? 'ERROR' : 'DONE', elapsedMs: finishedAt - startedAt }
+        : step),
+    } : previous);
+    await waitForPaint();
+  }, []);
+
+  const recordProcessingStep = useCallback((label: string, elapsedMs: number, failed = false): void => {
+    if (!sessionActiveRef.current) return;
+    const id = `processing-step-${++stepCounterRef.current}`;
+    const normalizedElapsedMs = Math.max(0, elapsedMs);
+    const finishedAt = performance.now();
+
+    // Some legacy simulations are intentionally synchronous. Their internal
+    // phases cannot repaint while they run, but recording the measured result
+    // still exposes the exact bottleneck without changing simulation order,
+    // random draws, save data or game-world rules.
+    setProcessing(previous => previous ? {
+      ...previous,
+      steps: [
+        ...previous.steps,
+        {
+          id,
+          label,
+          status: failed ? 'ERROR' : 'DONE',
+          startedAt: finishedAt - normalizedElapsedMs,
+          elapsedMs: normalizedElapsedMs,
+        },
+      ],
+    } : previous);
+  }, []);
+
+  const runProcessingStep = useCallback(async <T,>(label: string, task: () => T | Promise<T>): Promise<T> => {
+    const stepId = await beginProcessingStep(label);
+    try {
+      const result = await task();
+      await completeProcessingStep(stepId);
+      return result;
+    } catch (error) {
+      await completeProcessingStep(stepId, true);
+      throw error;
+    }
+  }, [beginProcessingStep, completeProcessingStep]);
 
   const runWithProcessing = useCallback(async <T,>(task: () => T | Promise<T>, options: ProcessingOptions = {}): Promise<T> => {
     const randomTip = getRandomProcessingTip();
@@ -148,17 +247,36 @@ export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       message: options.message ?? randomTip,
       status: options.status ?? 'Przetwarzam dane kariery',
       minVisibleMs: options.minVisibleMs ?? 350,
+      steps: [],
     };
     const startedAt = performance.now();
+    sessionActiveRef.current = true;
+    stepCounterRef.current = 0;
+    stepStartTimesRef.current.clear();
     setProcessing(nextProcessing);
     await waitForPaint();
 
     try {
       return await task();
     } finally {
+      sessionActiveRef.current = false;
+      const finishedAt = performance.now();
+      setProcessing(previous => previous ? {
+        ...previous,
+        steps: previous.steps.map(step => step.status === 'ACTIVE'
+          ? { ...step, status: 'DONE', elapsedMs: finishedAt - step.startedAt }
+          : step),
+      } : previous);
       const elapsed = performance.now() - startedAt;
       if (elapsed < nextProcessing.minVisibleMs) {
         await wait(nextProcessing.minVisibleMs - elapsed);
+      }
+      if (stepCounterRef.current > 0) {
+        // Keep completed day timings visible briefly. Other users of the global
+        // overlay (loading a game, opening the post-match studio) do not create
+        // tracked steps and therefore retain their original closing speed.
+        await waitForPaint();
+        await wait(900);
       }
       setProcessing(null);
     }
@@ -167,7 +285,11 @@ export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const value = useMemo<ProcessingContextValue>(() => ({
     isProcessing: processing !== null,
     runWithProcessing,
-  }), [processing, runWithProcessing]);
+    beginProcessingStep,
+    completeProcessingStep,
+    recordProcessingStep,
+    runProcessingStep,
+  }), [processing, runWithProcessing, beginProcessingStep, completeProcessingStep, recordProcessingStep, runProcessingStep]);
 
   return (
     <ProcessingContext.Provider value={value}>
@@ -198,6 +320,39 @@ export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             <p className="font-black italic uppercase tracking-tighter mt-5 text-xs leading-snug text-white/75">
               {processing.status}
             </p>
+            {processing.steps.length > 0 && (
+              <div className="mt-6 max-h-[280px] space-y-2 overflow-y-auto border-y border-cyan-200/10 py-3 text-left">
+                {processing.steps.map(step => {
+                  const elapsedMs = step.status === 'ACTIVE'
+                    ? Math.max(0, clockNow - step.startedAt)
+                    : (step.elapsedMs ?? 0);
+                  return (
+                    <div key={step.id} className="flex items-center gap-3 bg-white/[0.035] px-3 py-2.5">
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center border text-[11px] ${
+                          step.status === 'DONE'
+                            ? 'border-emerald-300/50 bg-emerald-500/20 text-emerald-200'
+                            : step.status === 'ERROR'
+                              ? 'border-rose-300/50 bg-rose-500/20 text-rose-200'
+                              : 'processing-step-pulse border-cyan-300/50 bg-cyan-500/20 text-cyan-100'
+                        }`}
+                      >
+                        {step.status === 'DONE' ? '✓' : step.status === 'ERROR' ? '!' : '•'}
+                      </span>
+                      <span className={`font-black italic uppercase tracking-tighter min-w-0 flex-1 text-[11px] ${
+                        step.status === 'DONE' ? 'text-emerald-100' : step.status === 'ERROR' ? 'text-rose-100' : 'text-white'
+                      }`}>
+                        {step.label}
+                      </span>
+                      <span className="font-black italic uppercase tracking-tighter shrink-0 tabular-nums text-[11px] text-cyan-100">
+                        {(elapsedMs / 1000).toFixed(1)} s
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <p className="font-black italic uppercase tracking-tighter mx-auto mt-4 max-w-[440px] text-[11px] leading-snug text-yellow-200">
               Jeśli przeglądarka pokaże komunikat, że strona nie odpowiada, nie martw się i poczekaj. Gra nadal przetwarza dane.
             </p>
@@ -228,10 +383,17 @@ export const ProcessingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               }
               .processing-progress-bar { animation: processing-progress-bar 1.35s ease-in-out infinite; will-change: transform; }
 
+              @keyframes processing-step-pulse {
+                0%, 100% { opacity: 0.55; transform: scale(0.92); }
+                50% { opacity: 1; transform: scale(1); }
+              }
+              .processing-step-pulse { animation: processing-step-pulse 0.9s ease-in-out infinite; }
+
               @media (prefers-reduced-motion: reduce) {
                 .processing-ball-idle,
                 .processing-ball-shadow,
-                .processing-progress-bar { animation-duration: 3.5s; }
+                .processing-progress-bar,
+                .processing-step-pulse { animation-duration: 3.5s; }
               }
             `}</style>
           </div>

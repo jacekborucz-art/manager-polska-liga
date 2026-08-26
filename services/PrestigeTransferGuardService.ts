@@ -261,10 +261,20 @@ export const PrestigeTransferGuardService = {
     return !PrestigeTransferGuardService.evaluateDestination(player, targetClub).blocksNegotiation;
   },
 
-  shouldConsiderDestination: (player: Player, targetClub: Club, managerChanceAdjustment = 0): boolean => {
+  shouldConsiderDestination: (
+    player: Player,
+    targetClub: Club,
+    managerChanceAdjustment = 0,
+    randomRoll?: number
+  ): boolean => {
     const assessment = PrestigeTransferGuardService.evaluateDestination(player, targetClub);
     const chance = getChanceWithManagerInfluence(assessment, managerChanceAdjustment);
-    return Math.random() <= chance;
+    // Callers normally omit randomRoll and retain the original behavior. The AI
+    // bulk-market scan may capture the roll before cheap deterministic filters
+    // and pass it here only for candidates which can actually be signed. This
+    // avoids thousands of unused prestige calculations while preserving the
+    // exact count and order of global RNG draws from the old implementation.
+    return (randomRoll ?? Math.random()) <= chance;
   },
 
   getAcceptanceChanceCap: (player: Player, targetClub: Club): number => {

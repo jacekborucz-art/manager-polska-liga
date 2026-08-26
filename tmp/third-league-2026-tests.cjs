@@ -22424,12 +22424,22 @@ var withCompetitionStats = (player, competitionId, update) => {
     }
   };
 };
+var getEventSearchClubIds = (players, scopedClubIds) => {
+  if (!scopedClubIds || scopedClubIds.length === 0) return Object.keys(players);
+  return Array.from(new Set(scopedClubIds)).filter((clubId) => Array.isArray(players[clubId]));
+};
 var PlayerStatsService = {
-  applyGoal: (players, scorerId, assistId, competitionId) => {
-    const newPlayers = { ...players };
-    for (const clubId in newPlayers) {
-      newPlayers[clubId] = newPlayers[clubId].map((p) => {
+  applyGoal: (players, scorerId, assistId, competitionId, scopedClubIds) => {
+    let newPlayers = players;
+    const foundPlayerIds = /* @__PURE__ */ new Set();
+    const updateClub = (clubId) => {
+      const squad = newPlayers[clubId];
+      if (!squad) return;
+      let changed = false;
+      const updatedSquad = squad.map((p) => {
         if (p.id === scorerId) {
+          foundPlayerIds.add(scorerId);
+          changed = true;
           const aggregated = {
             ...p,
             stats: { ...p.stats, goals: p.stats.goals + 1 }
@@ -22441,6 +22451,8 @@ var PlayerStatsService = {
           ));
         }
         if (assistId && p.id === assistId) {
+          foundPlayerIds.add(assistId);
+          changed = true;
           const aggregated = {
             ...p,
             stats: { ...p.stats, assists: p.stats.assists + 1 }
@@ -22453,14 +22465,35 @@ var PlayerStatsService = {
         }
         return p;
       });
+      if (changed) {
+        if (newPlayers === players) newPlayers = { ...players };
+        newPlayers[clubId] = updatedSquad;
+      }
+    };
+    const primaryClubIds = getEventSearchClubIds(players, scopedClubIds);
+    primaryClubIds.forEach(updateClub);
+    const requiredPlayerIds = /* @__PURE__ */ new Set([scorerId, ...assistId ? [assistId] : []]);
+    if (scopedClubIds && [...requiredPlayerIds].some((id) => !foundPlayerIds.has(id))) {
+      const primarySet = new Set(primaryClubIds);
+      for (const clubId of Object.keys(players)) {
+        if (primarySet.has(clubId)) continue;
+        updateClub(clubId);
+        if ([...requiredPlayerIds].every((id) => foundPlayerIds.has(id))) break;
+      }
     }
     return newPlayers;
   },
-  applyCard: (players, playerId, type, competitionId) => {
-    const newPlayers = { ...players };
-    for (const clubId in newPlayers) {
-      newPlayers[clubId] = newPlayers[clubId].map((p) => {
+  applyCard: (players, playerId, type, competitionId, scopedClubIds) => {
+    let newPlayers = players;
+    let playerFound = false;
+    const updateClub = (clubId) => {
+      const squad = newPlayers[clubId];
+      if (!squad) return;
+      let changed = false;
+      const updatedSquad = squad.map((p) => {
         if (p.id === playerId) {
+          playerFound = true;
+          changed = true;
           let yellowCards = p.stats.yellowCards;
           let redCards = p.stats.redCards;
           let suspensionMatches = p.suspensionMatches;
@@ -22491,6 +22524,20 @@ var PlayerStatsService = {
         }
         return p;
       });
+      if (changed) {
+        if (newPlayers === players) newPlayers = { ...players };
+        newPlayers[clubId] = updatedSquad;
+      }
+    };
+    const primaryClubIds = getEventSearchClubIds(players, scopedClubIds);
+    primaryClubIds.forEach(updateClub);
+    if (scopedClubIds && !playerFound) {
+      const primarySet = new Set(primaryClubIds);
+      for (const clubId of Object.keys(players)) {
+        if (primarySet.has(clubId)) continue;
+        updateClub(clubId);
+        if (playerFound) break;
+      }
     }
     return newPlayers;
   },

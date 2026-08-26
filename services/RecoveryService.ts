@@ -24,15 +24,72 @@ const getPlayerHealingDelayFactor = (player: Player): number => {
   return 1 + strengthDelay + ageDelay;
 };
 
+const FREE_AGENT_BUCKET_ID = 'FREE_AGENTS';
+
+/**
+ * A WeakMap is deliberately used instead of persisted game state. Once a
+ * FREE_AGENTS array is proven to contain only fully recovered players with no
+ * date-driven recovery fields, later days can reuse it without visiting 15k+
+ * dormant records. Any signing, release, injury, call-up or negotiation replaces
+ * the array and therefore invalidates the cache automatically. Save files do
+ * not change and loading a save simply rebuilds this knowledge on the first day.
+ */
+const settledFreeAgentPools = new WeakMap<Player[], string>();
+
+const getRecoveryCacheSignature = (intensity: TrainingIntensity, recoveryMult: number): string =>
+  `${intensity}:${recoveryMult.toFixed(6)}`;
+
+const hasSameStringEntries = (
+  left?: Record<string, string>,
+  right?: Record<string, string>
+): boolean => {
+  if (left === right) return true;
+  const leftEntries = Object.entries(left ?? {});
+  const rightEntries = Object.entries(right ?? {});
+  if (leftEntries.length !== rightEntries.length) return false;
+  return leftEntries.every(([key, value]) => right?.[key] === value);
+};
+
+const hasSameHealth = (left: Player['health'], right: Player['health']): boolean => {
+  if (left.status !== right.status) return false;
+  if (!left.injury || !right.injury) return left.injury === right.injury;
+  return (
+    left.injury.type === right.injury.type &&
+    left.injury.daysRemaining === right.injury.daysRemaining &&
+    left.injury.severity === right.injury.severity &&
+    left.injury.injuryDate === right.injury.injuryDate &&
+    left.injury.totalDays === right.injury.totalDays &&
+    left.injury.conditionAtInjury === right.injury.conditionAtInjury
+  );
+};
+
+const isRecoverySettled = (player: Player): boolean =>
+  player.health.status !== HealthStatus.INJURED &&
+  (player.fatigueDebt ?? 0) <= 0 &&
+  player.condition >= 100 &&
+  !player.nationalTeamRecoveryUntil &&
+  !player.nationalTeamMajorTournamentRecoveryUntil &&
+  !player.negotiationLockoutUntil &&
+  Object.keys(player.freeAgentClubLockouts ?? {}).length === 0;
+
 export const RecoveryService = {
   /**
    * Wykonuje dobową regenerację dla wszystkich zawodników.
    * daysCount: pozwala na precyzyjne odliczanie czasu.
    */
   applyDailyRecovery: (playersMap: Record<string, Player[]>, currentDate: Date, intensity: TrainingIntensity, daysCount: number = 1, recoveryMult: number = 1.0, medicalQuality?: number, userTeamId?: string): Record<string, Player[]> => {
-    const updatedMap = { ...playersMap };
+    let updatedMap = playersMap;
+    const recoveryCacheSignature = getRecoveryCacheSignature(intensity, recoveryMult);
 
-    for (const clubId in updatedMap) {
+    for (const clubId in playersMap) {
+      const sourceSquad = playersMap[clubId];
+      if (
+        clubId === FREE_AGENT_BUCKET_ID &&
+        settledFreeAgentPools.get(sourceSquad) === recoveryCacheSignature
+      ) {
+        continue;
+      }
+
       const effectiveMedicalQuality = (userTeamId && clubId === userTeamId) ? medicalQuality : undefined;
       const medicalSpeedFactor = (() => {
         if (!effectiveMedicalQuality) return 1.0;
@@ -42,8 +99,18 @@ export const RecoveryService = {
         if (q >= 10) return 1.05 + (q - 10) / 4 * 0.07;
         return 1.00 + (q - 1) / 9 * 0.05;
       })();
-      updatedMap[clubId] = updatedMap[clubId].map(player => {
-        const updated = { ...player };
+      let updatedSquad: Player[] | null = null;
+      for (let playerIndex = 0; playerIndex < sourceSquad.length; playerIndex++) {
+        const player = sourceSquad[playerIndex];
+        // Clone the nested injury record before changing daysRemaining/severity.
+        // The previous shallow clone could mutate the source save object while
+        // supposedly producing a new daily state.
+        const updated: Player = {
+          ...player,
+          health: player.health.injury
+            ? { ...player.health, injury: { ...player.health.injury } }
+            : player.health,
+        };
         const recoveryUntil = player.nationalTeamRecoveryUntil
           ? new Date(player.nationalTeamRecoveryUntil).setHours(23, 59, 59, 999)
           : 0;
@@ -162,15 +229,41 @@ export const RecoveryService = {
 
         if (updated.freeAgentClubLockouts) {
           const currentSimDate = new Date(currentDate).setHours(0, 0, 0, 0);
-          updated.freeAgentClubLockouts = Object.fromEntries(
+          const activeClubLockouts = Object.fromEntries(
             Object.entries(updated.freeAgentClubLockouts).filter(([, lockoutUntil]) =>
               new Date(lockoutUntil).setHours(0, 0, 0, 0) > currentSimDate
             )
           );
+          if (!hasSameStringEntries(updated.freeAgentClubLockouts, activeClubLockouts)) {
+            updated.freeAgentClubLockouts = activeClubLockouts;
+          }
         }
 
-        return updated;
-      });
+        const playerChanged =
+          updated.fatigueDebt !== player.fatigueDebt ||
+          updated.condition !== player.condition ||
+          !hasSameHealth(updated.health, player.health) ||
+          updated.nationalTeamRecoveryUntil !== player.nationalTeamRecoveryUntil ||
+          updated.nationalTeamMajorTournamentRecoveryUntil !== player.nationalTeamMajorTournamentRecoveryUntil ||
+          updated.negotiationLockoutUntil !== player.negotiationLockoutUntil ||
+          !hasSameStringEntries(updated.freeAgentClubLockouts, player.freeAgentClubLockouts);
+
+        const nextPlayer = playerChanged ? updated : player;
+        if (nextPlayer !== player && !updatedSquad) {
+          updatedSquad = sourceSquad.slice(0, playerIndex);
+        }
+        if (updatedSquad) updatedSquad.push(nextPlayer);
+      }
+
+      const finalSquad = updatedSquad ?? sourceSquad;
+      if (finalSquad !== sourceSquad) {
+        if (updatedMap === playersMap) updatedMap = { ...playersMap };
+        updatedMap[clubId] = finalSquad;
+      }
+
+      if (clubId === FREE_AGENT_BUCKET_ID && finalSquad.every(isRecoverySettled)) {
+        settledFreeAgentPools.set(finalSquad, recoveryCacheSignature);
+      }
     }
 
     return updatedMap;

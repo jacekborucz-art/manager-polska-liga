@@ -158,12 +158,27 @@ const applyMatchOutputToPlayers = (
 
   result.scorers.forEach(scorer => {
     if (!scorer.isMiss && !scorer.varDisallowed) {
-      nextPlayers = PlayerStatsService.applyGoal(nextPlayers, scorer.playerId, scorer.assistId);
+      // Hidden third-league matches use the same scoped statistic path as the
+      // main background engine. No unrelated squad or free-agent record needs
+      // to be visited for an event from this fixture.
+      nextPlayers = PlayerStatsService.applyGoal(
+        nextPlayers,
+        scorer.playerId,
+        scorer.assistId,
+        undefined,
+        [homeClubId, awayClubId]
+      );
     }
   });
 
   result.cards.forEach(card => {
-    nextPlayers = PlayerStatsService.applyCard(nextPlayers, card.playerId, card.type);
+    nextPlayers = PlayerStatsService.applyCard(
+      nextPlayers,
+      card.playerId,
+      card.type,
+      undefined,
+      [homeClubId, awayClubId]
+    );
   });
 
   if (result.awayScore === 0) {
