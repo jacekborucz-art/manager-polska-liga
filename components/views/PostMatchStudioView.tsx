@@ -7,8 +7,6 @@ import { PostMatchCommentSelector } from '../../PolishCupEngine/PostMatchComment
 import { KitSelectionService } from '../../services/KitSelectionService';
 import { DebugLoggerService } from '../../services/DebugLoggerService';
 import { MatchReportModalPolishLeague } from '../modals/MatchReportModalPolishLeague';
-import { PostMatchPressConferenceModal } from '../modals/PostMatchPressConferenceModal';
-import type { PostMatchConferenceOutcome } from '../../services/PostMatchPressConferenceService';
 import { KitPreview } from '../common/KitPreview';
 import { ThirdLeagueRoundPanel } from './postmatch/ThirdLeagueRoundPanel';
 
@@ -20,8 +18,6 @@ export const PostMatchStudioView: React.FC = () => {
   const [pageIndex, setPageIndex] = useState(1);
   const [showExpertModal, setShowExpertModal] = useState(false);
   const [reportMatchId, setReportMatchId] = useState<string | null>(null);
-  const [showPostMatchPressConference, setShowPostMatchPressConference] = useState(false);
-  const [postMatchConferenceOutcome, setPostMatchConferenceOutcome] = useState<PostMatchConferenceOutcome | null>(null);
   const [showThirdLeagueRound, setShowThirdLeagueRound] = useState(false);
 
   if (!lastMatchSummary) return null;
@@ -580,25 +576,6 @@ export const PostMatchStudioView: React.FC = () => {
                 </span>
               </button>
 
-              <button
-                type="button"
-                disabled={!!postMatchConferenceOutcome}
-                onClick={() => {
-                  if (postMatchConferenceOutcome) return;
-                  setShowPostMatchPressConference(true);
-                }}
-                className={`group relative px-8 py-4 border-t border-x border-b transition-all rounded-2xl active:translate-y-[2px] ${
-                  postMatchConferenceOutcome
-                    ? 'bg-emerald-500/15 border-t-emerald-300/30 border-x-emerald-400/20 border-b-black/60 cursor-not-allowed opacity-75 active:translate-y-0'
-                    : 'bg-cyan-500/15 border-t-cyan-300/30 border-x-cyan-400/20 border-b-black/60 hover:bg-cyan-500/25'
-                }`}
-               style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.5), 0 6px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' }}
-             >
-                <span className={`relative z-10 font-black italic uppercase tracking-tighter text-sm ${postMatchConferenceOutcome ? 'text-emerald-200' : 'text-cyan-100'}`}>
-                  {postMatchConferenceOutcome ? 'KONFERENCJA ZAKOŃCZONA' : 'KONFERENCJA PRASOWA'}
-                </span>
-             </button>
-
              <button
                onClick={() => setPageIndex(2)}
                className="group relative px-12 py-4 bg-white/5 border-t border-x border-b border-t-white/20 border-x-white/10 border-b-black/60 hover:bg-white/10 transition-all rounded-2xl active:translate-y-[2px]"
@@ -695,14 +672,6 @@ export const PostMatchStudioView: React.FC = () => {
       </div>
 
       <MatchReportModalPolishLeague matchId={reportMatchId} onClose={() => setReportMatchId(null)} />
-      {showPostMatchPressConference && (
-        <PostMatchPressConferenceModal
-          summary={lastMatchSummary}
-          onClose={() => setShowPostMatchPressConference(false)}
-          onComplete={setPostMatchConferenceOutcome}
-        />
-      )}
-
       {/* EXPERT COMMENT MODAL */}
       {showExpertModal && (
         <div

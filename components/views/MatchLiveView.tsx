@@ -17,7 +17,8 @@ import {
   UserCoachShoutId,
   Referee,
   Fixture,
-  WeatherSnapshot
+  WeatherSnapshot,
+  StaffRole
 } from '../../types';
 import { rollInjuryBySeverity } from '../../services/InjuryCatalog';
 import { PlayerMoraleService } from '../../services/PlayerMoraleService';
@@ -146,6 +147,13 @@ import { PreMatchBriefingModal } from '../modals/PreMatchBriefingModal';
 import { BriefingEffect, calculateAiCoachBriefingEffect } from '../../services/PreMatchBriefingService';
 import { PostMatchDebriefModal } from '../modals/PostMatchDebriefModal';
 import { DebriefEffect, DebriefContext, getDebriefContext } from '../../services/PostMatchDebriefService';
+import { PostMatchMediaDecisionModal } from '../modals/PostMatchMediaDecisionModal';
+import { PostMatchPressConferenceModal } from '../modals/PostMatchPressConferenceModal';
+import {
+  PostMatchMediaDecision,
+  PostMatchMediaDecisionService,
+} from '../../services/PostMatchMediaDecisionService';
+import type { PostMatchConferenceOutcome } from '../../services/PostMatchPressConferenceService';
 import { PlayerPositionFitService } from '../../services/PlayerPositionFitService';
 import { PlayerClubAdaptationService } from '../../services/PlayerClubAdaptationService';
 import { PreMatchPressConferenceService } from '../../services/PreMatchPressConferenceService';
@@ -811,7 +819,8 @@ export const MatchLiveView = () => {
     lineups, currentDate, setLastMatchSummary, applySimulationResult, viewPlayerDetails,seasonNumber, coaches, staffMembers,
     roundResults, setClubs,
     activeMatchState: matchState, setActiveMatchState: setMatchState,
-    pendingMatchKits, pressConferenceEffects
+    pendingMatchKits, pressConferenceEffects, managerProfile, messages,
+    setMediaRelationships, addPendingPressArticle
   } = useGame();
   const { isPreparingStudio, openPostMatchStudio } = usePostMatchStudioProcessing();
   
@@ -871,6 +880,11 @@ export const MatchLiveView = () => {
   const pendingVarGoalRef = useRef<{ side: 'HOME' | 'AWAY', scorerName: string, scorerId?: string, teamName: string, minute: number } | null>(null);
   const [isHalftimeTalkOpen, setIsHalftimeTalkOpen] = useState(false);
   const [showPostMatchDebrief, setShowPostMatchDebrief] = useState(false);
+  const [showPostMatchMediaDecision, setShowPostMatchMediaDecision] = useState(false);
+  const [postMatchMediaDecision, setPostMatchMediaDecision] = useState<PostMatchMediaDecision | null>(null);
+  const [showPostMatchPressConference, setShowPostMatchPressConference] = useState(false);
+  const [pendingDebriefEffect, setPendingDebriefEffect] = useState<DebriefEffect | null>(null);
+  const postMatchFinalizationRef = useRef(false);
   const [aiCoachBubble, setAiCoachBubble] = useState<{ text: string; fading: boolean } | null>(null);
   const lastAiCoachAnnouncementRef = useRef<string | null>(null);
   const [pendingFinishPayload, setPendingFinishPayload] = useState<{
@@ -957,6 +971,19 @@ export const MatchLiveView = () => {
     if (!ctx || !userTeamId) return 'HOME';
     return ctx.homeClub.id === userTeamId ? 'HOME' : 'AWAY';
   }, [ctx, userTeamId]);
+
+  const assistantCoach = useMemo(() => {
+    if (!userTeamId) return null;
+    const userClub = clubs.find(club => club.id === userTeamId);
+    if (!userClub) return null;
+    return (userClub.staffIds ?? [])
+      .map(staffId => staffMembers[staffId])
+      .find(staff => staff?.role === StaffRole.ASSISTANT_COACH && staff.currentClubId === userTeamId) ?? null;
+  }, [clubs, staffMembers, userTeamId]);
+
+  const managerDisplayName = managerProfile
+    ? `${managerProfile.firstName} ${managerProfile.lastName}`.trim()
+    : 'Trener zespołu';
 
   useEffect(() => {
     if (!matchState || !ctx) {
@@ -1979,23 +2006,155 @@ events: [], homeGoals: [], awayGoals: [], flashMessage: null,
     setIsHalftimeTalkOpen(false);
   };
 
-  const handleDebriefClose = (effect: DebriefEffect) => {
-    if (!pendingFinishPayload) return;
+  const finalizePostMatch = (
+    effect: DebriefEffect,
+    conferenceOutcome?: PostMatchConferenceOutcome,
+    decisionOverride?: PostMatchMediaDecision
+  ) => {
+    if (!pendingFinishPayload || postMatchFinalizationRef.current) return;
+    // The final answer button can receive two DOM clicks before React unmounts the modal.
+    // This synchronous guard prevents duplicate mail, morale and match-history commits.
+    postMatchFinalizationRef.current = true;
     const args = pendingFinishPayload.matchHistoryArgs;
     const userScore = args.homeTeamId === pendingFinishPayload.userTeamId ? args.homeScore : args.awayScore;
     const oppScore = args.homeTeamId === pendingFinishPayload.userTeamId ? args.awayScore : args.homeScore;
     const pressureEffect = adjustDebriefEffectForPressure(effect, userPressureProfile, userScore - oppScore);
+    const userClubBeforeMedia = pendingFinishPayload.simResultMerged.updatedClubs.find(
+      (club: any) => club.id === pendingFinishPayload.userTeamId
+    );
+    const userSquadBeforeMedia = pendingFinishPayload.simResultMerged.updatedPlayers[pendingFinishPayload.userTeamId] ?? [];
+    const userIsHome = args.homeTeamId === pendingFinishPayload.userTeamId;
+    const startingXIIds = (userIsHome ? args.homeLineup : args.awayLineup).filter((id: unknown): id is string => typeof id === 'string');
+
+    /*
+     * Media consequences are resolved only once, immediately before the single final
+     * simulation commit. This keeps the post-match flow save-safe: the club table,
+     * player map, morale, board confidence and match history all enter React state as
+     * one coherent result instead of being partially changed by several modal callbacks.
+     */
+    // A freshly clicked decision is passed explicitly because React state updates are
+    // asynchronous. This prevents IGNORE/DELEGATE from being finalized as an old choice.
+    const resolvedMediaDecision = decisionOverride ?? postMatchMediaDecision;
+    const nonAttendanceResolution =
+      resolvedMediaDecision && resolvedMediaDecision !== 'ATTEND' && userClubBeforeMedia
+        ? PostMatchMediaDecisionService.resolveNonAttendance({
+            decision: resolvedMediaDecision,
+            summary: pendingFinishPayload.summary,
+            userClub: userClubBeforeMedia,
+            squad: userSquadBeforeMedia,
+            startingXIIds,
+            managerName: managerDisplayName,
+            assistant: resolvedMediaDecision === 'DELEGATE' ? assistantCoach : null,
+            currentDate,
+            recentAbsenceCount: PostMatchMediaDecisionService.countRecentAbsences(messages, currentDate),
+          })
+        : null;
+
+    const mediaClubMoraleDelta = nonAttendanceResolution?.clubMoraleDelta
+      ?? conferenceOutcome?.teamMoraleDelta
+      ?? 0;
+    const boardConfidenceDelta = nonAttendanceResolution?.boardConfidenceDelta ?? 0;
     const finalUpdatedClubs = pendingFinishPayload.simResultMerged.updatedClubs.map((c: any) => {
       if (c.id !== pendingFinishPayload.userTeamId) return c;
-      const newMorale = Math.max(5, Math.min(95, Math.round((c.morale ?? 50) + pressureEffect.moraleDelta)));
-      return { ...c, morale: newMorale };
+      const newMorale = Math.max(5, Math.min(95, Math.round(
+        (c.morale ?? 50) + pressureEffect.moraleDelta + mediaClubMoraleDelta
+      )));
+      const nextBoardConfidence = Math.max(0, Math.min(100,
+        (c.boardConfidence ?? 50) + boardConfidenceDelta
+      ));
+      return { ...c, morale: newMorale, boardConfidence: nextBoardConfidence };
     });
-    applySimulationResult({ ...pendingFinishPayload.simResultMerged, updatedClubs: finalUpdatedClubs });
+
+    const participantIds = new Set(
+      (userIsHome ? pendingFinishPayload.summary.homePlayers : pendingFinishPayload.summary.awayPlayers)
+        .map(performance => performance.playerId)
+    );
+    const finalUpdatedPlayers = {
+      ...pendingFinishPayload.simResultMerged.updatedPlayers,
+      [pendingFinishPayload.userTeamId]: userSquadBeforeMedia.map((player: Player) => {
+        if (!participantIds.has(player.id)) return player;
+        const delta = nonAttendanceResolution?.playerMoraleDeltas[player.id]
+          ?? conferenceOutcome?.teamMoraleDelta
+          ?? 0;
+        return PlayerMoraleService.withMoraleChange(
+          player,
+          delta,
+          nonAttendanceResolution
+            ? nonAttendanceResolution.decision === 'IGNORE'
+              ? 'Zignorowanie mediów po meczu'
+              : 'Konferencja przekazana asystentowi'
+            : 'Wypowiedzi na konferencji pomeczowej',
+          currentDate
+        );
+      }),
+    };
+
+    if (nonAttendanceResolution) {
+      addPendingPressArticle({
+        mail: nonAttendanceResolution.article,
+        deliveryDate: nonAttendanceResolution.deliveryDate,
+      });
+      setMediaRelationships(previous => {
+        const current = previous[nonAttendanceResolution.newspaper] ?? 50;
+        return {
+          ...previous,
+          [nonAttendanceResolution.newspaper]: Math.max(0, Math.min(100,
+            current + nonAttendanceResolution.mediaRelationshipDelta
+          )),
+        };
+      });
+    } else if (conferenceOutcome) {
+      const reporter = PostMatchMediaDecisionService.getJournalist(pendingFinishPayload.summary.matchId);
+      const relationshipDelta = PostMatchMediaDecisionService.getConferenceMediaDelta(conferenceOutcome);
+      setMediaRelationships(previous => ({
+        ...previous,
+        [reporter.newspaper]: Math.max(0, Math.min(100,
+          (previous[reporter.newspaper] ?? 50) + relationshipDelta
+        )),
+      }));
+    }
+
+    applySimulationResult({
+      ...pendingFinishPayload.simResultMerged,
+      updatedClubs: finalUpdatedClubs,
+      updatedPlayers: finalUpdatedPlayers,
+    });
     MatchHistoryService.logMatch(pendingFinishPayload.matchHistoryArgs);
     setMatchState(null);
     setShowPostMatchDebrief(false);
+    setShowPostMatchMediaDecision(false);
+    setShowPostMatchPressConference(false);
     setPendingFinishPayload(null);
+    setPendingDebriefEffect(null);
+    setPostMatchMediaDecision(null);
     navigateTo(ViewState.MATCH_POST);
+  };
+
+  const handleDebriefClose = (effect: DebriefEffect) => {
+    /*
+     * The media question belongs after the dressing-room debrief and before the studio.
+     * Keep the simulated match payload untouched while the player chooses who will face
+     * the press; one final commit is still performed only after that branch is complete.
+     */
+    setPendingDebriefEffect(effect);
+    setShowPostMatchDebrief(false);
+    setShowPostMatchMediaDecision(true);
+  };
+
+  const handlePostMatchConferenceComplete = (outcome: PostMatchConferenceOutcome) => {
+    if (!pendingDebriefEffect) return;
+    finalizePostMatch(pendingDebriefEffect, outcome, 'ATTEND');
+  };
+
+  const handlePostMatchMediaDecision = (decision: PostMatchMediaDecision) => {
+    setPostMatchMediaDecision(decision);
+    setShowPostMatchMediaDecision(false);
+    if (decision === 'ATTEND') {
+      setShowPostMatchPressConference(true);
+      return;
+    }
+    if (!pendingDebriefEffect) return;
+    finalizePostMatch(pendingDebriefEffect, undefined, decision);
   };
 
   useEffect(() => {
@@ -7680,6 +7839,23 @@ const hasScored = matchState.homeGoals.some(g => !g.isOwnGoal && (g.scorerId ? g
         awayClubColors={pendingFinishPayload.summary.awayClub.colorsHex}
         sessionSeed={pendingFinishPayload.sessionSeed}
         leagueMotivationContext={leagueMotivationContext}
+      />
+    )}
+
+    {showPostMatchMediaDecision && ctx && (
+      <PostMatchMediaDecisionModal
+        matchId={ctx.fixture.id}
+        managerName={managerDisplayName}
+        assistant={assistantCoach}
+        onDecision={handlePostMatchMediaDecision}
+      />
+    )}
+
+    {showPostMatchPressConference && pendingFinishPayload && (
+      <PostMatchPressConferenceModal
+        summary={pendingFinishPayload.summary}
+        onClose={() => setShowPostMatchPressConference(false)}
+        onComplete={handlePostMatchConferenceComplete}
       />
     )}
 
