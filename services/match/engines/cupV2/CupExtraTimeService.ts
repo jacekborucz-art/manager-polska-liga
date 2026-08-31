@@ -1,4 +1,10 @@
+import { MatchEventType } from '../../../../types';
 import type { CupEngineConfig, CupRuntimeState } from './CupMatchTypes';
+
+type AddedTimeWindow = {
+  fromSecond?: number;
+  toSecond?: number;
+};
 
 export const CupExtraTimeService = {
   /**
@@ -12,15 +18,24 @@ export const CupExtraTimeService = {
   shouldPlayPenaltyShootout: (state: CupRuntimeState, config: CupEngineConfig): boolean =>
     config.enablePenaltyShootout && state.homeScore === state.awayScore,
 
-  getAddedTimeSeconds: (state: CupRuntimeState): number => {
+  getAddedTimeSeconds: (state: CupRuntimeState, window: AddedTimeWindow = {}): number => {
+    const fromSecond = window.fromSecond ?? 0;
+    const toSecond = window.toSecond ?? state.second;
+    const periodEvents = state.events.filter(event => event.second >= fromSecond && event.second < toSecond);
+    const count = (type: MatchEventType): number =>
+      periodEvents.filter(event => event.type === type).length;
+    const goals = count(MatchEventType.GOAL) + count(MatchEventType.ONE_ON_ONE_GOAL) + count(MatchEventType.PENALTY_SCORED);
+    const injuries = count(MatchEventType.INJURY_LIGHT) + count(MatchEventType.INJURY_SEVERE);
+
+    // Count only incidents from the requested half. Reading cumulative match
+    // statistics here would charge first-half interruptions again after 90'.
     const eventsCost =
-      (state.stats.HOME.goals + state.stats.AWAY.goals) * 35 +
-      (state.stats.HOME.yellowCards + state.stats.AWAY.yellowCards) * 18 +
-      (state.stats.HOME.redCards + state.stats.AWAY.redCards) * 45 +
-      (state.stats.HOME.injuries + state.stats.AWAY.injuries) * 55 +
-      (state.substitutionsUsed.HOME + state.substitutionsUsed.AWAY) * 25;
+      goals * 35 +
+      count(MatchEventType.YELLOW_CARD) * 18 +
+      count(MatchEventType.RED_CARD) * 45 +
+      injuries * 55 +
+      count(MatchEventType.SUBSTITUTION) * 25;
 
     return Math.max(60, Math.min(420, eventsCost));
   },
 };
-

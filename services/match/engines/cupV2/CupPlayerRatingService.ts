@@ -85,6 +85,25 @@ const creationImpact = (entry: CupPlayerMatchStats): number =>
   entry.foulsWon * 0.035 -
   entry.offsides * 0.055;
 
+const possessionImpact = (entry: CupPlayerMatchStats): number => {
+  const accuracy = entry.passesAttempted > 0
+    ? entry.passesCompleted / entry.passesAttempted
+    : 0.72;
+  const accuracyImpact = entry.passesAttempted >= 5
+    ? clamp((accuracy - 0.72) * 0.32, -0.18, 0.12)
+    : 0;
+  return (
+    accuracyImpact +
+    Math.min(0.10, entry.passesCompleted * 0.002) +
+    entry.controls * 0.001 +
+    entry.dribblesCompleted * 0.020 -
+    Math.max(0, entry.dribblesAttempted - entry.dribblesCompleted) * 0.018 +
+    entry.crossesCompleted * 0.012 +
+    entry.turnoversWon * 0.025 -
+    entry.turnoversLost * 0.035
+  );
+};
+
 const goalkeeperImpact = (entry: CupPlayerMatchStats, opponentScore: number): number => {
   if (entry.position !== PlayerPosition.GK) return 0;
 
@@ -113,7 +132,10 @@ const defensiveImpact = (entry: CupPlayerMatchStats, opponentScore: number): num
       ? entry.position === PlayerPosition.DEF ? 0.16 : entry.position === PlayerPosition.MID ? 0.08 : 0.03
       : 0;
 
-  return cleanSheet - concessionPenalty;
+  return cleanSheet - concessionPenalty +
+    entry.tacklesWon * 0.025 +
+    entry.shotsBlocked * 0.045 +
+    entry.reboundsWon * 0.008;
 };
 
 const disciplineImpact = (entry: CupPlayerMatchStats): number =>
@@ -152,6 +174,7 @@ export const CupPlayerRatingService = {
       fatigueImpact(entry.minutesPlayed, finalFatigue) +
       attackingImpact(entry) +
       creationImpact(entry) +
+      possessionImpact(entry) +
       goalkeeperImpact(entry, opponentScore) +
       defensiveImpact(entry, opponentScore) +
       disciplineImpact(entry) +

@@ -66,6 +66,7 @@ MysteryAgentBoardRequestResult,
 ReserveReleaseDirective,
 SportingDirectorContractVetoAction,
 SportingDirectorContractVetoActionResult,
+PendingLeagueMatchEngineSelection,
 } from '../types';
 import { StadiumExpansionService } from '../services/StadiumExpansionService';
 import { TrainingFacilityService } from '../services/TrainingFacilityService';
@@ -1167,6 +1168,8 @@ interface GameContextType {
   navigateWithoutHistory: (view: ViewState) => void;
   pendingMatchKits: { fixtureId: string; kits: KitSelection } | null;
   setPendingMatchKits: React.Dispatch<React.SetStateAction<{ fixtureId: string; kits: KitSelection } | null>>;
+  pendingLeagueMatchEngine: PendingLeagueMatchEngineSelection | null;
+  setPendingLeagueMatchEngine: React.Dispatch<React.SetStateAction<PendingLeagueMatchEngineSelection | null>>;
   updateLineup: (clubId: string, lineup: Lineup) => void;
   viewClubDetails: (clubId: string) => void;
   viewPlayerDetails: (playerId: string) => void;
@@ -1605,6 +1608,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [seasonNumber, setSeasonNumber] = useState<number>(1);
   const [activeMatchState, setActiveMatchState] = useState<MatchLiveState | null>(null);
   const [pendingMatchKits, setPendingMatchKits] = useState<{ fixtureId: string; kits: KitSelection } | null>(null);
+  /*
+   * Match Engine 2.0 is an opt-in prototype. Keep its choice in session memory
+   * instead of SaveState so every loaded/legacy save safely defaults to 1.0.
+   * The fixture id prevents a choice from leaking into the next league match.
+   */
+  const [pendingLeagueMatchEngine, setPendingLeagueMatchEngine] = useState<PendingLeagueMatchEngineSelection | null>(null);
   const generatedSquadCacheRef = React.useRef<Record<string, Player[]>>({});
   const activeEditorDatapackRef = React.useRef<unknown | null>(null);
   const [datapackCareerStartYear, setDatapackCareerStartYear] = useState<number | null>(null);
@@ -2575,6 +2584,8 @@ const getOrGenerateSquad = useCallback((clubId: string): Player[] => {
 
     activeEditorDatapackRef.current = null;
     setDatapackCareerStartYear(null);
+    setPendingMatchKits(null);
+    setPendingLeagueMatchEngine(null);
     const startYear = careerStartYear;
     const careerStartDate = new Date(startYear, 6, 1);
     const initialPolishEuropeanQualification = PolishEuropeanQualificationService.getInitialQualification(startYear);
@@ -4212,6 +4223,9 @@ if (userTeamId) {
 
   const loadGameFromFile = (data: SaveState): void => {
     activeEditorDatapackRef.current = null;
+    // Engine selection is a live-session decision, never persisted save data.
+    setPendingMatchKits(null);
+    setPendingLeagueMatchEngine(null);
     setDatapackCareerStartYear(data.datapackCareerStartYear ?? null);
     const loadedDate = data.currentDate instanceof Date ? data.currentDate : new Date(data.currentDate);
     const loadedSeasonStartYear = data.seasonTemplate?.seasonStartYear
@@ -20875,7 +20889,7 @@ const finalizeFreeAgentContract = useCallback((mailId: string, bypassDirectorApp
       managerProfile, managerJobOffers, activeManagerContract, managerContractNegotiation, seasonNumber, activeMatchState, messages, activeTrainingId, cupParticipants, activeCupDraw, activePlayoffDraw, confirmPlayoffDraw,
       activeIntensity, setTrainingIntensity: setActiveIntensity, trainingProgressHistory, reserveProgressHistory,
       startNewGame, getSaveState, loadGameFromFile, importEditorFullPack, saveManagerProfile, selectUserTeam, beginInitialManagerContractNegotiation, submitManagerContractProposal, signAgreedManagerContract, closeManagerContractNegotiation, advanceDay: advanceDayWithProcessing, jumpToDate, jumpToNextEvent, navigateTo, navigateWithoutHistory, updateLineup, viewClubDetails, viewPlayerDetails, viewRefereeDetails, getOrGenerateSquad,
-      setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits,
+      setPlayers, setClubs, setCoaches, setStaffMembers, setLastMatchSummary, addRoundResults, applySimulationResult, setActiveMatchState, pendingMatchKits, setPendingMatchKits, pendingLeagueMatchEngine, setPendingLeagueMatchEngine,
       pendingFriendlyRequests, addFriendlyRequest, cancelFriendly,
       aiFriendlyPairs, aiFriendlyReports, aiFriendlyReportsDateFilter, setAiFriendlyReportsDateFilter,
       activeFriendlyFixtureId, activeFriendlyConditions, setActiveFriendlyConditions,

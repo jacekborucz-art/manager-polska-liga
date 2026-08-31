@@ -27,7 +27,9 @@
       "Bash(rm -f \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\\\\tsconfig.strict.temp.json\")",
       "Bash(cat)",
       "Bash(echo \"exit:$?\")",
-      "Bash(cd \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\" && rm -f ./scratch_board_repro.ts *)"
+      "Bash(cd \"c:\\\\Users\\\\Jack Cave\\\\Documents\\\\FM google studio\\\\Last version\" && rm -f ./scratch_board_repro.ts *)",
+      "Bash(npm run *)",
+      "Bash(npx esbuild *)"
     ]
   }
 }

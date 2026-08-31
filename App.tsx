@@ -8,7 +8,7 @@ import { PreGameDatapackEditorView } from './components/views/PreGameDatapackEdi
 import { Dashboard } from './components/views/Dashboard';
 import { LeagueTables } from './components/views/LeagueTables';
 import { MatchView } from './components/views/MatchView';
-import { MatchLiveView } from './components/views/MatchLiveView';
+import { LeagueMatchEngineRouter } from './components/match/LeagueMatchEngineRouter';
 import { PreMatchStudioView } from './components/views/PreMatchStudioView';
 import { SquadView } from './components/views/SquadView';
 import { ClubDetails } from './components/views/ClubDetails';
@@ -510,7 +510,7 @@ case ViewState.CL_GROUP_DRAW:
       case ViewState.PRE_MATCH_STUDIO:
         return <PreMatchStudioView />;
       case ViewState.MATCH_LIVE:
-        return <MatchLiveView />;
+        return <LeagueMatchEngineRouter />;
       case ViewState.MATCH_POST:
         return <PostMatchStudioView />;
       case ViewState.MATCH_PREVIEW:

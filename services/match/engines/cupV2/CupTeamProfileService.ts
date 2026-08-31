@@ -60,11 +60,21 @@ export const CupTeamProfileService = {
     injuries: Record<string, CupInjurySeverity> = {}
   ): CupTeamRuntimeProfile => {
     const active = activePlayers(team).filter(player => !redCards[player.id]);
-    const goalkeeper = active.find(player => player.position === PlayerPosition.GK);
-    const outfield = active.filter(player => player.position !== PlayerPosition.GK);
-    const defenders = byPosition(active, PlayerPosition.DEF);
-    const midfielders = byPosition(active, PlayerPosition.MID);
-    const forwards = byPosition(active, PlayerPosition.FWD);
+    const naturalGoalkeeper = active.find(player => player.position === PlayerPosition.GK);
+    // A red card or an injury can remove the only natural goalkeeper after all
+    // substitutions were used. Football still requires somebody to occupy the
+    // goal, so select the most suitable active outfield player. His ordinary
+    // goalkeeping attributes remain authoritative and naturally produce a
+    // large sporting penalty without leaving later shot events unattributed.
+    const emergencyGoalkeeper = naturalGoalkeeper ? undefined : [...active].sort((left, right) =>
+      weightedScore(right.attributes, { goalkeeping: 0.55, positioning: 0.20, mentality: 0.15, strength: 0.10 }) -
+      weightedScore(left.attributes, { goalkeeping: 0.55, positioning: 0.20, mentality: 0.15, strength: 0.10 })
+    )[0];
+    const goalkeeper = naturalGoalkeeper ?? emergencyGoalkeeper;
+    const outfield = active.filter(player => player.id !== goalkeeper?.id);
+    const defenders = byPosition(outfield, PlayerPosition.DEF);
+    const midfielders = byPosition(outfield, PlayerPosition.MID);
+    const forwards = byPosition(outfield, PlayerPosition.FWD);
     const moraleMod = moraleMultiplier((team.morale * 0.52) + (team.preMatchMotivation * 0.32) + (team.stadiumSupport * 0.16));
     const shape = shapeFromTactic(team);
 

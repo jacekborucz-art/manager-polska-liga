@@ -1,6 +1,7 @@
 import { MatchEventType } from '../../../../types';
 import type { CupMatchEvent, CupTeamRuntimeProfile, CupTickContext } from './CupMatchTypes';
 import { clamp, pickWeighted, weightedScore } from './CupMath';
+import { CupMatchClockService } from './CupMatchClockService';
 
 const selectFouler = (
   profile: CupTeamRuntimeProfile,
@@ -73,14 +74,14 @@ export const CupDisciplineResolver = {
     const strictness = referee.strictness / 100;
     const advantage = referee.advantageTendency / 100;
     const consistencyNoise = (1 - referee.consistency / 100) * (ctx.random(salt + 1) - 0.5) * 0.08;
-    const foulChance = clamp(
+    const foulChance = clamp((
       0.026 +
       defending.disciplineRisk * 0.00070 +
       defending.pressing * 0.00032 +
       danger * 0.045 +
       strictness * 0.018 -
-      advantage * 0.012 +
-      consistencyNoise,
+      consistencyNoise
+    ) * ctx.state.coachEffects[defending.side].foulMultiplier,
       0.004,
       0.16
     );
@@ -89,13 +90,24 @@ export const CupDisciplineResolver = {
 
     const yellowChance = clamp(0.11 + strictness * 0.22 + danger * 0.25 + defending.disciplineRisk * 0.0009, 0.06, 0.62);
     const redChance = clamp(0.004 + strictness * 0.018 + Math.max(0, danger - 0.75) * 0.07, 0.002, 0.12);
-    const type = ctx.random(salt + 3) < redChance
+    const initialType = ctx.random(salt + 3) < redChance
       ? MatchEventType.RED_CARD
       : ctx.random(salt + 4) < yellowChance
       ? MatchEventType.YELLOW_CARD
       : MatchEventType.FOUL;
     const fouler = selectFouler(defending, ctx.random(salt + 5));
     const fouled = selectFouledPlayer(attacking, ctx.random(salt + 6));
+    const advantageChance = clamp(advantage * 0.55 + danger * 0.18 - strictness * 0.10, 0.03, 0.68);
+    const advantagePlayed = initialType === MatchEventType.FOUL && ctx.random(salt + 7) < advantageChance;
+    // A second caution must remove the player. Keeping this decision here
+    // means profiles, spatial state and statistics all see the same red-card
+    // event on the next tick rather than merely storing two yellow counters.
+    const secondYellow = initialType === MatchEventType.YELLOW_CARD && Boolean(fouler && (ctx.state.yellowCards[fouler.id] ?? 0) >= 1);
+    const type = advantagePlayed
+      ? MatchEventType.ADVANTAGE_PLAYED
+      : secondYellow
+        ? MatchEventType.RED_CARD
+        : initialType;
     const defendingTeamName = defending.side === 'HOME' ? ctx.input.home.name : ctx.input.away.name;
     const foulerName = fouler ? fouler.lastName : defendingTeamName;
     const fouledName = fouled ? fouled.lastName : 'rywala';
@@ -103,12 +115,14 @@ export const CupDisciplineResolver = {
     return {
       id: `cupv2_contact_${ctx.state.second}_${salt}`,
       second: ctx.state.second,
-      minute: Math.floor(ctx.state.second / 60) + 1,
+      minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
       side: defending.side,
       type,
       playerId: fouler?.id,
       secondaryPlayerId: fouled?.id,
-      text: `${foulerName} przerywa akcję faulem na ${fouledName}.`,
+      text: advantagePlayed
+        ? `${foulerName} fauluje ${fouledName}, ale sędzia stosuje przywilej korzyści.`
+        : `${foulerName} przerywa akcję faulem na ${fouledName}.`,
       detail: {
         danger,
         refereeStrictness: referee.strictness,
@@ -116,6 +130,8 @@ export const CupDisciplineResolver = {
         attackingSide: attacking.side,
         foulerId: fouler?.id,
         fouledPlayerId: fouled?.id,
+        secondYellow,
+        advantagePlayed,
       },
     };
   },

@@ -1,0 +1,3317 @@
+PLAN SILNIKA MECZOWEGO 2.0 — PROTOTYP I BEZPIECZNE WDROŻENIE
+
+Data opracowania: 27 sierpnia 2026
+Status: Etapy 0–6 wykonane; Etap 7 (interaktywny widok SVG) w toku — kontroler klatek i powtórki gotowe
+
+======================================================================
+1. CEL PROJEKTU
+======================================================================
+
+Głównym celem jest stworzenie jednego, wspólnego silnika meczowego 2.0 dla
+meczów oglądanych przez gracza. Ten sam rdzeń ma w przyszłości obsługiwać ligę,
+Puchar Polski, baraże, sparingi oraz europejskie puchary. Różnice między
+rozgrywkami mają wynikać z osobnych reguł, na przykład dogrywki i rzutów karnych,
+a nie z kopiowania całego silnika.
+
+Wersja prototypowa ma działać obok aktualnego silnika. Przed rozpoczęciem meczu
+gracz wybierze:
+
+- SILNIK 1.0 — obecna, stabilna wersja,
+- SILNIK 2.0 — nowy prototyp interaktywnego meczu.
+
+Domyślnie zaznaczony pozostanie silnik 1.0. Wybór będzie dotyczył tylko
+konkretnego meczu. Pozwoli to testować prototyp na normalnej karierze bez
+wyłączania sprawdzonego rozwiązania.
+
+Najważniejsza zasada: silnik 2.0 jest jedynym źródłem wyniku, zdarzeń,
+statystyk i ocen zawodników w meczu uruchomionym w tym trybie. Warstwa SVG ma
+jedynie pokazywać to, co naprawdę wydarzyło się w symulacji. Animacja nie może
+losować własnych podań, strzałów ani goli.
+
+======================================================================
+2. WNIOSKI Z ANALIZY OBECNEGO PROJEKTU
+======================================================================
+
+2.1. Elementy, które już istnieją i warto wykorzystać
+
+- Aktywny ligowy MatchLiveView zawiera rozbudowaną logikę meczu, taktyk,
+  poleceń trenera, krzyków, pogody, zmęczenia, kontuzji, kartek, zmian i raportu.
+- Istnieje osobna pucharowa wersja widoku meczu, która zawiera podobną logikę.
+- W services/match/engines/cupV2 istnieje częściowo modułowy silnik oparty na
+  akcjach, sytuacjach, strzałach, stałych fragmentach i deterministycznym RNG.
+- Istnieją moduły liczące profile drużyn, momentum, kontuzje, dyscyplinę,
+  zmiany, rzuty karne, statystyki zawodników i oceny meczowe.
+- Istnieje zestaw komponentów CupV2SvgComponents oraz mapper danych do SVG.
+- Istnieją testy balansu, czynników, statystyk, ocen i adapterów silnika V2.
+- Model zawodnika posiada wystarczająco dużo atrybutów do pierwszego prototypu:
+  siłę, kondycję, szybkość, obronę, podania, atak, wykończenie, technikę,
+  wizję, drybling, grę głową, ustawianie, bramkarstwo, stałe fragmenty,
+  agresję, dośrodkowania, przywództwo, mentalność i pracowitość.
+
+2.2. Problemy obecnej architektury
+
+- Ligowy MatchLiveView ma około 7900 linii i łączy obliczenia, stan meczu,
+  animacje, dźwięki, okna oraz końcowy zapis wyniku.
+- Pucharowy MatchLiveViewPolishCupV2 ma ponad 8200 linii i powtarza znaczną
+  część odpowiedzialności silnika ligowego.
+- Modułowy cupV2 nadal jest nazwany i projektowany głównie dla Pucharu Polski,
+  mimo że większość jego logiki może być wspólna dla wszystkich rozgrywek.
+- Przygotowane komponenty SVG nie są obecnie podłączone do aktywnego widoku.
+- Dokumentacja oraz część testów V2 opisują funkcje meczu liczonego na żywo,
+  których aktualna implementacja publiczna nie udostępnia. Przed rozwojem trzeba
+  więc wykonać audyt zgodności kodu, testów i dokumentacji.
+- Nie wolno tworzyć trzeciego dużego komponentu z kolejną kopią całej logiki.
+
+2.3. Decyzja architektoniczna
+
+Należy przekształcić użyteczne części cupV2 w neutralny MatchEngineV2 i
+podłączyć do niego nowy MatchLiveV2View. Obecne silniki pozostają nietknięte jako
+bezpieczny fallback do czasu przejścia wszystkich testów.
+
+======================================================================
+3. ZAKRES PIERWSZEGO PROTOTYPU
+======================================================================
+
+Pierwszy prototyp powinien obsługiwać jeden normalny mecz ligowy gracza i mieć:
+
+- pełne 90 minut wraz z doliczonym czasem,
+- poruszających się po boisku 22 zawodników,
+- widoczną piłkę i płynne podania,
+- drybling, odbiór, stratę, strzał, obronę oraz gola,
+- aut, rzut rożny, rzut wolny, spalony, faul i rzut karny,
+- żółte i czerwone kartki,
+- kontuzje,
+- zmiany zawodników,
+- zmianę taktyki oraz poleceń w trakcie meczu,
+- krzyki trenera,
+- przerwę i odprawę w przerwie,
+- prawidłowy wynik, statystyki, oceny i raport pomeczowy,
+- pauzę oraz prędkości meczu,
+- podstawowy czas trwania pełnego meczu wynoszący około 12–15 minut,
+- tryb pełnego meczu oraz tryb najważniejszych akcji,
+- przełączany widok klasyczny albo interaktywny,
+- opcjonalne powtórki goli włączane lub wyłączane przez gracza,
+- wybór silnika 1.0 lub 2.0 przed rozpoczęciem spotkania.
+
+Dogrywka i konkurs rzutów karnych zostaną przygotowane jako moduł reguł, ale
+mogą wejść do drugiej wersji prototypu po zatwierdzeniu meczu ligowego.
+
+W pierwszym prototypie gracz nie steruje zawodnikiem jak w grze zręcznościowej.
+Steruje trenerem: składem, ustawieniem, taktyką, zmianami, poleceniami i
+krzykami. Zawodnicy samodzielnie podejmują decyzje na podstawie atrybutów.
+
+Pierwszy etap integracji dotyczy wyłącznie zwykłych meczów ligowych. Puchar
+Polski, baraże, sparingi i europejskie puchary zostaną podłączone dopiero po
+zatwierdzeniu stabilności wersji ligowej.
+
+======================================================================
+4. ARCHITEKTURA JEDNEGO SILNIKA 2.0
+======================================================================
+
+4.1. Warstwa wejściowa meczu
+
+Powstanie jeden MatchEngineV2Input zawierający:
+
+- identyfikator i seed meczu,
+- typ rozgrywek oraz reguły spotkania,
+- kluby, składy, ławki i trenerów,
+- ustawienie obu zespołów,
+- aktualne polecenia taktyczne,
+- role kapitana i wykonawców stałych fragmentów,
+- kondycję, urazy, zawieszenia, morale, formę i aklimatyzację zawodników,
+- pogodę, jakość murawy, stadion, frekwencję i wsparcie kibiców,
+- sędziego,
+- znaczenie meczu, rywalizację i presję wyniku.
+
+Adaptery przekształcą istniejący MatchContext, skład oraz dane rozgrywek na ten
+sam format. Dzięki temu rdzeń nie będzie wiedział, czy rozgrywa Ekstraklasę,
+Puchar Polski czy Ligę Europy.
+
+4.2. Warstwa reguł rozgrywek
+
+Osobny MatchRules definiuje:
+
+- długość meczu,
+- liczbę i okna zmian,
+- możliwość remisu,
+- dogrywkę,
+- konkurs rzutów karnych,
+- zasadę meczu na neutralnym stadionie,
+- ewentualne szczególne reguły rozgrywek.
+
+Rdzeń pozostaje jeden. Puchar włącza dogrywkę i karne, liga je wyłącza.
+
+4.3. Autorytatywny stan meczu
+
+MatchEngineV2State będzie przechowywał między innymi:
+
+- dokładny czas meczu,
+- wynik i fazę spotkania,
+- pozycję piłki w metrach na boisku 105 x 68,
+- właściciela piłki albo informację o piłce niczyjej,
+- pozycję, kierunek, prędkość i cel każdego zawodnika,
+- aktualną rolę każdego zawodnika w fazie gry,
+- posiadanie, momentum, presję i organizację obu zespołów,
+- kondycję, krótkotrwałe zmęczenie, kartki i urazy,
+- aktywną akcję oraz oczekujący restart,
+- wykorzystane zmiany,
+- pełny dziennik zdarzeń i statystyk.
+
+Stan będzie czystą strukturą danych niezależną od Reacta. Dzięki temu można go
+testować bez uruchamiania interfejsu.
+
+4.4. Oddzielenie symulacji od animacji
+
+- Silnik podejmuje decyzje w stałych krokach czasu symulacji.
+- SVG renderuje obraz płynnie przez requestAnimationFrame.
+- Między kolejnymi stanami SVG interpoluje pozycje zawodników i piłki.
+- Liczba klatek monitora nie wpływa na wynik meczu.
+- Spadek FPS nie może zmienić skuteczności zawodników ani kolejności zdarzeń.
+- Pauza zatrzymuje rozwój stanu, a nie tylko animację.
+- Zmiana prędkości zmienia tempo odtwarzania, lecz nie zmienia rozstrzygnięć.
+
+4.5. Obliczenia poza głównym interfejsem
+
+Docelowo czysty rdzeń powinien pracować w Web Workerze. Główny wątek będzie
+odpowiadał za SVG, przyciski, dźwięk i okna. Worker będzie przesyłał małe
+snapshoty pozycji oraz zdarzenia, zamiast kopiować cały świat gry.
+
+W pierwszym kroku powstanie także tryb bez Workera do testów jednostkowych.
+Obie wersje muszą zwracać identyczny wynik dla tego samego seeda i poleceń.
+
+======================================================================
+5. MODEL BOISKA I RUCHU ZAWODNIKÓW
+======================================================================
+
+5.1. Współrzędne
+
+- Boisko ma logiczny rozmiar 105 x 68 metrów.
+- Każdy zawodnik ma aktualną pozycję, pozycję bazową i cel ruchu.
+- SVG skaluje metry do swojego viewBox, więc mechanika nie zależy od
+  rozdzielczości ekranu.
+- Murawa wizualnie wychodzi poza linie końcowe i boczne.
+- Piłka może znaleźć się poza linią, co uruchamia odpowiedni restart.
+
+5.2. Pozycje bazowe
+
+Pozycje bazowe powstają z formacji zapisanej w TacticRepository. Nie są jednak
+stałymi punktami. Zmieniają się zależnie od:
+
+- położenia piłki,
+- posiadania lub bronienia,
+- wysokości linii obrony,
+- szerokości gry,
+- pressingu,
+- nastawienia ofensywnego lub defensywnego,
+- kontry,
+- krycia strefowego lub indywidualnego,
+- wyniku i minuty meczu,
+- kondycji zawodnika oraz gry w osłabieniu.
+
+5.3. Ruch bez piłki
+
+Każdy zawodnik otrzymuje cel ruchu wynikający z roli:
+
+- bramkarz ustawia się względem piłki i bramki,
+- obrońcy zachowują linię, asekurują i kryją strefy,
+- pomocnicy tworzą kąty podań i zamykają przestrzenie,
+- napastnicy atakują wolne strefy, cofają się lub pilnują linii spalonego,
+- najbliższy zawodnik może pressować,
+- kolejni gracze zabezpieczają przestrzeń za pressingiem,
+- zawodnicy zmęczeni poruszają się wolniej i później reagują.
+
+Ruch nie może być całkowicie przypadkowy. RNG wybiera jedną z kilku sensownych
+decyzji, których wagi wynikają z atrybutów i sytuacji.
+
+5.4. Kolizje i zajęta przestrzeń
+
+- Zawodnicy tej samej drużyny unikają nakładania się.
+- Przeciwnicy mogą wejść w pojedynek o piłkę.
+- Strefa bezpiecznej odległości ogranicza przenikanie ikon.
+- System nie musi być pełnym silnikiem fizycznym; wystarczy stabilny model
+  separacji, krycia i pojedynków.
+
+======================================================================
+6. MODEL PIŁKI I ŁAŃCUCH AKCJI
+======================================================================
+
+Każda bramka musi wynikać z pełnego przebiegu akcji:
+
+restart -> posiadanie -> decyzja -> wykonanie -> reakcja rywala -> progresja
+-> stworzenie sytuacji -> strzał -> interwencja bramkarza/obrońcy -> wynik.
+
+6.1. Stany piłki
+
+- przy nodze zawodnika,
+- podanie po ziemi,
+- podanie górą,
+- dośrodkowanie,
+- strzał,
+- odbita przez bramkarza lub obrońcę,
+- piłka niczyja,
+- poza boiskiem,
+- zatrzymana przed restartem.
+
+6.2. Decyzja zawodnika z piłką
+
+Silnik tworzy kandydatów: podanie, drybling, dośrodkowanie, strzał, wybicie,
+przytrzymanie piłki lub podanie do tyłu. Każdy kandydat otrzymuje ocenę za:
+
+- dostępność i odległość partnera,
+- presję przeciwnika,
+- wolną przestrzeń,
+- ryzyko straty,
+- instrukcję podań i tempo,
+- nastawienie zespołu,
+- wynik oraz minutę,
+- atrybuty zawodnika,
+- jego kondycję, morale i pewność siebie.
+
+Najwyżej oceniana decyzja nie jest wybierana zawsze. Zawodnik o słabszej
+mentalności i wizji częściej wybierze gorszą opcję. Nawet najlepszy zawodnik
+zachowuje niewielką nieprzewidywalność.
+
+6.3. Podanie i przyjęcie
+
+Skuteczność podania wykorzystuje podania, technikę, wizję, mentalność,
+odległość, rodzaj podania, presję, pogodę i stan murawy. Odbiór zależy od
+ustawiania, obrony, szybkości, siły, pracowitości i pressingu. Przyjęcie piłki
+wykorzystuje technikę, mentalność, zmęczenie i presję.
+
+Nieudane podanie może zostać:
+
+- przejęte,
+- wybite na aut,
+- przecięte na rzut rożny,
+- pozostawione jako piłka niczyja,
+- przejęte ponownie przez zespół podający po rykoszecie.
+
+6.4. Drybling i pojedynek
+
+Atakujący wykorzystuje drybling, technikę, szybkość, siłę i mentalność.
+Obrońca wykorzystuje obronę, ustawianie, szybkość, siłę, pracowitość i
+agresję. Wynikiem może być minięcie, zatrzymanie, czysty odbiór, wybicie,
+faul albo utrata równowagi.
+
+6.5. Strzał i xG
+
+Najpierw liczona jest jakość sytuacji xG na podstawie:
+
+- odległości i kąta,
+- liczby obrońców na linii strzału,
+- presji na strzelającym,
+- rodzaju podania lub dośrodkowania,
+- użycia kontry lub stałego fragmentu,
+- ustawienia bramkarza,
+- informacji, czy jest to główka, strzał z pierwszej piłki czy sytuacja sam na sam.
+
+Następnie wykonanie zależy od wykończenia, techniki, mentalności, gry głową,
+kondycji i słabszego ustawienia pozycyjnego. Bramkarz reaguje przez
+bramkarstwo, ustawianie, szybkość, mentalność i kondycję.
+
+Wynikiem może być gol, obrona, odbicie, blok, strzał niecelny, słupek,
+poprzeczka albo rzut rożny. Nie będzie twardego limitu czterech bramek.
+Wysokie wyniki pozostaną rzadkie, ale możliwe.
+
+======================================================================
+7. STAŁE FRAGMENTY I PRZERWY W GRZE
+======================================================================
+
+Każdy restart otrzyma osobny stan oraz prosty szablon ustawienia zawodników.
+
+- Aut: wybór krótkiego albo długiego wznowienia, ruch odbiorców i możliwość
+  natychmiastowej straty.
+- Rzut rożny: ustawienie wykonawcy, zawodników w polu karnym, asekuracji i
+  obrońców; dośrodkowanie, wybicie, strzał lub kontra.
+- Rzut wolny: szybkie rozegranie, dośrodkowanie albo strzał bezpośredni.
+- Rzut karny: wybrany wykonawca, bramkarz, animacja rozbiegu i rozstrzygnięcie.
+- Wykop od bramki: krótkie rozpoczęcie lub długa piłka zgodnie z taktyką.
+- Rozpoczęcie po golu: zawodnicy wracają do pozycji startowych.
+- Spalony: liczony z pozycji podającego, odbiorcy i przedostatniego obrońcy w
+  chwili zagrania, a nie losowany jako niezależny komentarz.
+- Doliczony czas: wynika ze zmian, urazów, kartek, VAR i przerw.
+
+======================================================================
+8. WPŁYW ATRYBUTÓW ZAWODNIKÓW
+======================================================================
+
+Silnik nie powinien opierać akcji na samym overallu. Overall może być użyty do
+kontroli ogólnego balansu, ale każde zagranie korzysta z właściwych atrybutów.
+
+Przykładowe profile pochodne:
+
+- decyzja: mentalność + wizja + technika + doświadczenie wynikające z wieku,
+- pierwszy kontakt: technika + mentalność + kondycja,
+- krótkie podanie: podania + technika + wizja,
+- długa piłka: podania + technika + wizja + siła,
+- prowadzenie: drybling + technika + szybkość + mentalność,
+- odbiór: obrona + ustawianie + pracowitość + siła,
+- pressing: pracowitość + kondycja + szybkość + agresja,
+- krycie: ustawianie + obrona + mentalność,
+- ruch ofensywny: atak + ustawianie + szybkość + mentalność,
+- wykończenie: wykończenie + technika + mentalność,
+- główka: gra głową + siła + ustawianie,
+- dośrodkowanie: dośrodkowania + technika + wizja,
+- bramkarz: bramkarstwo + ustawianie + szybkość + mentalność,
+- stałe fragmenty: odpowiedni atrybut + technika + mentalność.
+
+Wpływ chwilowy:
+
+- kondycja obniża dynamikę, pressing i dokładność,
+- zmęczenie zwiększa czas reakcji i ryzyko błędu,
+- morale i forma wpływają umiarkowanie na pewność wykonania,
+- aklimatyzacja wpływa lekko na decyzje i ustawienie,
+- kartka ogranicza agresję rozsądnego zawodnika, lecz nerwowy lub agresywny
+  gracz nadal może ryzykować,
+- uraz ogranicza szybkość, siłę albo technikę zależnie od rodzaju urazu.
+
+======================================================================
+9. TAKTYKA, POLECENIA I KRZYKI TRENERA
+======================================================================
+
+9.1. Formacja
+
+Formacja określa pozycje bazowe, szerokość sektorów, liczbę linii podań,
+wysokość zabezpieczenia i liczbę zawodników atakujących pole karne.
+
+9.2. Polecenia drużynowe
+
+- Tempo: częstotliwość decyzji, szybkość podań, ryzyko błędu i zmęczenie.
+- Nastawienie: liczba graczy wspierających atak oraz zabezpieczających tyły.
+- Intensywność: siła pojedynków, pressing, faule i koszt kondycyjny.
+- Podania: preferowany dystans, cierpliwość rozegrania i ryzyko straty.
+- Pressing: odległość doskoku, liczba zawodników zaangażowanych i wolne strefy.
+- Kontratak: natychmiastowy ruch do przodu po odbiorze zamiast uspokojenia gry.
+- Krycie: zachowanie strefy, podążanie za przeciwnikiem lub brak wyraźnego
+  schematu krycia.
+
+Każde polecenie musi mieć zarówno korzyść, jak i koszt. Przykład: wysoki
+pressing zwiększa liczbę odbiorów wysoko, ale zużywa kondycję i pozostawia
+przestrzeń za linią pressingu.
+
+9.3. Krzyki trenera
+
+Należy wykorzystać istniejący UserCoachShoutService. Krzyk wpływa na stan
+mentalny i decyzje przez ograniczony czas. Jego efekt zależy od:
+
+- sytuacji w meczu,
+- wyniku i ostatniego zdarzenia,
+- przywództwa oraz mentalności zawodników,
+- wcześniejszego powtarzania tego samego krzyku,
+- jakości i dopasowania komunikatu.
+
+Krzyk nie generuje bramki. Może zmienić koncentrację, ryzyko, intensywność,
+organizację albo reakcję po stracie gola.
+
+9.4. Trener AI
+
+AI korzysta dokładnie z tych samych poleceń i tego samego interfejsu co gracz.
+Jakość trenera wpływa na moment reakcji, trafność diagnozy i prawdopodobieństwo
+wybrania dobrego rozwiązania. AI nie otrzymuje ukrytego mnożnika siły.
+
+======================================================================
+10. POGODA, MURAWA, STADION I KIBICE
+======================================================================
+
+- Deszcz zwiększa poślizg piłki, utrudnia przyjęcia i może zwiększać ryzyko
+  niektórych urazów.
+- Wiatr wpływa głównie na długie podania, dośrodkowania i strzały z dystansu.
+- Wysoka temperatura przyspiesza zmęczenie.
+- Zła murawa obniża jakość prowadzenia i krótkich podań oraz zwiększa liczbę
+  nieprzewidywalnych odbić.
+- Frekwencja powinna być liczona w relacji do pojemności stadionu, a nie tylko
+  jako surowa liczba widzów.
+- Wsparcie gospodarzy wpływa na początkową pewność, reakcję po dobrym fragmencie
+  i presję na gościach.
+- Derby oraz ważny mecz zwiększają intensywność emocji, lecz również ryzyko
+  nerwowości i kartek.
+- Przywództwo kapitana i mentalność zespołu ograniczają negatywny wpływ presji.
+- Przewaga własnego boiska ma być umiarkowana i nie może gwarantować wyniku.
+
+======================================================================
+11. RNG I POWTARZALNOŚĆ
+======================================================================
+
+- Mecz otrzymuje stały seed z identyfikatora spotkania i zapisanego losowania.
+- Osobne strumienie RNG obsługują decyzje, wykonanie akcji, urazy, sędziego i
+  warstwę czysto wizualną.
+- Animacja trawy, drobne ruchy oraz efekty graficzne nigdy nie wpływają na wynik.
+- Ponowne wczytanie tego samego stanu meczu nie może zmienić przeszłych zdarzeń.
+- Polecenie wydane w 60. minucie wpływa wyłącznie na przyszłość.
+- Silnik nie powinien liczyć całego wyniku przed pierwszym gwizdkiem.
+- Nawet przy bardzo dużej różnicy atrybutów słabszy zespół zachowuje niewielką
+  szansę na udaną akcję, błąd rywala albo niespodziankę.
+- Nie stosujemy twardego limitu goli, strzałów ani kartek. Używamy naturalnych
+  hamulców: zmiany tempa po wysokim prowadzeniu, zmęczenia, zarządzania wynikiem
+  i spadku ryzyka.
+
+======================================================================
+12. PROJEKT INTERAKTYWNEGO WIDOKU SVG
+======================================================================
+
+12.1. Układ 1920 x 1080
+
+- Górny pas: nazwa i logo gospodarzy po lewej, nazwa i logo gości po prawej,
+  wynik pośrodku oraz subtelny zegar i faza spotkania.
+- Lewy panel: jedenastka i ławka gospodarzy, oceny, kondycja, kartki, urazy,
+  gole i zmiany.
+- Prawy panel: analogiczne dane gości.
+- Środek: duże pionowe albo lekko perspektywiczne boisko SVG.
+- Dolny pas: pauza, prędkość, tryb transmisji, taktyka, polecenia, krzyki,
+  historia zdarzeń i wejście do zmian. Panel pozostaje w tym samym miejscu i
+  zachowuje podobny układ funkcjonalny jak dolny panel obecnego silnika ligowego.
+- Panele nie mogą zasłaniać boiska ani wymagać przewijania podstawowej jedenastki
+  w rozdzielczości 1920 x 1080.
+- Cała widoczna powierzchnia meczu — nagłówek, składy, boisko, wynik, zegar,
+  przyciski i dolny panel — zostanie narysowana w SVG. React będzie obsługiwał
+  logikę i dostępność, lecz nie będzie budował wyglądu z prostych prostokątnych
+  paneli HTML.
+- Boisko będzie ustawione pionowo, a składy znajdą się symetrycznie po jego
+  lewej i prawej stronie.
+
+12.2. Boisko SVG
+
+- Jeden viewBox z logicznymi współrzędnymi boiska.
+- Ciemnozielona murawa z pasami koszenia, delikatną teksturą i światłem.
+- Murawa większa niż obrys linii, dzięki czemu teren jest widoczny także poza
+  liniami bocznymi oraz końcowymi.
+- Dokładne linie boczne, środkowa, koło, pola karne, pola bramkowe, łuki,
+  punkty karne, narożniki i bramki.
+- Subtelne cienie zawodników i piłki pomagające odczytać ruch.
+- Widoczne kolory strojów obu drużyn oraz inny strój bramkarzy.
+- Nazwisko można pokazywać stale w skrócie albo po najechaniu, zależnie od
+  zatwierdzonego wariantu projektu.
+- Nowy wygląd nie będzie kopią starego prototypu cupV2. Można wykorzystać jego
+  format danych i część przeliczeń, ale wszystkie widoczne komponenty zostaną
+  zaprojektowane od nowa jako spójny zestaw SVG.
+- Barwy klubów będą zasilały gradienty, poświaty, aktywne krawędzie i akcenty
+  drużynowe. Efekty mają być błyszczące i nowoczesne, ale nie mogą obniżać
+  kontrastu tekstu ani utrudniać śledzenia piłki.
+- Światło, refleksy i połysk zostaną wykonane za pomocą kontrolowanych gradientów,
+  masek oraz filtrów SVG. Liczba filtrów będzie ograniczona, żeby nie obciążać
+  przeglądarki.
+
+12.3. Animacje
+
+- Zawodnicy poruszają się po interpolowanych krzywych, a nie skaczą między
+  punktami formacji.
+- Piłka ma osobną trajektorię dla podań po ziemi, górą, dośrodkowań i strzałów.
+- Podanie pokazuje ruch piłki między konkretnymi zawodnikami.
+- Strzał kończy się w bramce, rękach bramkarza, blokiem albo poza boiskiem.
+- Przy stałym fragmencie zawodnicy najpierw ustawiają się, dopiero potem akcja
+  zostaje wznowiona.
+- Gol, kartka, kontuzja i zmiana mają krótkie, czytelne efekty SVG bez
+  zasłaniania boiska na zbyt długo.
+- Kamera pozostaje stabilna. W prototypie nie wprowadzamy automatycznych zoomów,
+  które utrudniałyby śledzenie ustawienia całej drużyny.
+
+12.3a. Powtórki goli
+
+- Gracz może włączyć lub wyłączyć powtórki w dolnym panelu sterowania.
+- Ustawienie można zmienić także w trakcie meczu i obowiązuje od następnego gola.
+- Silnik przechowuje w krótkim buforze pozycje zawodników, piłki i ważne stany z
+  kilku sekund przed strzałem aż do zakończenia akcji.
+- Po golu normalne odtwarzanie zatrzymuje się, a renderer ponownie pokazuje
+  zapisane klatki akcji z czytelną etykietą „POWTÓRKA”.
+- Powtórka jest wyłącznie ponownym odtworzeniem istniejących danych. Nie uruchamia
+  RNG, nie symuluje strzału ponownie i nie może zmienić wyniku.
+- Po zakończeniu powtórki mecz wraca dokładnie do zatrzymanego stanu.
+- Wyłączenie powtórek pomija ten krok i pozwala od razu wznowić spotkanie.
+- Bufor powtórki istnieje tylko w pamięci podczas meczu. Brak zapisu meczu w
+  trakcie oznacza, że nie trzeba dodawać ciężkich danych powtórek do save'a.
+
+12.4. Interakcje
+
+- Kliknięcie zawodnika otwiera krótką kartę: kondycja, ocena, rola, zdarzenia i
+  aktywne polecenie indywidualne.
+- Kliknięcie zawodnika własnej drużyny podczas zmiany wybiera schodzącego.
+- Następnie kliknięcie rezerwowego wybiera wchodzącego.
+- Panel taktyki zatrzymuje mecz.
+- Po zatwierdzeniu polecenie otrzymuje dokładną minutę wejścia w życie.
+- Wszystkie elementy interaktywne SVG muszą mieć odpowiednik dostępny z
+  klawiatury oraz czytelny fokus.
+- Przełącznik „POWTÓRKI GOLI” będzie subtelny i nie może zajmować miejsca
+  głównych poleceń taktycznych.
+- Obok ustawienia transmisji znajdzie się przełącznik „WIDOK” z opcjami
+  „KLASYCZNY” i „INTERAKTYWNY”.
+
+12.4a. Typografia i czytelność
+
+- Podstawową rodziną tekstu będzie istniejący w projekcie Inter, ponieważ jest
+  wyraźny przy małych rozmiarach i nie wymaga ładowania kolejnego fontu.
+- Nazwy drużyn, wynik i najważniejsze zdarzenia otrzymają mocniejszą odmianę,
+  natomiast składy i dane liczbowe pozostaną proste oraz czytelne.
+- Kursywa może pozostać akcentem nagłówków, ale nie będzie stosowana do każdego
+  nazwiska, statystyki i opisu.
+- Szary tekst zostanie ograniczony do informacji drugorzędnych. Podstawowe dane
+  otrzymają biały lub bardzo jasny kolor z kontrolowanym kontrastem.
+- Długie nazwy nie będą ucinane bez możliwości odczytania. Najpierw zostanie
+  użyte dopasowanie rozmiaru, a dopiero później skrót z pełną nazwą w podpowiedzi.
+- Efekty blasku pozostaną za tekstem i nie będą nakładane bezpośrednio na litery.
+
+12.5. Techniczna zasada renderowania
+
+Wygląd zostanie zbudowany z małych komponentów SVG: nagłówka, boiska, linii,
+bramek, zawodnika, piłki, trajektorii, panelu wyniku i efektów zdarzeń. React nie
+powinien aktualizować całego drzewa 60 razy na sekundę. Pozycje szybko
+poruszających się elementów będą zmieniane przez referencje renderera, a React
+otrzyma rzadsze snapshoty statystyk oraz ważnych zdarzeń.
+
+12.6. Pełny mecz i najważniejsze akcje
+
+- W trybie pełnego meczu renderer pokazuje cały przebieg, a podstawowa prędkość
+  zamyka spotkanie w około 12–15 minutach czasu rzeczywistego.
+- W trybie najważniejszych akcji silnik nadal przelicza każdą fazę meczu, ale
+  spokojne fragmenty są wykonywane w Workerze w przyspieszonym tempie.
+- Obraz wraca do normalnego tempa przed groźną akcją, stałym fragmentem,
+  kontuzją, kartką, ważną zmianą momentum albo decyzją trenera AI.
+- Zdarzenie jest kwalifikowane jako ważne na podstawie stanu już osiągniętego
+  przez silnik. UI nie może zaglądać do przyszłości ani znać wyniku meczu.
+- Gracz może w każdej chwili przejść z najważniejszych akcji do pełnego meczu
+  bez przeliczania przeszłości.
+- Taktyka, krzyki i zmiany pozostają dostępne w obu trybach. Przyspieszenie
+  zatrzymuje się automatycznie, gdy gracz otwiera panel trenerski.
+- Powtórki goli działają w obu trybach według tego samego bufora wizualnego.
+
+12.7. Widok klasyczny i interaktywny
+
+Wybór sposobu oglądania jest niezależny od wyboru pełnego meczu lub
+najważniejszych akcji.
+
+WIDOK KLASYCZNY:
+
+- zachowuje charakter obecnego silnika ligowego,
+- pokazuje statyczne ustawienie zawodników na boisku,
+- głównym źródłem informacji jest komentarz tekstowy i ważne zdarzenia,
+- piłkarze nie wykonują ciągłego ruchu po murawie,
+- wynik, zegar, składy, statystyki i dolny panel pozostają widoczne,
+- może być lżejszym trybem dla słabszych komputerów.
+
+WIDOK INTERAKTYWNY:
+
+- pokazuje rzeczywiste pozycje zawodników oraz piłki ze stanu silnika 2.0,
+- odtwarza podania, dryblingi, odbiory, strzały, wznowienia i ruch bez piłki,
+- komentarz nadal jest dostępny jako uzupełnienie obrazu,
+- może odtwarzać opcjonalne powtórki bramek.
+
+Zasady przełączania:
+
+- widok można zmienić przed meczem i w dowolnym momencie spotkania,
+- przełączenie nie zatrzymuje, nie cofa i nie przelicza symulacji,
+- oba widoki odczytują dokładnie ten sam MatchEngineV2State i dziennik zdarzeń,
+- po powrocie do widoku interaktywnego zawodnicy pojawiają się w aktualnych
+  pozycjach, a nie w miejscu, w którym gracz wcześniej wyłączył animację,
+- przełączenie widoku nie zużywa RNG i nie wpływa na wynik ani statystyki,
+- wybrany widok może zostać zapamiętany jako preferencja interfejsu, ponieważ nie
+  wpływa na świat gry,
+- po wybraniu silnika 1.0 dostępny pozostaje jego obecny klasyczny widok,
+- po wybraniu silnika 2.0 dostępne są oba widoki korzystające z wyniku V2.
+
+Trzy ustawienia należy wyraźnie rozdzielić:
+
+1. SILNIK: 1.0 albo 2.0 — wybierany przed pierwszym gwizdkiem i niezmienny
+   podczas meczu.
+2. WIDOK: klasyczny albo interaktywny — można przełączać w trakcie meczu 2.0.
+3. TRANSMISJA: pełny mecz albo najważniejsze akcje — określa tempo prezentacji,
+   lecz nie zmienia mechaniki i wyniku.
+
+======================================================================
+13. WYBÓR SILNIKA PRZED MECZEM
+======================================================================
+
+13.1. Interfejs
+
+W rogu studia przedmeczowego pojawi się subtelne menu rozwijane „Silnik meczu”.
+Nie będzie tworzyć dużej dodatkowej sekcji ani odciągać uwagi od składów.
+
+Opcje menu:
+
+- 1.0 STABILNY — aktualny silnik i obecny widok,
+- 2.0 PROTOTYP — nowy interaktywny mecz SVG.
+
+Aktualny wybór będzie widoczny w zamkniętym menu. Po wybraniu 2.0 pojawi się
+delikatne oznaczenie wersji testowej. Przycisk rozpoczęcia meczu użyje wskazanej
+wersji. Wybór stroju, składu i pozostałych danych pozostaje wspólny.
+
+13.2. Stan i bezpieczeństwo
+
+- Wybór zostanie zapisany razem z oczekującym meczem, a nie jako zmiana całego
+  świata gry.
+- Brak wyboru w starszym zapisie oznacza zawsze silnik 1.0.
+- Przełącznik jest dostępny przed każdym meczem ligowym.
+- Podczas testów menu przed każdym nowym meczem domyślnie wraca do 1.0. Gracz
+  musi świadomie wybrać prototyp 2.0 dla konkretnego spotkania.
+- Odświeżenie widoku przed pierwszym gwizdkiem nie może zmienić wyboru.
+- Po rozpoczęciu meczu nie można przełączyć silnika, ponieważ oznaczałoby to
+  utworzenie innego przebiegu i innego wyniku.
+- Fixture może zostać zakończony tylko raz, niezależnie od wybranego silnika.
+- Oba silniki korzystają z jednego serwisu końcowego zapisu meczu.
+
+13.3. Router silników
+
+Powstanie MatchEngineRegistry, który mapuje wybór na właściwy widok i adapter.
+App nie powinien zawierać wielu rozbudowanych warunków zależnych od ligi.
+Rozgrywki przekazują reguły, a registry wybiera LEGACY albo V2.
+
+======================================================================
+14. WSPÓLNY ZAPIS WYNIKU I RAPORTU
+======================================================================
+
+Silnik 2.0 musi zwracać dane w formacie akceptowanym przez istniejące systemy:
+
+- wynik i status fixture,
+- gole, asysty i minuty zdarzeń,
+- kartki oraz zawieszenia,
+- kontuzje,
+- zmiany i minuty gry,
+- statystyki klubowe,
+- statystyki zawodników w odpowiednich rozgrywkach,
+- oceny meczowe i zawodnika meczu,
+- frekwencję oraz finanse dnia meczowego,
+- kondycję i fatigueDebt po meczu,
+- dane dla historii, studia pomeczowego, konferencji i wiadomości.
+
+Powstanie MatchFinalizationService używany przez oba silniki. Dzięki temu nowy
+widok nie będzie kopiował kilkuset linii końcowego zatwierdzania meczu.
+
+Każdy commit meczu otrzyma blokadę jednokrotnego wykonania. Podwójne kliknięcie,
+odświeżenie modala albo szybkie przejście widoku nie może dodać dwóch raportów,
+dwóch wypłat ani podwójnych statystyk.
+
+======================================================================
+15. ETAPY IMPLEMENTACJI
+======================================================================
+
+ETAP 0 — audyt i zamrożenie punktu odniesienia
+
+- Uruchomić wszystkie obecne testy ligowego meczu oraz cupV2.
+- Spisać, które testy cupV2 nie odpowiadają aktualnemu API.
+- Zarchiwizować próbkę wyników starego silnika dla kilku scenariuszy.
+- Dodać test, że stary silnik nadal kończy i zapisuje mecz dokładnie raz.
+- Nie zmieniać balansu silnika 1.0 podczas budowy prototypu.
+
+Warunek zakończenia: znamy stan początkowy i potrafimy odróżnić nowy błąd od
+problemu istniejącego wcześniej.
+
+ETAP 1 — neutralne kontrakty Match Engine V2
+
+- Utworzyć neutralne typy MatchEngineV2Input, MatchEngineV2State,
+  MatchEngineV2Command, MatchEngineV2Event i MatchEngineV2Result.
+- Oddzielić reguły ligowe od pucharowych.
+- Zbudować adapter istniejącego MatchContext.
+- Przenieść wielokrotnego użytku elementy cupV2 bez zmiany ich balansu.
+- Zachować dotychczasowy cupV2 jako punkt porównawczy do czasu migracji.
+
+Warunek zakończenia: neutralny silnik potrafi uruchomić syntetyczny mecz bez UI.
+
+ETAP 2 — deterministyczny tryb meczu liczonego na żywo
+
+- Dodać createMatch, advanceTo, applyCommand, snapshot i finalize.
+- Silnik liczy wyłącznie do bieżącego czasu.
+- Komendy nie zmieniają przeszłości.
+- Dodać osobne strumienie RNG.
+- Dodać pauzę, prędkości i bezpieczne zakończenie.
+
+Warunek zakończenia: ten sam seed i te same komendy tworzą identyczny mecz.
+
+ETAP 3 — przestrzeń, ruch i posiadanie
+
+- Wprowadzić boisko 105 x 68, pozycje oraz cele ruchu.
+- Zbudować zachowanie w posiadaniu, bez piłki i w przejściu.
+- Dodać nośnika piłki, podania, przejęcia i piłkę niczyją.
+- Dodać ograniczenia pozycji i separację zawodników.
+
+Warunek zakończenia: pełne 90 minut może przebiec bez znikających zawodników,
+piłki poza stanem oraz pozycji poza dozwolonym obszarem.
+
+ETAP 4 — akcje ofensywne i defensywne
+
+- Dodać wybór decyzji z piłką.
+- Dodać przyjęcie, drybling, odbiór, blok, dośrodkowanie i strzał.
+- Powiązać każdą akcję z właściwymi atrybutami.
+- Liczyć xG z pozycji i presji.
+- Dodać interwencje bramkarza oraz dobicia.
+
+Warunek zakończenia: każdy gol ma pełny łańcuch zdarzeń i widoczną trajektorię.
+
+ETAP 5 — reguły boiskowe
+
+- Auty, rożne, wolne, karne, spalone, wykopy i rozpoczęcia.
+- Faule, przywilej korzyści, kartki i reakcje sędziego.
+- Kontuzje, pomoc medyczna i wymuszone zmiany.
+- Doliczony czas.
+- Moduł pucharowy: dogrywka i seria rzutów karnych.
+
+Warunek zakończenia: długie testy losowe nie tworzą nielegalnego stanu meczu.
+
+ETAP 6 — taktyka, trener i AI
+
+- Podłączyć wszystkie obecne ustawienia panelu taktycznego.
+- Podłączyć UserCoachShoutService i polecenia indywidualne.
+- Zbudować AI używające tego samego systemu komend.
+- Dodać reakcje AI na wynik, kartkę, uraz, zmęczenie i dominację rywala.
+- Dodać wpływ jakości trenera na trafność oraz czas reakcji.
+
+Warunek zakończenia: testy A/B wykazują oczekiwane koszty i korzyści każdej
+taktyki, bez jednej zawsze najlepszej strategii.
+
+ETAP 7 — interaktywny widok SVG
+
+- Zbudować responsywny layout 1920 x 1080.
+- Wykonać nagłówek, wynik, zegar, boisko, składy i kontrolki.
+- Dodać ruch zawodników i piłki na podstawie snapshotów silnika.
+- Dodać efekty goli, kartek, kontuzji i zmian.
+- Zaprojektować od nowa cały widoczny interfejs SVG; nie kopiować wyglądu
+  starego prototypu cupV2.
+- Dodać klubowe gradienty, subtelne refleksy i kontrolowane błyszczące akcenty.
+- Umieścić panel sterowania na dole, zgodnie z układem silnika ligowego.
+- Dodać czytelną typografię Inter i testy kontrastu tekstu.
+- Dodać kliknięcia zawodników, kartę danych i wybór zmian.
+- Dodać klasyczny widok statyczny z komentarzem korzystający z tego samego
+  stanu i zdarzeń Match Engine V2.
+- Dodać natychmiastowe przełączanie widoku klasycznego i interaktywnego bez
+  restartowania lub ponownego losowania meczu.
+- Sprawdzić kontrast, czytelność nazw oraz obsługę klawiatury.
+
+Warunek zakończenia: każda widoczna akcja odpowiada zdarzeniu silnika i widok
+pozostaje płynny przy pełnych 22 zawodnikach.
+
+ETAP 8 — przełącznik przedmeczowy
+
+- Dodać subtelne menu rozwijane 1.0/2.0 w rogu studia przedmeczowego.
+- Dodać MatchEngineRegistry i tymczasowy stan wyboru.
+- Domyślnie pozostawić 1.0.
+- Oznaczyć 2.0 jako prototyp.
+- Zabezpieczyć fixture przed podwójnym zakończeniem.
+
+Warunek zakończenia: na tym samym zapisie można rozegrać kolejno mecz 1.0 i
+inny mecz 2.0 bez konfliktu danych.
+
+ETAP 8A — opcjonalne powtórki goli
+
+- Dodać krótki bufor stanów wizualnych przechowujący akcję bramkową.
+- Dodać w dolnym panelu przełącznik powtórek.
+- Odtwarzać powtórkę bez ponownego uruchamiania symulacji lub RNG.
+- Zapewnić dokładny powrót do zatrzymanego stanu meczu.
+- Sprawdzić kilka goli następujących szybko po sobie oraz gola anulowanego.
+
+Warunek zakończenia: włączenie i wyłączenie powtórek nie zmienia wyniku,
+statystyk, seeda ani czasu autorytatywnej symulacji.
+
+ETAP 8B — system Action Script (scenariusze akcji ze świadomością całej drużyny)
+
+- Rozszerzyć krok scenariusza o nazwane zachowania grupowe obu drużyn (np.
+  cofnięcie linii obrony, przesunięcie pomocy, wejście napastników w pole
+  karne, wypchnięcie całej drużyny do przodu, trzymanie linii obrony) zamiast
+  jednego uniwersalnego wzoru dla wszystkich scen otwartej gry.
+- Zbudować osobny, wymienny rejestr zachowań grupowych, niezależny od
+  konkretnego scenariusza, żeby dało się dopisywać nowe scenariusze bez
+  zmiany głównego kodu animacji.
+- Zsynchronizować komentarz tekstowy z konkretnym krokiem scenariusza zamiast
+  wyłącznie z końcowym zdarzeniem autorytatywnym.
+- Rozszerzyć wszystkie istniejące rodziny scenariuszy o zachowania grupowe
+  oraz komentarz krok po kroku.
+
+Warunek zakończenia: podczas dowolnej pokazywanej akcji otwartej gry pozostali
+zawodnicy obu drużyn poruszają się zgodnie z fazą i stroną akcji (atak albo
+obrona), a nie jednym identycznym wzorem niezależnie od typu scenariusza;
+komentarz tekstowy nie wyprzedza animacji i nie zużywa dodatkowego RNG.
+
+ETAP 9 — raport i zapis świata gry
+
+- Podłączyć MatchFinalizationService.
+- Zapisać pełne statystyki, kondycję, urazy, kartki, finanse i historię.
+- Podłączyć odprawę, konferencję i studio pomeczowe.
+- Porównać ekran live z raportem końcowym.
+
+Warunek zakończenia: wynik, strzelcy, asysty, kartki i zmiany są identyczne na
+boisku, w studiu, tabeli, historii oraz po ponownym wczytaniu zapisu.
+
+ETAP 10 — Worker i optymalizacja
+
+- Uruchomić rdzeń w Web Workerze.
+- Ograniczyć częstotliwość snapshotów do UI.
+- Nie kopiować całej mapy zawodników podczas każdej klatki.
+- Dodać pomiar czasu symulacji, renderu, FPS i pamięci.
+- Dodać automatyczne ograniczenie efektów wizualnych na słabszym sprzęcie bez
+  zmiany mechaniki meczu.
+
+Warunek zakończenia: płynny obraz i brak blokowania interfejsu w długich meczach.
+
+ETAP 11 — kalibracja i rozszerzanie rozgrywek
+
+- Wykonać duże próby statystyczne.
+- Skalibrować wynik, strzały, xG, posiadanie, podania, stałe fragmenty i kartki.
+- Podłączyć Puchar Polski, baraże, sparingi i puchary europejskie przez reguły.
+- Włączać kolejne rozgrywki dopiero po osobnym teście integracyjnym.
+
+Warunek zakończenia: jeden rdzeń obsługuje wszystkie mecze gracza, a różnice
+wynikają wyłącznie z danych i reguł rozgrywek.
+
+======================================================================
+16. PLAN TESTÓW
+======================================================================
+
+16.1. Testy deterministyczne
+
+- Ten sam seed i komendy dają ten sam wynik oraz zdarzenia.
+- Zmiana prędkości animacji nie zmienia wyniku.
+- Odświeżenie UI nie zużywa RNG silnika.
+- Komenda wydana później nie zmienia wcześniejszych zdarzeń.
+
+16.2. Testy reguł i niezmienników
+
+- Na boisku jest najwyżej 11 aktywnych zawodników jednej drużyny.
+- Po czerwonej kartce zawodnik nie uczestniczy w kolejnych akcjach.
+- Zmieniony zawodnik nie może wrócić.
+- Kontuzjowany zawodnik nie znika bez zdarzenia i decyzji o zmianie.
+- Piłka zawsze ma prawidłowy stan.
+- Gol jest uznany tylko po prawidłowym przekroczeniu linii lub prawidłowym
+  rozstrzygnięciu zdarzenia strzału.
+- Rzut rożny, aut i wykop wynikają z miejsca opuszczenia boiska oraz ostatniego
+  kontaktu.
+- Spalony jest liczony w chwili podania.
+- Wynik live zawsze odpowiada liczbie uznanych goli.
+
+16.3. Testy wpływu atrybutów
+
+Na tych samych seedach porównujemy drużyny różniące się jednym czynnikiem:
+
+- lepsze podania powinny zwiększać celność i utrzymanie piłki,
+- lepsza wizja powinna poprawiać wybór adresata oraz tworzenie sytuacji,
+- lepsze wykończenie powinno poprawiać realizację podobnego xG,
+- lepszy bramkarz powinien obniżać gole względem podobnych strzałów celnych,
+- lepsza kondycja powinna zmniejszać spadek jakości pod koniec meczu,
+- agresja i intensywność powinny zwiększać odbiory, ale też faule i kartki,
+- pressing powinien zwiększać wysokie odbiory kosztem energii oraz przestrzeni.
+
+16.4. Testy taktyk
+
+- Krótkie podania kontra pressing.
+- Długie podania kontra wysoka linia.
+- Kontratak kontra ofensywne ustawienie.
+- Niskie tempo kontra zmęczony zespół.
+- Krycie indywidualne kontra mobilni napastnicy.
+- Gra w osłabieniu i reorganizacja formacji.
+- Prowadzenie jedną bramką w końcówce.
+- Odwracanie wyniku przez ofensywne zmiany.
+
+16.5. Testy statystyczne
+
+Próby po co najmniej kilka tysięcy meczów dla scenariuszy równych drużyn,
+faworyta u siebie, faworyta na wyjeździe, dużej różnicy klas, derby, złej pogody
+i czerwonej kartki.
+
+Początkowe szerokie zakresy kontrolne:
+
+- łączne gole zwykle około 2–3 na mecz,
+- łączne strzały najczęściej 18–30,
+- strzały celne najczęściej 6–12,
+- rożne najczęściej 6–12,
+- żółte kartki zwykle 2–6,
+- wyniki 0:0 występują, ale nie dominują,
+- wyniki z co najmniej 6 golami są rzadkie, ale możliwe,
+- słabszy zespół czasami wygrywa, lecz faworyt pozostaje faworytem,
+- przewaga własnego boiska jest widoczna w dużej próbie, nie w każdym meczu.
+
+Zakresy należy później skalibrować na podstawie danych referencyjnych i poziomu
+rozgrywek. Test nie może wymuszać identycznej średniej w każdej lidze.
+
+16.6. Testy interfejsu
+
+- 1920 x 1080 bez uciętych składów i kontrolek.
+- 1600 x 900 oraz 1366 x 768 z kontrolowanym skalowaniem.
+- długie nazwy klubów i zawodników,
+- brak logo, podobne kolory strojów, czerwone kartki i liczne kontuzje,
+- pauza, zmiana prędkości i szybkie wielokrotne kliknięcia,
+- przełączanie pełnego meczu i najważniejszych akcji bez zmiany wyniku,
+- przełączanie widoku klasycznego i interaktywnego w różnych minutach bez
+  zmiany seeda, wyniku, statystyk i kolejności zdarzeń,
+- powtórki włączone i wyłączone oraz powrót do prawidłowej sekundy meczu,
+- czytelność przy jasnych i ciemnych barwach klubów,
+- zgodność animacji piłki z właścicielem i komentarzem.
+
+16.7. Testy integracyjne zapisu
+
+- Mecz 1.0 na istniejącym zapisie.
+- Mecz 2.0 na tym samym istniejącym zapisie.
+- Zapis przed meczem i ponowne wczytanie.
+- Zapis po meczu i kontrola tabeli, statystyk oraz kondycji.
+- Sprawdzenie finansów, kartek, zawieszeń, urazów i historii.
+- Sprawdzenie konferencji oraz studia pomeczowego.
+- Ochrona przed dwukrotnym zakończeniem tego samego fixture.
+
+======================================================================
+17. NARZĘDZIA DIAGNOSTYCZNE PROTOTYPU
+======================================================================
+
+Tryb developerski powinien mieć przełączalną nakładkę pokazującą:
+
+- seed meczu,
+- aktualną fazę i posiadanie,
+- pozycję i cel ruchu zawodników,
+- właściciela piłki,
+- wybraną decyzję i jej kandydatów,
+- obliczone prawdopodobieństwo wykonania,
+- wpływ atrybutów, taktyki, pogody i zmęczenia,
+- kolejkę komend trenera,
+- czas kroku symulacji oraz FPS.
+
+Nakładka domyślnie jest wyłączona i nie trafia do raportu gracza. Powinna być
+włączana skrótem klawiaturowym i nie może zmieniać seeda ani czasu symulacji.
+
+Możliwość eksportu krótkiego raportu JSON z meczu znacznie ułatwi analizę
+błędów bez zapisywania całego świata gry.
+
+======================================================================
+18. RYZYKA I SPOSOBY ZABEZPIECZENIA
+======================================================================
+
+Ryzyko: piękna animacja pokazuje coś innego niż wynik silnika.
+Zabezpieczenie: jedna kolejka autorytatywnych zdarzeń; SVG wyłącznie ją odtwarza.
+
+Ryzyko: liczba ruchomych elementów blokuje React.
+Zabezpieczenie: requestAnimationFrame, referencje SVG, rzadsze snapshoty i Worker.
+
+Ryzyko: kopiowanie obecnego MatchLiveView tworzy trzeci monolit.
+Zabezpieczenie: czysty rdzeń, osobny kontroler, małe komponenty i wspólna
+finalizacja meczu.
+
+Ryzyko: nowy silnik psuje stare zapisy.
+Zabezpieczenie: brak wyboru oznacza LEGACY; prototyp jest opcjonalny i ma
+adapter domyślnych wartości.
+
+Ryzyko: zmiana taktyki przelicza przeszłość albo ujawnia gotowy wynik.
+Zabezpieczenie: silnik advance-only, zapis stanu RNG i komendy z czasem wejścia.
+
+Ryzyko: jedna taktyka staje się zawsze najlepsza.
+Zabezpieczenie: testy kontr-taktyk, koszt każdego polecenia i wieloseedowe A/B.
+
+Ryzyko: zbyt realistyczny model staje się nieczytelny dla gracza.
+Zabezpieczenie: czytelne komunikaty, podgląd aktywnych poleceń i raport pokazujący
+dlaczego zespół ma problemy bez ujawniania dokładnych wzorów.
+
+Ryzyko: silnik jest dobry statystycznie, ale pojedyncze mecze są nudne.
+Zabezpieczenie: testy jakości przebiegu, różne rytmy spotkań, okresy presji,
+kontry, stałe fragmenty i rzadkie niespodzianki bez sztucznego scenariusza.
+
+======================================================================
+19. KOLEJNOŚĆ BEZPIECZNEGO UDOSTĘPNIANIA
+======================================================================
+
+1. Tryb laboratoryjny bez UI.
+2. Symulacja shadow obok starego silnika, bez wpływu na zapis.
+3. Odtwarzanie SVG z wyniku shadow, nadal bez zapisu.
+4. Wybór 2.0 tylko dla testowego meczu ligowego.
+5. Zapis wyniku V2 na osobnej kopii kariery.
+6. Test na istniejącym zapisie użytkownika.
+7. Dobrowolny przełącznik 1.0/2.0 w normalnej grze.
+8. Rozszerzenie na Puchar Polski i baraże.
+9. Rozszerzenie na europejskie puchary i sparingi.
+10. Dopiero po długich testach rozważenie ustawienia 2.0 jako domyślnego.
+
+Po każdym etapie wymagającym testu gry należy jasno podać użytkownikowi:
+
+- co dokładnie ma sprawdzić,
+- czy może użyć istniejącego zapisu,
+- czy powinien zrobić kopię zapisu,
+- jakie dane lub zrzuty przesłać w przypadku błędu.
+
+======================================================================
+20. DEFINITION OF DONE DLA PROTOTYPU
+======================================================================
+
+Prototyp można uznać za gotowy do testów użytkownika, gdy:
+
+- przed meczem można bezpiecznie wybrać 1.0 albo 2.0,
+- 2.0 liczy mecz dopiero w trakcie jego trwania,
+- piłkarze i piłka poruszają się zgodnie z akcjami,
+- podania, strzały, gole, auty, faule, rożne, wolne i karne są widoczne,
+- taktyka, polecenia, krzyki, pogoda, kibice i RNG mają zmierzony wpływ,
+- zmiany, kartki, kontuzje i osłabienia działają zgodnie z zasadami,
+- wynik live jest identyczny z raportem, tabelą i historią,
+- stary silnik nadal działa bez zmian,
+- build i zestaw testów przechodzą,
+- mecz działa płynnie na docelowej rozdzielczości 1920 x 1080,
+- istniejący zapis gry nie wymaga migracji tylko po to, aby wypróbować prototyp.
+
+======================================================================
+21. UZGODNIONE DECYZJE PROJEKTOWE
+======================================================================
+
+1. Pierwszy prototyp powstaje wyłącznie dla zwykłych meczów ligowych.
+2. [NIEAKTUALNE od 29 sierpnia 2026, patrz wpis "gęstość pokazywanych akcji i
+   nowy model tempa"] Pełny mecz przy podstawowej prędkości ma trwać około
+   12–15 minut.
+3. Dostępne będą pełny mecz oraz tryb najważniejszych akcji.
+4. W silniku 2.0 gracz może przełączać widok klasyczny z komentarzem albo
+   interaktywny mecz z ruchem zawodników i piłki.
+5. Boisko będzie ustawione pionowo, ze składami po lewej i prawej stronie.
+6. Nie będzie zapisu ani wznawiania meczu w jego trakcie.
+7. Będą opcjonalne powtórki goli włączane lub wyłączane przez gracza.
+8. Przed każdym meczem ligowym pojawi się subtelne menu rozwijane wyboru silnika.
+9. Nowy design zostanie wykonany od zera jako spójny interfejs SVG. Nie należy
+   kopiować brzydkiej grafiki starego prototypu.
+10. Projekt ma wykorzystywać barwy klubów, połysk, gradienty i subtelne efekty.
+11. Panel sterowania pozostaje na dole, w miejscu znanym z silnika ligowego.
+12. Czcionki mają być wyraźne, jasne i czytelne; podstawą będzie Inter.
+
+======================================================================
+22. REKOMENDOWANY PIERWSZY KROK PO AKCEPTACJI PLANU
+======================================================================
+
+Pierwsza implementacja nie powinna zaczynać się od grafiki. Należy wykonać
+Etap 0 i Etap 1: sprawdzić aktualne testy cupV2, ustalić które moduły są realnie
+używalne, utworzyć neutralne kontrakty Match Engine V2 i uruchomić jeden
+syntetyczny mecz ligowy poza Reactem. Dopiero po potwierdzeniu stabilnego,
+deterministycznego przebiegu należy podłączyć ruch na boisku SVG.
+
+Takie podejście pozwoli zbudować atrakcyjny ekran bez sytuacji, w której
+animacja jest tylko dekoracją dla starego losowania wyniku.
+
+======================================================================
+23. DZIENNIK IMPLEMENTACJI
+======================================================================
+
+27 sierpnia 2026 — Etap 0: audyt i punkt odniesienia
+
+- Uruchomiono istniejące testy balansu, pełnych czynników, statystyk
+  zawodników, ocen, adaptera oraz raportu końcowego cupV2.
+- Naprawiono test audytu shadow, który zakładał na sztywno 256 meczów. Po
+  wgraniu aktywnego datapacka pula zawiera obecnie 108 przypadków, dlatego test
+  od tej chwili porównuje raport z faktycznie wygenerowaną pulą i nadal wymaga
+  minimum 100 przypadków.
+- Potwierdzono, że obecny silnik 1.0 i jego aktywny widok nie zostały
+  przełączone ani zmodyfikowane.
+
+27 sierpnia 2026 — Etap 1: neutralny kontrakt silnika
+
+- Utworzono katalog services/match/engines/v2 z neutralnymi typami, regułami
+  rozgrywek oraz publicznym API MatchEngineV2.
+- Reguły normalnego meczu ligowego są oddzielone od reguł pucharowych. Mecz
+  ligowy może zakończyć się remisem i nie uruchamia dogrywki ani karnych.
+- Dodano walidację pełnych jedenastek, nieznanych identyfikatorów zawodników,
+  duplikatów w składzie i sprzecznych reguł rozgrywek.
+- Przywrócono brakujący tryb live w rdzeniu cupV2: utworzenie meczu, przesuwanie
+  tylko do wskazanej sekundy, snapshot, finalizacja oraz ręczna zmiana.
+
+27 sierpnia 2026 — Etap 2: deterministyczny przebieg i stan przestrzenny
+
+- Utworzenie meczu nie liczy przyszłego wyniku ani przyszłej listy zdarzeń.
+- Silnik przesuwa czas wyłącznie do przodu w stałych tickach. Ta sama wartość
+  seed i ten sam zestaw komend dają identyczny przebieg.
+- Polecenia taktyczne są oznaczone dokładną sekundą i wpływają wyłącznie na
+  przyszłość. Spóźnione polecenia są jawnie odrzucane.
+- Ręczne zmiany respektują limit zmian, ławkę, czerwone kartki i zakaz powrotu
+  zawodnika, który już zszedł z boiska.
+- Dodano pierwszy stan przestrzenny dla pionowego boiska 105 x 68 metrów:
+  pozycje 22 zawodników, punkty bazowe formacji, cele ruchu, szybkość ruchu,
+  pozycję piłki i jej aktualnego posiadacza.
+- Stan przestrzenny pozostaje w granicach boiska, reaguje na posiadanie,
+  sektor akcji, taktykę, zmiany i czerwone kartki. Jest to fundament renderera,
+  nie gotowa jeszcze animacja pojedynczych podań i strzałów.
+- Dodano ograniczony bufor wskazówek wizualnych tworzonych wyłącznie z
+  autorytatywnych zdarzeń meczu. Każda wskazówka zawiera rodzaj akcji, sekundę,
+  uczestników, punkt startowy, punkt końcowy i sugerowany czas animacji. Warstwa
+  SVG nie będzie mogła samodzielnie dopisać gola, strzału, kartki ani kontuzji.
+
+Testy wykonane po tym etapie:
+
+- npm run test:match-engine-v2-core — zaliczony,
+- npm run test:cup-v2-live — zaliczony,
+- npm run test:cup-v2-shadow-audit — zaliczony na 108 przypadkach z datapacka,
+- npm run test:cup-v2-adapter — zaliczony,
+- npm run test:cup-v2-final-report — zaliczony,
+- npm run build — zaliczony.
+
+Następny krok:
+
+- rozbudować łańcuch ofensywny o przyjęcia, dryblingi, odbiory, bloki,
+  dośrodkowania, interwencje bramkarza i dobicia,
+- dopiero po testach pełnego łańcucha gola odtwarzać ten sam stan w klasycznym
+  i interaktywnym widoku SVG.
+
+27 sierpnia 2026 — Etap 3: przestrzeń, ruch, podania i odtwarzanie
+
+- Każda widoczna akcja posiadania wybiera teraz konkretnego podającego,
+  odbiorcę oraz zawodnika pressującego.
+- Wybór uwzględnia pozycję na boisku, rolę, podania, wizję, technikę,
+  ustawianie, szybkość, pracowitość, siłę, mentalność, kondycję oraz RNG.
+- Silnik zapisuje udane podania jako osobne zdarzenia. Straty zawierają zarówno
+  zawodnika odzyskującego piłkę, jak i zawodnika, który ją stracił.
+- Dodano indywidualne statystyki podań celnych, wszystkich prób podań, odbiorów
+  prowadzących do odzyskania posiadania oraz strat. Dane delikatnie wpływają na
+  ocenę meczową, bez przesłaniania goli, asyst i kluczowych zdarzeń.
+- Dodano deterministyczne trajektorie piłki dla podań, strzałów, goli,
+  interwencji i wznowień. Warstwa SVG będzie jedynie interpolowała zapisany
+  punkt początkowy i końcowy.
+- Zawodnicy otrzymują intencję ruchu: utrzymanie pozycji, wsparcie, pressing,
+  powrót lub wbiegnięcie za linię obrony.
+- Dodano rozdzielanie nakładających się pozycji zawodników oraz ograniczenia
+  wszystkich współrzędnych do boiska 105 x 68 metrów.
+- Dodano kontroler transmisji. Prędkość 1x daje około 12 minut 30 sekund,
+  obsługuje pauzę, 0.5x/1x/2x/4x, pełny mecz albo najważniejsze akcje,
+  klasyczny albo interaktywny widok oraz włączenie powtórek goli.
+- Zmiana widoku i rodzaju transmisji nie dotyka czasu silnika ani RNG. Tryb
+  najważniejszych akcji filtruje wyłącznie prezentację, a pełna symulacja nadal
+  oblicza każdą sekundę, zmęczenie, kartki, kontuzje i statystyki.
+
+Self-test Etapu 3:
+
+- pełne 90 minut sprawdzone co 5 sekund,
+- zachowana prawidłowa liczba zawodników po czerwonych kartkach i zmianach,
+- wszystkie pozycje zawodników, piłki oraz trajektorii pozostały w granicach,
+- 82 udane podania i 23 przypisane straty w próbce testowej,
+- wyraźnie najlepszy podający wybierany w 47,4% prób przy zachowaniu RNG,
+- pełna transmisja 1x zakończyła 90 minut po 12 minutach 30 sekund,
+- test balansu 200 meczów, pełne czynniki, statystyki, oceny, adapter, raport
+  końcowy oraz build produkcyjny pozostały zaliczone.
+
+27 sierpnia 2026 — Etap 4: pełne akcje ofensywne i defensywne
+
+- Każda rozstrzygnięta akcja otrzymuje wspólny identyfikator sekwencji. Dzięki
+  temu podanie, przyjęcie, drybling, strzał, blok, interwencja i zbiórka mogą
+  zostać odtworzone jako jedna akcja, a nie przypadkowa seria animacji.
+- Dodano przyjęcia piłki, udane dryblingi, odbiory w pojedynku, przechwyty,
+  dośrodkowania na bliższy i dalszy słupek oraz blokowane dośrodkowania.
+- Nie zmieniono wcześniej skalibrowanego prawdopodobieństwa progresji. Nowe
+  zdarzenia opisują zawodników uczestniczących w wyniku już rozstrzygniętej
+  akcji i nie wykonują ukrytego drugiego losowania jej powodzenia.
+- Strzał zawiera teraz identyfikator bramkarza i obrońcy kryjącego. Niecelny
+  strzał może zostać zaklasyfikowany jako rzeczywisty blok obrońcy bez
+  zmniejszenia istniejącego prawdopodobieństwa gola.
+- Po obronie, słupku, poprzeczce albo bloku rozstrzygany jest pojedynek o
+  odbitą piłkę. Rzadkie zbiórki ofensywne mogą utworzyć prawdziwe dobicie z
+  niższym xG, większą presją i niezależnym zestawem losowań.
+- Dobicia nie przyznają automatycznej asysty. Jeżeli dojdzie do drugiego
+  strzału, jego xG, celność, obrona, blok, róg i gol są normalnie księgowane.
+- Rozszerzono statystyki zawodników i drużyn o podania, przyjęcia, dryblingi,
+  odbiory, dośrodkowania, bloki, zbiórki oraz straty. Dane mają ograniczony,
+  zależny od pozycji wpływ na ocenę meczową.
+- Warstwa przestrzenna rozróżnia teraz podanie, przyjęcie, drybling, odbiór,
+  dośrodkowanie, blok i zbiórkę. Każdy rodzaj ma własny czas i trajektorię, ale
+  nadal nie może zmienić autorytatywnego wyniku symulacji.
+- Bufor wskazówek wizualnych zwiększono do 1200 zdarzeń. Pozostaje ograniczony,
+  ale mieści szczegółowe akcje z pierwszej połowy potrzebne do powtórek goli.
+
+Self-test Etapu 4:
+
+- 36 pełnych meczów zweryfikowało wszystkie nowe rodzaje akcji,
+- sprawdzono 49 pełnych łańcuchów bramkowych,
+- w próbce wystąpiło 7 prawdziwych dobić po ofensywnej zbiórce,
+- każda zbiórka wskazywała wcześniejszy strzał z tej samej sekwencji,
+- sumy statystyk drużyn i zawodników były identyczne z historią zdarzeń,
+- wszystkie trajektorie i pozycje pozostały w granicach boiska 105 x 68,
+- test 200 meczów pozostał w paśmie kalibracyjnym,
+- testy rdzenia, live, adaptera, raportu i build produkcyjny pozostały zaliczone.
+
+Następny krok:
+
+- Etap 5: przetestować reguły wznowień, fauli, kartek, urazów, doliczonego
+  czasu, końca meczu ligowego oraz wariantu pucharowego,
+- dopiero po przejściu testów nielegalnych stanów rozpocząć podłączanie
+  komend trenera i projektowanie aktywnego widoku SVG.
+
+27 sierpnia 2026 — Etap 5 zakończony: legalne wznowienia i zegar
+
+- Naprawiono martwy doliczony czas. Po zakończeniu regulaminowych 90 minut
+  silnik oblicza jego długość, wyrównuje ją do kroku symulacji i rzeczywiście
+  rozgrywa wszystkie dodatkowe sekundy.
+- Początek dogrywki i serii karnych jest teraz liczony po doliczonym czasie,
+  dzięki czemu żadna część meczu nie zostaje skrócona.
+- Faul drużyny pressującej nie jest już jednocześnie zwykłym odbiorem piłki.
+  Poszkodowany zespół otrzymuje wolny albo karny, a każde wznowienie wskazuje
+  konkretny kontakt, z którego powstało.
+- Podłączono istniejący model jakości stałych fragmentów. Wykonawca, celność,
+  bramkarz, krycie, presja i xG wpływają na wynik wolnego lub karnego.
+- W rzutach karnych wykonawca stałego fragmentu jest również strzelcem. Karny
+  nie może otrzymać asysty, a obroniony karny zapisuje interwencję bramkarza.
+- Strzały wybite na róg tworzą teraz jawne zdarzenie rzutu rożnego z odnośnikiem
+  do strzału, zamiast tylko potajemnie zmieniać sektor i posiadanie.
+- Zegar końcowy serii karnych obejmuje wszystkie wykonane próby. Wcześniej
+  ostatnie zdarzenia karnych mogły mieć czas późniejszy niż stan końcowy meczu.
+
+Self-test rozpoczęcia Etapu 5:
+
+- 60 meczów ligowych: 181 wolnych i 34 rzuty karne,
+- 24 mecze pucharowe: 7 dogrywek i 6 serii rzutów karnych,
+- wszystkie zdarzenia pozostały chronologiczne i miały unikalne identyfikatory,
+- wynik, gole w historii oraz statystyki drużyn były identyczne,
+- drużyna faulująca nigdy nie otrzymała tego samego wznowienia,
+- test balansu 200 meczów zaliczony: średnio 19,69 strzału, 1,95 gola i 6,37 rożnego.
+
+- Doliczony czas jest obliczany osobno dla pierwszej i drugiej połowy. Zegar
+  techniczny pozostaje rosnący, ale komentarz i przyszły interfejs pokazują po
+  przerwie prawidłowe minuty 46–90, bez przesunięcia o czas pierwszej połowy.
+- Dodano jawne rozpoczęcie meczu, rozpoczęcie drugiej połowy, wznowienie po
+  golu, wykonanie rożnego, aut, wykop od bramki i wprowadzenie piłki po obronie.
+- Każde wznowienie wskazuje zdarzenie źródłowe. Dzięki temu animacja nie musi
+  zgadywać, czy piłka wyszła po strzale, bloku albo interwencji bramkarza.
+- Dodano rzeczywisty przywilej korzyści. Sędzia zapisuje kontakt, lecz nie
+  zatrzymuje akcji i nie przyznaje jednocześnie rzutu wolnego.
+- Uraz tworzy osobne zdarzenie pomocy medycznej, gotowe do pokazania w SVG.
+- Druga żółta kartka usuwa zawodnika. Gracz z czerwoną kartką nie jest dalej
+  uwzględniany w profilu zespołu ani w zmęczeniu.
+- AI nie może ponownie wprowadzić zawodnika, który wcześniej opuścił boisko.
+  Automatyczne zmiany używają czasu piłkarskiego, więc doliczenie pierwszej
+  połowy nie przesuwa planowanych zmian o przypadkowe minuty.
+- Jedna kontuzja nie może zostać drugi raz niezależnie wylosowana temu samemu
+  zawodnikowi w tym spotkaniu.
+- Rozmowa w przerwie zapisuje ograniczoną reakcję drużyny, która poprawia
+  rozegranie i progresję, a następnie stopniowo wygasa. Nie zwiększa wprost
+  szansy strzału ani gola.
+
+Self-test zakończenia Etapu 5:
+
+- 60 meczów ligowych i 24 pucharowe przeszły kontrolę legalności stanów,
+- sprawdzono osobno wymuszoną drugą żółtą i przywilej korzyści,
+- oba rozpoczęcia, wykonania rożnych i wykopy miały prawidłowe źródła,
+- nie wystąpiły powroty zmienionych zawodników ani podwójne urazy,
+- test 200 meczów: średnio 19,88 strzału, 1,93 gola, 6,43 rożnego,
+- pełny test A/B atrybutów, formacji, instrukcji, pogody, murawy, sędziego,
+  morale, kondycji i rozmowy w przerwie został zaliczony,
+- build produkcyjny został zaliczony.
+
+Następny krok:
+
+- Etap 6: połączyć polecenia gracza i AI z jednym, czasowym systemem komend,
+  a następnie wykonać testy A/B kosztów oraz korzyści każdej instrukcji.
+
+27 sierpnia 2026 — Etap 6 rozpoczęty: wspólne komendy trenerów
+
+- Neutralne API silnika obsługuje teraz zmianę ustawień taktycznych, krótkie
+  polecenie przy linii, okrzyk trenera, rozmowę w przerwie oraz zmianę gracza.
+- Każda komenda ma autorytatywną sekundę. Spóźniona komenda jest odrzucana i
+  nie może zmienić wcześniejszych akcji.
+- Polecenia i okrzyki korzystają z istniejących, rozbudowanych macierzy
+  zgodności. Uwzględniają taktykę, wynik, przebieg, morale, mentalność,
+  osobowość, kartki, zmęczenie, powtarzanie i możliwe nieporozumienie.
+- Reakcja ma opóźnienie i czas wygaśnięcia. Modyfikatory są ograniczone i
+  wpływają na inicjatywę, tworzenie akcji, straty, zmęczenie, faule i urazy.
+- RNG reakcji trenera ma osobny deterministyczny strumień. Nie zużywa RNG
+  podań, strzałów ani bramkarza, a ten sam seed i komendy odtwarzają ten sam
+  przebieg.
+- Opcjonalny trener AI wybiera z dokładnie tej samej listy. Jego doświadczenie,
+  decyzje i motywacja wpływają na opóźnienie, trafność i siłę reakcji. Twarde
+  reguły blokują absurdalne wybory niezależnie od RNG.
+- API odrzuca ręczne sterowanie stroną oznaczoną jako prowadzona przez AI.
+- Szybka ścieżka symulacji pozostaje aktywna bez komend. Dokładne przechodzenie
+  tick po ticku włącza się tylko na czas aktywnych poleceń lub pracy trenera AI.
+
+Self-test bieżącej części Etapu 6:
+
+- identyczny seed, taktyka, polecenie i okrzyk stworzyły identyczne zdarzenia,
+- snapshot komend jest odłączony od autorytatywnego stanu,
+- efekty strony gospodarzy nie przeniosły się na stronę gości,
+- dwóch trenerów AI o identycznych danych utworzyło identyczne decyzje,
+- próba ręcznego wydania komendy stronie AI została odrzucona,
+- trener AI przeprowadził wcześniejszą analizę bez czekania na zwykły termin po
+  czerwonej kartce, wymuszonej zmianie oraz długiej dominacji przeciwnika,
+- reakcje zdarzeniowe mają osobny czas odnowienia, dlatego jeden uraz lub jedna
+  przerwa w grze nie tworzą serii sprzecznych decyzji co pięć sekund,
+- stan zapisuje stabilny powód ostatniej decyzji, gotowy do przetłumaczenia na
+  prosty komunikat w przyszłym panelu SVG,
+- zaliczone zostały testy macierzy poleceń, reakcji zawodników na okrzyki i
+  logicznych ograniczeń wyboru trenera AI,
+- test rdzenia i build produkcyjny zostały zaliczone.
+
+27 sierpnia 2026 — Etap 6 zakończony
+
+- Dodano osobny wieloseedowy test A/B wszystkich 10 krótkich poleceń i 8
+  okrzyków. Każda opcja została sprawdzona na 120 seedach.
+- Test wymaga, aby każda opcja miała jednocześnie mierzalną korzyść i koszt.
+  Zapobiega to powstaniu jednego polecenia, które warto stosować zawsze.
+- Sprawdzono kierunek działania każdej opcji, między innymi wzrost inicjatywy,
+  ograniczenie strat, zużycie kondycji, ryzyko faulu i oddawanie przestrzeni.
+- Wszystkie modyfikatory pozostały w ustalonych limitach bezpieczeństwa.
+- Snapshot silnika zawiera teraz odłączony model prezentacyjny dla obu trenerów:
+  nazwę polecenia lub okrzyku, stan oczekiwania albo działania, czas pozostały
+  do wygaśnięcia oraz prosty powód ostatniej reakcji AI.
+- Polskie komunikaty panelu są tworzone bez zużywania RNG i bez dostępu do
+  możliwości zmiany autorytatywnego stanu meczu.
+
+Self-test zakończenia Etapu 6:
+
+- 2160 wariantów poleceń i okrzyków przeszło kontrolę kosztów, korzyści oraz
+  limitów (18 opcji x 120 seedów),
+- test reakcji AI po czerwonej kartce, wymuszonej zmianie i dominacji zaliczony,
+- test deterministyczności komend i odseparowania obu trenerów zaliczony,
+- test reguł ligowych i pucharowych oraz build produkcyjny zaliczone.
+
+Następny krok:
+
+- Etap 7: zbudować właściwy interaktywny widok SVG korzystający wyłącznie z
+  gotowych snapshotów przestrzennych, wskazówek animacji i modelu trenera.
+
+27 sierpnia 2026 — Etap 7 rozpoczęty: pierwszy ekran SVG
+
+- Powstał niezależny ekran prototypowy o proporcjach 1920 x 1080, który nie
+  korzysta z GameContext i nie może wywołać błędu brakującego GameProvider.
+- Cały podstawowy układ został narysowany w SVG: tło, nagłówek, miejsca na
+  herby, wynik, zegar, dwa panele składów, boisko i dolny panel sterowania.
+- Murawa wychodzi poza linie boiska. Dodano linie boczne, środkową, koło,
+  pola karne, pola bramkowe, bramki, punkty karne i łuki pola karnego.
+- Na boisku wyświetlanych jest 22 zawodników z autorytatywnego snapshotu.
+  Pozycje są przeliczane ze skali 105 x 68 metrów bez tworzenia dodatkowego RNG.
+- Ostatnia akcja może być pokazana jako świecąca trajektoria SVG, a piłka jako
+  osobny animowany znacznik. Animacje respektują ustawienie ograniczenia ruchu.
+- Tryb klasyczny pozostawia statyczne ustawienie i pokazuje komentarz tekstowy.
+  Tryb interaktywny pokazuje ruchome pozycje, trajektorię oraz piłkę.
+- Dolny panel zawiera przygotowane kontrolki pauzy, tempa 0.5x–4x, trybu
+  transmisji, powtórek, taktyki, poleceń i zmian.
+- Panele składów pokazują pełne nazwiska, role, kondycję, kartki, urazy i oceny.
+  Dłuższe nazwy są dopasowywane do dostępnej szerokości zamiast obcinania.
+- Dodano test renderowania bez kontekstu gry. Potwierdził 22 znaczniki graczy,
+  obecność obu składów, zegara, kontrolek oraz wariantu klasycznego.
+
+Do kontynuacji Etapu 7 pozostaje:
+
+- podłączyć właściwe okna taktyki i zmian do callbacków prototypu,
+- przeprowadzić test płynności oraz czytelności na 1920 x 1080.
+
+28 sierpnia 2026 — Etap 7: kontroler klatek i powtórki bramek
+
+- Dodano osobny kontroler czasu obrazu. Kontroler nie przesuwa zegara silnika,
+  nie wywołuje losowania i nie może zmienić wyniku, zdarzeń ani statystyk.
+- Pozycje zawodników są płynnie interpolowane między kolejnymi autorytatywnymi
+  migawkami. Nowy ruch rozpoczyna się w punkcie aktualnie widocznym na ekranie,
+  dlatego nieregularne odstępy między migawkami nie powodują przeskoków.
+- Prędkość interpolacji uwzględnia wybrane tempo transmisji, a pauza zatrzymuje
+  zwykły ruch i nie wykonuje pustej pętli animacji w tle.
+- Piłka porusza się po deterministycznej trajektorii przypisanej do aktualnej
+  akcji. Jej wysokość jest pokazana przez uniesienie, zmianę rozmiaru i cień.
+- Akcje trafiają do kolejki w kolejności czasu i identyfikatora. Widok
+  „najważniejsze akcje” nadal filtruje wyłącznie prezentację, nie symulację.
+- Gol uruchamia powtórkę dopiero po pokazaniu całej akcji na żywo. Powtórka
+  korzysta z istniejących podań, przyjęć, dryblingów, strzałów i gola o tym
+  samym identyfikatorze sekwencji. Awaryjnie używany jest ograniczony fragment
+  maksymalnie 18 sekund przed golem.
+- Powtórka nie przelicza akcji ponownie. Ekran zwraca jedynie informację, że
+  host powinien na czas powtórki zatrzymać dalsze przesuwanie symulacji.
+- Wyłączenie powtórek usuwa kolejkę prezentacyjną. Wczytanie meczu oznacza
+  istniejące wskazówki jako historię, aby stare gole nie odtwarzały się ponownie.
+- W SVG dodano pasek „POWTÓRKA GOLA”, numer odtwarzanej części akcji i postęp.
+- Dodano hook korzystający z requestAnimationFrame. Uruchamia on klatki tylko,
+  gdy faktycznie trwa ruch, akcja albo powtórka, co ogranicza pracę procesora.
+
+Self-test tej części Etapu 7:
+
+- interpolacja kończy się dokładnie w pozycji zapisanej w migawce,
+- pauza zatrzymuje ruch zawodnika,
+- trzyczęściowa sekwencja podanie–strzał–gol została odtworzona w całości,
+- w czasie powtórki wynik i raport meczu pozostały identyczne,
+- wyłączone powtórki nie uruchomiły odtwarzania,
+- wczytany mecz nie odtworzył starych goli,
+- dwa kontrolery z tymi samymi danymi utworzyły identyczne klatki,
+- test renderowania obu wariantów SVG, test trajektorii, test pełnych sekwencji
+  akcji oraz build produkcyjny zostały zaliczone.
+
+Do zakończenia Etapu 7 pozostaje:
+
+- podłączyć prototyp do testowego wyboru silnika przed meczem ligowym,
+- wykonać pomiar płynności i test czytelności w działającej grze na 1920 x 1080.
+
+28 sierpnia 2026 — Etap 7: sterowanie taktyką i zmianami
+
+- Dodano niezależny kontroler sesji meczu 2.0. Łączy on autorytatywny runtime,
+  snapshoty, zegar transmisji, pauzę, tempo, tryb widoku i powtórki.
+- Sesja przesuwa silnik co 100 ms. Płynność zawodników i piłki nadal obsługuje
+  osobny kontroler klatek, więc całe rozbudowane SVG nie jest renderowane 60
+  razy na sekundę.
+- Otwarcie taktyki lub zmian automatycznie zatrzymuje mecz. Po zamknięciu mecz
+  jest wznawiany tylko wtedy, gdy nie był wcześniej ręcznie zatrzymany.
+- Powstało nowe Centrum Taktyczne 2.0 wykonane w SVG. Zawiera tempo,
+  nastawienie, intensywność, podania, pressing, kontratak i sposób krycia.
+- Osobne zakładki zawierają 10 krótkich poleceń z linii oraz 8 okrzyków
+  trenera. Panel pokazuje aktualną informację o aktywnym działaniu trenera.
+- Powstał panel zmian 2.0 w SVG. Pokazuje zawodników na boisku, prawidłowych
+  rezerwowych, pozycję, kondycję i wykorzystany limit zmian.
+- Gracz nie może wskazać zawodnika wyrzuconego z boiska ani zawodnika, który
+  wcześniej zszedł. Panel nie próbuje samodzielnie zatwierdzać legalności.
+- Każda taktyka, komenda i zmiana trafia do MatchEngineV2.applyCommand z
+  dokładnym czasem meczu. React nie edytuje bezpośrednio składu ani runtime.
+- Odrzucona decyzja ma zapisany powód w dzienniku komend, a widok pokazuje
+  graczowi czytelny komunikat bez zmiany zdarzeń oraz RNG.
+
+Self-test warstwy sterowania:
+
+- siedem ustawień taktycznych zostało przyjętych i zapisanych w runtime,
+- polecenie z linii oraz okrzyk zostały przyjęte po prawidłowym czasie meczu,
+- legalna zmiana weszła do składu i zwiększyła licznik zmian,
+- próba ponownego wpuszczenia zawodnika, który zszedł, została odrzucona,
+- oba panele oraz pełna sesja zostały wyrenderowane bez GameContext,
+- sesja pokazała dokładnie 22 znaczniki zawodników,
+- regresyjne testy rdzenia, kontrolera klatek i podstawowego SVG są zaliczone,
+- build produkcyjny jest poprawny.
+
+Następny krok:
+
+- dodać subtelny wybór „Silnik 1.0 / Silnik 2.0 — prototyp” przed ligowym
+  meczem i skierować wyłącznie dobrowolne mecze testowe do nowej sesji,
+- pozostawić Silnik 1.0 jako ustawienie domyślne i nie zmieniać istniejących
+  zapisów ani dotychczasowej ścieżki meczu.
+
+29 sierpnia 2026 — Etap 8: dobrowolny wybór silnika przed meczem
+
+- W studiu przed zwykłym meczem ligowym dodano małe menu „Silnik meczu”.
+- Dostępne są „Silnik 1.0 — klasyczny” oraz „Silnik 2.0 — prototyp”.
+- Silnik 1.0 pozostaje pierwszą i domyślną opcją przed każdym kolejnym meczem.
+- Wybór jest przypisany do identyfikatora konkretnego spotkania. Nie może
+  przypadkowo przejść na następny mecz ani na spotkanie ze starego zapisu.
+- Po kliknięciu rozpoczęcia wybór zostaje zablokowany dla uruchomionej sesji.
+- Brak wyboru, nieaktualny wybór albo wczytanie zapisu zawsze uruchamia 1.0.
+- Rozpoczęcie nowej kariery i wczytanie zapisu czyści tymczasowy wybór, dlatego
+  nie była potrzebna migracja danych ani zmiana formatu save.
+- Powstał jeden router ligowych ekranów meczu oraz rejestr silników. App nie
+  zawiera osobnych, rozrastających się warunków dla każdej przyszłej wersji.
+- Prototyp 2.0 buduje izolowaną sesję z prawdziwego ligowego fixture, klubów,
+  trenerów, kadr, ustawionych jedenastek, ławek, strojów i kolorów drużyn.
+- Składy runtime są kopiowane. Zmiana wykonana w prototypie nie edytuje świata
+  gry przed świadomym końcowym zatwierdzeniem meczu.
+- Jeżeli zapisany skład jest niepełny, adapter próbuje zbudować prawidłową
+  jedenastkę według istniejących zasad wyboru składu.
+- Opuszczenie testu odrzuca niezatwierdzony przebieg i wraca do studia z
+  domyślnym silnikiem 1.0. Nie powstaje drugi wynik ani częściowy zapis.
+- Na ekranie SVG dodano czytelne oznaczenie „Silnik 2.0 • prototyp”.
+
+Self-test Etapu 8:
+
+- rejestr zwraca 1.0 przy braku wyboru,
+- wybór 2.0 działa wyłącznie dla zgodnego identyfikatora spotkania,
+- stary wybór 2.0 nie przechodzi na następny fixture,
+- 1.0 pozostaje pierwszą opcją listy,
+- istniejące testy rdzenia, klatek, sterowania i SVG są nadal uruchamiane,
+- build produkcyjny przechodzi poprawnie.
+
+Następny krok — Etap 9:
+
+- zbudować jeden wspólny serwis końcowego zapisu wyniku,
+- podłączyć do 2.0 tabelę, statystyki zawodników, kartki, urazy, kondycję,
+  finanse, historię, odprawę, konferencję i studio pomeczowe,
+- dodać blokadę dokładnie jednego zatwierdzenia fixture.
+
+29 sierpnia 2026 — Etap 8.1: ciągłość akcji i ruch na boisku
+
+- Bramkarze otrzymali osobne pozycjonowanie przy własnej bramce. Nie są już
+  przesuwani wysoko razem z całym blokiem drużyny posiadającej piłkę.
+- Dodano twardą kontrolę obszaru bramkarza po każdym przeliczeniu przestrzeni,
+  również po obronie, zbiórce, wykopie i rozdzielaniu nachodzących znaczników.
+- Przed pierwszym gwizdkiem piłka leży na środku, a wykonawca rozpoczęcia i
+  partner do krótkiego rozegrania zajmują rzeczywiste pozycje przy kole.
+- Silnik pamięta aktualnego zawodnika z piłką. Odbiorca podania staje się
+  prowadzącym kolejną akcję, a zwycięzca odbioru rozpoczyna akcję swojej drużyny.
+- Każdy prowadzący wybiera podanie krótkie, podanie bezpośrednie, rajd albo
+  dośrodkowanie. Wybór łączy podania, wizję, technikę, drybling, szybkość,
+  mentalność, pozycję na boisku, polecenia taktyczne i deterministyczne RNG.
+- Kolejne części jednej akcji korzystają z końca poprzedniej trajektorii.
+  Podanie, przyjęcie, rajd, dośrodkowanie i strzał nie zaczynają się już w
+  przypadkowych, niepowiązanych punktach.
+- Kontroler obrazu prowadzi zawodnika razem z piłką podczas rajdu. Adresat
+  wychodzi do podania lub dośrodkowania, a wykonawca wykonuje ruch po zagraniu.
+- Zwykłe przesuwanie formacji trwa przez większą część odstępu między
+  migawkami, dzięki czemu znikają długie statyczne pauzy między ruchami.
+- Kropkę zastąpiła pełna piłka nożna SVG z panelami, szwami, cieniem, wysokością
+  i obrotem. Dodano animowane oznaczenia wykonawcy i celu akcji oraz zakrzywione
+  linie przebiegu podań i strzałów.
+- Wszystkie zmiany prezentacyjne są tylko odczytem zdarzeń meczu. Nie zmieniają
+  wyniku, statystyk ani kolejności losowań autorytatywnego silnika.
+
+Self-test Etapu 8.1:
+
+- sprawdzono rozpoczęcie z wykonawcą na środku i 22 aktywnych zawodników,
+- sprawdzono pozycję obu bramkarzy na początku i po 20 minutach symulacji,
+- sprawdzono wyjście adresata do podania oraz ruch prowadzącego razem z piłką,
+- sprawdzono wybór podań zwykłych, bezpośrednich i rajdów przy zachowaniu RNG,
+- sprawdzono pełne sekwencje akcji, SVG futbolówki i produkcyjny build.
+
+29 sierpnia 2026 — Etap 8.2: strefy, przerwa, momentum i celebracja gola
+
+- Każdy zawodnik otrzymał własną niewidoczną strefę pracy wyprowadzoną z jego
+  miejsca w ustawieniu oraz roli: bramkarza, obrońcy, pomocnika lub napastnika.
+- Strefy mają osobne granice boczne i pionowe. Pozycja, cel ruchu, pressing,
+  asekuracja, powrót, przyjęcie podania i rajd są kontrolowane względem tych
+  granic, dzięki czemu piłkarze nie zamieniają się dowolnie miejscami.
+- Każdy zawodnik otrzymał osobny deterministyczny rytm, fazę i amplitudę
+  ruchu. Zespół nadal reaguje na piłkę i taktykę, lecz jedenastka nie porusza
+  się już jak jeden sztywny blok.
+- Rozpoczęcie gry oraz celebracja po zatrzymaniu meczu są świadomymi wyjątkami.
+  Po nich zawodnicy płynnie wracają do swoich normalnych stref.
+- Pod nagłówkiem dodano pasek momentum od -100 do +100. Lewa część używa barw
+  gospodarzy, prawa barw gości, a wypełnienie pokazuje bieżącą przewagę.
+- Po zakończeniu pierwszej połowy zegar i symulacja zatrzymują się dokładnie na
+  granicy połowy. Widok pokazuje wynik do przerwy i czeka na decyzję gracza.
+- Główny przycisk pokazuje kolejno „ROZPOCZNIJ MECZ”, „PAUZA”, „WZNÓW” oraz
+  podczas przerwy „II POŁOWA”.
+- Gol zatrzymuje dalsze liczenie meczu na cztery rzeczywiste sekundy. Na boisku
+  pojawia się migający komunikat „GOL!” w barwach zdobywcy bramki.
+- Strzelec i czterech najbliższych zawodników biegną do krótkiej celebracji,
+  zatrzymują się przy sobie, a następnie wracają płynnie do ustawienia.
+- Jeżeli powtórki są włączone, powtórka rozpoczyna się dopiero po zakończeniu
+  czterosekundowej celebracji. Wyłączenie powtórek nie wyłącza informacji o golu.
+- Wszystkie strefy i ruchy prezentacyjne pozostają odłączone od wyniku oraz RNG
+  silnika. Momentum widoczne na pasku pochodzi bezpośrednio ze stanu meczu.
+
+Self-test Etapu 8.2:
+
+- cały mecz sprawdzono co pięć sekund pod kątem pozostawania 22 zawodników w
+  przypisanych strefach, z uwzględnieniem kartek i zmian,
+- potwierdzono co najmniej sześć różnych wektorów ruchu w jednej drużynie,
+- sprawdzono dokładną granicę przerwy i wszystkie cztery etykiety przycisku,
+- sprawdzono obecność paska momentum i ekranu przerwy w renderowanym SVG,
+- sprawdzono aktywną celebrację przed upływem 4 sekund i jej zakończenie po
+  przekroczeniu tego czasu,
+- sprawdzono kolejność: akcja bramkowa, celebracja, opcjonalna powtórka.
+
+29 sierpnia 2026 — Etap 8.3: pełniejsze wykorzystanie boiska
+
+- Przeliczanie pozycji z ustawienia taktycznego zostało rozszerzone na niemal
+  całą długość murawy. Obrona, pomoc i atak zajmują teraz wyraźnie oddzielone
+  sektory zamiast skupiać się w krótkim pasie przy środku.
+- Poszerzono również rozmieszczenie boczne. Skrzydłowi i boczni obrońcy
+  wykorzystują więcej szerokości boiska, nadal pozostając wewnątrz linii.
+- Osobiste strefy ruchu są krótsze wzdłuż boiska. Zawodnik reaguje na piłkę,
+  pressing i posiadanie, ale nie opuszcza przez to całkowicie swojej formacji.
+- Minimalny odstęp odpowiada teraz rzeczywistej średnicy znacznika widocznego
+  w SVG. Korekta pozycji uwzględnia indywidualną strefę każdego zawodnika.
+- Rozsuwanie ikon działa po zwykłym ruchu oraz po animowanej akcji, więc podanie,
+  odbiór lub walka o piłkę nie pozostawiają dwóch znaczników na sobie.
+
+Self-test Etapu 8.3:
+
+- sprawdzono rozpiętość ustawienia na długości i szerokości murawy,
+- sprawdzono odległości między wszystkimi aktywnymi ikonami co pięć sekund
+  przez pełne 90 minut,
+- ponownie sprawdzono strefy zawodników, bramkarzy, akcje, klatki animacji
+  oraz renderowanie całego widoku SVG.
+
+29 sierpnia 2026 — Etap 8.4: ciągłość akcji i płynny obraz meczu
+
+- Każda nowa akcja otwarta rozpoczyna się teraz w miejscu, w którym piłka
+  zakończyła poprzednią akcję. Zmiana wykonawcy nie przenosi już piłki do jego
+  wcześniejszego miejsca w ustawieniu.
+- Zawodnik najpierw płynnie dochodzi do piłki, a dopiero potem wykonuje podanie,
+  rajd, dośrodkowanie albo strzał. Jego współrzędne nie są podmieniane w jednej
+  klatce na początek zapisanej akcji.
+- Odbiorca wychodzi do podania ze swojej ostatniej widocznej pozycji. Po
+  przyjęciu piłki następna akcja korzysta z tego samego punktu, dzięki czemu
+  sekwencja A → B → D jest przedstawiana jako dwa rzeczywiste zagrania.
+- Po zakończeniu udziału w akcji zawodnik wraca do strefy taktycznej płynnym
+  torem. Strefa nie może już teleportować wykonawcy rozpoczęcia, wybiegającego
+  odbiorcy ani zawodnika prowadzącego piłkę.
+- Wybieg adresata do podania został ograniczony do realistycznego dystansu.
+  Przejście akcji do kolejnego sektora nie przesuwa już piłkarza o kilkadziesiąt
+  metrów w czasie jednego zagrania.
+- Zdarzenia jednego pięciosekundowego kroku silnika otrzymują wspólny budżet
+  prezentacji. Kolejka obrazu nie pozostaje już kilka akcji za zegarem meczu.
+- Pętla animacji przestała uruchamiać się ponownie przy każdej aktualizacji
+  zegara React. Jedna ciągła pętla pobiera najnowszy stan meczu i renderuje
+  wszystkie klatki bez regularnego szarpnięcia co około 100 ms.
+- Faule, kartki, urazy i zmiany zatrzymują piłkę w bieżącym miejscu zamiast
+  tworzyć sztuczny lot do ogólnego środka sektora.
+- Wszystkie poprawki dotyczą wyłącznie prezentacji. Wynik, decyzje zawodników,
+  statystyki, taktyka i deterministyczne RNG pozostają bez zmian.
+
+Self-test Etapu 8.4:
+
+- odtworzono celowo uszkodzoną sekwencję A → B, następnie B → D,
+- potwierdzono identyczny koniec pierwszego i początek drugiego podania,
+- zmierzono maksymalny ruch między klatkami: piłka 2,787 m, zawodnik 0,427 m,
+- potwierdzono opróżnienie całej kolejki akcji przed kolejnym krokiem meczu,
+- ponownie przetestowano 36 pełnych spotkań, łańcuchy bramkowe, rajdy, odbiory,
+  sterowanie, SVG i niezmienność statystyk silnika.
+
+29 sierpnia 2026 — Etap 8.5: stałe fragmenty, auty, spalone i rajdy
+
+- Zachowano istniejące decyzje silnika dotyczące rożnych, autów, wolnych,
+  karnych, spalonych i rajdów. Warstwa obrazu odczytuje wynik zdarzenia, ale
+  nie losuje własnych sytuacji i nie może zmienić rezultatu meczu.
+- Rzut rożny otrzymał osobne ustawienie. Wykonawca przechodzi do narożnika,
+  co najmniej pięciu atakujących wbiega w pole karne, obrońcy ustawiają krycie,
+  a bramkarz pozostaje przy bramce.
+- Bezpośredni rzut wolny ustawia piłkę w realistycznej odległości, wykonawcę
+  nad piłką, czteroosobowy mur 9,15 m dalej oraz zawodników oczekujących w polu
+  karnym. Boczny wolny korzysta z ustawienia do dośrodkowania.
+- Rzut karny odbywa się z punktu oddalonego o 11 m od bramki. Bramkarz stoi na
+  linii, wykonawca przy piłce, a pozostali zawodnicy czekają poza polem karnym.
+- Aut pokazuje wykonawcę przy właściwej linii bocznej oraz najbliższe opcje do
+  wznowienia i kryjących je przeciwników.
+- Przy spalonym linia obrony zatrzymuje się na jednej wysokości, a w SVG
+  wyświetlana jest przerywana linia ułatwiająca odczytanie decyzji.
+- Indywidualny rajd został wyróżniony pulsującym znacznikiem piłki i napisem.
+  Zawodnik nadal prowadzi piłkę po torze wyznaczonym przez jego atrybuty,
+  decyzję taktyczną oraz RNG silnika.
+- Na murawie pojawiają się krótkie komunikaty: „RZUT ROŻNY”, „AUT”, „RZUT
+  WOLNY”, „RZUT KARNY”, „SPALONY” i „RAJD Z PIŁKĄ”.
+- Przejście całych formacji do ustawienia stałego fragmentu i późniejszy
+  powrót wykorzystują interpolację od ostatniej widocznej pozycji. Zawodnicy
+  nie są przenoszeni natychmiast między miejscami.
+
+Self-test Etapu 8.5:
+
+- sprawdzono osobno ustawienie rożnego, autu, wolnego, karnego i spalonego,
+- potwierdzono wejście minimum pięciu zawodników obu drużyn w pole karne przy
+  rożnym, czteroosobowy mur, pozycje obu bramkarzy i wykonawcę przy linii autu,
+- w 60 pełnych meczach ligowych wygenerowano 350 rożnych, 944 auty, 155 wolnych,
+  30 karnych, 74 spalone oraz 2104 indywidualne rajdy,
+- ponownie sprawdzono ciągłość klatek, trajektorie akcji, SVG oraz produkcyjny
+  build całej gry.
+
+======================================================================
+UWAGA: RÓWNOLEGŁA SESJA I SPRZECZNY KIERUNEK PREZENTACJI
+======================================================================
+
+29 sierpnia 2026 — podczas pisania poniższego wpisu (praca nad gęstością akcji
+i tempem prezentacji) okazało się, że ten plik urósł z 1228 do 1636 linii w
+trakcie tej samej rozmowy — równolegle działała inna sesja, która dopisała
+wpisy Etapów 6, 7, 8, 8.1, 8.2, 8.3, 8.4 i 8.5 powyżej. Poniższy wpis (gęstość
+akcji i tempo) powstawał w tym samym czasie, niezależnie od tamtej pracy, na
+wyraźne, odrębne polecenie użytkownika w tej rozmowie.
+
+Wpisy Etapu 8.1 i 8.4 świadomie wprowadziły i chwalą ciągły, płynny ruch całej
+formacji przez większość odstępu między migawkami („znikają długie statyczne
+pauzy między ruchami"). Wpis poniżej robi coś przeciwnego: poza aktywną sceną
+akcji każdy zawodnik ma teraz spoczywać dokładnie na swoim stałym slocie
+formacji (anchor), bez żadnego ciągłego ruchu, na wyraźne życzenie użytkownika
+z tej rozmowy. Zmieniono dokładnie ten sam plik —
+services/match/engines/v2/MatchEngineV2FrameControllerService.ts — w
+`createTracks` i `synchronizeTracks`, zamieniając cel śledzenia pozycji
+zawodnika z `player.position` na `player.anchor`.
+
+Stan na dysku zweryfikowany bezpośrednio po zapisaniu tego wpisu: wersja
+oparta o `player.anchor` jest aktualnie obowiązująca w kodzie. Jeżeli
+równoległa sesja nadal działa i kontynuuje linię Etapu 8.x, może nadpisać tę
+zmianę z powrotem na ciągły ruch — a wtedy poniższy opis nowego modelu tempa
+(zatrzymana formacja poza akcją) przestanie odpowiadać rzeczywistemu kodowi.
+
+Przed dalszą pracą nad silnikiem 2.0 użytkownik powinien świadomie
+rozstrzygnąć, który model prezentacji między akcjami ma obowiązywać:
+- ciągły, płynny ruch całej formacji przez cały mecz (kierunek Etapu 8.1/8.4),
+- czy statyczny układ taktyki poza sceną akcji, z pełną animacją tylko w
+  trakcie sceny (kierunek wpisu poniżej, zgodny z tą rozmową).
+Oba modele nie mogą obowiązywać jednocześnie w tym samym pliku.
+
+======================================================================
+
+29 sierpnia 2026 — gęstość pokazywanych akcji i nowy model tempa
+
+Zakres tego wpisu ustalono w osobnej rozmowie z użytkownikiem, niezależnie od
+kolejności Etapów 6–8.5 opisanej powyżej. Punkt wyjścia: silnik miał już
+gotową bibliotekę gotowych scenariuszy akcji (10 rodzin x warianty dla goli,
+niecelnych, obron, spalonych i fauli) oraz dwupoziomowy wybór gęstości
+transmisji. Zadanie polegało na rozbudowaniu tego do trzech poziomów gęstości
+oraz na zmianie tempa meczu w spokojnych fragmentach.
+
+Ustalone przez użytkownika reguły trzech poziomów:
+- WSZYSTKIE AKCJE: każdy strzał niezależnie od skutku, a także faule, rzuty
+  rożne, rzuty wolne i rzuty karne jako zdarzenia same w sobie, nawet bez
+  zakończenia strzałem.
+- KLUCZOWE: wyłącznie gole, rzuty karne (trafione i niewykorzystane),
+  niecelne strzały z wysokim xG, strzały w słupek lub poprzeczkę oraz obrony
+  bramkarza przy wysokim xG. Faule, rożne i wolne bez zakończenia strzałem NIE
+  wchodzą do tego poziomu.
+- TYLKO KOMENTARZ: brak animowanych scen, sam zapis tekstowy zdarzeń.
+
+Zmiany w kodzie:
+
+- `MatchEngineV2Types.ts`: dodano opcjonalne pole `xG` na wskazówce wizualnej
+  (`MatchEngineV2VisualCue`) oraz zmieniono `MatchEngineV2TransmissionMode` z
+  `'KEY_MOMENTS' | 'GOALS_ONLY'` na `'ALL_ACTIONS' | 'KEY_MOMENTS' |
+  'COMMENTARY_ONLY'`. Nazwa KEY_MOMENTS została zachowana, ale jej znaczenie
+  zawęziło się z dawnego „gole + faule + rożne + obrony + niecelne" do nowej,
+  ściślejszej definicji powyżej.
+- `MatchEngineV2SpatialService.ts`: xG źródłowego zdarzenia jest teraz
+  przenoszone na każdą tworzoną wskazówkę wizualną.
+- `MatchEngineV2HighlightScriptService.ts`: dodano rozpoznawanie samodzielnego
+  rzutu rożnego, wolnego i przyznanego karnego bez własnej rodziny scenariusza
+  (`isStandaloneRestartAction`) oraz próg xG (0,30) decydujący, czy niecelny
+  strzał lub obrona liczą się jako kluczowe (`isKeyMoment`,
+  `isKeyMomentCue`). Funkcja `terminalCues` została przebudowana pod trzy
+  poziomy zamiast dwóch.
+- `MatchEngineV2PlaybackService.ts`: tempo spokojnej gry zmieniono z 7,2 na 60
+  sekund meczu na sekundę rzeczywistą (1 sek = 1 min), domyślny poziom
+  transmisji zmieniono na WSZYSTKIE AKCJE.
+- `MatchEngineV2FrameControllerService.ts`: samodzielny rzut rożny lub wolny
+  bez własnego scenariusza dostaje teraz scenę zbudowaną z surowej,
+  autorytatywnej wskazówki zamiast zostać pominięty. Formacja poza aktywną
+  sceną zbiega teraz do stałego slotu (`anchor`), a nie do bieżącej pozycji
+  autorytatywnej — patrz ostrzeżenie powyżej. Ustawianie się do stałego
+  fragmentu (`applyStructuredRestartShape`) przestało być ograniczane
+  realistyczną prędkością sprintu i, tak jak celebracja gola, korzysta teraz z
+  bezpośredniej interpolacji — inaczej, przy formacji spoczywającej daleko na
+  stałym slocie, ustawianie się do rożnego lub wolnego nie mieściłoby się w
+  dotychczasowym limicie ruchu na jedną scenę.
+
+Self-test:
+
+- npm run test:match-engine-v2-core — zaliczony,
+- npm run test:match-engine-v2-actions — zaliczony,
+- npm run test:match-engine-v2-highlights — zaliczony (nowe przypadki: niski
+  i wysoki xG niecelnego strzału i obrony, słupek/poprzeczka, karny
+  niewykorzystany, samodzielny rożny bez strzału — każdy poziom pokazuje
+  dokładnie oczekiwany zestaw),
+- npm run test:match-engine-v2-frames — zaliczony po poprawkach opisanych
+  niżej,
+- npm run test:match-engine-v2-action-chain — zaliczony,
+- npm run test:match-engine-v2-rules — zaliczony,
+- npm run test:match-engine-v2-coach-balance — zaliczony,
+- npm run test:match-engine-v2-controls — zaliczony,
+- npm run test:match-engine-v2-registry — zaliczony,
+- npm run test:match-live-v2-svg — zaliczony,
+- npm run test:cup-v2-live — zaliczony,
+- npm run test:cup-v2-shadow-audit — zaliczony,
+- npm run build — zaliczony.
+
+Znaleziony i poprawiony problem podczas testów: formacja spoczywająca na
+stałym slocie bywa znacznie dalej od realnego miejsca akcji niż wcześniej
+zakładał kod animacji pojedynczego zawodnika (`applyActionChoreography`).
+Wykrył to test kontrolera klatek — zawodnik nie mógł dobiec do piłki podczas
+rajdu, a przy stałych fragmentach cała formacja przesuwała się o więcej niż
+przyjęty limit jednej sceny. Ustawianie się do stałych fragmentów przestało
+być limitowane (patrz wyżej). Test bezpieczeństwa dla stałych fragmentów
+został podniesiony z 10 m na przekątną całego boiska — pilnuje teraz tylko
+oczywistego błędu we współrzędnych, nie realistycznego dystansu, ponieważ
+ustawianie się do rożnego po drugiej stronie boiska jest teraz zamierzonym,
+przyjętym uproszczeniem prezentacji, tak jak zbiórka drużyny po golu.
+
+Znane ograniczenie pozostawione bez zmian: ruch pojedynczego zawodnika w
+trakcie zwykłej (nie stałofragmentowej) sceny akcji — dogonienie piłki,
+prowadzenie, podanie — nadal jest ograniczone realistyczną prędkością sprintu
+liczoną od miejsca, w którym dany zawodnik aktualnie spoczywał. Jeśli jego
+stały slot jest bardzo daleko od miejsca, w którym scena się zaczyna, może nie
+zdążyć w pełni dobiec do piłki w czasie trwania jednej sceny — spokojny,
+realistyczny bieg zamiast skoku, ale bez gwarancji pełnego dotarcia na
+miejsce. Naprawa tego do końca (np. wydłużanie czasu sceny proporcjonalnie do
+dystansu) wymaga osobnej pracy nad modelem animacji i nie została zrobiona w
+tej sesji.
+
+Zaktualizowane testy: `MatchEngineV2HighlightScriptTests.ts` (nowe przypadki
+progu xG i samodzielnego rożnego), `MatchEngineV2ActionTrajectoryTests.ts`
+(zmiana nazwy trybu, zaktualizowany komentarz o tempie),
+`MatchLiveV2PrototypeRenderTests.tsx` (TYLKO KOMENTARZ zamiast starego GOALS_ONLY),
+`MatchEngineV2FrameControllerTests.ts` (test ciągłego ruchu przepisany na
+zmianę `anchor` zamiast `position`, z dodatkowym sprawdzeniem, że sama zmiana
+autorytatywnej pozycji NIE porusza znacznika poza sceną; podniesiony limit
+testu bezpieczeństwa stałych fragmentów; trzy testowe zawodniki w regresji
+łańcucha A→B→D otrzymały przypięte kotwice blisko współrzędnych scenariusza).
+
+Uwaga o czasie trwania meczu: sekcja 21 punkt 2 tego planu („12–15 minut przy
+podstawowej prędkości") jest od tego wpisu nieaktualna. Po nowym tempie mecz
+bez wielu pokazywanych scen trwałby rzędu 1,5 minuty realnego czasu, a z
+typową liczbą scen w trybie WSZYSTKIE AKCJE — kilka minut. Użytkownik
+świadomie zaakceptował tę zmianę w tej rozmowie.
+
+======================================================================
+
+29 sierpnia 2026 — poprawka wydajności: throttling odświeżania i nazwane tempa
+
+Po wdrożeniu tempa 1 sek = 1 min użytkownik zgłosił realny problem przy
+faktycznym graniu: chaos na ekranie, piłka animowana z pustych miejsc, zegar
+skaczący nierówno co ok. 15 sekund meczowych zamiast płynąć. Zdiagnozowano
+przyczynę: kontroler sesji ([MatchLiveV2Session.tsx](components/match/v2/MatchLiveV2Session.tsx))
+odświeżał autorytatywny stan meczu co 100 ms (10 razy na sekundę). Przy starym
+tempie (7,2 sek meczu/sek rzeczywistą) rzadko przekraczało to granicę kroku
+silnika (5 sekund meczu), więc kosztowne przeliczenie migawki
+(`MatchEngineV2.advanceTo` → pełna resynchronizacja przestrzenna → agregacja
+statystyk wszystkich zdarzeń) uruchamiało się tylko ok. 1,4 raza na sekundę.
+Przy nowym tempie (60 sek/sek) niemal każde odświeżenie co 100 ms przekraczało
+tę granicę, więc to samo kosztowne przeliczenie zaczęło się uruchamiać ok. 10
+razy na sekundę — przeglądarka nie nadążała.
+
+Rozważono i odrzucono pomysł skoku silnika od razu do najbliższej pokazywanej
+akcji: złamałoby to działający już system poleceń trenerskich z Etapu 6, bo
+polecenie wydane „teraz” nie miałoby się do czego podłączyć, gdyby silnik już
+policzył przyszłość. Zamiast tego:
+
+- Interwał odświeżania w `MatchLiveV2Session.tsx` wydłużono ze 100 ms do
+  250 ms (z 10 do 4 kosztownych przeliczeń na sekundę). Silnik nadal liczy
+  krok po kroku, więc polecenia trenerskie trafiają we właściwy moment —
+  zmienia się tylko częstotliwość odświeżania ekranu, nie zasada działania.
+- Tempo przeliczono z abstrakcyjnego mnożnika (0,5x/1x/2x/4x nad stałą 60) na
+  wprost nazwane warianty żądane przez użytkownika: NORMALNE (1 sek
+  rzeczywista = 1 min meczu), WOLNIEJ (2 sek = 1 min), DUŻO WOLNIEJ (3 sek =
+  1 min). Typ `MatchEngineV2PlaybackSpeed` to teraz `1 | 2 | 3`, a wzór w
+  `MatchEngineV2PlaybackService.advance` to `60 / speed` zamiast `60 * speed`.
+
+Zmienione pliki: `MatchEngineV2Types.ts`, `MatchEngineV2PlaybackService.ts`,
+`MatchLiveV2Prototype.tsx` (etykiety i cykl przycisku TEMPO),
+`MatchLiveV2Session.tsx` (interwał).
+
+Self-test: `test:match-engine-v2-actions`, `test:match-live-v2-svg`,
+`test:match-engine-v2-controls` oraz `npm run build` — zaliczone.
+
+Otwarte pytanie, nierozstrzygnięte w tej sesji: nawet wariant DUŻO WOLNIEJ
+(3 sek = 1 min = 20 sek meczu/sek rzeczywistą) wymaga ok. 4 kroków silnika na
+sekundę — nadal więcej niż stare, działające bez zarzutu tempo 7,2 sek/sek
+(ok. 1,4 kroku na sekundę). Rzeczywista wydajność w przeglądarce użytkownika
+po tej poprawce nie została jeszcze potwierdzona graniem — do sprawdzenia przy
+najbliższym teście.
+
+======================================================================
+
+30 sierpnia 2026 — trzy poprawki jakości sceny + otwarta propozycja Action Script
+
+Po realnym graniu użytkownik zgłosił trzy konkretne błędy w [MatchLiveV2Prototype.tsx](components/match/v2/MatchLiveV2Prototype.tsx)
+i [MatchEngineV2FrameControllerService.ts](services/match/engines/v2/MatchEngineV2FrameControllerService.ts):
+zegar nadal skacze co 0,25 s, piłka nie znika poza aktywną sceną, a w trakcie
+sceny piłka bywa animowana z miejsca, w którym nie stoi żaden zawodnik.
+
+1. Piłka znika poza sceną: renderowanie piłki w `MatchLiveV2Prototype.tsx`
+   uzależniono od `Boolean(latestCue) || frame.replay.active`, zamiast
+   pokazywać ją zawsze w trybie interaktywnym.
+
+2. Kosmetyczny, płynny zegar: dodano `frame.displaySecond` w
+   `MatchEngineV2FrameControllerService` — sekunda futbolowa (uwzględniająca
+   doliczony czas i przerwę, wzięta z już policzonego `snapshot.displayClock`)
+   płynnie dolicza rzeczywisty czas, ale **tylko gdy nic się nie dzieje**
+   (brak aktywnej sceny, powtórki i kolejki scen) — inaczej zegar zamrażałby
+   się dokładnie tak samo jak autorytatywny czas silnika podczas pokazywanej
+   akcji. Sam autorytatywny snapshot nadal odświeża się rzadziej (250 ms);
+   ten licznik tylko wygładza obraz między jego aktualizacjami i koryguje się
+   sam przy każdej kolejnej. Format „45+2” w doliczonym czasie pokazuje wersję
+   autorytatywną zamiast próbować go płynnie doliczać kosmetycznie.
+
+3. Piłka z pustego miejsca — właściwa przyczyna i dwie próby naprawy:
+   Zawodnik teraz spoczywa na stałym slocie formacji (`anchor`) między
+   scenami, co bywa daleko od miejsca, w którym scena akcji się zaczyna.
+   Piłka natomiast od razu ustawiała się w `cue.start`, podczas gdy dobiegający
+   tam zawodnik (z ograniczoną, realistyczną prędkością sprintu) często nie
+   zdążył dotrzeć na czas. Pierwsza próba naprawy (wydłużanie całej sceny
+   proporcjonalnie do dystansu) okazała się zła: zwykłe, umiarkowanie odległe
+   podania zaczęły trwać po kilka sekund zamiast ułamka sekundy, co zepsuło
+   dopasowane wcześniej testy i realnie spowolniłoby całą prezentację.
+   Właściwa naprawa: zamiast wydłużać czas, **przyciągnięto punkt startowy
+   piłki bliżej zawodnika** — `cue.start` jest teraz przycinany do tego, jak
+   daleko zawodnik realnie zdąży dobiec w krótkim, stałym oknie podejścia
+   (`movePointTowards(actorOrigin, cue.start, budżet_metrów)`), zamiast
+   pozostawać w oryginalnym, odległym miejscu. Stałe fragmenty (rożny/aut/
+   wolny/karny/spalony) są wyłączone z tej korekty, bo mają własną, osobną
+   choreografię ustawienia formacji (`applyStructuredRestartShape`), która i
+   tak nadpisuje pozycję wykonawcy.
+
+Przy okazji naprawiono też: `blockSimulation` sprawdzał wcześniej tylko
+`cue.scriptedHighlight`, więc samodzielny rzut rożny/wolny bez gotowego
+scenariusza (dodany w poprzednim wpisie) nie zatrzymywał czasu silnika mimo
+wyświetlania sceny — teraz blokuje każda aktywna lub oczekująca scena. Kierunek
+mnożnika `playback.speed` w trzech miejscach czasu trwania animacji
+(`PLAYER_MOVE_MS`, zwykłe ustawianie się scen) był odwrócony po zeszłotygodniowej
+zmianie znaczenia tempa (teraz wyższa wartość = wolniej, a nie szybciej) —
+poprawiono z dzielenia na mnożenie.
+
+Self-test: `test:match-engine-v2-core`, `-actions`, `-highlights`, `-frames`,
+`-action-chain`, `-rules`, `-coach-balance`, `-controls`, `-registry`,
+`test:match-live-v2-svg` oraz `npm run build` — wszystkie zaliczone
+(zaktualizowano też oczekiwania dwóch testów, które sprawdzały stare,
+niepoprawne zachowanie: limit prędkości ustawiania formacji przy stałym
+fragmencie oraz obecność piłki w statycznym, bezczynnym kadrze).
+
+Otwarta, nierozpoczęta propozycja: użytkownik przedstawił szczegółową
+specyfikację systemu „Action Script” — biblioteki wielu gotowych scenariuszy
+akcji (atak środkiem, kontratak, dośrodkowanie itd.), gdzie każdy scenariusz
+opisuje nie tylko zawodnika z piłką, ale też zachowania grupowe reszty obu
+drużyn (np. `DEFENSIVE_LINE_RETREAT`, `MIDFIELD_SHIFT_LEFT`) oraz synchronizację
+komentarza tekstowego z konkretnymi momentami akcji. To wymaga osobnej analizy
+i projektu, zanim powstanie implementacja — nie zostało jeszcze zaprojektowane
+ani rozpoczęte w kodzie.
+
+======================================================================
+
+30 sierpnia 2026 — Etap 8B rozpoczęty: plan implementacji systemu Action Script
+
+Diagnoza przyczyny chaosu (analiza istniejącego kodu przed projektem):
+
+- [MatchEngineV2FrameControllerService.ts](services/match/engines/v2/MatchEngineV2FrameControllerService.ts)
+  `applyActionChoreography` porusza wyłącznie aktora i odbiorcę danego kroku
+  (maks. 2 zawodników). Resztę drużyn obsługuje jedna, wspólna dla
+  wszystkich scenariuszy funkcja `applyOpenPlayTeamFlow` — bierze 3 najbliższych
+  zawodników atakujących jako „wsparcie” i 2 najbliższych broniących jako
+  „pressing”, zawsze tym samym uniwersalnym wzorem, niezależnie od tego, czy
+  pokazywana scena to kontratak, dośrodkowanie czy rajd środkiem.
+- Skutek: 15 z 22 zawodników (ci niezaangażowani bezpośrednio i spoza
+  najbliższej piątki) w ogóle się nie rusza w trakcie sceny, a ci którzy się
+  ruszają, robią to identycznie niezależnie od charakteru akcji — stąd brak
+  logicznego, futbolowego wrażenia opisany przez użytkownika.
+- Komentarz tekstowy w [MatchLiveV2Prototype.tsx](components/match/v2/MatchLiveV2Prototype.tsx)
+  pochodzi dziś wyłącznie z already-zapisanych zdarzeń autorytatywnych
+  (`snapshot.result.events`), pokazywanych jako lista przeszłych zdarzeń w
+  trybie klasycznym. Nie ma mechanizmu wiążącego konkretny tekst z konkretnym,
+  aktualnie odtwarzanym krokiem scenariusza w trybie interaktywnym.
+
+Plan implementacji (kolejność wykonania w tej sesji):
+
+1. Typy: dodać `MatchEngineV2GroupBehaviorId` (unia nazwanych zachowań:
+   DEFENSIVE_LINE_RETREAT, MIDFIELD_SHIFT_LEFT, MIDFIELD_SHIFT_RIGHT,
+   TEAM_PUSH_FORWARD, ATTACKERS_ENTER_BOX, DEFENDERS_HOLD_LINE). Rozszerzyć
+   `MatchEngineV2HighlightStep` i `MatchEngineV2VisualCue` o opcjonalne pola
+   `attackingGroupBehavior`, `defendingGroupBehavior`, `commentaryTemplate`.
+   Funkcja `step(...)` w bibliotece scenariuszy dostaje opcjonalny, ostatni
+   parametr z tymi trzema polami, żeby nie trzeba było przepisywać istniejących
+   wywołań bez tych danych.
+2. Nowy plik `MatchEngineV2GroupBehaviorService.ts`: rejestr pięciu (plus
+   symetryczny wariant w prawo) czystych funkcji zachowań grupowych. Każda
+   dostaje kontekst (renderowani zawodnicy, dane przestrzenne, strona,
+   pozycja piłki, postęp kroku, zbiór wykluczonych id uczestników bezpośrednich,
+   funkcja pobierająca stabilny punkt startowy sceny, limit widocznego ruchu) i
+   przesuwa tylko zawodników danej roli/strony, bez tworzenia nowego RNG ani
+   dotykania stanu autorytatywnego.
+3. Podłączenie w `MatchEngineV2FrameControllerService.ts`: nowa funkcja
+   `applyScenarioGroupBehaviors` używana zamiast `applyOpenPlayTeamFlow`,
+   kiedy aktywny krok ma ustawione `attackingGroupBehavior` lub
+   `defendingGroupBehavior`. Scenariusze bez tych pól nadal korzystają z
+   dotychczasowego uniwersalnego wzoru — brak wstecznej niezgodności.
+4. Synchronizacja komentarza: `commentaryTemplate` (np. „{actor} rusza w
+   kierunku bramki...”) trafia do wskazówki wizualnej i jest podmieniany na
+   prawdziwe imiona i nazwiska po stronie widoku (tam, gdzie już dziś istnieje
+   `fullName`), nie w silniku prezentacji — silnik przesyła tylko identyfikatory
+   zawodników, nigdy gotowego tekstu z nazwiskiem. Pokazywany zamiast
+   dotychczasowego uproszczonego napisu „RODZAJ AKCJI • DRUŻYNA” w dolnym pasku
+   sterowania, kiedy jest dostępny.
+5. Rozszerzenie wszystkich dziesięciu istniejących rodzin scenariuszy w
+   `MatchEngineV2HighlightScriptService.ts` o zachowania grupowe i komentarz
+   dla każdego kroku, dobrane do charakteru danej rodziny (np. kontratak:
+   drużyna broniąca cofa linię, drużyna atakująca pcha się do przodu; rajd
+   skrzydłem: pomoc przesuwa się w stronę piłki, napastnicy wchodzą w pole
+   karne).
+6. Testy: rozszerzenie `MatchEngineV2FrameControllerTests.ts` o sprawdzenie,
+   że zachowanie grupowe faktycznie porusza właściwych zawodników we
+   właściwą stronę, oraz `MatchEngineV2HighlightScriptTests.ts` o sprawdzenie,
+   że `materialize()` poprawnie przenosi nowe pola z kroku na wskazówkę.
+
+Świadomie poza zakresem tej sesji (faza 2, do zrobienia później): dopisywanie
+zupełnie nowych rodzin scenariuszy ponad istniejące dziesięć, bardziej
+rozbudowany, wieloetapowy tekst komentarza na scenę oraz ewentualne
+przeniesienie biblioteki scenariuszy do formatu czysto danych (np. JSON)
+zamiast kodu TypeScript — to nie zmienia mechanizmu z punktów 1-4 powyżej,
+więc może zostać dodane bez przebudowy.
+
+======================================================================
+
+30 sierpnia 2026 — Etap 8B: faza 1 zaimplementowana
+
+Wszystkie sześć punktów planu powyżej zostało wykonanych:
+
+1. `MatchEngineV2Types.ts`: nowy typ `MatchEngineV2GroupBehaviorId` (sześć
+   nazwanych zachowań — piąte z listy użytkownika plus symetryczny
+   `MIDFIELD_SHIFT_RIGHT`), rozszerzenie `MatchEngineV2VisualCue` o
+   `attackingGroupBehavior`, `defendingGroupBehavior`, `commentaryTemplate`.
+2. Nowy plik [MatchEngineV2GroupBehaviorService.ts](services/match/engines/v2/MatchEngineV2GroupBehaviorService.ts):
+   rejestr sześciu czystych funkcji. Każda dostaje kontekst (renderowani
+   zawodnicy, dane przestrzenne, strona, pozycja piłki, postęp kroku,
+   wykluczeni bezpośredni uczestnicy, stabilny punkt startowy, limit ruchu) i
+   przesuwa tylko zawodników właściwej roli i strony. Dwie funkcje geometrii
+   (`movePointTowards`, `interpolatePoint`) są świadomie zduplikowane z
+   `MatchEngineV2FrameControllerService.ts` — ten serwis jest jedynym
+   wywołującym, a import w drugą stronę stworzyłby cykl modułów.
+3. `MatchEngineV2FrameControllerService.ts`: nowa funkcja
+   `applyScenarioGroupBehaviors`, wywoływana zamiast `applyOpenPlayTeamFlow`,
+   gdy aktywny krok ma ustawione którekolwiek z dwóch pól zachowania. Krok bez
+   tych pól nadal korzysta z dotychczasowego uniwersalnego wzoru — brak
+   wstecznej niezgodności dla nieopisanych scenariuszy.
+4. Komentarz: `commentaryTemplate` z placeholderami `{actor}`/`{receiver}`
+   trafia przez `materialize()` na wskazówkę wizualną. Silnik prezentacji
+   nigdy nie widzi imion — podmiana na `resolveCommentary` w
+   [MatchLiveV2Prototype.tsx](components/match/v2/MatchLiveV2Prototype.tsx),
+   pokazywana w dolnym pasku sterowania zamiast dotychczasowego uproszczonego
+   napisu „RODZAJ AKCJI • DRUŻYNA”, kiedy scena ma ustawiony komentarz.
+5. Wszystkie dziesięć istniejących rodzin scenariuszy w
+   [MatchEngineV2HighlightScriptService.ts](services/match/engines/v2/MatchEngineV2HighlightScriptService.ts)
+   ma teraz zachowanie grupowe i komentarz na każdym kroku, dobrane do
+   charakteru rodziny (np. SZYBKI KONTRATAK: drużyna broniąca cofa linię przez
+   całą akcję, drużyna atakująca pcha się do przodu i wypełnia pole karne;
+   INDYWIDUALNY RAJD: obrona cofa linię, napastnicy nie towarzyszą). Tekst
+   ostatniego kroku uwzględnia, że ta sama rodzina bywa używana też w puli
+   spalonych i fauli — `finalCommentary` podmienia treść na właściwą zamiast
+   opisu strzału, kiedy krok w rzeczywistości jest spalonym albo faulem.
+6. Testy: `MatchEngineV2FrameControllerTests.ts` dostał nowy blok sprawdzający,
+   że `TEAM_PUSH_FORWARD` faktycznie przesuwa zawodnika atakującego do przodu,
+   a `DEFENSIVE_LINE_RETREAT` cofa obrońcę broniącego w stronę własnej bramki —
+   nie tylko że pole zostało ustawione, ale że naprawdę zmienia pozycję.
+   `MatchEngineV2HighlightScriptTests.ts` dostał sprawdzenie, że każdy
+   zmaterializowany krok ma komentarz, że przynajmniej jeden krok w całym
+   zestawie testowym ma każdy z dwóch typów zachowania, oraz że tekst
+   ostatniego kroku dla spalonego i faulu nie zawiera słowa „STRZELA”.
+
+Self-test: `test:match-engine-v2-core`, `-actions`, `-highlights`, `-frames`,
+`-action-chain`, `-rules`, `-coach-balance`, `-controls`, `-registry`,
+`test:match-live-v2-svg` oraz `npm run build` — wszystkie zaliczone.
+
+Nierozstrzygnięte w tej sesji: kierunki `MIDFIELD_SHIFT_LEFT` / `_RIGHT`
+przypisane do poszczególnych kroków (np. w AKCJI SKRZYDŁEM i WYCOFANIU PIŁKI)
+dobrano na podstawie geometrii danego wariantu rodziny, ale nie zostały
+sprawdzone wizualnie w przeglądarce — do potwierdzenia przy najbliższym teście
+w grze, razem z fazą 1 jako całością.
+
+Faza 2 (nierozpoczęta, poza zakresem tej sesji): nowe rodziny scenariuszy
+ponad istniejące dziesięć, bardziej rozbudowany komentarz oraz ewentualne
+przejście na format czysto danych zamiast kodu TypeScript.
+
+======================================================================
+
+30 sierpnia 2026 — Etap 8B: faza 2 rozpoczęta — trzy nowe rodziny scenariuszy
+
+Na wyraźne polecenie „rozpocznij" (bez dalszych szczegółów) wybrano pierwszy,
+najbardziej konkretny i najmniej ryzykowny punkt z listy fazy 2: dopisanie
+nowych rodzin scenariuszy. Dodano trzy, wypełniające luki względem
+pierwotnej listy z pierwszej rozmowy o Action Script, których żadna z
+istniejących dziesięciu rodzin nie pokrywała:
+
+- `THROUGH_BALL` („PROSTOPADŁE PODANIE") — podanie rozrywające linię obrony,
+  którym napastnik wychodzi sam na sam, w odróżnieniu od ONE_ON_ONE (tam
+  sytuacja sam na sam powstaje od razu, bez rozbijania obrony podaniem).
+- `HIGH_PRESS_TURNOVER` („ODBIÓR WYSOKO NA BOISKU") — odbiór piłki już
+  wysoko w polu rywala i natychmiastowy strzał, w odróżnieniu od
+  COUNTER_ATTACK (tam odbiór następuje we własnej połowie).
+- `LONG_BALL_HOLDUP` („GRA NA DŁUGĄ PIŁKĘ") — długie podanie do napastnika
+  trzymającego się plecami do bramki, zgranie do nadbiegającego pomocnika.
+
+Każda ma zachowania grupowe i komentarz na każdym kroku, tak samo jak
+wcześniejsza dziesiątka. `attackFamilies` ma teraz 13 pozycji; pula spalonych
+(`offsideFamilies`) celowo pozostaje przy pierwszych pięciu — nowe rodziny
+nie zostały do niej dopisane, bo istniejąca piątka już dobrze pokrywa spalone.
+
+Zaktualizowano twarde liczby w `MatchEngineV2HighlightScriptTests.ts`:
+GOAL 50→65, OFFSIDE bez zmian (10), MISS/SAVE/FOUL 20→26 każdy, suma
+120→153, każdy nadal z unikalnym identyfikatorem.
+
+Self-test: `test:match-engine-v2-highlights`, `-frames`, `-action-chain`,
+`-rules`, `test:match-live-v2-svg` oraz `npm run build` — wszystkie
+zaliczone.
+
+Pozostałe punkty fazy 2 (bogatszy, wieloetapowy komentarz i ewentualne
+przejście na format danych) nadal nie zostały rozpoczęte — do potwierdzenia
+z użytkownikiem, czy i w jakiej kolejności je robić.
+
+======================================================================
+
+30 sierpnia 2026 — zwrot: użytkownik odrzucił dotychczasowe scenariusze,
+autorskie scenariusze GOLA napisane od zera
+
+Po realnym teście w grze użytkownik zgłosił, że mecz nadal jest chaotyczny, a
+wcześniej zaprogramowane scenariusze (13 rodzin z Etapu 8B, w tym 3 nowe z
+poprzedniego wpisu) są złe. Zamiast dalej rozwijać własne pomysły, silnik
+przechodzi na scenariusze pisane wprost przez użytkownika — on dostarcza
+dokładny opis (z ukrytymi w nawiasach wskazówkami tylko dla silnika, nie dla
+gracza), a zadaniem jest przełożenie tego jeden do jednego na kod i animację.
+
+Ustalone z użytkownikiem: kategorie 2 („obrona bramkarza”) i 4 („strzał
+obroniony przez bramkarza”) z jego listy sześciu kategorii to to samo —
+zostaje jedna. Docelowe kategorie: GOL, obrona/strzał obroniony przez
+bramkarza, niecelny strzał, rzut rożny, rzut wolny.
+
+Rozszerzenie mechanizmu (wymagane, żeby oddać poziom szczegółu z opisów
+użytkownika — konkretni, nazwani zawodnicy poza samym podającym/odbiorcą,
+precyzyjne ustawienia całej formacji):
+
+1. `MatchEngineV2HighlightStepBehaviors` (w
+   [MatchEngineV2HighlightScriptService.ts](services/match/engines/v2/MatchEngineV2HighlightScriptService.ts))
+   dostał `actorRoleIndex`/`receiverRoleIndex` — autor scenariusza może teraz
+   przypiąć „pierwszego pomocnika” i „drugiego pomocnika” do konkretnych,
+   spójnych przez cały scenariusz zawodników, zamiast pozwalać silnikowi
+   automatycznie dobierać ich na podstawie pozycji kroku w sekwencji (co
+   działało tylko przypadkowo poprawnie w starych rodzinach).
+2. Nowe pole `supportingRuns` — lista nazwanych, indywidualnie
+   choreografowanych biegów zawodników, którzy w danym kroku NIE są ani
+   aktorem, ani odbiorcą podania (bieg między obrońcami, zasłona, wbiegający
+   obrońca). Rozwiązane na realnych identyfikatorach zawodników i
+   przekazywane na `MatchEngineV2VisualCue` przez `materialize()`.
+3. `MatchEngineV2FrameControllerService.ts`: nowa funkcja
+   `applyStepSupportingRuns`, wywoływana jako ostatnia w kolejce choreografii
+   (po zachowaniach grupowych), więc nazwany bieg zawsze wygrywa dla
+   konkretnego zawodnika, którego dotyczy.
+4. Zabezpieczenie tożsamości: prawdziwy strzelec gola (`terminal.actorId` z
+   autorytatywnego zdarzenia meczu) jest teraz świadomie wykluczany z puli,
+   z której losowani są INNI, nienazwani jako strzelec zawodnicy w
+   `supportingRuns` — bez tego dwóch różnych „aktorów” w opisie mogło
+   przypadkiem wylosować tego samego, prawdziwego zawodnika.
+
+Pięć autorskich scenariuszy gola (zastępują całą pulę GOLA — pula
+NIECELNY/OBRONA/SPALONY/FAUL nadal korzysta ze starych 13 rodzin z Etapu 8B,
+do czasu aż użytkownik dostarczy zamienniki także dla tych kategorii):
+
+- `THROUGH_PASS_CENTRAL` — „Prostopadłe podanie środkiem”
+- `RIGHT_WING_CUTBACK` — „Akcja prawym skrzydłem i podanie w pole karne”
+- `BOX_ONE_TWO` — „Wymiana podań przed polem karnym” (jedyny z sześcioma
+  krokami — podanie w jedynkę wymaga dwóch dodatkowych podań względem
+  pozostałych czterech scenariuszy)
+- `TURNOVER_COUNTER` — „Przejęcie piłki i szybki kontratak”
+- `LONG_RANGE_STRIKE` — „Strzał z dystansu” (tu strzelcem jest drugi
+  pomocnik, nie napastnik — jedyny scenariusz, w którym rola SCORER nie
+  odpowiada roli „napastnik z opisu”)
+
+Każdy krok ma dokładny komentarz zgodny z podanym przez użytkownika tekstem
+(nie parafrazowany), zachowania grupowe obu drużyn tam, gdzie opis to opisuje
+(cofanie linii obrony, pchanie całej drużyny do przodu, wejście w pole karne),
+oraz nazwane biegi dla zawodników wymienionych z opisu ruchu, którzy nie są
+bezpośrednim uczestnikiem podania w danym kroku.
+
+Świadoma decyzja bez pytania użytkownika (do potwierdzenia): pozostawiono
+starą pulę 13 rodzin dla NIECELNY/OBRONA/SPALONY/FAUL zamiast usuwać ją od
+razu, bo użytkownik jeszcze nie dostarczył zamienników dla tych kategorii —
+usunięcie ich teraz zostawiłoby te cztery wyniki bez żadnych scenariuszy.
+
+Testy: rozszerzono `MatchEngineV2HighlightScriptTests.ts` o dedykowaną pętlę
+próbkującą aż do trafienia wszystkich pięciu autorskich scenariuszy gola co
+najmniej raz, sprawdzającą dla każdego z osobna, że strzelec pozostaje tym
+samym zawodnikiem od pierwszego do ostatniego kroku, oraz że każdy nazwany
+bieg wskazuje na istniejącego zawodnika. Zaktualizowano twarde liczby: GOAL
+65→5 (bez proceduralnych wariantów — to pięć w pełni autorskich scenariuszy,
+nie jedna rodzina z wariantami), suma 153→93, górny limit liczby kroków w
+teście podniesiony z 5 do 6 (BOX_ONE_TWO).
+
+Self-test: `test:match-engine-v2-highlights`, `-frames`, `-action-chain`,
+`-rules`, `test:match-live-v2-svg` oraz `npm run build` — wszystkie zaliczone.
+
+Nierozstrzygnięte, do sprawdzenia przez użytkownika w grze: czy te pięć
+scenariuszy faktycznie wygląda i brzmi tak, jak opisał — to pierwszy test
+całego nowego mechanizmu (`actorRoleIndex`, `supportingRuns`), nie tylko
+nowej treści. Czeka też na kolejne kategorie (obrona/niecelny, rożny, wolny)
+do rozpisania tym samym sposobem.
+
+======================================================================
+
+30 sierpnia 2026 — pięć autorskich scenariuszy OBRONY BRAMKARZA
+
+Użytkownik dostarczył pięć scenariuszy dla drugiej kategorii, z zastrzeżeniem
+własnym: obrona oznacza tu wyłącznie sytuację, w której bramkarz łapie piłkę i
+akcja się kończy; odbicie z piłką pozostającą w grze zostanie osobną,
+nierozpisaną jeszcze kategorią. Mechanizm z poprzedniego wpisu
+(`actorRoleIndex`, `supportingRuns`) nie wymagał żadnych zmian — od razu
+wystarczył do zapisania tych pięciu scenariuszy.
+
+`MATCH_ENGINE_V2_SAVE_SCRIPTS` zastąpiono analogicznie do GOLA — teraz to
+pięć w pełni autorskich scenariuszy (`makeScripts('SAVE', authoredSaveFamilies, 1)`),
+zamiast starych 13 rodzin z Etapu 8B:
+
+- `CENTRAL_LAYOFF_SAVE` — „Strzał napastnika po podaniu środkiem”
+- `LEFT_WING_SAVE` — „Akcja lewym skrzydłem”
+- `TWO_FORWARD_COUNTER_SAVE` — „Szybki kontratak dwóch napastników” (tu
+  strzelcem jest drugi napastnik biorący podanie z boku, nie ten wymieniony
+  jako pierwszy w opisie pozycji startowej — rola SCORER przypięta do
+  właściwej osoby z treści, nie do kolejności wymienienia)
+- `MIDFIELD_ONE_TWO_LONG_SHOT_SAVE` — „Kombinacja dwóch pomocników i strzał z
+  dystansu” (podobnie jak w LONG_RANGE_STRIKE z puli gola, strzelcem jest
+  pierwszy pomocnik, nie napastnik)
+- `THROUGH_BALL_ONE_ON_ONE_SAVE` — „Podanie pomiędzy obrońców i sytuacja sam
+  na sam”, bliźniaczy geometrycznie do `THROUGH_PASS_CENTRAL` z puli gola,
+  różni się tylko rezultatem końcowym
+
+Pula NIECELNY i FAUL nadal korzysta ze starych 13 rodzin z Etapu 8B — to
+świadomie ta sama, wcześniej zakomunikowana i niekwestionowana przez
+użytkownika decyzja co poprzednio.
+
+Testy: funkcja sprawdzająca tożsamość scenariuszy z poprzedniego wpisu
+(`verifyAuthoredScenarioIdentity`) przerobiona na uniwersalną, przyjmuje teraz
+wynik (GOAL/SAVE) i oczekiwaną liczbę scenariuszy — użyta dla obu kategorii
+zamiast duplikować kod. Dla SAVE dodatkowo sprawdza, że obronę w ostatnim
+kroku zapisuje prawdziwy bramkarz drużyny broniącej (rola GK), nie przypadkowy
+zawodnik. Zaktualizowano twarde liczby: SAVE 26→5, suma 93→72.
+
+Self-test: `test:match-engine-v2-highlights`, `-frames`,
+`test:match-live-v2-svg` oraz `npm run build` — wszystkie zaliczone.
+
+Nierozstrzygnięte, do sprawdzenia przez użytkownika w grze: to samo pytanie
+co dla gola — czy te pięć scenariuszy obrony wygląda i brzmi tak, jak opisał.
+Czeka na kolejne kategorie: niecelny strzał, rzut rożny, rzut wolny, oraz
+osobno wspomnianą przez użytkownika kategorię „obrona z odbiciem, piłka
+zostaje w grze”.
+
+======================================================================
+
+30 sierpnia 2026 — pięć autorskich scenariuszy NIECELNEGO STRZAŁU
+
+Użytkownik dostarczył pięć scenariuszy dla trzeciej kategorii, w tym samym
+formacie i tym samym rygorem opisu pozycji startowej, sekwencji podań i
+komentarza co dla gola i obrony. Mechanizm (`actorRoleIndex`,
+`supportingRuns`) ponownie nie wymagał żadnych zmian.
+
+`MATCH_ENGINE_V2_MISS_SCRIPTS` zastąpiono analogicznie do GOLA i OBRONY —
+teraz to pięć w pełni autorskich scenariuszy
+(`makeScripts('MISS', authoredMissFamilies, 1)`), zamiast starych 13 rodzin
+z Etapu 8B:
+
+- `LONG_RANGE_MISS` — „Strzał z dystansu niecelny”
+- `WING_ACTION_MISS` — „Akcja skrzydłem, dośrodkowanie niecelne/wybite poza
+  bramkę”
+- `FAST_COUNTER_MISS` — „Szybki kontratak, niecelne uderzenie”
+- `BOX_EDGE_COMBINATION_MISS` — „Kombinacja na krawędzi pola karnego,
+  strzał niecelny”
+- `DEFENSE_SPLITTING_RUN_MISS` — „Podanie rozrywające obronę, przyjęcie i
+  niecelny strzał sam na sam”
+
+Pula SPALONY i FAUL nadal korzysta ze starych 13 rodzin z Etapu 8B — to
+świadomie ta sama, wcześniej zakomunikowana i niekwestionowana przez
+użytkownika decyzja co poprzednio.
+
+Testy: `verifyAuthoredScenarioIdentity` rozszerzona o trzeci wariant wyniku
+(GOAL/SAVE/MISS), użyta też dla MISS. Zaktualizowano twarde liczby:
+MISS 26→5, suma 72→51.
+
+Self-test: `test:match-engine-v2-highlights`, `-frames`,
+`test:match-live-v2-svg` oraz `npm run build` — wszystkie zaliczone.
+
+Nierozstrzygnięte, do sprawdzenia przez użytkownika w grze: to samo pytanie
+co dla gola i obrony — czy te pięć scenariuszy niecelnego strzału wygląda i
+brzmi tak, jak opisał. Czeka na kolejne kategorie: rzut rożny, rzut wolny,
+oraz osobno wspomnianą przez użytkownika kategorię „obrona z odbiciem,
+piłka zostaje w grze”.
+
+======================================================================
+
+30 sierpnia 2026 — pięć scenariuszy RZUTU ROŻNEGO i pięć RZUTU WOLNEGO,
+plus realna zmiana w silniku autorytatywnym dla rożnych
+
+Użytkownik dostarczył po pięć scenariuszy dla dwóch ostatnich kategorii
+z pierwotnej listy sześciu. Kluczowa różnica względem gola/obrony/niecelnego:
+użytkownik świadomie NIE chciał, żeby każdy scenariusz kończył się wynikiem
+(GOL/OBRONA/NIECELNY) — część rożnych i wolnych ma zostawać otwarta (krótkie
+rozegranie, wybicie obrony, wybicie i kontra przeciwnika), „dla naturalności
+animacji, żeby stałe fragmenty nie wyglądały jak pięć zaprogramowanych
+cut-scenek”.
+
+Analiza przed implementacją wykazała asymetrię w silniku `cupV2`: rzut wolny
+z faulu (`CupActionBuilder.resolveFoulRestart`) od razu, w tym samym ticku,
+rozstrzyga przez `CupSetPieceResolver.createSetPieceChance`, czy z niego
+powstaje strzał — zdarzenie przyznania i ewentualny strzał dzielą ten sam
+`sequenceId`. Rzut rożny (`CORNER_TAKEN`, wznawiany w `CupMatchLoop.
+appendPendingRestart`) nigdy nie był tak rozstrzygany — po wykonaniu rożnego
+gra po prostu wracała do zwykłej, niepowiązanej symulacji otwartej gry, bez
+żadnego zdarzenia-następstwa. `CupSetPieceResolver` miał już w pełni gotową
+obsługę `kind: 'CORNER'` (osobne wagi, bazowe xG), po prostu nigdy nie była
+wołana dla prawdziwych rożnych — wygląda na przeoczenie z wcześniejszego
+etapu, nie świadomą decyzję.
+
+Zgłoszono to użytkownikowi jako pytanie wymagające decyzji (zmiana dotyczy
+symulacji meczu, nie tylko prezentacji) i uzyskano zgodę na dopięcie
+`CORNER_TAKEN` do tego samego mechanizmu co wolne. Implementacja:
+
+- `CupActionBuilder.ts`: wydzielono z `resolveFoulRestart` nową, współdzieloną
+  funkcję `resolveSetPieceDelivery({ctx, attacking, defending, intent,
+  sequenceId, kind, sourceContactId?})` — rozstrzyga samo rozegranie stałego
+  fragmentu (szansa/strzał albo brak), niezależnie od tego, kto stworzył
+  zdarzenie przyznania. `resolveFoulRestart` stała się cienkim wrapperem:
+  tworzy zdarzenie przyznania, woła `resolveSetPieceDelivery`, doklęja
+  zdarzenie na początek listy — zachowanie dla wolnych/karnych bez zmian.
+- `simulateTick` (ten sam plik): na samym początku, zaraz po policzeniu
+  `intent`, nowa gałąź — jeśli `ctx.state.possessionReason ===
+  'CORNER_DELIVERY'`, od razu woła `resolveSetPieceDelivery` z `kind:
+  'CORNER'`, zamiast wchodzić w normalny tok dobrego/złego podania.
+- `CupMatchLoop.ts` (`appendPendingRestart`): zdarzenie `CORNER_TAKEN`
+  dostaje teraz własny `sequenceId` (`cupv2_corner_delivery_{sekunda}_
+  {strona}`) oraz `detail.setPieceKind: 'CORNER'`. Zamiast od razu ustawiać
+  `state.possessionReason = 'OPEN_PLAY'`, dla rożnego ustawia nowy stan
+  `'CORNER_DELIVERY'` (dodany do `CupPossessionReason` w `CupMatchTypes.ts`)
+  — dokładnie ten sam sequenceId jest odtwarzany deterministycznie w
+  `simulateTick` (te same `second`/`possession`, więc nie trzeba go nigdzie
+  przechowywać).
+- Dodatkowe pytanie do użytkownika (RÓŻNY 4, „wybicie i kontra przeciwnika”):
+  gałąź „brak szansy” w `resolveSetPieceDelivery` zawsze oddawała piłkę z
+  powrotem drużynie atakującej — nie było możliwości czystego przejęcia przez
+  obrońcę. Za zgodą użytkownika dodano (tylko dla `kind === 'CORNER'`, wolne
+  bez zmian): 30% szansy (`ctx.random(504)`), że nieudany rożny kończy się
+  przejęciem przez broniącą się drużynę (`nextPossession: defending.side`,
+  `nextZone: 'MIDFIELD'`) zamiast zwykłym „atakujący zatrzymują piłkę”.
+
+Self-test po zmianie silnika (przed dopisaniem treści prezentacyjnej):
+`test:cup-v2-balance`, `-adapter`, `-shadow-audit`, `-full-factors`,
+`-player-stats`, `-player-ratings`, `-final-report`, `-live`,
+`test:match-engine-v2-core/-actions/-action-chain/-rules/-coach-balance` —
+wszystkie zaliczone, `avgTotalCorners` i `leagueCorners` w normie, żadnej
+zmiany w niezwiązanych statystykach.
+
+Warstwa prezentacji (`MatchEngineV2HighlightScriptService.ts`):
+
+- `MatchEngineV2HighlightOutcome` rozszerzony o `CORNER_RESTART` i
+  `FREE_KICK_RESTART` — dla stałych fragmentów, które NIE kończą się
+  strzałem. `cueOutcome` rozpoznaje je po `sourceEventType ===
+  CORNER_TAKEN`/`FREE_KICK`/`FREE_KICK_DANGEROUS`, priorytet w
+  `outcomePriority` ustawiony na 0 (tak jak inne samodzielne restarty) —
+  dzięki wspólnemu `sequenceId` prawdziwy strzał w tej samej sekwencji zawsze
+  wygrywa priorytetem, więc rożny/wolny, który jednak skończył się strzałem,
+  nigdy nie pokazuje jednocześnie „pustej” sceny restartu.
+- `MatchEngineV2HighlightScript` dostał opcjonalne pole
+  `requiredSetPieceKind?: 'CORNER' | 'FREE_KICK'`. `selectScript` filtruje
+  pulę GOAL/SAVE/MISS do tylko otagowanych scenariuszy, gdy `cue.
+  setPieceKind` faktycznie wskazuje na rożny/wolny — realny rożny nigdy nie
+  losuje ogólnej sceny z otwartej gry i odwrotnie.
+- `terminalEnd` dostał gałąź dla CORNER_RESTART/FREE_KICK_RESTART: piłka
+  leci do autorskiego punktu końcowego kroku (jak w GOAL), bo nie ma
+  żadnego prawdziwego strzału, do którego trzeba by ją „doczepiać”.
+
+Nowe rodziny (wszystkie w tym samym pliku, między `authoredMissFamilies` a
+`offsideFamilies`):
+
+Kończące się strzałem (GOL/OBRONA/NIECELNY zależnie od silnika — dołączone,
+otagowane, do wszystkich trzech puli GOAL/SAVE/MISS):
+- `cornerShotFamilies` — `CORNER_CROSS_AND_HEADER` (RÓŻNY 1: dośrodkowanie,
+  strzelec dochodzi do piłki), `CORNER_FAR_POST_CROSS` (RÓŻNY 5:
+  dośrodkowanie na dalszy słupek)
+- `freeKickShotFamilies` — `FREE_KICK_DIRECT_SHOT` (WOLNY 1: strzał
+  bezpośredni), `FREE_KICK_LAYOFF_SHOT` (WOLNY 2: podanie do drugiego
+  zawodnika i strzał), `FREE_KICK_CROSS_HEADER` (WOLNY 3: dośrodkowanie
+  z boku)
+
+Komentarz ostatniego kroku we wszystkich pięciu jest celowo neutralny wobec
+wyniku („— STRZAŁ!”), dokładnie jak napisał użytkownik — bez „GOL!”/
+„OBRONA!”, bo ten sam scenariusz trafia do wszystkich trzech puli.
+
+Bez strzału (własne, nowe pule CORNER_RESTART/FREE_KICK_RESTART):
+- `cornerRestartFamilies` — `CORNER_SHORT_COMBINATION` (RÓŻNY 2: krótko
+  rozegrany), `CORNER_DEFENSIVE_CLEARANCE` (RÓŻNY 3: wybicie, akcja trwa),
+  `CORNER_CLEARANCE_COUNTER` (RÓŻNY 4: wybicie i kontra — korzysta z nowej
+  30% gałęzi przejęcia przez obrońcę)
+- `freeKickRestartFamilies` — `FREE_KICK_SHORT_COMBINATION` (WOLNY 4:
+  krótkie rozegranie i akcja skrzydłem), `FREE_KICK_CLEARANCE_RECOVERY`
+  (WOLNY 5: wybicie i odzyskanie piłki)
+
+Świadoma decyzja: `freeKickRestartFamilies` nigdy nie używa roli SCORER —
+w przeciwieństwie do `CORNER_TAKEN` (który zawsze ma `playerId` prawdziwego
+wykonawcy), zdarzenie przyznania wolnego/karnego z `CupSetPieceResolver.
+eventForAward` nie zapisuje wykonawcy wcale, więc nie ma tu żadnej realnej
+tożsamości do przypięcia — każdy aktor w tych dwóch scenariuszach jest
+zwykłym `role`/`roleIndex`, nie SCORER.
+
+Napotkany i naprawiony błąd przy autorstwie: trzy kroki (`CORNER_SHORT_
+COMBINATION` krok 4, `CORNER_DEFENSIVE_CLEARANCE` krok 1, `FREE_KICK_
+CLEARANCE_RECOVERY` krok 1) łączyły „odbiorcą jest FORWARD indeks 0” z
+dodatkowym biegiem „FORWARD indeks 1” w tym samym kroku — gdy w składzie
+testowym jest tylko jeden prawdziwy napastnik, indeks 1 spada z powrotem do
+tego samego zawodnika co indeks 0, więc dodatkowy bieg pokrywał się z
+odbiorcą podania. Naprawione przez zamianę drugiego biegu na rolę
+MIDFIELDER zamiast drugiego FORWARD.
+
+Testy (`MatchEngineV2HighlightScriptTests.ts`): twarde liczby zaktualizowane
+— GOAL/SAVE/MISS 5→10 każda (5 ogólnych + 2 rożne + 3 wolne, otagowane),
+suma 51→71, doszły `MATCH_ENGINE_V2_CORNER_RESTART_SCRIPTS` (3) i
+`MATCH_ENGINE_V2_FREE_KICK_RESTART_SCRIPTS` (2). Nowa funkcja
+`verifyAuthoredSetPieceScenarioIdentity` (analogiczna do istniejącej
+`verifyAuthoredScenarioIdentity`, ale próbkuje cue z ustawionym
+`setPieceKind`) oraz `verifyAuthoredRestartScenarioCoverage` (bez sprawdzania
+tożsamości strzelca, bo dla FREE_KICK_RESTART taka tożsamość nie istnieje).
+
+Napotkany i naprawiony problem w samych testach (nie w silniku): przy próbce
+2-elementowej puli (rożne w GOAL/SAVE/MISS, dwa scenariusze) próbkowanie
+zawsze trafiało w ten sam scenariusz. Przyczyna: `stableHash` to FNV-1a,
+którego najniższy bit wyniku to czysty XOR bajtów wejścia (mnożenie przez
+nieparzystą stałą FNV nigdy nie zmienia bitu 0) — a testowa funkcja `terminal()`
+wstawiała tę samą próbkowaną liczbę jednocześnie do `sourceEventId` i
+`sequenceId`, więc ich wkład do najniższego bitu się znosił, zostawiając stały
+wynik `% 2` niezależnie od próbki. Poprawka: w nowych funkcjach próbkujących
+`sourceEventId` zostaje stały, różni się tylko `sequenceId`. To wyłącznie
+właściwość syntetycznego cue w teście — prawdziwe identyfikatory zdarzeń z
+silnika nigdy nie powtarzają tej samej liczby w ten sposób.
+
+Self-test: `test:match-engine-v2-highlights` (71 skryptów), `-frames`,
+`-action-chain`, `-rules`, `test:match-live-v2-svg`, `-controls`,
+`-registry` oraz `npm run build` — wszystkie zaliczone.
+
+Nierozstrzygnięte, do sprawdzenia przez użytkownika w grze: czy te dziesięć
+scenariuszy (pięć rożnych, pięć wolnych) wygląda i brzmi tak, jak opisał —
+zwłaszcza czy otwarte zakończenia (RÓŻNY 2/3/4, WOLNY 4/5) faktycznie
+sprawiają wrażenie naturalnej, nieprzewidywalnej gry, a nie urwanej sceny.
+Czeka na jedyną pozostałą, wcześniej zapowiedzianą kategorię: „obrona z
+odbiciem, piłka zostaje w grze”. Nadal otwarte pytanie z poprzednich wpisów:
+SPALONY i FAUL wciąż korzystają ze starej, odrzuconej puli 13 rodzin.
+
+======================================================================
+
+30 sierpnia 2026 — osobny suwak prędkości scenek oraz pauza na gwizdek
+sędziego przy stałych fragmentach
+
+Użytkownik zgłosił dwie uwagi po testach w grze: (1) animacja akcji jest
+zbyt dynamiczna, i zamiast po prostu ją spowolnić, lepszym rozwiązaniem
+byłaby osobna, wybieralna przez użytkownika prędkość scenek, niezależna od
+tempa cichej gry w tle; (2) przy rzucie wolnym powinna być pauza, w której
+zawodnicy ustawiają mur i czekają na gwizdek sędziego, zanim wolny zostanie
+wykonany.
+
+Analiza przed implementacją: dotychczas jeden przycisk TEMPO
+(NORMALNE/WOLNIEJ/DUŻO WOLNIEJ, `playback.speed`) sterował jednocześnie
+tempem cichej gry (`MATCH_SECONDS_PER_MATCH_MINUTE / state.speed` w
+`MatchEngineV2PlaybackService.advance`) ORAZ czasem trwania każdej scenki
+(`presentationCue.durationMs * playback.speed` w `MatchEngineV2Frame
+ControllerService.collectNewCues`) — jedna wspólna wartość na dwa różne,
+niezależne w odczuciu użytkownika zjawiska. Po interview z użytkownikiem
+wybrano rozwiązanie (1): osobny suwak tylko dla scenek.
+
+Zaimplementowano:
+
+- `MatchEngineV2Types.ts`: `MatchEngineV2PlaybackState` dostał nowe pole
+  `sceneSpeed: MatchEngineV2PlaybackSpeed` (ten sam typ `1|2|3`, ta sama
+  semantyka mnożnika co dotychczasowe `speed`), całkowicie niezależne od
+  `speed`.
+- `MatchEngineV2PlaybackService.ts`: `create()` domyślnie ustawia
+  `sceneSpeed: 1`, nowa metoda `setSceneSpeed()` analogiczna do `setSpeed()`.
+- `MatchEngineV2FrameControllerService.ts`: w `collectNewCues` zmieniono
+  mnożnik czasu trwania scenki z `playback.speed` na `playback.sceneSpeed`.
+  Pozostałe trzy miejsca używające `playback.speed` (dosiadanie zawodników
+  do formacji między scenkami w `synchronizeTracks`, powrót zawodników do
+  formacji po scence w `rebaseActionTracks`, kosmetyczny zegar) zostały
+  świadomie NIE przepięte — dotyczą tempa cichej gry/przejść między nią a
+  scenką, nie samej scenki.
+- `MatchLiveV2Session.tsx`/`MatchLiveV2Prototype.tsx`: nowy handler
+  `setSceneSpeed`/prop `onSetSceneSpeed`, nowy przycisk „SCENA
+  NORMALNE/WOLNIEJ/DUŻO WOLNIEJ” w dolnym pasku sterowania (róż, x=1423,
+  szerokość 140), obok istniejącego „TEMPO”. Żeby zmieścić nowy przycisk bez
+  przebudowy całego paska, pasek z aktualnym komentarzem/nazwą akcji
+  (poprzednio x=1423 szer. 437) przesunięto na x=1576 i zwężono do 284 —
+  **nie przetestowano wizualnie w przeglądarce** (brak w tej sesji narzędzia
+  do zrzutów ekranu/automatyzacji przeglądarki), więc użytkownik powinien
+  sprawdzić w grze, czy dłuższy komentarz nadal się mieści/skraca poprawnie
+  przy węższym pasku.
+
+Pauza na gwizdek sędziego (2): za zgodą użytkownika (opcja „rzuty wolne i
+rożne, ok. 2-3 sek.”) dodano nowy, pierwszy krok (kind CONTROL, piłka
+nieruchoma — `start === end`) na początku wszystkich 10 autorskich rodzin
+rożnego i wolnego (`cornerShotFamilies`, `freeKickShotFamilies`,
+`cornerRestartFamilies`, `freeKickRestartFamilies`) — 2200ms dla rożnych,
+2600ms dla wolnych (przy TEMPIE SCENY = NORMALNE to dokładnie żądane 2-3
+sekundy realnego czasu, bo krok CONTROL mnożony jest teraz przez
+`sceneSpeed`, a nie `speed`). Treść komentarza zależy od kategorii: rożne —
+zawodnicy wbiegają w pole karne, wykonawca czeka przy rożniku; wolne —
+obrona ustawia mur, wykonawca czeka na gwizdek sędziego. W `FREE_KICK_
+DIRECT_SHOT` i `FREE_KICK_LAYOFF_SHOT` mur obrony (`DEFENDER` z `side:
+'DEFENDING'`) przeniesiono/dodano do tego nowego kroku, żeby faktycznie
+ustawiał się w trakcie pauzy, nie od razu.
+
+Weryfikacja bezpieczeństwa wstawienia nowego pierwszego kroku: `actorFor`/
+`resolveRunPlayer` używają `scriptStep.actorRoleIndex ?? index` — wstawienie
+kroku na początku przesuwa indeksy WSZYSTKICH kolejnych kroków o 1.
+Sprawdzono ręcznie wszystkie 10 rodzin: każdy krok albo już miał jawny
+`actorRoleIndex`/`receiverRoleIndex`, albo używał roli SCORER (rozwiązywanej
+bezpośrednio, bez indeksu) — przesunięcie indeksu nie zmienia tożsamości
+żadnego zawodnika w żadnym z 10 scenariuszy.
+
+Testy: żadna zmiana liczby skryptów w pulach (nadal 71) ani w assercjach
+tożsamości — istniejące testy przeszły bez modyfikacji, jedynie górna liczba
+kroków w niektórych rodzinach wzrosła (maksymalnie do 5, wciąż w granicach
+istniejącego limitu 2-6).
+
+Self-test: `test:match-engine-v2-highlights`, `-frames`,
+`test:match-live-v2-svg`, `-controls`, `-rules` oraz `npm run build` —
+wszystkie zaliczone.
+
+Nierozstrzygnięte: (1) użytkownik powinien wypróbować nowy przycisk SCENA w
+grze i potwierdzić, czy węższy pasek komentarza nadal wygląda dobrze —
+niesprawdzone wizualnie w tej sesji; (2) czy pauza 2-3 sek. faktycznie
+sprawia wrażenie naturalnego oczekiwania na gwizdek, czy jednak powinna być
+dłuższa/krótsza. Wciąż otwarte z poprzednich wpisów: SPALONY/FAUL na starej
+puli, kategoria „obrona z odbiciem” jeszcze nie opisana.
+
+======================================================================
+
+30 sierpnia 2026 — powtórka gola w zwolnionym tempie, wznowienie od środka
+po stracie bramki
+
+Użytkownik zgłosił dwie kolejne uwagi z testów w grze: (1) powtórka gola
+powinna być w zwolnionym tempie; (2) po powtórce drużyna, która straciła
+bramkę, powinna zacząć grę od środka boiska.
+
+Analiza kodu wykazała dwa osobne, konkretne problemy — nie jedną wspólną
+przyczynę:
+
+(1) `REPLAY_CUE_SPEED` w `MatchEngineV2FrameControllerService.ts` wynosił
+0.82 — czyli każdy krok powtórki trwał 82% oryginalnego czasu, więc powtórka
+odtwarzała się SZYBCIEJ niż żywa akcja, a nie wolniej. Brak komentarza
+tłumaczącego tę wartość sugeruje, że to była pomyłka, nie świadoma decyzja.
+Zmieniono na 1.8 (powtórka wyraźnie wolniejsza, jak w prawdziwej transmisji)
+— świadomie NIEZALEŻNIE od nowego suwaka `sceneSpeed` z poprzedniego wpisu:
+powtórka ma swoją stałą konwencję zwolnionego tempa, niezwiązaną z tym, jak
+szybko user ustawił sobie żywe scenki.
+
+(2) Poważniejsze odkrycie: zdarzenie `KICK_OFF` (użyte też do wznowienia po
+stracie bramki, `nextPossessionReason: 'GOAL_RESTART'` w `CupActionBuilder`)
+nigdy nie było pokazywane jako scena — w ŻADNYM trybie transmisji. Przyczyna:
+`isStandaloneRestartAction` w `MatchEngineV2HighlightScriptService.ts`
+(używane przez `terminalCues`, które faktycznie decyduje co się renderuje)
+wymieniało tylko CORNER/CORNER_TAKEN/FREE_KICK/FREE_KICK_DANGEROUS/
+PENALTY_AWARDED — nie KICK_OFF. `cueOutcome(cue)` też zwraca dla niego
+`null` (to nie jest żaden z GOAL/SAVE/MISS/OFFSIDE/FOUL). Efekt: `terminalCues`
+odrzucało tę scenę całkowicie, więc po golu (i tak samo na początku meczu i
+drugiej połowy) gra po prostu wracała do normalnej symulacji bez żadnego
+widocznego „wznowienia od środka” — nie chodziło o złe wystawienie/pozycję,
+tylko o to, że scena w ogóle się nie pojawiała.
+
+Naprawiono w dwóch miejscach:
+- `isStandaloneRestartAction` — dodano `MatchEventType.KICK_OFF`, więc scena
+  teraz przechodzi filtr w trybie WSZYSTKIE AKCJE (tak jak inne samodzielne
+  restarty, nadal nie liczy się jako kluczowy moment w KLUCZOWYCH MOMENTACH
+  — to zamierzone, zgodne z istniejącą konwencją dla reszty tej rodziny).
+- `MatchEngineV2FrameControllerService.ts`: dodano `isCentreRestart` (już
+  istniejące wcześniej, przeniesione wyżej w pliku, obok innych `isXxxCue`)
+  do `usesStructuredRestartShape`, oraz nową gałąź w
+  `applyStructuredRestartShape` — dwaj środkowi zawodnicy drużyny
+  wznawiającej stoją przy kole środkowym we własnej połowie, reszta obu
+  drużyn cofa się za linię środkową do swojej połowy, bramkarze zostają na
+  swoich liniach (już obsługiwane ogólnie dla każdego restartu). Surowe
+  współrzędne `start`/`end` samej piłki (koło środkowe) były już poprawne w
+  `MatchEngineV2SpatialService.eventTarget` — brakowało tylko widoczności i
+  ustawienia zawodników.
+
+Świadoma decyzja bez pytania: naprawa `KICK_OFF` obejmuje WSZYSTKIE
+wznowienia od środka (początek meczu, druga połowa, po bramce), nie tylko
+po stracie gola — to ten sam typ zdarzenia, nie da się ich odróżnić na
+poziomie cue bez dodatkowego pola, a pokazanie wznowienia też na początku
+meczu/połowy jest spójnym, pożądanym efektem ubocznym tej samej poprawki.
+
+Self-test: `test:match-engine-v2-frames`, `-highlights`, `-actions`,
+`-action-chain`, `test:match-live-v2-svg`, `-rules`, `-controls`,
+`-registry` oraz `npm run build` — wszystkie zaliczone.
+
+Nierozstrzygnięte: obie zmiany niesprawdzone wizualnie w przeglądarce (brak
+takiego narzędzia w tej sesji) — użytkownik powinien potwierdzić w grze, czy
+tempo powtórki teraz wygląda dobrze i czy formacja wznowienia od środka
+wygląda naturalnie, zwłaszcza że scena wznowienia nadal trwa tylko bazowe
+1100ms (× sceneSpeed) — nie dostała własnej wydłużonej pauzy jak wolny/rożny
+z poprzedniego wpisu, bo użytkownik o to nie prosił.
+
+======================================================================
+
+30 sierpnia 2026 — znaczniki zawodników nachodzące na siebie
+
+Użytkownik zgłosił, że przy niektórych akcjach znaczniki zawodników na
+boisku nachodzą na siebie (nakładają się jeden na drugi) — dopuszczalne jest
+dotykanie się, ale nie pełne nakładanie.
+
+Analiza: w repo już istnieje test pilnujący minimalnego odstępu między
+znacznikami (`smallestRenderedPlayerDistance >= 35.5` px w
+`MatchEngineV2ActionTrajectoryTests.ts`), ale mierzy on `snapshot.spatial.
+players` — surowe, taktyczne pozycje z warstwy autorytatywnej, próbkowane co
+5 sekund meczu. To NIE jest to samo co pozycje faktycznie renderowane przez
+`MatchEngineV2FrameControllerService.makeFrame` w trakcie odtwarzanej scenki
+(choreografia akcji, zachowania grupowe, formacje stałych fragmentów,
+nazwane biegi, formacja bezczynności, świętowanie gola) — żadna z tych
+warstw prezentacji nie miała własnej ochrony przed nałożeniem się dwóch
+znaczników, więc istniejący test nie mógł w ogóle wykryć problemu, na który
+trafił użytkownik (on dotyczy właśnie scenek, `„przy niektórych akcjach”`).
+
+Naprawiono dodaniem jednej, uniwersalnej funkcji `declumpPlayers` w
+`MatchEngineV2FrameControllerService.ts`, wywoływanej na samym końcu
+`makeFrame` — już PO każdej innej logice pozycjonującej (żeby nie kolidować
+z żadną z nich, tylko skorygować końcowy wynik). Dla każdej pary zawodników
+na boisku bliższej niż `MIN_PLAYER_SEPARATION_METRES = 2.6` m (dobrane tak,
+żeby znaczniki mogły się stykać krawędziami, ale nie nakładać środkami),
+rozsuwa obu zawodników symetrycznie wzdłuż linii łączącej ich pozycje;
+3 przebiegi, żeby rozwiązanie mogło się ułożyć, gdy poprawienie jednej pary
+zbliża kogoś do trzeciego zawodnika. Gdy dwóch zawodników renderuje się
+dokładnie w tym samym punkcie (brak kierunku do rozsunięcia), kierunek
+dobierany jest w sposób deterministyczny na podstawie porównania ID
+zawodników — żeby korekta nigdy nie migotała między klatkami. Piłka nie
+jest ruszana. Zmiana jest czysto kosmetyczna — nie dotyka silnika
+autorytatywnego ani żadnej logiki decydującej o wyniku meczu.
+
+Nowy test w `MatchEngineV2FrameControllerTests.ts`: dwóch zawodników
+domowej drużyny dostaje ten sam punkt kotwicy formacji przez kilka
+kolejnych migawek (symulacja kilku ticków, bo pojedyncza migawka pozwala
+tylko na jeden krok ograniczony przez `MAX_TRACK_STEP_METRES=7.5m` —
+identycznie jak działa to w prawdziwym meczu), po czym sprawdzane jest, że
+finalny renderowany odstęp wynosi dokładnie ok. 2.6 m, nie 0.
+
+Self-test: `test:match-engine-v2-frames` (nowy test przechodzi,
+`declumpedDistance: 2.6`), `test:match-live-v2-svg`, `-highlights`,
+`-controls`, `-action-chain` oraz `npm run build` — wszystkie zaliczone.
+Istniejący test `smallestRenderedPlayerDistance` (inna warstwa, patrz wyżej)
+bez zmian, nadal przechodzi.
+
+Nierozstrzygnięte: niesprawdzone wizualnie w przeglądarce (brak takiego
+narzędzia w tej sesji) — użytkownik powinien potwierdzić w grze, czy próg
+2.6 m wygląda dobrze, czy powinien być większy/mniejszy.
+
+======================================================================
+
+30 sierpnia 2026 — DUŻY ZWROT: porzucenie ręcznego autorowania scenariuszy
+na rzecz Edytora Akcji Meczowych
+
+Po zobaczeniu zrzutu ekranu z gry (zawodnicy nachodzący na siebie, ustawienie
+wyglądające nienaturalnie mimo wcześniejszych poprawek) użytkownik ocenił:
+„wszystko wygląda bardzo źle, wszystkie animacje są do skasowania” i
+zdecydował o zmianie całego podejścia. Zamiast ja ręcznie wpisuję
+współrzędne kroków scenariusza (jak w każdym z poprzednich sześciu wpisów
+dziennika — GOL/OBRONA/NIECELNY/ROŻNY/WOLNY, łącznie 71 skryptów), user sam
+rysuje trasy ruchu na boisku w nowym, dedykowanym edytorze wizualnym.
+
+To NIE jest odrzucenie silnika V2 jako takiego — `MatchEngineV2FrameControllerService`,
+system ról/mirroringu/zachowań grupowych z poprzednich etapów zostaje. To,
+co się kończy, to metoda TWORZENIA treści: ręczne dyktowanie mi liczb
+zamiast rysowania.
+
+Przed implementacją: pełen `EnterPlanMode` z dwoma agentami Explore (Vite/
+`import.meta.glob`, formacje/routing) i planem zapisanym w
+`C:\Users\Jack Cave\.claude\plans\quiet-swinging-wren.md`, zatwierdzonym
+przez użytkownika. Cztery decyzje architektoniczne ustalone przez interview
+(seria `AskUserQuestion` w tej rozmowie):
+1. Format edytora ma dać się ODTWORZYĆ istniejącym silnikiem, ale UI edytora
+   NIE musi bezpośrednio produkować `MatchEngineV2HighlightStep[]` — edytor
+   ma własny, naturalny dla siebie format; konwersja na format silnika to
+   OSOBNY, późniejszy etap integracji w meczu (nierozpoczęty w tym wpisie).
+2. Zapis wyłącznie lokalnie, w `npm run dev`, przez mały middleware Vite
+   piszący pliki JSON prosto do repo — nigdy do builda produkcyjnego.
+3. Ruch zawodnika: wieloetapowa ścieżka (kilka punktów), nie jedna strzałka.
+4. „Generator akcji” (tworzenie wariantów: lustro/przesunięcie/inny
+   wykonawca) to OSOBNE, jeszcze niezaczęte narzędzie — nie to samo co edytor.
+
+Zaimplementowany zakres (Etap 1 z planu — sam edytor, bez integracji w
+meczu i bez generatora wariantów):
+
+- `services/match/editor/MatchActionEditorTypes.ts` — nowy, samodzielny
+  format: `MatchActionRecording` (id/outcome/tytuł/formacjeA+B/lista
+  `MatchActionPlayerPath` + jeden `MatchActionBallPath`). Zawodnik
+  adresowany przez `slotIndex` (0-10, indeks w `Tactic.slots` wybranej
+  formacji) zamiast roli+indeksu jak dotychczasowy
+  `MatchEngineV2HighlightActor` — prostsze i jednoznaczne, skoro edytor i
+  tak wymaga wybranej formacji. 10 tagów wyniku dokładnie z listy
+  użytkownika: GOL/RZUT ROŻNY/RZUT WOLNY/RZUT KARNY/AUT/SPALONY/FAUL/
+  OBRONA BRAMKARZA/POPRZECZKA/SŁUPEK.
+- `services/match/editor/MatchActionEditorPlaybackService.ts` — czyste,
+  testowalne funkcje: `interpolatePathAtTime` (interpolacja liniowa po
+  `atMs`, do podglądu PLAY), `recordingDurationMs`, `validateRecording`
+  (limity boiska, rosnący czas, min. 2 punkty na ścieżkę, unikalne sloty,
+  min. 1 zawodnik z narysowanym ruchem).
+- `services/match/editor/MatchActionEditorStorageService.ts` — `save()`
+  (POST do `/__match-action-editor/save`, rzuca poza `import.meta.env.DEV`),
+  `listSaved()` (czyta `import.meta.glob('../engines/v2/actions/**/*.json',
+  {eager:true, import:'default'})` — pierwsze użycie glob-importu w repo).
+- `vite.config.ts` — nowy inline plugin `matchActionEditorSavePlugin`,
+  `configureServer` rejestrowany TYLKO gdy `command === 'serve'` (nigdy przy
+  `vite build`), waliduje `id`/`outcome` (whitelista znaków) przed zapisem,
+  `fs.mkdirSync(..., {recursive:true})` + `fs.writeFileSync` do
+  `services/match/engines/v2/actions/<outcome>/<id>.json`.
+- `services/match/engines/v2/MatchEngineV2SpatialService.ts` — `anchorForSlot`
+  (rzutowanie znormalizowanych `x,y` slotu formacji na metry boiska, z
+  mirroringiem AWAY) wyeksportowane zamiast być prywatną stałą modułu —
+  edytor używa DOKŁADNIE tej samej matematyki co `createTeamPlayers`,
+  zero duplikacji geometrii formacji.
+- `components/match/editor/MatchActionEditorView.tsx` — główny ekran:
+  boisko SVG (te same stałe `VIEW_WIDTH/VIEW_HEIGHT/PITCH` co
+  `MatchLiveV2Prototype.tsx`), `<select>` formacji A/B z
+  `TacticRepository.getAll()`, 22 znaczniki na pozycjach `anchorForSlot`,
+  pasek 10 przycisków wyniku, PLAY/PAUZA/STOP, COFNIJ, ZAPISZ.
+  Rysowanie: lewy przycisk + przeciągnięcie na zawodniku dopisuje punkty
+  (`mousemove` throttlowany do min. 1.4 m między punktami, żeby nie zalać
+  ścieżki tysiącami punktów) do jego ścieżki aż do puszczenia przycisku —
+  pełne 360°, bez ograniczeń kierunku; kliknięcie już narysowanego
+  zawodnika nadpisuje jego ścieżkę nową. Prawy przycisk + przeciągnięcie na
+  ikonce piłki analogicznie dla toru lotu piłki (`onContextMenu`
+  zablokowany, żeby nie wyskakiwało natywne menu przeglądarki). Podgląd
+  PLAY to WŁASNA, prosta pętla `requestAnimationFrame` — NIE
+  `MatchEngineV2FrameControllerService` (ten zakłada model krok-z-jednym-
+  aktorem-piłki, tu wszyscy 22 zawodnicy mają jednocześnie własne,
+  niezależne ścieżki, więc potrzebna była osobna logika odtwarzania tylko
+  na potrzeby edytora).
+- `types.ts` / `App.tsx` — nowy `ViewState.MATCH_ACTION_EDITOR`, wpięty
+  wzorem `CALENDAR_DEBUG`, ale owinięty w `import.meta.env.DEV` (potwierdzone
+  po buildzie: string „Edytor Akcji Meczowych” ma zero wystąpień w
+  `dist/assets/index-*.js` — realnie usunięty z builda produkcyjnego, nie
+  tylko ukryty w UI). Wejście do edytora: pływający przycisk „Edytor akcji”
+  w lewym dolnym rogu (`App.tsx`, poza Dashboardem — bo `CALENDAR_DEBUG`,
+  jedyny istniejący precedens nazewniczy, okazał się PRAWDZIWYM ekranem
+  kalendarza, nie ukrytym narzędziem deweloperskim, więc wpięcie w jego
+  miejsce byłoby mylące), też tylko w `import.meta.env.DEV` i zweryfikowane
+  że zniknęło z builda.
+- `vite-env.d.ts` (nowy, w katalogu głównym) — `/// <reference types="vite/client" />`,
+  żeby `import.meta.env`/`import.meta.glob` miały typy (repo nie używało
+  tego wcześniej).
+
+Świadomie NIEZROBIONE w tym wpisie (Etap 2 i 3 z planu, do zrobienia
+osobno, po sprawdzeniu Etapu 1 w praktyce):
+- Integracja w rozgrywanym meczu — wczytanie folderu `actions/` i konwersja
+  `MatchActionRecording` na format odtwarzany przez istniejący silnik
+  (`MatchEngineV2HighlightStep[]`), żeby narysowane akcje faktycznie
+  pojawiały się podczas meczu. Dziś folder `actions/` istnieje
+  (`.gitkeep`) i się zapełnia, ale nic jeszcze z niego nie czyta w grze.
+- Generator wariantów (lustrzane odbicie / przesunięcie / inny wykonawca
+  z gotowej akcji) — osobne narzędzie, jeszcze nietknięte.
+- Edycja pojedynczego punktu ścieżki przez przeciąganie — dziś kliknięcie
+  już narysowanego zawodnika czyści i każe narysować całą ścieżkę od nowa;
+  jeśli to za mało precyzyjne, naturalny następny krok.
+
+Self-test: nowy `tests/MatchActionEditorConversionTests.ts`
+(`interpolatePathAtTime`, `recordingDurationMs`, `validateRecording` —
+same czyste funkcje, bez UI), `npm run test:match-engine-v2-core`,
+`test:match-live-v2-svg` (sanity po zmianie eksportu w
+`MatchEngineV2SpatialService.ts`) oraz `npm run build` — wszystkie
+zaliczone. Potwierdzono grepem, że edytor i przycisk wejścia mają zero
+wystąpień w zbudowanym `dist/`.
+
+Nierozstrzygnięte, wymaga sprawdzenia przez użytkownika w `npm run dev`:
+CAŁA interakcja myszą (przeciąganie, rysowanie, PLAY/PAUZA, ZAPISZ) —
+w tej sesji nie ma narzędzia do automatyzacji przeglądarki, więc żadna z
+tych interakcji nie została wizualnie zweryfikowana, tylko przeanalizowana
+w kodzie. To pierwszy realny test tego mechanizmu.
+
+======================================================================
+
+30 sierpnia 2026 — edytor uruchomiony niezależnie od gry, semantyka
+podań/biegu z piłką
+
+Po pierwszym realnym użyciu edytora wyszły dwie sprawy:
+
+(1) Użytkownik: „edytor akcji musi się uruchamiać poza grą... może korzystać
+z zasobów gry jeśli trzeba, ale wejście do niego musi być niezależne”.
+Dotychczasowe wpięcie (`ViewState.MATCH_ACTION_EDITOR` + pływający przycisk
+w `App.tsx`, owinięte w `import.meta.env.DEV`) nadal wymagało wczytania
+całej aplikacji gry (`GameProvider`, `AppContent`) tylko po to, żeby
+dorysować akcję. Naprawiono przez PRAWDZIWE rozdzielenie na poziomie
+grafu buildu Vite, nie flagi środowiskowej:
+- nowy `editor.html` (kopia nagłówka `index.html` — importmap na React z
+  esm.sh, Tailwind CDN, `/index.css` — z osobnym `<div id="editor-root">`)
+  i `editor.tsx` (montuje `<MatchActionEditorView />` BEZ `GameProvider`,
+  bez `ViewState`).
+- Usunięto `ViewState.MATCH_ACTION_EDITOR`, case w `App.tsx`, pływający
+  przycisk i import `MatchActionEditorView` z `App.tsx` — gra już go
+  w ogóle nie importuje.
+- `MatchActionEditorView.tsx` przestał zależeć od `useGame()` (usunięty
+  przycisk „Wyjdź” — to teraz osobna strona, nie ma dokąd wracać).
+- Efekt: `npm run build` domyślnie buduje tylko `index.html` (`editor.html`
+  nie jest w `build.rollupOptions.input`), więc edytor jest wykluczony z
+  produkcyjnego `dist/` STRUKTURALNIE (nie jest osiągalny z żadnego pliku,
+  który się buduje), a nie tylko przez `import.meta.env.DEV` — potwierdzone
+  ponownym build+grep. W trybie `npm run dev` edytor jest pod
+  `/editor.html`, niezależnie od tego, czy gra (`/index.html`) jest w ogóle
+  otwarta.
+
+(2) Użytkownik, po próbie narysowania „Podanie, bieg z piłką, podanie górą,
+strzał”: „jak narysować strzałkę żeby edytor wiedział że zawodnik prowadzi
+piłkę, jak narysować podanie od zawodnika do zawodnika... musi być jakaś
+łatwiejsza metoda”. Pierwotny model (jedna, w pełni swobodna linia dla
+całej piłki, rysowana niezależnie od zawodników, bez żadnej wiedzy o tym
+kto komu podaje) faktycznie nie miał tej semantyki — to nie był błąd do
+naprawienia, tylko brakująca funkcja.
+
+Przebudowa modelu piłki: zamiast `MatchActionBallPath` (jedna linia),
+`ball: MatchActionBallTouch[]` — sekwencja typowanych, następujących po
+sobie w czasie „dotknięć” piłki. Każde dotknięcie: `kind` (PASS/CARRY/
+LOFTED_PASS/SHOT — dokładnie PODANIE/BIEG Z PIŁKĄ/PODANIE GÓRĄ/STRZAŁ z
+przykładu użytkownika), `from` (kto ma piłkę), opcjonalnie `to` (odbiorca,
+tylko PASS/LOFTED_PASS), własne `waypoints`. Sekwencja czterech dotknięć z
+przykładu użytkownika to teraz dosłownie cztery elementy tej tablicy, jedna
+po drugiej.
+
+Nowy, prowadzony workflow (zamiast rysowania na wolną rękę dla piłki):
+1. Kliknij przycisk rodzaju akcji (PODANIE / BIEG Z PIŁKĄ / PODANIE GÓRĄ /
+   STRZAŁ) w panelu bocznym.
+2. Kliknij zawodnika, który ma piłkę.
+3a. PODANIE/PODANIE GÓRĄ: kliknij drugiego zawodnika-odbiorcę — edytor sam
+    rysuje prostą linię między ich aktualnymi pozycjami i liczy sensowny
+    czas trwania z odległości (różne prędkości dla podania po ziemi/górą).
+3b. STRZAŁ: kliknij miejsce strzału na boisku (np. w bramce).
+3c. BIEG Z PIŁKĄ: zamiast klikać drugi raz, przytrzymaj i przeciągnij tego
+    samego zawodnika (jak stare rysowanie na wolną rękę) — to jedyny typ
+    akcji piłki, który nadal rysuje się przez przeciąganie, bo trasa biegu
+    z piłką jest z natury dowolna, nie prostą linią punkt-do-punktu.
+Panel boczny na bieżąco pokazuje zbudowaną sekwencję („1. PODANIE: A6 → A9,
+2. BIEG Z PIŁKĄ: A9, ...”) — to bezpośrednia odpowiedź na „musi być jakaś
+instrukcja”, widoczna w samym edytorze, nie tylko w dokumentacji.
+
+`computeCurrentPositions()` (nowa funkcja w komponencie) śledzi, gdzie
+KAŻDY zawodnik aktualnie „jest” po przejściu całej dotychczasowej sekwencji
+dotknięć (kończy bieg z piłką tam, gdzie się zatrzymał; kończy jako odbiorca
+podania tam, gdzie piłka doleciała) — dzięki temu drugie i kolejne dotknięcie
+w sekwencji zaczyna się we właściwym miejscu, nie zawsze na pozycji z
+formacji początkowej.
+
+Świadome uproszczenie (nienaprawione w tym wpisie): podczas PLAY/podglądu
+znacznik zawodnika NIE podąża jeszcze wizualnie za piłką w trakcie BIEGU
+Z PIŁKĄ — porusza się tylko piłka. Sam zapisany rekord ma już poprawne dane
+(`kind: 'CARRY'`, `from`), więc to czysto kosmetyczny brak w podglądzie
+edytora, nie w danych. Do ewentualnego dopracowania później, jeśli okaże
+się potrzebne.
+
+Zaktualizowano: `MatchActionEditorTypes.ts` (nowe typy dotknięć),
+`MatchActionEditorPlaybackService.ts` (nowa `ballPositionAtTime` —
+odczytuje pozycję piłki z właściwego dotknięcia w sekwencji po czasie;
+`validateRecording` sprawdza teraz sekwencję dotknięć zamiast jednej ścieżki,
+w tym że każde PASS/LOFTED_PASS ma odbiorcę), `MatchActionEditorView.tsx`
+(przebudowane rysowanie/klikanie), `tests/MatchActionEditorConversionTests.ts`
+(testy `ballPositionAtTime` i zaktualizowanej walidacji).
+
+Self-test: `npm run test:match-action-editor`, `npm run build` (build
+gry — sam edytor od teraz NIE jest w tym grafie, więc dodatkowo
+zweryfikowano `npx esbuild editor.tsx --bundle` osobno, żeby złapać błędy
+składni/importów w kodzie edytora, skoro `vite build` gry już go nie
+dotyka) — wszystkie zaliczone.
+
+Nierozstrzygnięte: nowy workflow (4 przyciski rodzaju akcji, klikanie
+zawodników, przeciąganie tylko dla biegu z piłką) nieprzetestowany wizualnie
+— użytkownik powinien spróbować narysować pełną sekwencję z przykładu
+(podanie, bieg z piłką, podanie górą, strzał) w `npm run dev` pod
+`/editor.html` i potwierdzić, czy jest to rzeczywiście prostsze.
+
+======================================================================
+
+30 sierpnia 2026 — wolniejszy podgląd, koniec klikania dwóch zawodników
+
+Po pierwszej próbie rysowania w nowym workflow użytkownik zgłosił dwie
+rzeczy: (1) podgląd PLAY jest za szybki; (2) gdy zawodnik zostanie
+przesunięty własną strzałką (bez piłki), a POTEM wybrany jako odbiorca
+podania, piłka leci do jego STAREJ pozycji (z formacji), nie do miejsca, w
+które go przesunięto — bo `computeCurrentPositions()` nie uwzględniało
+samodzielnie narysowanych tras, tylko dotknięcia piłki. Do tego wprost:
+„zawodnicy zmieniają pozycje więc rysowanie strzałki z piłką powinno
+wyglądać inaczej... teraz klikasz na dwóch zawodników to jest złe
+podejście” — odrzucenie samego mechanizmu klik-klik, nie tylko jego błędu.
+
+(1) Dodano `PREVIEW_SLOWDOWN = 0.35` w pętli `requestAnimationFrame` PLAY —
+`elapsed` mnożony przez ten czynnik przed dodaniem do `playbackAtMs`, więc
+podgląd trwa ok. 3x dłużej niż rzeczywisty/wyliczony czas akcji. Niezależne
+od podobnej poprawki tempa powtórki gola w grze właściwej sprzed dwóch
+wpisów — inny mechanizm, inny plik.
+
+(2) Dwie zmiany razem:
+- `computeCurrentPositions()` teraz nakłada również `playerPaths`
+  (samodzielne biegi bez piłki) — kolejność: kotwica formacji → koniec
+  narysowanego biegu bez piłki (jeśli jest) → koniec dotknięcia piłki
+  (jeśli jest, nadpisuje jako najpóźniejsze w sekwencji). To naprawia
+  dosłowny zgłoszony błąd.
+- Ważniejsza zmiana: usunięto CAŁY mechanizm klik-klik (`pendingFrom`,
+  `handlePlayerClick`, `handlePitchClick`) dla PODANIA/PODANIA GÓRĄ/STRZAŁU.
+  Teraz WSZYSTKIE cztery rodzaje akcji piłki (i samodzielny bieg bez piłki)
+  rysuje się identycznym gestem: przytrzymaj i przeciągnij zawodnika z
+  piłką. Dla PODANIA/PODANIA GÓRĄ, jeśli przeciągnięcie kończy się w
+  promieniu `RECEIVER_SNAP_METRES = 4` m od innego zawodnika, edytor
+  rozpoznaje go jako odbiorcę i przypina ostatni punkt dokładnie do jego
+  AKTUALNEJ pozycji (z tego samego, poprawionego `computeCurrentPositions()`)
+  — więc odbiorca jest zawsze rozpoznawany tam, gdzie faktycznie jest, nie
+  tam gdzie zaczynał w formacji.
+
+Techniczna pułapka po drodze: `handleMove`/`handleUp` żyją w
+`useEffect(() => {...}, [])` zarejestrowanym raz przy montowaniu — gdyby
+czytały `computeCurrentPositions()`/`slotEntries` bezpośrednio, widziałyby
+STARY stan sprzed montowania (domknięcie befikowe), nie bieżące formacje/
+dotknięcia. Naprawione przez zrobienie zrzutu (`slotSnapshot`) pozycji
+wszystkich zawodników RAZ, w `handlePlayerPointerDown` (świeże domknięcie
+z każdego renderu), i zapisanie go w `drawingRef.current` — `handleUp`
+czyta już tylko ten zrzut z refa, nigdy bezpośrednio stanu.
+
+Świadomie NIENAPRAWIONE: dopasowanie odbiorcy wciąż nie jest świadome
+CZASU — `computeCurrentPositions()` daje jedną, statyczną „aktualną”
+pozycję każdego zawodnika (koniec jego najpóźniejszego narysowanego
+elementu), a nie jego pozycję w konkretnym momencie w trakcie odtwarzania
+całej sekwencji. Dla najczęstszego przypadku (rysowanie po kolei, krok po
+kroku, tak jak podano w przykładzie) to wystarcza; może wymagać dalszej
+poprawki, jeśli użytkownik zacznie rysować akcje w bardziej splecionej
+kolejności czasowej.
+
+Self-test: `npm run test:match-action-editor`, `npx esbuild editor.tsx
+--bundle` (standalone, bo edytor jest poza grafem buildu gry) oraz
+`npm run build` (gra) — wszystkie zaliczone.
+
+Nierozstrzygnięte: nieprzetestowane wizualnie — użytkownik powinien
+sprawdzić, czy 0.35x podglądu to dobre tempo, i czy przypinanie odbiorcy
+(promień 4 m) działa intuicyjnie, zwłaszcza gdy dwóch zawodników stoi
+blisko siebie.
+
+======================================================================
+
+30 sierpnia 2026 — znacznik zawodnika nie ruszał się wizualnie po biegu z
+piłką (dane były już poprawne, widok nie)
+
+Użytkownik: „zawodnik biegnie z piłką i musi zrobić podanie ale podanie
+musi być z miejsca do którego dobiegł z piłką a teraz podanie jest tylko z
+miejsca w którym był wcześniej... musi być jakieś rejestrowanie jego
+zachowania”.
+
+Analiza: poprzedni wpis naprawił dane (`computeCurrentPositions()` poprawnie
+liczy koniec biegu z piłką), ale NIE naprawił tego, co użytkownik faktycznie
+widzi. Znacznik zawodnika (kółko + etykieta) był renderowany przez
+`displayPositionFor(anchor, ...)`, które poza odtwarzaniem (scrubbing) ZAWSZE
+zwraca surową kotwicę formacji — nigdy koniec narysowanego biegu ani
+dotknięcia piłki. Czyli po narysowaniu biegu z piłką (albo po przyjęciu
+podania) znacznik zostawał wizualnie na starym miejscu z formacji, a obok
+niego widać było tylko strzałkę-nakładkę. To dotyczyło też samego
+przeciągania: podczas rysowania znacznik NIGDY nie podążał za kursorem,
+tylko stał w miejscu. Dane zapisu były poprawne cały czas — problem był
+wyłącznie w tym, co pokazywał ekran, więc użytkownik zasadnie nie mógł
+zaufać, że poprzednia poprawka faktycznie coś zmieniła.
+
+Naprawiono, w `MatchActionEditorView.tsx`:
+- Znacznik w trybie bezczynności (nie odtwarzanie) renderuje się teraz na
+  `computeCurrentPositions()[slot]` (obliczonym raz na render jako
+  `currentPositions`), nie na surowej kotwicy — więc po każdej narysowanej
+  akcji (bieg z piłką, przyjęcie podania, bieg bez piłki) znacznik
+  faktycznie zostaje tam, gdzie akcja się skończyła.
+- Podczas aktywnego przeciągania znacznik podąża na żywo za kursorem: dla
+  zwykłego biegu bez piłki i dla BIEGU Z PIŁKĄ (bo w tym jednym przypadku
+  zawodnik dosłownie biegnie razem z piłką — ich pozycja to ta sama
+  przeciągana linia). Dla PODANIA/PODANIA GÓRĄ/STRZAŁU znacznik wykonawcy
+  świadomie NIE podąża za przeciąganą linią — przy prawdziwym podaniu
+  podający zwykle stoi w miejscu, rusza się tylko piłka.
+
+Self-test: `npx esbuild editor.tsx --bundle` (standalone) oraz
+`npm run test:match-action-editor` — wszystkie zaliczone. Przy okazji
+usunięto osierocony fragment zdania („2.6 m wygląda dobrze...”) pozostały
+w tym pliku po wcześniejszej edycji innego wpisu.
+
+Nierozstrzygnięte: nieprzetestowane wizualnie — to trzecia z rzędu tura
+poprawek tego samego obszaru edytora bez możliwości sprawdzenia w
+przeglądarce; użytkownik powinien potwierdzić, że znacznik teraz faktycznie
+widocznie „zostaje” tam, gdzie akcja się skończyła, i że kolejna akcja
+zaczyna się z właściwego miejsca.
+
+======================================================================
+
+30 sierpnia 2026 — przycisk resetu edytora
+
+Użytkownik: „brakuje przycisku zresetowania widoku do default”. Dodano
+`handleReset` w `MatchActionEditorView.tsx` (przycisk „Resetuj widok do
+domyślnego” w pasku kontrolek, obok COFNIJ) — czyści wszystkie ścieżki
+zawodników, wszystkie dotknięcia piłki, historię cofania, wybraną akcję
+piłki, stan zapisu, zatrzymuje odtwarzanie i przywraca formacje/wynik/tytuł
+do wartości domyślnych (pierwsza formacja z listy, GOL, pusty tytuł) — czyli
+dokładnie stan, w jakim edytor startuje. Jeśli jest cokolwiek narysowane
+(`history.length > 0`), pyta przez `window.confirm` przed wyczyszczeniem —
+to jedyna operacja w edytorze kasująca pracę bez możliwości cofnięcia.
+
+Self-test: `npx esbuild editor.tsx --bundle`, `npm run test:match-action-editor`
+— zaliczone.
+
+======================================================================
+
+30 sierpnia 2026 — wspólna oś czasu: strzał (i wszystko inne) rysowane jako
+ostatnie faktycznie kończy sekwencję jako ostatnie
+
+Użytkownik: „strzał musi być ostatnią akcją meczu... a teraz strzał zostaje
+oddany na początku akcji zanim piłkarze dojdą do swoich pozycji”.
+
+Znaleziono DWA nakładające się błędy czasu w `MatchActionEditorView.tsx`,
+drugi poważniejszy od pierwszego:
+
+1. Samodzielne biegi zawodników (bez piłki) zawsze zaczynały się od
+   `atMs: 0`, całkowicie niezależnie od tego, gdzie w sekwencji piłki
+   akurat byliśmy — czyli bieg pozycjonujący i sekwencja piłki (kończąca
+   się strzałem) chodziły na dwóch niepowiązanych zegarach. Jeśli
+   sekwencja piłki była narysowana szybciej niż bieg pozycjonujący, strzał
+   (koniec sekwencji piłki) kończył się, zanim bieg pozycjonujący w ogóle
+   się skończył.
+2. Poważniejszy, ukryty błąd w samym `handleMove` (funkcja obsługująca
+   przeciąganie): pierwszy punkt każdego rysowania poprawnie dostawał
+   `atMs` na wspólnej osi czasu, ale KOLEJNE punkty tego samego
+   przeciągnięcia liczyły czas jako `performance.now() - drawing.
+   startedAtMs` — czyli czas trwania SAMEGO przeciągnięcia od zera,
+   ignorując punkt startowy. Efekt: każde rysowanie po pierwszym (którego
+   `atMs` startowe i tak wynosiło 0, więc błąd był niewidoczny) cofało się
+   w czasie zaraz po pierwszym punkcie — złamanie własnej reguły
+   `validateRecording` o rosnącym czasie, i realna przyczyna tego, że
+   późniejsze akcje „zjeżdżały” bliżej początku sekwencji niż powinny.
+
+Naprawiono oba naraz:
+- Dodano `currentDurationMs` (już istniejące, teraz też używane) jako
+  WSPÓLNY zegar: `handlePlayerPointerDown` startuje KAŻDE nowe rysowanie
+  (bieg bez piłki i każdy rodzaj dotknięcia piłki jednakowo) od
+  `currentDurationMs` — czyli dokładnie tam, gdzie skończyło się
+  wszystko narysowane dotychczas, niezależnie od typu.
+- `handleMove` dodaje teraz upływający czas przeciągnięcia DO punktu
+  startowego tego rysowania (`drawing.points[0].atMs`), zamiast liczyć go
+  od zera.
+
+Efekt: kolejność rysowania = kolejność czasowa w odtwarzaniu. Narysowanie
+strzału jako ostatniego elementu (czy to biegu z piłką kończącego się
+strzałem, czy samego strzału) gwarantuje, że będzie ostatni w PLAY —
+świadomie rezygnując z możliwości rysowania kilku rzeczy „naraz”
+(równoległe biegi kilku zawodników w tym samym momencie) na rzecz w pełni
+sekwencyjnego, przewidywalnego modelu czasu, zgodnego z tym, jak użytkownik
+opisuje akcje („podanie, bieg z piłką, podanie górą, strzał” — jedno po
+drugim).
+
+Self-test: `npx esbuild editor.tsx --bundle`, `npm run test:match-action-editor`
+— zaliczone.
+
+Nierozstrzygnięte: nieprzetestowane wizualnie. Jeśli w przyszłości okaże
+się, że użytkownik jednak potrzebuje kilku RÓWNOLEGŁYCH biegów w tym samym
+momencie (np. dwóch zawodników wbiegających jednocześnie w pole karne), w
+pełni sekwencyjny model będzie trzeba złagodzić — świadomy kompromis, nie
+przeoczenie.
+
+======================================================================
+
+30 sierpnia 2026 — zawodnik faktycznie prowadzi piłkę podczas odtwarzania,
+naprawa gubienia krótkich podań, inteligentniejsza lista sekwencji
+
+Trzy zgłoszenia użytkownika naraz: (1) przy biegu z piłką znacznik
+zawodnika musi faktycznie nieść piłkę do wyznaczonego punktu podczas
+odtwarzania; (2) brak animacji podania piłki; (3) potrzebna bardziej
+inteligentna, tekstowa lista podglądu sekwencji — bez opisywania ruchu bez
+piłki (to tylko tło, wystarczy że jest zapamiętane w kodzie).
+
+(1) Potwierdzone i naprawione. Znaczniki zawodników podczas ODTWARZANIA
+(scrubbing) korzystały wyłącznie z ich WŁASNEJ, samodzielnie narysowanej
+ścieżki (`playerPaths`) — a bieg z piłką (`CARRY`) nigdy takiej ścieżki nie
+tworzy, tylko wpis w `touches`. Efekt: podczas PLAY znacznik niosącego
+piłkę zawodnika stał w miejscu, poruszała się tylko piłka. Nowa funkcja
+`playerPositionAtTime` w `MatchActionEditorPlaybackService.ts` (plus test)
+scala WSZYSTKIE źródła ruchu danego zawodnika w jedną chronologiczną
+sekwencję: własna ścieżka (jeśli jest) + każdy `CARRY`, gdzie jest `from`
+(podąża za piłką przez cały czas trwania) + każdy `PASS`/`PODANIE GÓRĄ`,
+gdzie jest `to` (trzyma pozycję przyjęcia dopiero OD chwili, gdy piłka
+faktycznie dotrze — nie wcześniej). Podpięte w `MatchActionEditorView.tsx`
+w miejsce starego `displayPositionFor` (usuniętego).
+
+(2) Nie udało się jednoznacznie zlokalizować zgłoszonego objawu przez samo
+czytanie kodu (nie mam w tej sesji dostępu do przeglądarki), ale znaleziono
+i naprawiono konkretny, prawdopodobny winowajca: krótkie, szybkie
+przeciągnięcie (typowy gest dla krótkiego podania między blisko stojącymi
+zawodnikami) mogło zakończyć się, zanim jakikolwiek `mousemove` przekroczył
+próg `MIN_WAYPOINT_DISTANCE_METRES = 1.4` m — zostawiając tylko punkt
+startowy, więc `handleUp` po prostu CICHO odrzucał całą akcję (mniej niż 2
+punkty). Naprawione: `handleUp` teraz, jeśli po przeciągnięciu zostały
+mniej niż 2 punkty, dokłada punkt zwolnienia przycisku myszy (jeśli
+faktycznie się poruszył o >0.3 m) zamiast porzucać akcję. To NIE jest
+potwierdzona przyczyna zgłoszenia (2), tylko najbardziej prawdopodobna po
+analizie kodu — do potwierdzenia przez użytkownika z pomocą nowej listy
+sekwencji (patrz niżej), która teraz od razu pokaże, czy dane podanie w
+ogóle zostało zarejestrowane.
+
+(3) Rozszerzono panel „Sekwencja piłki”: każdy wpis pokazuje teraz zakres
+czasu (`0.5–2.0s`) i pełniejszy, czytelny opis po polsku (nowa funkcja
+`describeBallTouch` w serwisie: „A6 → A9 (podanie)”, „A9 prowadzi piłkę”,
+„A9 oddaje strzał”), plus ostrzeżenie wprost w liście, jeśli podanie nie
+ma rozpoznanego odbiorcy. Nagłówek panelu pokazuje łączny czas trwania
+całej akcji. Samodzielne biegi bez piłki (`playerPaths`) świadomie NIE są
+tu wypisywane — zgodnie z życzeniem użytkownika, zostają tylko w danych.
+
+Self-test: `npm run test:match-action-editor` (nowe testy
+`playerPositionAtTime` — trzyma pozycję spoczynku przed przyjęciem podania,
+trzyma pozycję przyjęcia po nim, podąża za piłką w trakcie biegu — oraz
+`describeBallTouch`), `npx esbuild editor.tsx --bundle` (standalone) oraz
+`npm run build` (gra) — wszystkie zaliczone.
+
+Nierozstrzygnięte: (2) pozostaje niepotwierdzone — jeśli po tej poprawce
+problem nadal występuje, nowa lista sekwencji z dokładnym czasem każdej
+akcji powinna pozwolić dokładnie opisać, na czym polega (np. „akcja X w
+ogóle nie pojawia się na liście” vs „pojawia się, ale piłka się nie
+rusza” — to dwa różne błędy wymagające różnych poprawek).
+
+======================================================================
+
+30 sierpnia 2026 — cofnięcie nadgorliwej poprawki: ruch bez piłki wraca do
+równoległości (z losowym jitterem), zamiast pełnej sekwencyjności
+
+Użytkownik: „każdy zawodnik który nie ma piłki powinien poruszać się z
+randomowym milisekundowym opóźnieniem i w tym samym momencie jak dzieje się
+akcja... teraz wszystkie ruchy wykonywane są sekwencyjnie i po kolei...
+zamiast jako jedna całość. Oprócz podań i strzałów, które powinny być w
+odpowiednich momentach kiedy zawodnik dobiegnie do miejsca z którego robi
+podanie/strzał”.
+
+To bezpośrednia korekta „wspólnej osi czasu” z dwóch wpisów wcześniej.
+Tamta zmiana miała naprawić „strzał zbyt wcześnie”, ale poszła za daleko —
+zamiast tylko naprawić realny błąd (patrz niżej), wymusiła, żeby WSZYSTKO,
+łącznie z niezwiązanymi biegami bez piłki wielu różnych zawodników,
+ustawiało się w jedną kolejkę, jedno po drugim. Po ponownej analizie:
+prawdziwą przyczyną „strzału za wcześnie” był najpewniej inny, osobno już
+naprawiony błąd w `handleMove` (punkty cofające się w czasie) — sama
+sekwencyjność wszystkiego nie była konieczna i została teraz cofnięta.
+
+Nowy podział w `MatchActionEditorView.tsx` (`handlePlayerPointerDown`):
+- **Bieg bez piłki** (rysowany poza trybem akcji piłki): zaczyna się od
+  losowego, niewielkiego opóźnienia `Math.random() * OFF_BALL_JITTER_MS`
+  (300 ms) — niezależnie od tego, co dzieje się gdzie indziej. Kilku
+  zawodników narysowanych osobno rusza się więc mniej więcej naraz, z
+  naturalnym rozjazdem w czasie, a nie jeden po drugim.
+- **Podanie/bieg z piłką/podanie górą/strzał**: nadal w pełni
+  sekwencyjne WOBEC SIEBIE (kolejne dotknięcie zaczyna się dokładnie tam,
+  gdzie skończyło się poprzednie — to się nie zmienia, piłka nie może być
+  w dwóch miejscach naraz). Dodatkowo: jeśli KONKRETNY zaangażowany
+  zawodnik (ten, od którego zaczyna się to dotknięcie) miał wcześniej
+  narysowany własny bieg bez piłki, dotknięcie czeka, aż TEN bieg się
+  skończy (`Math.max(koniec łańcucha piłki, koniec własnej ścieżki tego
+  zawodnika)`) — ale nigdy nie czeka na cudze, niezwiązane biegi innych
+  zawodników. To odpowiada wprost na „podania i strzały... kiedy zawodnik
+  dobiegnie do miejsca”, bez przywracania globalnej sekwencyjności.
+
+Self-test: `npx esbuild editor.tsx --bundle`, `npm run test:match-action-editor`,
+`npm run build` (gra) — wszystkie zaliczone (istniejące testy nie zależały
+od dokładnych wartości czasu poza monotonicznością w obrębie jednej
+ścieżki/łańcucha piłki, więc przeszły bez zmian).
+
+Nierozstrzygnięte: nieprzetestowane wizualnie — użytkownik powinien
+potwierdzić, że kilka biegów bez piłki narysowanych osobno teraz wygląda
+jak jednoczesny ruch drużyny, a nie kolejka, i że podania/strzały nadal
+czekają na właściwego zawodnika we właściwym momencie.
+
+2026-08-30 — Wpis 11: własne pozycje startowe zawodników (niezależnie od formacji)
+
+Zgłoszenie użytkownika: potrzeba przesunięcia zawodnika na dowolne miejsce
+na boisku PRZED rozpoczęciem rysowania akcji, niezależnie od jego pozycji
+w formacji — np. przy rzucie rożnym obrona ustawia się inaczej niż
+wynikałoby to z taktyki, i to właśnie od tego ustawienia akcja ma się
+zaczynać. Ta pozycja musi też trafić do zapisanego rekordu akcji, żeby
+przy odtwarzaniu w meczu start był z właściwego miejsca, nie z anchoru
+formacji.
+
+Analiza: to inna potrzeba niż rysowanie ruchu w akcji (`playerPaths`) —
+tam ścieżka ZACZYNA się od bieżącej pozycji i jest częścią przebiegu akcji
+w czasie (`atMs`). Tu chodzi o przestawienie punktu zerowego, z którego
+wszystko inne (biegi bez piłki, dotknięcia piłki) dopiero startuje, i to
+przestawienie nie ma własnego czasu w przebiegu akcji — to stan „przed
+gwizdkiem”.
+
+Co zmieniono:
+- `MatchActionEditorTypes.ts`: nowy typ `MatchActionStartPosition = {side,
+  slotIndex, x, y}` oraz nowe pole `startPositions:
+  MatchActionStartPosition[]` w `MatchActionRecording` (tylko zawodnicy z
+  ustawioną własną pozycją; reszta zostaje na anchorze formacji, tak samo
+  jak już działa dla `players`).
+- `MatchActionEditorPlaybackService.ts` (`validateRecording`): walidacja
+  `startPositions` — poprawny zakres slotu (0-10), brak duplikatu slotu,
+  punkt w granicach boiska.
+- `MatchActionEditorView.tsx`:
+  - nowy stan `customStartPositions: Record<SlotKey, MatchEngineV2Point>`
+    (nadpisania per zawodnik) i `setupMode: boolean` (tryb ustawiania,
+    włączany/wyłączany osobnym przyciskiem w panelu bocznym, wzajemnie
+    wykluczający się z wyborem akcji piłki — wybranie jednego czyści
+    drugie);
+  - `anchorFor(side, slotIndex)` sprawdza teraz najpierw
+    `customStartPositions[key]`, dopiero potem liczy anchor z formacji
+    przez `anchorForSlot` — dzięki temu WSZYSTKO, co już korzystało z
+    `anchorFor` (pozycje spoczynkowe, `computeCurrentPositions`,
+    `playerPositionAtTime` jako `restPoint`), automatycznie honoruje
+    nadpisanie bez osobnej ścieżki kodu;
+  - nowy wariant `DrawingTarget`: `{kind:'REPOSITION', side, slotIndex}`,
+    używający DOKŁADNIE tego samego mechanizmu przeciągania
+    (`drawingRef`, throttling po `MIN_WAYPOINT_DISTANCE_METRES`, fallback
+    krótkiego przeciągnięcia w `handleUp`) co rysowanie ścieżki/dotknięcia
+    piłki — bez duplikowania logiki drag-and-drop;
+  - `handlePlayerPointerDown`: gdy `setupMode` aktywny, zawsze zaczyna
+    przeciąganie REPOSITION (z pominięciem `pendingKind`), zapisując do
+    `drawingRef.current.previousStart` poprzednie nadpisanie (jeśli było)
+    — potrzebne dla poprawnego COFNIJ;
+  - `handleUp`: nowa gałąź dla `REPOSITION` — ostatni punkt przeciągnięcia
+    trafia do `customStartPositions[key]`, wpis historii
+    `{kind:'REPOSITION', key, previous}`;
+  - `handleUndo`: nowa gałąź dla `REPOSITION` — przywraca `previous` albo
+    usuwa nadpisanie, jeśli wcześniej go nie było;
+  - `handleReset`: czyści też `customStartPositions` i `setupMode`;
+  - `buildRecording`: dokłada `startPositions` (rozpakowane z
+    `customStartPositions` z powrotem na `{side, slotIndex, x, y}`) — to
+    było też wymagane samym typowaniem, bo `MatchActionRecording` już
+    wymagał tego pola;
+  - UI: przycisk „Tryb ustawiania pozycji startowych” z licznikiem
+    ustawionych pozycji i podpowiedzią tekstową; znacznik zawodnika z
+    aktywnym nadpisaniem rysowany z przerywanym obramowaniem (odróżnienie
+    wizualne od zwykłej pozycji formacyjnej), a w trakcie samego
+    przeciągania REPOSITION obramowanie w kolorze fioletowym (tak samo jak
+    dla trwającego przeciągnięcia dotknięcia piłki).
+
+Self-test: `npx esbuild editor.tsx --bundle` (OK, 103.6kb), nowy przypadek
+testowy w `tests/MatchActionEditorConversionTests.ts` dla walidacji
+`startPositions` (poprawna pozycja, slot poza zakresem, punkt poza
+boiskiem, duplikat slotu — wszystkie przeszły), `npm run
+test:match-action-editor` (OK), `npm run build` gry (OK, bez zmian w
+ostrzeżeniach poza istniejącym ostrzeżeniem o rozmiarze chunków,
+niezwiązanym z tą zmianą).
+
+Nierozstrzygnięte: nieprzetestowane wizualnie w przeglądarce — użytkownik
+powinien potwierdzić, że przycisk trybu ustawiania działa intuicyjnie,
+że przerywane obramowanie faktycznie czytelnie odróżnia przestawionego
+zawodnika, i że po przełączeniu z powrotem na rysowanie akcji piłka/biegi
+faktycznie zaczynają się z nowo ustawionego miejsca, a nie z anchoru
+formacji.
+
+2026-08-30 — Wpis 12: pozycja startowa pod prawym przyciskiem myszy; zgłoszony błąd „Cannot read properties of undefined (reading 'side')”
+
+Dwa zgłoszenia użytkownika po Wpisie 11:
+1) Osobny przycisk-przełącznik trybu ustawiania pozycji startowych jest
+   zbędnym krokiem — lepiej, żeby to było wprost pod prawym przyciskiem
+   myszy (przyciśnięcie i przeciągnięcie), analogicznie do tego, jak lewy
+   przycisk już obsługuje bieg bez piłki / akcję piłki.
+2) Po przeciągnięciu pojawiał się błąd w konsoli:
+   `Uncaught TypeError: Cannot read properties of undefined (reading
+   'side')` w `describeBallTouch` (`MatchActionEditorPlaybackService.ts:92`,
+   wywołane z `MatchActionEditorView.tsx:533`, wnętrze `touches.map(...)`
+   w liście „Sekwencja piłki”) — czyli jakiś element `touches` nie miał
+   pola `from`.
+
+Zmiana (1) — przeniesienie na prawy przycisk:
+- Usunięto stan `setupMode` i przycisk-przełącznik „Tryb ustawiania pozycji
+  startowych” razem z jego obsługą (`handleSetupModeToggle`).
+- `handlePlayerPointerDown`: warunek na starcie zmieniony z `event.button
+  !== 0` (blokada wszystkiego poza lewym) na akceptację lewego (0) I
+  prawego (2); gałąź `event.button === 2` zawsze zaczyna przeciąganie
+  REPOSITION (niezależnie od `pendingKind` — lewy i prawy przycisk działają
+  teraz jednocześnie i niezależnie, bez potrzeby przełącznika trybu).
+  `handleKindSelect` z powrotem prosty (bez czyszczenia trybu, bo trybu
+  już nie ma).
+- Każdy znacznik zawodnika dostał `onContextMenu={e =>
+  e.preventDefault()}` (dodatkowo do istniejącego na całym `<svg>`), żeby
+  prawy przycisk nigdy nie otwierał natywnego menu kontekstowego
+  przeglądarki.
+- Instrukcja w panelu bocznym zastąpiona statycznym opisem: „prawy
+  przycisk myszy, przytrzymaj i przeciągnij zawodnika — ustawia jego
+  miejsce startowe niezależnie od formacji”.
+- Cała reszta mechanizmu (REPOSITION jako wariant `DrawingTarget`,
+  `customStartPositions`, `previousStart` do cofania, przerywane
+  obramowanie dla przestawionego zawodnika, zapis do `startPositions`)
+  bez zmian — zmienił się tylko SPOSÓB wejścia w ten tryb.
+
+Analiza błędu (2): przegląd całego kodu tworzącego/czyszczącego
+`touches` (jedyne miejsce push: gałąź TOUCH w `handleUp`, zawsze
+ustawia `from` wprost z `drawing.target.from`, który sam zawsze jest
+ustawiany jako `{side, slotIndex}` w `handlePlayerPointerDown`; jedyne
+miejsce kasowania: `handleUndo` — `slice(0,-1)`, i `handleReset` —
+`setTouches([])`) nie znalazł ŻADNEJ ścieżki kodu, w której element
+`touches` mógłby zostać zapisany bez `from`. Najbardziej prawdopodobna
+przyczyna: w Wpisie 11 dodano DWA nowe wywołania `useState`
+(`customStartPositions`, `setupMode`) WEWNĄTRZ istniejącej listy hooków
+komponentu (między `touches` a `pendingKind`) — to klasyczna pułapka
+React Fast Refresh (HMR) w Vite: dopisanie/usunięcie hooka w środku listy
+podczas hot-reloadu (bez pełnego przeładowania strony) potrafi przesunąć
+zachowane wartości stanu do NIEWŁAŚCIWYCH slotów hooków w już
+zamontowanym komponencie, więc np. stara wartość jednego stanu ląduje w
+zupełnie innym. To by dokładnie tłumaczyło błąd pojawiający się właśnie
+po tej zmianie i właśnie „po przeciągnięciu” (czyli po pierwszym renderze
+korzystającym z przesuniętego stanu). Ten sam Wpis 12 dodatkowo usuwa
+`setupMode` (jeden z dwóch nowo dodanych hooków) — kolejna zmiana liczby
+hooków, więc zalecenie dla użytkownika jest wprost: po tej aktualizacji
+zrobić pełne przeładowanie karty (nie polegać na samym HMR), najlepiej
+też zrestartować `npm run dev`, zanim będzie dalej testował.
+
+Self-test: `npx esbuild editor.tsx --bundle` (OK, 103.2kb), `npm run
+test:match-action-editor` (OK, bez zmian w testach — dotyczyły warstwy
+danych, nie interakcji myszą).
+
+Nierozstrzygnięte: nie mam dostępu do przeglądarki, więc hipoteza o
+przyczynie błędu (przesunięcie slotów hooków przy HMR) jest NIEPOTWIERDZONA
+— jeśli błąd wystąpi ponownie PO pełnym przeładowaniu strony (czyli na
+pewno bez udziału HMR), to nie jest to wyjaśnienie i trzeba będzie
+dokładnej sekwencji kliknięć od użytkownika, żeby dalej szukać.
+
+2026-08-30 — Wpis 13: ukrycie widocznego selektora „Silnik meczu” na rzecz skrótu Ctrl+S
+
+Niezwiązane z edytorem akcji — dotyczy ekranu `PreMatchStudioView.tsx`
+(studio przedmeczowe zwykłego meczu ligowego), gdzie od dawna istniał
+widoczny `<select>` „Silnik meczu” (etykieta w prawym górnym rogu panelu
+przycisków) do ręcznego przełączania między `LEGACY_1_0` („Silnik 1.0 —
+klasyczny”) a `PROTOTYPE_2_0` („Silnik 2.0 — prototyp”), zdefiniowanymi w
+`services/match/MatchEngineRegistry.ts`. Użytkownik zgłosił zrzut ekranu
+tego selektora i poprosił o: (1) ukrycie go z widoku, (2) przełączanie
+silnika ukrytym skrótem klawiszowym Ctrl+S, (3) krótką informację na
+ekranie o tym, który silnik został włączony po użyciu skrótu.
+
+Co zmieniono w `components/views/PreMatchStudioView.tsx`:
+- Usunięto z renderu cały blok `<label>...<select>...</label>` (razem z
+  widocznym zawsze znacznikiem „Test” przy `PROTOTYPE_2_0`) — nic z tego
+  nie jest już widoczne na ekranie.
+- Nowy stan `engineSwitchNotice: string | null` oraz dwa nowe `useEffect`:
+  1) listener `keydown` na `window` reagujący na Ctrl+S/⌘+S (`event.key
+     === 's'` przy `ctrlKey || metaKey`), z `preventDefault()` (żeby
+     przeglądarka nie otworzyła własnego okna zapisu strony) — przełącza
+     na KOLEJNY silnik z `MatchEngineRegistry.listLeagueEngines()`
+     (obecnie 2 silniki, więc w praktyce przełącznik 1↔2), wywołuje
+     dokładnie te same dwie funkcje co dawny `onChange` selektora
+     (`setSelectedMatchEngine` + `setPendingLeagueMatchEngine(...,
+     locked: false)`), i ustawia `engineSwitchNotice` na etykietę nowo
+     wybranego silnika. Respektuje tę samą blokadę co wcześniej
+     `disabled` na `<select>` — nic się nie dzieje, jeśli mecz jest już
+     zablokowany (`pendingLeagueMatchEngine.locked`) na biezący fixture;
+  2) auto-ukrycie: `setTimeout` czyszczący `engineSwitchNotice` po 2.5s.
+- W miejscu dawnego `<label>` renderowany jest teraz mały,
+  `pointer-events-none` dymek „Włączono: {nazwa silnika}”, widoczny
+  TYLKO przez te 2.5s po użyciu skrótu — reszta czasu nic tam nie ma.
+
+Self-test: `npm run build` (gra) — OK, bez nowych błędów/ostrzeżeń poza
+istniejącym ostrzeżeniem o rozmiarze chunków (niezwiązanym).
+
+Nierozstrzygnięte: nieprzetestowane wizualnie/klawiaturowo w przeglądarce
+— użytkownik powinien potwierdzić, że Ctrl+S faktycznie nie otwiera
+natywnego okna zapisu strony w używanej przeglądarce, że dymek z nazwą
+silnika jest czytelny, i że przełączanie działa również wtedy, gdy focus
+jest akurat na jakimś innym elemencie tego ekranu.

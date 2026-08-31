@@ -22,6 +22,7 @@ type AggregationInput = {
 
 const SHOT_TYPES = new Set<MatchEventType>([
   MatchEventType.SHOT,
+  MatchEventType.SHOT_BLOCKED,
   MatchEventType.SHOT_ON_TARGET,
   MatchEventType.SAVE,
   MatchEventType.SHOT_POST,
@@ -91,6 +92,19 @@ const createPlayerStats = (player: Player, side: CupTeamSide, starter: boolean):
   xG: 0,
   chancesCreated: 0,
   keyPasses: 0,
+  passesAttempted: 0,
+  passesCompleted: 0,
+  controls: 0,
+  dribblesAttempted: 0,
+  dribblesCompleted: 0,
+  tacklesAttempted: 0,
+  tacklesWon: 0,
+  crossesAttempted: 0,
+  crossesCompleted: 0,
+  shotsBlocked: 0,
+  reboundsWon: 0,
+  turnoversWon: 0,
+  turnoversLost: 0,
   foulsCommitted: 0,
   foulsWon: 0,
   offsides: 0,
@@ -259,6 +273,72 @@ export const CupPlayerStatsAggregator = {
     events.forEach(event => {
       const side = event.side;
 
+      if (event.type === MatchEventType.PASS_COMPLETED && event.playerId) {
+        const passer = ensureStats(stats, lookup, event.playerId, side);
+        if (passer) {
+          passer.passesAttempted += 1;
+          passer.passesCompleted += 1;
+        }
+      }
+
+      if (event.type === MatchEventType.MISPLACED_PASS) {
+        const winner = event.playerId ? ensureStats(stats, lookup, event.playerId, side) : undefined;
+        const loser = event.secondaryPlayerId ? ensureStats(stats, lookup, event.secondaryPlayerId) : undefined;
+        if (winner) winner.turnoversWon += 1;
+        if (loser) {
+          loser.passesAttempted += 1;
+          loser.turnoversLost += 1;
+        }
+      }
+
+      if (event.type === MatchEventType.BALL_CONTROL && event.playerId) {
+        const receiver = ensureStats(stats, lookup, event.playerId, side);
+        if (receiver) receiver.controls += 1;
+      }
+
+      if (event.type === MatchEventType.DRIBBLING && event.playerId) {
+        const dribbler = ensureStats(stats, lookup, event.playerId, side);
+        if (dribbler) {
+          dribbler.dribblesAttempted += 1;
+          if (event.detail?.succeeded !== false) dribbler.dribblesCompleted += 1;
+        }
+      }
+
+      if (event.type === MatchEventType.TACKLE_WON) {
+        const tackler = event.playerId ? ensureStats(stats, lookup, event.playerId, side) : undefined;
+        const dispossessed = event.secondaryPlayerId ? ensureStats(stats, lookup, event.secondaryPlayerId) : undefined;
+        if (tackler) {
+          tackler.tacklesAttempted += 1;
+          tackler.tacklesWon += 1;
+          tackler.turnoversWon += 1;
+        }
+        if (dispossessed) dispossessed.turnoversLost += 1;
+      }
+
+      if (event.type === MatchEventType.CROSS_NEAR_POST || event.type === MatchEventType.CROSS_FAR_POST) {
+        const crosser = event.playerId ? ensureStats(stats, lookup, event.playerId, side) : undefined;
+        if (crosser) {
+          crosser.crossesAttempted += 1;
+          if (event.detail?.completed !== false) crosser.crossesCompleted += 1;
+        }
+      }
+
+      if (event.type === MatchEventType.CROSS_BLOCKED && event.secondaryPlayerId) {
+        const crosser = ensureStats(stats, lookup, event.secondaryPlayerId);
+        if (crosser) crosser.crossesAttempted += 1;
+      }
+
+      if (event.type === MatchEventType.SHOT_BLOCKED) {
+        const markerId = detailString(event, 'markerId');
+        const blocker = markerId ? ensureStats(stats, lookup, markerId) : undefined;
+        if (blocker) blocker.shotsBlocked += 1;
+      }
+
+      if (event.type === MatchEventType.REBOUND_WON && event.playerId) {
+        const winner = ensureStats(stats, lookup, event.playerId, side);
+        if (winner) winner.reboundsWon += 1;
+      }
+
       if (isShootoutPenalty(event)) {
         if (event.playerId && (event.type === MatchEventType.PENALTY_SCORED || event.type === MatchEventType.PENALTY_MISSED)) {
           const taker = ensureStats(stats, lookup, event.playerId, side);
@@ -284,7 +364,7 @@ export const CupPlayerStatsAggregator = {
         if (shooter) {
           shooter.shots += 1;
           shooter.xG += event.xG ?? 0;
-          if (ON_TARGET_TYPES.has(event.type)) shooter.shotsOnTarget += 1;
+          if (ON_TARGET_TYPES.has(event.type) || (event.type === MatchEventType.PENALTY_MISSED && detailBool(event, 'saved'))) shooter.shotsOnTarget += 1;
           else shooter.shotsOffTarget += 1;
           if (event.type === MatchEventType.SHOT_POST) shooter.posts += 1;
           if (event.type === MatchEventType.SHOT_BAR) shooter.bars += 1;
@@ -344,7 +424,12 @@ export const CupPlayerStatsAggregator = {
       if (event.playerId) {
         const entry = ensureStats(stats, lookup, event.playerId, side);
         if (entry) {
-          if (event.type === MatchEventType.FOUL || event.type === MatchEventType.YELLOW_CARD || event.type === MatchEventType.RED_CARD) {
+          if (
+            event.type === MatchEventType.FOUL ||
+            event.type === MatchEventType.ADVANTAGE_PLAYED ||
+            event.type === MatchEventType.YELLOW_CARD ||
+            event.type === MatchEventType.RED_CARD
+          ) {
             entry.foulsCommitted += 1;
           }
           if (event.type === MatchEventType.OFFSIDE) entry.offsides += 1;
@@ -360,7 +445,12 @@ export const CupPlayerStatsAggregator = {
 
       if (
         event.secondaryPlayerId &&
-        (event.type === MatchEventType.FOUL || event.type === MatchEventType.YELLOW_CARD || event.type === MatchEventType.RED_CARD)
+        (
+          event.type === MatchEventType.FOUL ||
+          event.type === MatchEventType.ADVANTAGE_PLAYED ||
+          event.type === MatchEventType.YELLOW_CARD ||
+          event.type === MatchEventType.RED_CARD
+        )
       ) {
         const fouled = ensureStats(stats, lookup, event.secondaryPlayerId);
         if (fouled) fouled.foulsWon += 1;

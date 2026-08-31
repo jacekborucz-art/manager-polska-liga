@@ -68,6 +68,10 @@ Projektuje automatyczne zmiany AI na podstawie zmęczenia, kontuzji, kartek, poz
 
 Izoluje reguły pucharowe: dogrywkę, decyzję o karnych i doliczony czas zależny od przebiegu spotkania.
 
+`CupMatchClockService.ts`
+
+Oddziela stale rosnący czas techniczny od czasu pokazywanego na zegarze. Obsługuje osobny doliczony czas obu połów i zapobiega przesunięciu minut drugiej połowy.
+
 `CupPenaltyShootoutService.ts`
 
 Symuluje serię rzutów karnych zgodnie z logiką pucharową: 5 serii, potem nagła śmierć. Karne zależą od atrybutów wykonawcy i bramkarza.
@@ -75,10 +79,11 @@ Symuluje serię rzutów karnych zgodnie z logiką pucharową: 5 serii, potem nag
 `CupMatchLoop.ts`
 
 Główna pętla okresu meczu. Co 5 sekund odświeża profile drużyn, presję, zdarzenia, momentum, posiadanie i zmęczenie.
+Jawnie zapisuje również rozpoczęcia, wykonania rożnych, wykopy i wznowienia bramkarza.
 
 `CupMatchEngineV2.ts`
 
-Publiczne wejście silnika: `CupMatchEngineV2.simulate(input)`. Uruchamia pierwszą połowę, drugą połowę, dogrywkę i karne.
+Publiczne wejście silnika. `simulate(input)` nadal uruchamia pełną symulację testową. API live (`createLiveMatch`, `advanceLiveMatch`, `snapshotLiveMatch`, `finalizeLiveMatch`) udostępnia ten sam rdzeń w trybie przesuwanym wyłącznie do przodu. `applyManualSubstitution` waliduje ręczne zmiany bez przepisywania wcześniejszego przebiegu.
 
 `CupBalanceSimulation.ts`
 

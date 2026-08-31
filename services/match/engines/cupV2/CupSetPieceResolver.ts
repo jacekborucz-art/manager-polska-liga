@@ -1,6 +1,7 @@
 import { MatchEventType } from '../../../../types';
 import type { CupChance, CupMatchEvent, CupTeamRuntimeProfile, CupTickContext } from './CupMatchTypes';
 import { clamp, pickWeighted, weightedScore } from './CupMath';
+import { CupMatchClockService } from './CupMatchClockService';
 
 export type CupSetPieceKind = 'CORNER' | 'FREE_KICK_WIDE' | 'FREE_KICK_DIRECT' | 'PENALTY';
 
@@ -38,7 +39,7 @@ export const CupSetPieceResolver = {
       }),
     })), ctx.random(501));
 
-    const shooter = pickWeighted(targets.map(player => ({
+    const selectedTarget = pickWeighted(targets.map(player => ({
       item: player,
       weight: weightedScore(player.attributes, {
         heading: kind === 'CORNER' || kind === 'FREE_KICK_WIDE' ? 0.28 : 0.08,
@@ -50,6 +51,9 @@ export const CupSetPieceResolver = {
         mentality: 0.05,
       }),
     })), ctx.random(502));
+    // The set-piece taker is also the penalty shooter. Selecting a separate
+    // aerial target here produced impossible penalty assists and wrong takers.
+    const shooter = kind === 'PENALTY' ? taker : selectedTarget;
 
     const delivery =
       weightedScore(taker.attributes, {
@@ -91,7 +95,7 @@ export const CupSetPieceResolver = {
   eventForAward: (ctx: CupTickContext, side: 'HOME' | 'AWAY', kind: CupSetPieceKind): CupMatchEvent => ({
     id: `cupv2_setpiece_award_${ctx.state.second}_${kind}`,
     second: ctx.state.second,
-    minute: Math.floor(ctx.state.second / 60) + 1,
+    minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
     side,
     type:
       kind === 'CORNER' ? MatchEventType.CORNER :
@@ -103,4 +107,3 @@ export const CupSetPieceResolver = {
     text: `${side === 'HOME' ? ctx.input.home.name : ctx.input.away.name} otrzymuje stały fragment gry.`,
   }),
 };
-

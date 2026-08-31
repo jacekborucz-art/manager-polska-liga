@@ -296,3 +296,142 @@ Konferencja prasowa przed studiem pomeczowym
 - Artykuł i jego skutki nie zmieniają się po ponownym wczytaniu gry.
 - Odpowiedzi udzielone podczas właściwej konferencji mają teraz rzeczywisty wpływ na morale i relacje z mediami.
 - Zmiana działa na istniejących zapisach gry; nie trzeba rozpoczynać nowej kariery.
+
+Prototyp nowego silnika meczowego 2.0
+
+- Powstała pierwsza wewnętrzna wersja nowego silnika dla meczów ligowych.
+- Mecz jest liczony akcja po akcji, a wynik nie jest ustalany z góry.
+- Podania, przyjęcia, dryblingi, odbiory, dośrodkowania, strzały, obrony,
+  bloki, odbite piłki i dobicia są przypisywane konkretnym zawodnikom.
+- Dodano dokładniejsze statystyki podań, dryblingów, odbiorów, dośrodkowań,
+  bloków, strat i zbiórek.
+- Faule prowadzą teraz do prawidłowego wolnego albo karnego dla poszkodowanej
+  drużyny, a strzał wybity za linię końcową tworzy rzut rożny.
+- Mecze rozgrywają rzeczywisty doliczony czas przed zakończeniem lub dogrywką.
+- Wewnętrzne testy objęły pełne akcje bramkowe, rzuty karne, dogrywki oraz
+  200 meczów kontrolujących liczbę strzałów, goli, rożnych i niespodzianek.
+- Prototyp nie jest jeszcze dostępny w zwykłym ekranie meczu. Obecny silnik
+  pozostaje domyślny i nie został wyłączony.
+- Doliczony czas działa osobno w obu połowach, a minuty po przerwie są
+  wyświetlane prawidłowo.
+- Dodano rozpoczęcia po golach i po przerwie, auty, wykonania rzutów rożnych,
+  wykopy od bramki oraz wprowadzanie piłki przez bramkarza.
+- Sędzia może zastosować przywilej korzyści bez jednoczesnego przyznania
+  rzutu wolnego.
+- Poprawiono drugą żółtą kartkę, wymuszone zmiany po urazach i zabezpieczenie
+  przed ponownym wejściem zawodnika, który wcześniej zszedł z boiska.
+- Rozmowy w przerwie mają zauważalny, stopniowo wygasający wpływ na grę
+  drużyny w drugiej połowie.
+- Prototyp obsługuje krótkie polecenia przy linii oraz okrzyki trenera.
+- Reakcje zawodników zależą między innymi od sytuacji, taktyki, morale,
+  mentalności, zmęczenia i losowego elementu.
+- Trener drużyny sterowanej przez komputer korzysta z tych samych poleceń.
+  Lepsze atrybuty pomagają mu szybciej i trafniej reagować na przebieg meczu.
+- Trener sterowany przez komputer nie czeka już biernie po czerwonej kartce,
+  urazie, wymuszonej zmianie ani podczas wyraźnej dominacji przeciwnika.
+- Zabezpieczenie czasowe zapobiega wydawaniu wielu sprzecznych poleceń po tym
+  samym zdarzeniu.
+- Wszystkie polecenia i okrzyki zostały sprawdzone w wielu losowych wariantach.
+  Każde z nich ma własne korzyści oraz ryzyko, więc nie istnieje jedna opcja,
+  która zawsze będzie najlepsza.
+- Przygotowano czytelne informacje o aktywnym poleceniu, czasie jego działania
+  oraz przyczynie reakcji trenera komputera. Zostaną wykorzystane w nowym
+  interaktywnym ekranie meczu.
+- Rozpoczęto budowę nowego ekranu meczu 2.0. Pierwsza wersja zawiera pionowe
+  boisko, składy po bokach, wynik, zegar i dolny panel sterowania.
+- Dostępny będzie widok interaktywny z zawodnikami, piłką i przebiegiem akcji
+  oraz spokojniejszy widok klasyczny z komentarzem tekstowym.
+- Długie nazwiska są dopasowywane do miejsca, a informacje o kondycji, kartkach,
+  urazach i ocenach pozostają widoczne.
+- Zawodnicy i piłka poruszają się teraz płynnie między kolejnymi akcjami w
+  prototypowym widoku nowego silnika.
+- Po zdobyciu bramki może zostać pokazana powtórka całej akcji prowadzącej do
+  gola. Powtórkę można wyłączyć w dolnym panelu.
+- Podczas powtórki widoczny jest jej postęp i numer aktualnej części akcji.
+- Pauza zatrzymuje zwykłe animacje, a wczytanie meczu nie odtwarza ponownie
+  wcześniejszych goli.
+- Nowy ekran meczu otrzymał centrum taktyczne z ustawieniem tempa, nastawienia,
+  intensywności, podań, pressingu, kontrataku i krycia.
+- Gracz może przekazywać krótkie polecenia oraz okrzyki trenera bez opuszczania
+  transmisji.
+- Dodano osobny panel zmian pokazujący skład, ławkę, kondycję i pozostały limit.
+- Niedozwolona zmiana, między innymi ponowne wejście zawodnika, który wcześniej
+  zszedł, jest automatycznie blokowana.
+- Otwarcie panelu zatrzymuje mecz i nie powoduje utraty czasu transmisji.
+- Przed zwykłym meczem ligowym można teraz wybrać dotychczasowy silnik 1.0
+  albo dobrowolnie uruchomić testowy silnik 2.0.
+- Silnik 1.0 nadal jest wybierany automatycznie przed każdym meczem.
+- Wybór 2.0 dotyczy tylko jednego wskazanego spotkania i nie przechodzi na
+  kolejne mecze ani na wczytany zapis gry.
+- Testowy mecz 2.0 korzysta z prawdziwych drużyn, składów, trenerów, strojów
+  i barw klubowych z aktualnej kariery.
+- Wyjście z prototypu odrzuca testowy przebieg i bezpiecznie wraca do studia.
+  Pełne zapisywanie wyniku 2.0 w tabeli i studiu pomeczowym będzie dodane w
+  następnym etapie; obecny silnik 1.0 działa bez zmian.
+- Bramkarze w silniku 2.0 stoją teraz przy własnych bramkach i nie przesuwają
+  się zbyt wysoko razem z resztą zespołu.
+- Mecz rozpoczyna się od środka z zawodnikiem ustawionym przy piłce.
+- Zawodnicy samodzielnie wybierają podanie, odważne zagranie, rajd lub
+  dośrodkowanie. Znaczenie mają ich umiejętności, taktyka trenera i losowość.
+- Akcje są płynniejsze: piłkarz prowadzi piłkę podczas rajdu, a odbiorca
+  wychodzi do podania zamiast czekać nieruchomo.
+- Podania, przyjęcia, rajdy, dośrodkowania i strzały tworzą jedną ciągłą akcję.
+- Piłka ma teraz wygląd prawdziwej futbolówki, obraca się i rzuca cień.
+- Dodano czytelniejsze animacje wykonawcy, odbiorcy i kierunku akcji.
+- Każdy zawodnik w silniku 2.0 porusza się teraz indywidualnie w swojej części
+  boiska, zgodnie z domyślną pozycją w ustawieniu.
+- Piłkarze nie przesuwają się już jednocześnie jak jeden sztywny blok.
+- Dodano pasek momentum pokazujący, która drużyna przejęła inicjatywę.
+- Po pierwszej połowie pojawia się prawdziwa przerwa z wynikiem do przerwy.
+- Druga połowa rozpoczyna się dopiero po kliknięciu przycisku „II POŁOWA”.
+- Przycisk meczu pokazuje teraz „ROZPOCZNIJ MECZ”, „PAUZA” albo „WZNÓW” zależnie
+  od aktualnej sytuacji.
+- Po zdobyciu bramki mecz zatrzymuje się na cztery sekundy, zawodnicy celebrują,
+  a na ekranie miga komunikat „GOL!” w barwach drużyny.
+- Powtórka bramki, jeżeli jest włączona, rozpoczyna się dopiero po celebracji.
+- Poprawiono rozmieszczenie zawodników w silniku meczu 2.0. Formacje korzystają
+  teraz z większej części boiska, boczni zawodnicy grają szerzej, a ikony nie
+  nakładają się na siebie podczas zwykłej gry i akcji z piłką.
+- Poprawiono płynność silnika meczu 2.0. Piłka nie przeskakuje już między
+  niepowiązanymi zawodnikami, kolejne podania łączą się ze sobą, a piłkarze
+  płynnie dochodzą do piłki i wracają na swoje pozycje.
+- Dodano czytelne rzuty rożne. Zawodnicy atakujący wbiegają w pole karne,
+  obrońcy ich kryją, a wykonawca ustawia piłkę w narożniku.
+- Dodano widoczne rzuty wolne z murem, rzuty karne z bramkarzem na linii oraz
+  auty wykonywane przy właściwej linii bocznej.
+- Przy spalonym pojawia się linia obrony, dzięki której łatwiej zrozumieć
+  przerwanie akcji.
+- Indywidualne rajdy z piłką są teraz lepiej wyróżnione na boisku.
+- Każda z tych sytuacji ma krótki, czytelny komunikat na murawie.
+
+SILNIK MECZOWY 2.0 – NOWY FUNDAMENT USTAWIENIA DRUŻYNY
+
+- Dodano rozpoznawanie faz gry zespołu: budowanie akcji, atak, gra pod bramką
+  rywala, ustawienie obronne oraz krótkie przejścia po odbiorze i stracie piłki.
+- Formacje przesuwają się teraz wspólnie w stronę akcji, zachowując czytelne
+  linie obrony, pomocy i ataku.
+- Każdy zawodnik nadal pilnuje własnej strefy wynikającej z ustawienia drużyny.
+- Do pressingu rusza ograniczona liczba najbliższych piłkarzy, a pozostali
+  zabezpieczają pozycje zamiast bezładnie zbiegać się do piłki.
+- Bramkarze pozostają w bezpiecznej strefie przy własnej bramce.
+- Poprawiono zachowanie pary napastników w centralnych akcjach, aby ich ikony
+  nie nakładały się na siebie.
+- Pierwszy etap nie zmienia wyniku ani statystyk spotkania. Przygotowuje
+  stabilne ustawienie zawodników pod kolejne etapy ruchu i decyzji.
+
+SILNIK MECZOWY 2.0 – PŁYNNIEJSZY PRZEBIEG AKCJI
+
+- Poprawiono rozpoczęcie meczu. Zawodnicy ustawiają się zgodnie z formacją,
+  a przy piłce pozostają tylko gracze wykonujący rozpoczęcie.
+- Ograniczono nagłe przeskoki zawodników po boisku. Piłkarze przyspieszają,
+  hamują i wracają na swoje pozycje w bardziej naturalny sposób.
+- Poprawiono ciągłość podań. Piłka podąża od wskazanego podającego do
+  odbiorcy i nie pojawia się nagle przy niepowiązanym zawodniku.
+- Decyzje o podaniu uwzględniają teraz odległość, wolną drogę do partnera,
+  nacisk przeciwników i kierunek rozwijania akcji.
+- Miejsce oddania strzału lepiej odpowiada faktycznej pozycji zawodnika.
+- Piłka jest stale widoczna również między najważniejszymi akcjami.
+- Dodano informację o zawodniku przy piłce, drużynie w posiadaniu oraz
+  uczestnikach aktualnego zagrania.
+- Dodano testy sprawdzające ustawienie na początku meczu, płynność ruchu,
+  ciągłość podań i prawidłowego właściciela piłki.

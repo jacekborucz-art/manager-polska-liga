@@ -1,6 +1,6 @@
 import type { Player } from '../../../../types';
 import { PlayerPosition } from '../../../../types';
-import type { CupActionIntent, CupChance, CupPitchZone, CupTeamRuntimeProfile } from './CupMatchTypes';
+import type { CupActionIntent, CupChance, CupPitchZone, CupSpatialDecisionContext, CupTeamRuntimeProfile } from './CupMatchTypes';
 import { clamp, contestProbability, pickWeighted, weightedScore } from './CupMath';
 
 const bestShooterPool = (profile: CupTeamRuntimeProfile): Player[] => {
@@ -37,6 +37,32 @@ const creatorWeight = (player: Player): number =>
     workRate: 0.05,
   }));
 
+const nearestOpponentDistance = (
+  spatial: CupSpatialDecisionContext,
+  side: 'HOME' | 'AWAY',
+  playerId: string,
+): number => {
+  const point = spatial.players[playerId];
+  if (!point) return 8;
+  const opponents = Object.values(spatial.players).filter(player => player.isOnPitch && player.side !== side);
+  return opponents.length > 0
+    ? Math.min(...opponents.map(player => Math.hypot(player.x - point.x, player.y - point.y)))
+    : 12;
+};
+
+const spatialShotWeight = (
+  spatial: CupSpatialDecisionContext | undefined,
+  side: 'HOME' | 'AWAY',
+  playerId: string,
+): number => {
+  const point = spatial?.players[playerId];
+  if (!spatial || !point?.isOnPitch) return 1;
+  const goalY = side === 'HOME' ? spatial.pitchLength : 0;
+  const distance = Math.hypot(point.x - spatial.pitchWidth / 2, point.y - goalY);
+  const pressure = nearestOpponentDistance(spatial, side, playerId);
+  return clamp((1.42 - distance / 95) * clamp(pressure / 5, 0.45, 1.22), 0.22, 1.42);
+};
+
 export const CupChanceCreationService = {
   /**
    * Ta warstwa zamienia udaną progresję w konkretną sytuację. Nie każda akcja
@@ -51,6 +77,9 @@ export const CupChanceCreationService = {
     zone,
     pressure,
     scoreDiff,
+    spatial,
+    preferredShooterId,
+    preferredCreatorId,
     roll,
   }: {
     side: 'HOME' | 'AWAY';
@@ -60,6 +89,9 @@ export const CupChanceCreationService = {
     zone: CupPitchZone;
     pressure: number;
     scoreDiff: number;
+    spatial?: CupSpatialDecisionContext;
+    preferredShooterId?: string;
+    preferredCreatorId?: string;
     roll: (salt: number) => number;
   }): CupChance | null => {
     const creationScore =
@@ -100,13 +132,39 @@ export const CupChanceCreationService = {
 
     if (roll(31) > chanceProbability) return null;
 
-    const shooter = pickWeighted(bestShooterPool(attacking).map(player => ({ item: player, weight: shotWeight(player) })), roll(32));
+    const shooter = pickWeighted(bestShooterPool(attacking).map(player => ({
+      item: player,
+      weight: shotWeight(player) *
+        spatialShotWeight(spatial, side, player.id) *
+        (player.id === preferredShooterId ? 1.75 : 1),
+    })), roll(32));
     const creatorCandidates = attacking.outfieldPlayers.filter(player => player.id !== shooter.id);
     const creator = creatorCandidates.length > 0
-      ? pickWeighted(creatorCandidates.map(player => ({ item: player, weight: creatorWeight(player) })), roll(33))
+      ? pickWeighted(creatorCandidates.map(player => ({
+          item: player,
+          weight: creatorWeight(player) * (player.id === preferredCreatorId ? 1.65 : 1),
+        })), roll(33))
       : undefined;
+    const shooterPoint = spatial?.players[shooter.id];
     const marker = defending.defenders.length > 0
-      ? pickWeighted(defending.defenders.map(player => ({ item: player, weight: Math.max(1, player.attributes.defending + player.attributes.positioning) })), roll(34))
+      ? pickWeighted(defending.defenders.map(player => {
+          const markerPoint = spatial?.players[player.id];
+          const distanceWeight = shooterPoint && markerPoint
+            ? clamp(14 / Math.max(2, Math.hypot(markerPoint.x - shooterPoint.x, markerPoint.y - shooterPoint.y)), 0.35, 2.2)
+            : 1;
+          return {
+            item: player,
+            weight: Math.max(1, player.attributes.defending + player.attributes.positioning) * distanceWeight,
+          };
+        }), roll(34))
+      : undefined;
+
+    const goalY = side === 'HOME' ? 105 : 0;
+    const spatialDistance = shooterPoint
+      ? clamp(Math.hypot(shooterPoint.x - 34, shooterPoint.y - goalY), 5, 36)
+      : undefined;
+    const spatialAngle = shooterPoint
+      ? clamp(1 - Math.abs(shooterPoint.x - 34) / 34, 0.18, 1)
       : undefined;
 
     const rawXg =
@@ -115,7 +173,8 @@ export const CupChanceCreationService = {
       (zone === 'BOX' ? 0.112 : zone === 'FINAL_THIRD' ? 0.044 : 0.018) +
       (intent.pattern === 'COUNTER' ? 0.030 : 0) +
       (intent.pattern === 'SET_PIECE' ? 0.018 : 0) -
-      pressure * 0.0009;
+      pressure * 0.0009 +
+      (spatialDistance !== undefined ? clamp((20 - spatialDistance) * 0.0022, -0.035, 0.035) : 0);
 
     const leadingXgDampener =
       scoreDiff >= 5 ? 0.76 :
@@ -141,8 +200,8 @@ export const CupChanceCreationService = {
       marker,
       xG,
       pressure,
-      angle: clamp(0.25 + roll(35) * 0.65 + (zone === 'BOX' ? 0.10 : 0), 0, 1),
-      distance: zone === 'BOX' ? 7 + roll(36) * 10 : 16 + roll(36) * 14,
+      angle: spatialAngle ?? clamp(0.25 + roll(35) * 0.65 + (zone === 'BOX' ? 0.10 : 0), 0, 1),
+      distance: spatialDistance ?? (zone === 'BOX' ? 7 + roll(36) * 10 : 16 + roll(36) * 14),
     };
   },
 };

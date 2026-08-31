@@ -1,0 +1,24895 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// tests/CupMatchEngineV2ShadowAuditTests.ts
+var import_strict = __toESM(require("node:assert/strict"), 1);
+
+// resources/static_db/clubs/pl_clubs.ts
+var generateClubId = (name) => {
+  const slug = name.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return `PL_${slug}`;
+};
+var RAW_PL_CLUBS = [
+  // --- TIER 1 (Ekstraklasa) - 18 Teams ---004d00
+  { name: "Legia Warszawa", tier: 1, colors: ["#007a25", "#ffffff", "#a80e0e"], stadium: "Stadion Wojska Polskiego", capacity: 31103, reputation: 10, logoFile: "legia-warsaw-2019-logo.png" },
+  { name: "Lech Pozna\u0144", tier: 1, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Enea Stadion", capacity: 41609, reputation: 10, logoFile: "lech-poznan-2022-logo.png" },
+  { name: "Jagiellonia Bia\u0142ystok", tier: 1, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Bia\u0142ymstoku", capacity: 22372, reputation: 8, logoFile: "jagiellonia-bialystok-2024-logo.png" },
+  { name: "Rak\xF3w Cz\u0119stochowa", tier: 1, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Cz\u0119stochowie", capacity: 5500, reputation: 8, logoFile: "rakow-czestochowa-2014-logo.png" },
+  { name: "Pogo\u0144 Szczecin", tier: 1, colors: ["#000080", "#800000", "#FFFFFF"], stadium: "Stadion Miejski im. Floriana Krygiera", capacity: 21163, reputation: 7, logoFile: "pogon_szczecin.png" },
+  { name: "G\xF3rnik Zabrze", tier: 1, colors: ["#0519ca", "#ffffff", "#FF0000"], stadium: "Stadion im. Ernesta Pohla", capacity: 24563, reputation: 8, logoFile: "Gornik_zabrze.png" },
+  { name: "Cracovia", tier: 1, colors: ["#ff0000", "#ffffff", "#000000"], stadium: "Stadion im. J\xF3zefa Pi\u0142sudskiego", capacity: 15016, reputation: 8, logoFile: "cracovia-2024-logo.png" },
+  { name: "Zag\u0142\u0119bie Lubin", tier: 1, colors: ["#FF5F1F", "#FFFFFF", "#008000"], stadium: "Dialog Arena", capacity: 16068, reputation: 7, logoFile: "zaglebie-lubin-2022-logo.png" },
+  { name: "Widzew \u0141\xF3d\u017A", tier: 1, colors: ["#FF0000", "#FFFFFF", "#FF0000"], stadium: "Stadion Widzewa", capacity: 18018, reputation: 10, logoFile: "widzew-lodz.png" },
+  { name: "Lechia Gda\u0144sk", tier: 1, colors: ["#008000", "#FFFFFF", "#008000"], stadium: "Polsat Plus Arena Gda\u0144sk", capacity: 41620, reputation: 7, logoFile: "lechia_gdansk.png" },
+  { name: "Piast Gliwice", tier: 1, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Gliwicach", capacity: 9913, reputation: 6, logoFile: "piast-gliwice-1997-logo.png" },
+  { name: "Arka Gdynia", tier: 1, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski w Gdyni", capacity: 15139, reputation: 6, logoFile: "arka-gdynia-2009-logo.png" },
+  { name: "Korona Kielce", tier: 1, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Suzuki Arena", capacity: 15500, reputation: 7, logoFile: "korona-kielce-2024-logo.png" },
+  { name: "Radomiak Radom", tier: 1, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Radomiu", capacity: 15e3, reputation: 6, logoFile: "RKS_Radomiak_Radom.png" },
+  { name: "Motor Lublin", tier: 1, colors: ["#FFFF00", "#FFFFFF", "#0000FF"], stadium: "Arena Lublin", capacity: 15500, reputation: 6, logoFile: "motor-lublin-2023-logo.png" },
+  { name: "GKS Katowice", tier: 1, colors: ["#FFFF00", "#0a6102", "#000000"], stadium: "Stadion GKS Katowice", capacity: 6710, reputation: 6, logoFile: "gks-katowice-logo.png" },
+  { name: "Termalica Nieciecza", tier: 1, colors: ["#FF5F1F", "#FFFF00", "#0000FF"], stadium: "Stadion Bruk-Bet", capacity: 4595, reputation: 5, logoFile: "bruk-bet-termalica-nieciecza-2021-logo.png" },
+  { name: "Wis\u0142a P\u0142ock", tier: 1, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion im. Kazimierza G\xF3rskiego", capacity: 12800, reputation: 6, logoFile: "wisla-plock-2006-logo.png" },
+  // --- TIER 2 (1. Liga) - 18 Teams ---
+  { name: "Wis\u0142a Krak\xF3w", tier: 2, colors: ["#fa0101", "#0026ff", "#ffffff"], stadium: "Stadion im. Henryka Reymana", capacity: 33326, reputation: 10, logoFile: "wisla-krakow-logo.png" },
+  { name: "Pogo\u0144 Grodzisk Mazowiecki", tier: 2, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Grodzisku Mazowieckim", capacity: 1500, reputation: 4, logoFile: "pogon-grodzisk-mazowiecki.png" },
+  { name: "Polonia Bytom", tier: 2, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion im. Edwardw Szymkowiaka", capacity: 5500, reputation: 7, logoFile: "Polonia_Bytom.png" },
+  { name: "Chrobry G\u0142og\xF3w", tier: 2, colors: ["#FF5F1F", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w G\u0142ogowie", capacity: 3e3, reputation: 5, logoFile: "chrobry_glogow.png" },
+  { name: "Stal Rzesz\xF3w", tier: 2, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Rzeszowie", capacity: 11500, reputation: 6, logoFile: "stal-rzeszow-2025-logo.png" },
+  { name: "\u015Al\u0105sk Wroc\u0142aw", tier: 2, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Tarczy\u0144ski Arena", capacity: 42771, reputation: 10, logoFile: "Slask_Wroclaw.png" },
+  { name: "Polonia Warszawa", tier: 2, colors: ["#000000", "#FFFFFF", "#ff0000e9"], stadium: "Stadion Im. Gen. Kazimierza Sosnowskiego", capacity: 7150, reputation: 8, logoFile: "Polonia_warszawa.png", stadiumSeatColors: ["#111111", "#cc0000", "#ffffff"] },
+  { name: "Wieczysta Krak\xF3w", tier: 2, colors: ["#FFFF00", "#FF0000", "#000000"], stadium: "Stadion Pr\u0105dniczanki", capacity: 2e3, reputation: 5, logoFile: "wieczysta-krakow-logo.png" },
+  { name: "Ruch Chorz\xF3w", tier: 2, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Chorzowie", capacity: 9300, reputation: 9, logoFile: "ruch-chorzow-2021-logo.png" },
+  { name: "Mied\u017A Legnica", tier: 2, colors: ["#008000", "#FF0000", "#0000FF"], stadium: "Stadion Or\u0142a Bia\u0142ego", capacity: 6194, reputation: 8, logoFile: "miedz-legnica-2022-logo.png" },
+  { name: "\u0141KS \u0141\xF3d\u017A", tier: 2, colors: ["#FFFFFF", "#FF0000", "#FFFFFF"], stadium: "Stadion Kr\xF3la", capacity: 18029, reputation: 9, logoFile: "lks_lodz.png" },
+  { name: "Pogo\u0144 Siedlce", tier: 2, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion ROSRRiT", capacity: 2900, reputation: 4, logoFile: "pogon_siedlce.png" },
+  { name: "Odra Opole", tier: 2, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Odry", capacity: 4800, reputation: 6, logoFile: "odra-opole.png" },
+  { name: "Puszcza Niepo\u0142omice", tier: 2, colors: ["#FFFFFF", "#0000FF", "#008000"], stadium: "Stadion w Niepo\u0142omicach", capacity: 2118, reputation: 6, logoFile: "puszcza-niepolomice-2013-logo.png" },
+  { name: "Znicz Pruszk\xF3w", tier: 2, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Stadion MZOS", capacity: 2100, reputation: 4, logoFile: "znicz-pruszkow.png" },
+  { name: "Stal Mielec", tier: 2, colors: ["#0817ee", "#e2e611", "#ffffff"], stadium: "Stadion MOSiR w Mielcu", capacity: 6864, reputation: 7, logoFile: "stal-mielec.png" },
+  { name: "GKS Tychy", tier: 2, colors: ["#008000", "#000000", "#FF0000"], stadium: "Stadion Miejski w Tychach", capacity: 15300, reputation: 6, logoFile: "gks_tychy.png" },
+  { name: "G\xF3rnik \u0141\u0119czna", tier: 2, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion G\xF3rnika", capacity: 7200, reputation: 6, logoFile: "gornik_leczna.png" },
+  // --- TIER 3 (2. Liga) - 18 Teams ---
+  { name: "Zag\u0142\u0119bie Sosnowiec", tier: 3, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "ArcelorMittal Park", capacity: 11600, reputation: 6, logoFile: "Zaglebie_Sosnowiec.png" },
+  { name: "Podbeskidzie Bielsko-Bia\u0142a", tier: 3, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Bielsku-Bia\u0142ej", capacity: 15100, reputation: 4, logoFile: "Podbeskidzie_bielsko_biala.png" },
+  { name: "Warta Pozna\u0144", tier: 3, colors: ["#008000", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Pozaniu", capacity: 4600, reputation: 4, logoFile: "warta-poznan.png" },
+  { name: "Zawisza Bydgoszcz", tier: 3, colors: ["#0000FF", "#000000", "#FFFFFF"], stadium: "Stadion im. Zdzis\u0142awa Krzyszkowiaka", capacity: 20247, reputation: 7, logoFile: "zawisza-bydgoszcz.png" },
+  { name: "Stal Stalowa Wola", tier: 3, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Podkarpackie Centrum Pi\u0142ki No\u017Cnej", capacity: 3800, reputation: 3, logoFile: "stal-stalowa-wola-2024-logo.png" },
+  { name: "Resovia", tier: 3, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski w Rzeszowie", capacity: 3500, reputation: 3, logoFile: "Resovia.png" },
+  { name: "Hutnik Krak\xF3w", tier: 3, colors: ["#5EB6E4", "#FFFFFF", "#FF0000"], stadium: "Stadion Suche Stawy", capacity: 6500, reputation: 3, logoFile: "Hutnik_krakow.png" },
+  { name: "Olimpia Grudzi\u0105dz", tier: 3, colors: ["#FFFFFF", "#FF0000", "#008000"], stadium: "Stadion Miejski w Grudzi\u0105dzu", capacity: 5e3, reputation: 3, logoFile: "olimpia_grudziadz.png" },
+  { name: "Sandecja Nowy S\u0105cz", tier: 3, colors: ["#FFFFFF", "#000000", "#0000FF"], stadium: "Stadion Miejski w Nowym S\u0105czu", capacity: 4500, reputation: 3, logoFile: "Sandecja_Nowy_sacz.png" },
+  { name: "Chojniczanka Chojnice", tier: 3, colors: ["#FFFF00", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Chojnicach", capacity: 3500, reputation: 3, logoFile: "Chojniczanka_chojnice.png" },
+  { name: "Elana Toru\u0144", tier: 3, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski w Toruniu", capacity: 4200, reputation: 3, logoFile: "Elana_Torun.png" },
+  { name: "KKS 1925 Kalisz", tier: 3, colors: ["#FFFFFF", "#008000", "#0000FF"], stadium: "Stadion Miejski w Kaliszu", capacity: 8e3, reputation: 3, logoFile: "kks-1925-kalisz.png" },
+  { name: "GKS Jastrz\u0119bie", tier: 3, colors: ["#008000", "#000000", "#FFFF00"], stadium: "Stadion Miejski w Jastrz\u0119biu-Zdroju", capacity: 5600, reputation: 3, logoFile: "GKS_Jastrz\u0119bie.png" },
+  { name: "Unia Skierniewice", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FFFF00"], stadium: "Stadion Miejski w Skierniewicach", capacity: 2500, reputation: 2, logoFile: "Unia_Skierniewice.png" },
+  { name: "Podhale Nowy Targ", tier: 3, colors: ["#FF0000", "#0000FF", "#FFFF00"], stadium: "Stadion Miejski w Nowym Targu", capacity: 3e3, reputation: 2, logoFile: "Podhale_Nowy_Targ.png" },
+  { name: "\u015Awit Szczecin", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Szczecinie", capacity: 2e3, reputation: 2, logoFile: "swit_szczecin.png" },
+  { name: "Sok\xF3\u0142 Kleczew", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Kleczewie", capacity: 1e3, reputation: 2, logoFile: "sokol-kleczew-logo.png" },
+  { name: "Rekord Bielsko-Bia\u0142a", tier: 3, colors: ["#FFFFFF", "#008000", "#FFFF00"], stadium: "Stadion Miejski", capacity: 800, reputation: 2, logoFile: "Rekord_Bielsko-Bia\u0142a.png" },
+  // --- TIER 4 (3. Liga i niższe) ---
+  // Drużyny rezerw są osobnymi klubami AI. Integracja sportowa i kadrowa z
+  // pierwszym zespołem zostanie dodana w osobnym etapie.
+  { name: "Legia Warszawa II", tier: 4, colors: ["#007a25", "#ffffff", "#a80e0e"], stadium: "Legia Training Center", capacity: 1e3, reputation: 3, logoFile: "legia-warsaw-2019-logo.png" },
+  { name: "\u015Al\u0105sk Wroc\u0142aw II", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Oporowska", capacity: 8346, reputation: 3, logoFile: "Slask_Wroclaw.png" },
+  { name: "\u0141KS II \u0141\xF3d\u017A", tier: 4, colors: ["#FFFFFF", "#FF0000", "#FFFFFF"], stadium: "Akademia \u0141KS", capacity: 3e3, reputation: 3, logoFile: "lks_lodz.png" },
+  { name: "GKS Be\u0142chat\xF3w", tier: 4, colors: ["#06830c", "#ffffff", "#000000"], stadium: "GIEKSA Arena", capacity: 5264, reputation: 5, logoFile: "gksbelchatow.png" },
+  { name: "Wigry Suwa\u0142ki", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Suwa\u0142kach", capacity: 3060, reputation: 3 },
+  { name: "Olimpia Elbl\u0105g", tier: 4, colors: ["#FFFF00", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Elbl\u0105gu", capacity: 3e3, reputation: 3 },
+  { name: "Avia \u015Awidnik", tier: 4, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski w \u015Awidniku", capacity: 2800, reputation: 2 },
+  { name: "KSZO Ostrowiec", tier: 4, colors: ["#FF5F1F", "#000000", "#FFFFFF"], stadium: "Stadion KSZO", capacity: 7430, reputation: 5, logoFile: "kszo-ostrowiec-swietokrzyski.png" },
+  { name: "Siarka Tarnobrzeg", tier: 4, colors: ["#008000", "#000000", "#FFFF00"], stadium: "Stadion Miejski w Tarnobrzegu", capacity: 3770, reputation: 2, logoFile: "siarka-tarnobrzeg-logo.png" },
+  { name: "Wis\u0142oka D\u0119bica", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Wis\u0142oki w D\u0119bicy", capacity: 2840, reputation: 2 },
+  { name: "Lechia Zielona G\xF3ra", tier: 4, colors: ["#FFFFFF", "#008000", "#FFFF00"], stadium: "Stadion MOSiR w Zielonej G\xF3rze", capacity: 5e3, reputation: 2 },
+  { name: "MKS Flota \u015Awinouj\u015Bcie", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w \u015Awinouj\u015Bciu", capacity: 3070, reputation: 2 },
+  { name: "\u015Awit Nowy Dw\xF3r Mazowiecki", tier: 4, colors: ["#FFFFFF", "#008000", "#000000"], stadium: "Stadion Miejski w Nowym Dworze Mazowieckim", capacity: 3e3, reputation: 2 },
+  { name: "Lechia Tomasz\xF3w Mazowiecki", tier: 4, colors: ["#008000", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski w Tomaszowie Mazowieckim", capacity: 2500, reputation: 2 },
+  { name: "G\xF3rnik Polkowice", tier: 4, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Polkowicach", capacity: 2500, reputation: 2 },
+  { name: "MKS Kluczbork", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Kluczborku", capacity: 2500, reputation: 2 },
+  { name: "Che\u0142mianka Che\u0142m", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Miejski w Che\u0142mie", capacity: 3e3, reputation: 2 },
+  { name: "Star Starachowice", tier: 4, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Starachowicach", capacity: 5e3, reputation: 2 },
+  { name: "B\u0142\u0119kitni Stargard", tier: 4, colors: ["#87CEEB", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Stargardzie", capacity: 2850, reputation: 2 },
+  { name: "Warta Gorz\xF3w Wielkopolski", tier: 4, colors: ["#000080", "#800000", "#FFFFFF"], stadium: "Stadion OSiR w Gorzowie Wielkopolskim", capacity: 4e3, reputation: 2 },
+  { name: "Bro\u0144 Radom", tier: 4, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski w Radomiu", capacity: 4e3, reputation: 2, logoFile: "bron-radom-2020-logo.png" },
+  { name: "M\u0142awianka M\u0142awa", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w M\u0142awie", capacity: 4e3, reputation: 2 },
+  { name: "Warta Sieradz", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Miejski w Sieradzu", capacity: 2e3, reputation: 2 },
+  { name: "Polonia Nysa", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Nysie", capacity: 2e3, reputation: 2 },
+  { name: "FKS Stal Kra\u015Bnik", tier: 4, colors: ["#0000FF", "#FFFF00", "#FFFFFF"], stadium: "Stadion Miejski w Kra\u015Bniku", capacity: 2e3, reputation: 2 },
+  { name: "\u015Al\u0119za Wroc\u0142aw", tier: 4, colors: ["#FFFF00", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski", capacity: 2e3, reputation: 2 },
+  { name: "Z\u0105bkovia Z\u0105bki", tier: 4, colors: ["#FFFFFF", "#FF0000", "#000080"], stadium: "Stadion Miejski w Z\u0105bkach", capacity: 2e3, reputation: 2, logoFile: "zabkovia-zabki-2018-logo.png" },
+  { name: "Pogo\u0144-Sok\xF3\u0142 Lubacz\xF3w", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Lubaczowie", capacity: 2500, reputation: 1 },
+  { name: "LKS Gocza\u0142kowice-Zdr\xF3j", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1, logoFile: "lks-goczalkowice-zdroj-2025-logo.png" },
+  { name: "MKP Carina Gubin", tier: 4, colors: ["#008000", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Gubinie", capacity: 1500, reputation: 1 },
+  { name: "SKRA Cz\u0119stochowa", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1, logoFile: "skra-czestochowa-2023-logo.png" },
+  { name: "Karkonosze Jelenia G\xF3ra", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Jeleniej G\xF3rze", capacity: 3e3, reputation: 1 },
+  { name: "S\u0142owianin Wolib\xF3rz", tier: 4, colors: ["#008000", "#FF0000", "#000000"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
+  { name: "Pni\xF3wek Paw\u0142owice \u015Al\u0105skie", tier: 4, colors: ["#008000", "#000000", "#FFFF00"], stadium: "Stadion Miejski", capacity: 1200, reputation: 1 },
+  { name: "LZS Starowice", tier: 4, colors: ["#0000FF", "#FF0000", "#FFFFFF"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
+  { name: "MKS Stal Jasie\u0144", tier: 4, colors: ["#FFFF00", "#0000FF", "#FFFFFF"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
+  { name: "\u0141KS \u0141om\u017Ca", tier: 4, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski w \u0141om\u017Cy", capacity: 3e3, reputation: 1 },
+  { name: "KS CK Troszyn", tier: 4, colors: ["#008000", "#FFFFFF", "#000000"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
+  { name: "KS Wasilk\xF3w", tier: 4, colors: ["#0000FF", "#FF0000", "#008000"], stadium: "Stadion Miejski w Wasilkowie", capacity: 1e3, reputation: 1 },
+  { name: "MLKS Znicz Bia\u0142a Piska", tier: 4, colors: ["#FF0000", "#008000", "#FFFFFF"], stadium: "Stadion Miejski w Bia\u0142ej Piskiej", capacity: 800, reputation: 1 },
+  { name: "Polonia \u015Aroda Wielkopolska", tier: 4, colors: ["#800000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w \u015Arodzie Wielkopolskiej", capacity: 1500, reputation: 1 },
+  { name: "KTS-K Luzino", tier: 4, colors: ["#FFFFFF", "#FF0000", "#0000FF"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
+  { name: "Cartusia Kartuzy", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Kartuzach", capacity: 1200, reputation: 1 },
+  { name: "KS Lipno St\u0119szew", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
+  { name: "WDA \u015Awiecie", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w \u015Awieciu", capacity: 3e3, reputation: 1 },
+  { name: "Note\u0107 Czarnk\xF3w", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Czarnkowie", capacity: 1500, reputation: 2 },
+  { name: "ZKS Kluczevia Stargard", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
+  { name: "Pogo\u0144 Nowe Skalmierzyce", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1500, reputation: 1 },
+  { name: "SKS Unia Swarz\u0119dz", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Swarz\u0119dzu", capacity: 1500, reputation: 1 },
+  { name: "MKS Viktoria Wrze\u015Bnia", tier: 4, colors: ["#FFFFFF", "#008000", "#FF0000"], stadium: "Stadion Miejski we Wrze\u015Bni", capacity: 1e3, reputation: 1 },
+  { name: "GZS Tluchovia T\u0142uchowo", tier: 4, colors: ["#0000FF", "#FFFF00", "#FF0000"], stadium: "Stadion Miejski", capacity: 500, reputation: 1 },
+  { name: "LKS Wybrze\u017Ce Rewalskie Rewal", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
+  { name: "Wi\u015Blanie Ja\u015Bkowice", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000080"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
+  { name: "MKS Podlasie Bia\u0142a Podlaska", tier: 4, colors: ["#FFFFFF", "#008000", "#FFFF00"], stadium: "Stadion Miejski w Bia\u0142ej Piskiej", capacity: 1500, reputation: 1 },
+  { name: "MKS Czarni Po\u0142aniec", tier: 4, colors: ["#FFFF00", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w Po\u0142a\u0144cu", capacity: 900, reputation: 1 },
+  { name: "KS Naprz\xF3d J\u0119drzej\xF3w", tier: 4, colors: ["#FFFF00", "#000000", "#FFFFFF"], stadium: "Stadion Miejski w J\u0119drzejowie", capacity: 1200, reputation: 1 },
+  { name: "\u015Awidniczanka \u015Awidnik", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
+  { name: "Sok\xF3\u0142 Kolbuszowa Dolna", tier: 4, colors: ["#FF0000", "#FFFF00", "#008000"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
+  { name: "Sparta Kazimierza Wielka", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski", capacity: 800, reputation: 1 },
+  { name: "BKS Sparta Katowice", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
+  { name: "Wikielec", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski", capacity: 600, reputation: 1 },
+  { name: "Kotwica Ko\u0142obrzeg", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Ko\u0142obrzegu", capacity: 3e3, reputation: 3 },
+  { name: "Olimpia Zambr\xF3w", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Zambrowie", capacity: 2e3, reputation: 2 },
+  { name: "Stomil Olsztyn", tier: 4, colors: ["#1f68d6", "#FFFFFF", "#0c53bd"], stadium: "Stadion Miejski w Olsztynie", capacity: 4500, reputation: 5 },
+  { name: "Gwardia Koszalin", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Koszalinie", capacity: 2500, reputation: 2 },
+  { name: "Ba\u0142tyk Gdynia", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Gdyni (Ba\u0142tyk)", capacity: 2e3, reputation: 3, logoFile: "baltyk_gdynia.png" },
+  { name: "Vineta Wolin", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Stadion Miejski w Wolinie", capacity: 1500, reputation: 2 },
+  { name: "Chemik Police", tier: 4, colors: ["#008000", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Policach", capacity: 2e3, reputation: 2 },
+  { name: "Lechia Dzier\u017Coni\xF3w", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Dzier\u017Coniowie", capacity: 2500, reputation: 2 },
+  { name: "Foto-Higiena Ga\u0107", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Gaci", capacity: 800, reputation: 1 },
+  { name: "Unia Janikowo", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Janikowie", capacity: 2e3, reputation: 2 },
+  { name: "W\u0142\xF3kniarz Cz\u0119stochowa", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion Miejski w Cz\u0119stochowie", capacity: 1500, reputation: 2 },
+  { name: "Victoria Cz\u0119stochowa", tier: 4, colors: ["#008000", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski", capacity: 1e3, reputation: 1 },
+  { name: "KTS Wesz\u0142o Warszawa", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski", capacity: 1200, reputation: 1 },
+  { name: "Sok\xF3\u0142 Ostr\xF3da", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Miejski w Ostr\xF3dzie", capacity: 3e3, reputation: 2 },
+  { name: "Mazovia Mi\u0144sk Mazowiecki", tier: 4, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Stadion Miejski w Mi\u0144sku Mazowieckim", capacity: 1500, reputation: 1 },
+  { name: "Polonia Bydgoszcz", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion im. Bronis\u0142awa Malinowskiego", capacity: 2500, reputation: 2 },
+  // 2026/27 III-liga expansion -------------------------------------------------
+  // These records complete the official four-group membership used by a new
+  // 2026/27 career. They intentionally live in the normal Polish club database:
+  // the regular squad, finance, transfer and injury systems can then treat them
+  // exactly like every other AI club instead of relying on special placeholders.
+  // Reserve teams deliberately reuse their parent club's logo file. Some screens
+  // render Club.logoFile directly instead of calling the shared getClubLogo()
+  // helper, so keeping this relationship in the database guarantees the same
+  // crest in tables, match studios, club details and editor/datapack exports.
+  { name: "Widzew \u0141\xF3d\u017A II", tier: 4, colors: ["#C8102E", "#FFFFFF"], stadium: "O\u015Brodek Treningowy Widzewa", capacity: 1e3, reputation: 2, logoFile: "widzew-lodz.png" },
+  { name: "Pelikan \u0141owicz", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w \u0141owiczu", capacity: 2100, reputation: 2 },
+  { name: "Wis\u0142a P\u0142ock II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Wis\u0142y II", capacity: 1e3, reputation: 2, logoFile: "wisla-plock-2006-logo.png" },
+  { name: "Jagiellonia Bia\u0142ystok II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "O\u015Brodek Treningowy Jagiellonii", capacity: 1e3, reputation: 2, logoFile: "jagiellonia-bialystok-2024-logo.png" },
+  { name: "Polonia Lidzbark Warmi\u0144ski", tier: 4, colors: ["#000000", "#FFFFFF", "#D71920"], stadium: "Stadion Miejski w Lidzbarku Warmi\u0144skim", capacity: 1200, reputation: 1 },
+  { name: "Wik\u0119d Luzino", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Gminny w Luzinie", capacity: 1e3, reputation: 1 },
+  { name: "Lech Pozna\u0144 II", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Akademii Lecha", capacity: 1500, reputation: 3, logoFile: "lech-poznan-2022-logo.png" },
+  { name: "Gedania Gda\u0144sk", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Gedanii", capacity: 1e3, reputation: 1 },
+  { name: "Chemik Bydgoszcz", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion im. Czes\u0142awa Kobusa", capacity: 1500, reputation: 1 },
+  { name: "Ba\u0142tyk Koszalin", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Ba\u0142tyku", capacity: 1500, reputation: 1 },
+  { name: "Grom Nowy Staw", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w Nowym Stawie", capacity: 800, reputation: 1 },
+  { name: "Kotwica K\xF3rnik", tier: 4, colors: ["#00843D", "#FFFFFF"], stadium: "Stadion Miejski w K\xF3rniku", capacity: 1e3, reputation: 1 },
+  { name: "Odra Bytom Odrza\u0144ski", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Bytomiu Odrza\u0144skim", capacity: 1e3, reputation: 1 },
+  { name: "Zag\u0142\u0119bie Lubin II", tier: 4, colors: ["#F58220", "#FFFFFF", "#00843D"], stadium: "Akademia Zag\u0142\u0119bia Lubin", capacity: 1e3, reputation: 3, logoFile: "zaglebie-lubin-2022-logo.png" },
+  { name: "Barycz Su\u0142\xF3w", tier: 4, colors: ["#000000", "#FFFFFF"], stadium: "Stadion w Su\u0142owie", capacity: 800, reputation: 1 },
+  { name: "ROW Rybnik", tier: 4, colors: ["#00843D", "#000000"], stadium: "Stadion Miejski w Rybniku", capacity: 1e4, reputation: 3 },
+  { name: "Stal Brzeg", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Brzegu", capacity: 2500, reputation: 2 },
+  { name: "Stilon Gorz\xF3w", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion OSiR w Gorzowie Wielkopolskim", capacity: 5e3, reputation: 3 },
+  { name: "Mied\u017A Legnica II", tier: 4, colors: ["#00843D", "#D71920", "#0057B8"], stadium: "Akademia Miedzi Legnica", capacity: 1e3, reputation: 2, logoFile: "miedz-legnica-2022-logo.png" },
+  { name: "Rak\xF3w Cz\u0119stochowa II", tier: 4, colors: ["#0057B8", "#D71920"], stadium: "Centrum Treningowe Rakowa", capacity: 1e3, reputation: 3, logoFile: "rakow-czestochowa-2014-logo.png" },
+  { name: "Wi\u015Blanie Skawina", tier: 4, colors: ["#D71920", "#FFFFFF"], stadium: "Stadion Miejski w Skawinie", capacity: 1e3, reputation: 1 },
+  { name: "Wis\u0142a Krak\xF3w II", tier: 4, colors: ["#D71920", "#0057B8", "#FFFFFF"], stadium: "Baza Treningowa Wis\u0142y", capacity: 1e3, reputation: 3, logoFile: "wisla-krakow-logo.png" },
+  { name: "Wieczysta Krak\xF3w II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Stadion Pr\u0105dniczanki", capacity: 1e3, reputation: 2, logoFile: "wieczysta-krakow-logo.png" },
+  { name: "JKS Jaros\u0142aw", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Jaros\u0142awiu", capacity: 2500, reputation: 2 },
+  { name: "Hetman Zamo\u015B\u0107", tier: 4, colors: ["#00843D", "#D71920", "#FFFFFF"], stadium: "Stadion OSiR w Zamo\u015Bciu", capacity: 16e3, reputation: 3 },
+  { name: "Moravia Morawica", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion Miejski w Morawicy", capacity: 1e3, reputation: 1 },
+  { name: "AKS 1947 Busko-Zdr\xF3j", tier: 4, colors: ["#D71920", "#FFFFFF", "#000000"], stadium: "Stadion Miejski w Busku-Zdroju", capacity: 1500, reputation: 1 },
+  { name: "Korona Kielce II", tier: 4, colors: ["#F5D000", "#D71920"], stadium: "Centrum Treningowe Korony", capacity: 1e3, reputation: 2, logoFile: "korona-kielce-2024-logo.png" },
+  { name: "Wis\u0142a Pu\u0142awy", tier: 4, colors: ["#0057B8", "#FFFFFF"], stadium: "Stadion MOSiR w Pu\u0142awach", capacity: 4418, reputation: 3 }
+];
+
+// resources/static_db/clubs/ChampionsLeagueTeams.tsx
+var RAW_CHAMPIONS_LEAGUE_CLUBS = [
+  { name: "Ajax Amsterdam", country: "NED", tier: 2, colors: ["#FFFFFF", "#ED0000", "#000000"], stadium: "Johan Cruijff Arena", capacity: 54744, reputation: 16 },
+  { name: "Arsenal Londyn", country: "ENG", tier: 1, colors: ["#EF0107", "#FFFFFF", "#023474"], stadium: "Emirates Stadium", capacity: 60260, reputation: 18 },
+  { name: "Atalanta Bergamo", country: "ITA", tier: 2, colors: ["#000000", "#1E90FF", "#000000"], stadium: "Gewiss Stadium", capacity: 24500, reputation: 15 },
+  { name: "Athletic Bilbao", country: "ESP", tier: 2, colors: ["#D50032", "#FFFFFF", "#000000"], stadium: "San Mam\xE9s", capacity: 53e3, reputation: 15 },
+  { name: "Atl\xE9tico Madryt", country: "ESP", tier: 1, colors: ["#C8102E", "#FFFFFF", "#1F3C88"], stadium: "C\xEDvitas Metropolitano", capacity: 68456, reputation: 17 },
+  { name: "Bayer Leverkusen", country: "GER", tier: 1, colors: ["#E32219", "#000000", "#FFFFFF"], stadium: "BayArena", capacity: 30750, reputation: 17 },
+  { name: "Bayern Monachium", country: "GER", tier: 1, colors: ["#DC052D", "#FFFFFF", "#0066B2"], stadium: "Allianz Arena", capacity: 75e3, reputation: 20 },
+  { name: "Benfica Lizbona", country: "POR", tier: 1, colors: ["#E10600", "#FFFFFF", "#E10600"], stadium: "Est\xE1dio da Luz", capacity: 65e3, reputation: 17 },
+  { name: "Bod\xF8/Glimt", country: "NOR", tier: 3, colors: ["#FFD200", "#000000", "#FFD200"], stadium: "Aspmyra Stadion", capacity: 8270, reputation: 12 },
+  { name: "Borussia Dortmund", country: "GER", tier: 1, colors: ["#FDE100", "#000000", "#FDE100"], stadium: "Signal Iduna Park", capacity: 81365, reputation: 18 },
+  { name: "Celtic Glasgow", country: "SCO", tier: 2, colors: ["#009A44", "#FFFFFF", "#009A44"], stadium: "Celtic Park", capacity: 60832, reputation: 15 },
+  { name: "Chelsea Londyn", country: "ENG", tier: 1, colors: ["#034694", "#FFFFFF", "#034694"], stadium: "Stamford Bridge", capacity: 41798, reputation: 18 },
+  { name: "Club Brugge", country: "BEL", tier: 2, colors: ["#003DA5", "#000000", "#003DA5"], stadium: "Jan Breydel Stadium", capacity: 29500, reputation: 14 },
+  { name: "Crvena Zvezda Belgrad", country: "SRB", tier: 3, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Rajko Miti\u0107 Stadium", capacity: 53200, reputation: 14 },
+  { name: "Dinamo Kij\xF3w", country: "UKR", tier: 2, colors: ["#0057B8", "#FFFFFF", "#0057B8"], stadium: "Olimpijski", capacity: 70050, reputation: 14 },
+  { name: "Dinamo Zagrzeb", country: "CRO", tier: 2, colors: ["#0046AD", "#FFFFFF", "#0046AD"], stadium: "Maksimir", capacity: 35e3, reputation: 13 },
+  { name: "FC Barcelona", country: "ESP", tier: 1, colors: ["#A50044", "#004D98", "#FDB913"], stadium: "Camp Nou", capacity: 99354, reputation: 20 },
+  { name: "FC Kopenhaga", country: "DEN", tier: 3, colors: ["#9D2235", "#FFFFFF", "#9D2235"], stadium: "Parken", capacity: 38065, reputation: 14 },
+  { name: "Fenerbah\xE7e Stambu\u0142", country: "TUR", tier: 2, colors: ["#0A1E3F", "#FCD116", "#D21034"], stadium: "\u015E\xFCkr\xFC Saraco\u011Flu", capacity: 50509, reputation: 15 },
+  { name: "Galatasaray Stambu\u0142", country: "TUR", tier: 1, colors: ["#A50034", "#FDCB0A", "#A50034"], stadium: "RAMS Park", capacity: 52652, reputation: 16 },
+  { name: "Inter Mediolan", country: "ITA", tier: 1, colors: ["#00529B", "#000000", "#00529B"], stadium: "San Siro", capacity: 80018, reputation: 18 },
+  { name: "Juventus Turyn", country: "ITA", tier: 1, colors: ["#FFFFFF", "#000000", "#FFFFFF"], stadium: "Allianz Stadium", capacity: 41507, reputation: 18 },
+  { name: "Lazio Rzym", country: "ITA", tier: 2, colors: ["#A7C7E7", "#FFFFFF", "#A7C7E7"], stadium: "Stadio Olimpico", capacity: 70634, reputation: 15 },
+  { name: "Liverpool FC", country: "ENG", tier: 1, colors: ["#C8102E", "#FFFFFF", "#C8102E"], stadium: "Anfield", capacity: 54074, reputation: 18 },
+  { name: "Manchester City", country: "ENG", tier: 1, colors: ["#6CABDD", "#FFFFFF", "#6CABDD"], stadium: "Etihad Stadium", capacity: 55017, reputation: 20 },
+  { name: "Manchester United", country: "ENG", tier: 1, colors: ["#DA291C", "#FFFFFF", "#DA291C"], stadium: "Old Trafford", capacity: 74879, reputation: 18 },
+  { name: "Milan AC", country: "ITA", tier: 1, colors: ["#A50034", "#000000", "#A50034"], stadium: "San Siro", capacity: 80018, reputation: 18 },
+  { name: "Napoli", country: "ITA", tier: 1, colors: ["#1C6ED5", "#FFFFFF", "#1C6ED5"], stadium: "Stadio Diego Armando Maradona", capacity: 54726, reputation: 16 },
+  { name: "Olympiakos Pireus", country: "GRE", tier: 2, colors: ["#E41F26", "#FFFFFF", "#E41F26"], stadium: "Karaiskakis Stadium", capacity: 32115, reputation: 14 },
+  { name: "Paris Saint-Germain", country: "FRA", tier: 1, colors: ["#004170", "#FFFFFF", "#E30613"], stadium: "Parc des Princes", capacity: 47929, reputation: 19 },
+  { name: "FC Porto", country: "POR", tier: 1, colors: ["#0033A0", "#FFFFFF", "#0033A0"], stadium: "Est\xE1dio do Drag\xE3o", capacity: 50033, reputation: 17 },
+  { name: "PSV Eindhoven", country: "NED", tier: 2, colors: ["#FF0000", "#FFFFFF", "#FF0000"], stadium: "Philips Stadion", capacity: 35600, reputation: 16 },
+  { name: "Real Madryt", country: "ESP", tier: 1, colors: ["#FFFFFF", "rgba(5, 40, 179, 0.96)", "#767b80"], stadium: "Santiago Bernab\xE9u", capacity: 81044, reputation: 20 },
+  { name: "AS Roma", country: "ITA", tier: 2, colors: ["#8E1B3D", "#F7B500", "#8E1B3D"], stadium: "Stadio Olimpico", capacity: 70634, reputation: 15 },
+  { name: "Red Bull Salzburg", country: "AUT", tier: 3, colors: ["#FFFFFF", "#E20613", "#FFD200"], stadium: "Red Bull Arena", capacity: 31895, reputation: 13 },
+  { name: "Sevilla FC", country: "ESP", tier: 2, colors: ["#D00027", "#FFFFFF", "#D00027"], stadium: "Ram\xF3n S\xE1nchez-Pizju\xE1n", capacity: 43883, reputation: 16 },
+  { name: "Szachtar Donieck", country: "UKR", tier: 2, colors: ["#FF7A00", "#000000", "#FF7A00"], stadium: "Donbas Arena", capacity: 52400, reputation: 14 },
+  { name: "Sporting Lizbona", country: "POR", tier: 2, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "Est\xE1dio Jos\xE9 Alvalade", capacity: 50095, reputation: 15 },
+  { name: "Tottenham Hotspur", country: "ENG", tier: 1, colors: ["#132257", "#FFFFFF", "#132257"], stadium: "Tottenham Hotspur Stadium", capacity: 62850, reputation: 17 },
+  { name: "Union Berlin", country: "GER", tier: 2, colors: ["#E30613", "#FFFFFF", "#E30613"], stadium: "Stadion An der Alten F\xF6rsterei", capacity: 22012, reputation: 14 },
+  { name: "Villarreal CF", country: "ESP", tier: 2, colors: ["#FFE000", "#00529F", "#FFE000"], stadium: "Estadio de la Cer\xE1mica", capacity: 23500, reputation: 15 },
+  { name: "Young Boys Berno", country: "SUI", tier: 3, colors: ["#FFD100", "#000000", "#FFD100"], stadium: "Stadion Wankdorf", capacity: 31783, reputation: 13 },
+  { name: "Zenit Petersburg", country: "RUS", tier: 1, colors: ["#009EE0", "#FFFFFF", "#009EE0"], stadium: "Gazprom Arena", capacity: 68134, reputation: 13 },
+  { name: "RB Lipsk", country: "GER", tier: 1, colors: ["#FFFFFF", "#DD0741", "#002D62"], stadium: "Red Bull Arena Leipzig", capacity: 47069, reputation: 14 },
+  { name: "Slavia Praga", country: "CZE", tier: 3, colors: ["#D7141A", "#FFFFFF", "#D7141A"], stadium: "Eden Arena", capacity: 19370, reputation: 14 },
+  { name: "AS Monaco", country: "FRA", tier: 2, colors: ["#FFFFFF", "#E30613", "#FFFFFF"], stadium: "Stade Louis II", capacity: 18523, reputation: 15 },
+  { name: "Borussia M\xF6nchengladbach", country: "GER", tier: 2, colors: ["#FFFFFF", "#000000", "#FFFFFF"], stadium: "Borussia-Park", capacity: 54057, reputation: 13 },
+  { name: "FC Basel", country: "SUI", tier: 3, colors: ["#D00027", "#FFFFFF", "#002F6C"], stadium: "St. Jakob-Park", capacity: 38512, reputation: 11 },
+  { name: "Ludogorec Razgrad", country: "BUL", tier: 3, colors: ["#2E8B57", "#FFFFFF", "#2E8B57"], stadium: "Huvepharma Arena", capacity: 10422, reputation: 11 },
+  { name: "Qaraba\u011F A\u011Fdam", country: "AZE", tier: 3, colors: ["#000000", "#FFFFFF", "#000000"], stadium: "Azersun Arena", capacity: 5800, reputation: 11 },
+  { name: "Sheriff Tiraspol", country: "MDA", tier: 3, colors: ["#FFD700", "#000000", "#FFD700"], stadium: "Sheriff Stadium", capacity: 12900, reputation: 9 },
+  { name: "Slovan Bratys\u0142awa", country: "SVK", tier: 3, colors: ["#5B2D8B", "#FFFFFF", "#5B2D8B"], stadium: "Teheln\xE9 pole", capacity: 22500, reputation: 10 },
+  { name: "Ferencv\xE1ros Budapeszt", country: "HUN", tier: 3, colors: ["#008000", "#FFFFFF", "#008000"], stadium: "Groupama Arena", capacity: 23700, reputation: 9 },
+  { name: "Malm\xF6 FF", country: "SWE", tier: 3, colors: ["#5BA4E5", "#FFFFFF", "#5BA4E5"], stadium: "Eleda Stadion", capacity: 22500, reputation: 11 },
+  { name: "APOEL Nikozja", country: "CYP", tier: 3, colors: ["#003A8F", "#FFD200", "#003A8F"], stadium: "GSP Stadium", capacity: 22859, reputation: 11 },
+  { name: "HJK Helsinki", country: "FIN", tier: 3, colors: ["#0057B8", "#FFFFFF", "#0057B8"], stadium: "Bolt Arena", capacity: 10770, reputation: 11 },
+  { name: "\u017Dalgiris Wilno", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "LFF Stadium", capacity: 5400, reputation: 5 },
+  { name: "Flora Tallinn", country: "EST", tier: 4, colors: ["#2E8B57", "#FFFFFF", "#2E8B57"], stadium: "A. Le Coq Arena", capacity: 14500, reputation: 6 },
+  { name: "K\xCD Klaksv\xEDk", country: "FRO", tier: 4, colors: ["#003A8F", "#FFFFFF", "#003A8F"], stadium: "Vi\xF0 Dj\xFApum\xFDrar", capacity: 3e3, reputation: 8 },
+  { name: "Lincoln Red Imps", country: "GIB", tier: 4, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Victoria Stadium", capacity: 5028, reputation: 4 },
+  { name: "Swift Hesperange", country: "LUX", tier: 4, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Stade Alphonse Theis", capacity: 7800, reputation: 4 },
+  { name: "V\xEDkingur Reykjav\xEDk", country: "ISL", tier: 3, colors: ["#D50032", "#000000", "#D50032"], stadium: "V\xEDkingsv\xF6llur", capacity: 1200, reputation: 8 },
+  { name: "Struga Trim-Lum", country: "MKD", tier: 4, colors: ["#1E90FF", "#FFFFFF", "#1E90FF"], stadium: "Gradska Pla\u017Ea", capacity: 8e3, reputation: 7 },
+  { name: "Celje", country: "SVN", tier: 3, colors: ["#0057B8", "#FFD200", "#0057B8"], stadium: "Stadion Z'de\u017Eele", capacity: 13059, reputation: 9 },
+  { name: "RFS Ryga", country: "LAT", tier: 4, colors: ["#003A8F", "#FFFFFF", "#003A8F"], stadium: "LNK Sporta Parks", capacity: 2500, reputation: 6 },
+  { name: "H\xE4cken", country: "SWE", tier: 3, colors: ["#FFD200", "#000000", "#FFD200"], stadium: "Bravida Arena", capacity: 6500, reputation: 9 },
+  { name: "Zrinjski Mostar", country: "BIH", tier: 3, colors: ["#D50032", "#FFFFFF", "#D50032"], stadium: "Stadion Pod Bijelim Brijegom", capacity: 9e3, reputation: 9 },
+  { name: "Partizani Tirana", country: "ALB", tier: 4, colors: ["#D50032", "#FFFFFF", "#000000"], stadium: "Air Albania Stadium", capacity: 22500, reputation: 9 },
+  { name: "Astana", country: "KAZ", tier: 3, colors: ["#00AEEF", "#FFD200", "#00AEEF"], stadium: "Astana Arena", capacity: 3e4, reputation: 11 },
+  { name: "Dinamo Tbilisi", country: "GEO", tier: 4, colors: ["#0057B8", "#FFFFFF", "#0057B8"], stadium: "Boris Paichadze Dinamo Arena", capacity: 54900, reputation: 10 },
+  { name: "Shamrock Rovers", country: "IRL", tier: 4, colors: ["#007A33", "#FFFFFF", "#007A33"], stadium: "Tallaght Stadium", capacity: 1e4, reputation: 7 },
+  { name: "Hapoel Be'er Sheva", country: "ISR", tier: 3, colors: ["#E30613", "#FFFFFF", "#E30613"], stadium: "Turner Stadium", capacity: 16126, reputation: 10 },
+  { name: "Linfield Belfast", country: "NIR", tier: 4, colors: ["#003A8F", "#FFFFFF", "#003A8F"], stadium: "Windsor Park", capacity: 18234, reputation: 6 },
+  { name: "The New Saints", country: "WAL", tier: 4, colors: ["#00A650", "#FFFFFF", "#00A650"], stadium: "Park Hall", capacity: 2034, reputation: 7 },
+  { name: "Brei\xF0ablik", country: "ISL", tier: 4, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "K\xF3pavogsv\xF6llur", capacity: 5501, reputation: 8 },
+  { name: "CSKA Moskwa", country: "RUS", tier: 3, colors: ["#fc0101", "#001aff", "#ff0000"], stadium: "VEB Arena", capacity: 3e4, reputation: 12 },
+  { name: "BATE Borisov", country: "BLR", tier: 3, colors: ["#f2ff00", "#1e00ff", "#ffffff"], stadium: "BATE Area", capacity: 13126, reputation: 12 },
+  { name: "Spartak Moskwa", country: "RUS", tier: 2, colors: ["#ff0000", "#ffffff", "#ff0000"], stadium: "Otkritie Arena", capacity: 45e3, reputation: 12 }
+];
+var generateEuropeanClubId = (name) => {
+  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return `EU_CL_${slug}`;
+};
+
+// resources/static_db/clubs/EuropeLeagueTeams.tsx
+var RAW_EUROPA_LEAGUE_CLUBS = [
+  // Albania (ALB)
+  { name: "Tirana", country: "ALB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Air Albania Stadium", capacity: 22500, reputation: 6 },
+  { name: "Egnatia", country: "ALB", tier: 4, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Arena Egnatia", capacity: 4e3, reputation: 7 },
+  { name: "Vllaznia Szkodra", country: "ALB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Loro Bori\xE7i Stadium", capacity: 16e3, reputation: 7 },
+  // Anglia (ENG) 
+  { name: "Crystal Palace", country: "ENG", tier: 2, colors: ["#1E22AA", "#C41230", "#FFFFFF"], stadium: "Selhurst Park", capacity: 25486, reputation: 14 },
+  { name: "Brighton & Hove Albion", country: "ENG", tier: 2, colors: ["#0057B8", "#FFFFFF", "#FFCD00"], stadium: "Falmer Stadium", capacity: 31876, reputation: 14 },
+  { name: "Wolverhampton Wanderers", country: "ENG", tier: 2, colors: ["#FDB913", "#000000", "#FFFFFF"], stadium: "Molineux Stadium", capacity: 32050, reputation: 14 },
+  { name: "Newcastle United", country: "ENG", tier: 2, colors: ["#000000", "#FFFFFF", "#41B6E6"], stadium: "St James' Park", capacity: 52305, reputation: 12 },
+  { name: "Everton FC", country: "ENG", tier: 2, colors: ["#003399", "#FFFFFF", "#FF0000"], stadium: "Goodison Park", capacity: 39214, reputation: 12 },
+  { name: "Aston Villa", country: "ENG", tier: 3, colors: ["#882525", "#134ac0", "#ffffff"], stadium: "Villa Park", capacity: 42682, reputation: 10 },
+  { name: "Nottingham Forest", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "City Ground", capacity: 3e4, reputation: 9 },
+  // Armenia (ARM)
+  { name: "Ararat-Armenia", country: "ARM", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "FFA Academy Stadium", capacity: 1400, reputation: 6 },
+  { name: "Noah Erywa\u0144", country: "ARM", tier: 4, colors: ["#000000", "#FFD700", "#FFFFFF"], stadium: "Abovyan City Stadium", capacity: 5320, reputation: 6 },
+  { name: "Pyunik Erywa\u0144", country: "ARM", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Republican Stadium after Vazgen Sargsyan", capacity: 14403, reputation: 6 },
+  // Azerbejdżan (AZE)
+  { name: "Neft\xE7i Baku", country: "AZE", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Bak\u0131 Olimpiya Stadionu", capacity: 68700, reputation: 7 },
+  { name: "Sabah FK", country: "AZE", tier: 4, colors: ["#0033A0", "#FFFFFF", "#FFD700"], stadium: "Bank Respublika Arena", capacity: 13e3, reputation: 7 },
+  { name: "Zira FK", country: "AZE", tier: 4, colors: ["#000000", "#FFFFFF", "#FF6600"], stadium: "Zir\u0259 Sport Kompleksi", capacity: 1500, reputation: 7 },
+  // Austria (AUT)
+  { name: "Rapid Wiede\u0144", country: "AUT", tier: 2, colors: ["#006600", "#FFFFFF", "#000000"], stadium: "Allianz Stadion", capacity: 28345, reputation: 13 },
+  { name: "Austria Wiede\u0144", country: "AUT", tier: 2, colors: ["#FFFFFF", "#000000", "#990000"], stadium: "Generali Arena", capacity: 17800, reputation: 13 },
+  { name: "LASK Linz", country: "AUT", tier: 2, colors: ["#000000", "#FFFFFF", "#FFCC00"], stadium: "Raiffeisen Arena", capacity: 19009, reputation: 13 },
+  { name: "Sturm Graz", country: "AUT", tier: 2, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Merkur Arena", capacity: 16e3, reputation: 12 },
+  // Belgia (BEL) – 
+  { name: "Royal Antwerp", country: "BEL", tier: 2, colors: ["#FFFFFF", "#C8102E", "#000000"], stadium: "Bosuilstadion", capacity: 23057, reputation: 12 },
+  { name: "Gent", country: "BEL", tier: 2, colors: ["#006633", "#FFFFFF", "#FFCC00"], stadium: "Ghelamco Arena", capacity: 2e4, reputation: 13 },
+  { name: "Standard Li\xE8ge", country: "BEL", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stade Maurice Dufrasne", capacity: 30023, reputation: 13 },
+  { name: "Anderlecht Bruksela", country: "BEL", tier: 2, colors: ["#FFFFFF", "#0033A0", "#FF0000"], stadium: "Lotto Park", capacity: 21e3, reputation: 15 },
+  { name: "KRC Genk", country: "BEL", tier: 2, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "Luminus Arena", capacity: 24956, reputation: 12 },
+  // Białoruś (BLR)
+  { name: "Dinamo Mi\u0144sk", country: "BLR", tier: 3, colors: ["#FFFFFF", "#0033A0", "#FF0000"], stadium: "Dinamo Stadium", capacity: 22346, reputation: 7 },
+  { name: "Torpedo-BelAZ \u017Bodzino", country: "BLR", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Torpedo Stadium", capacity: 6524, reputation: 7 },
+  { name: "Neman Grodno", country: "BLR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Neman Stadium", capacity: 8500, reputation: 7 },
+  // Bośnia i Hercegowina (BIH) – 
+  { name: "Borac Banja Luka", country: "BIH", tier: 3, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "Gradski Stadion Banja Luka", capacity: 9730, reputation: 8 },
+  { name: "FK Sarajevo", country: "BIH", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "Asim Ferhatovi\u0107 Hase", capacity: 34500, reputation: 7 },
+  { name: "\u017Deljezni\u010Dar Sarajewo", country: "BIH", tier: 3, colors: ["#0033A0", "#FFFFFF", "#000000"], stadium: "Grbavica", capacity: 13349, reputation: 7 },
+  // Bułgaria (BUL) – 
+  { name: "Levski Sofia", country: "BUL", tier: 3, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Georgi Asparuhov Stadium", capacity: 18341, reputation: 9 },
+  { name: "CSKA Sofia", country: "BUL", tier: 3, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "Balgarska Armiya Stadium", capacity: 18191, reputation: 8 },
+  { name: "Lokomotiv P\u0142owdiw", country: "BUL", tier: 3, colors: ["#000000", "#FFFFFF", "#C8102E"], stadium: "Lokomotiv Stadium", capacity: 13e3, reputation: 7 },
+  // Chorwacja (CRO) – 
+  { name: "Hajduk Split", country: "CRO", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Poljud", capacity: 34198, reputation: 10 },
+  { name: "HNK Rijeka", country: "CRO", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion Rujevica", capacity: 8279, reputation: 9 },
+  { name: "NK Osijek", country: "CRO", tier: 3, colors: ["#FFFFFF", "#0033A0", "#FFCC00"], stadium: "Opus Arena", capacity: 13005, reputation: 9 },
+  // Cypr (CYP) – 
+  { name: "Omonia Nikozja", country: "CYP", tier: 3, colors: ["#00A651", "#FFFFFF", "#000000"], stadium: "GSP Stadium", capacity: 22859, reputation: 8 },
+  { name: "AEK Larnaka", country: "CYP", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "AEK Arena", capacity: 7380, reputation: 9 },
+  { name: "Aris Limassol", country: "CYP", tier: 3, colors: ["#00AEEF", "#FFFFFF", "#000000"], stadium: "Alphamega Stadium", capacity: 11e3, reputation: 9 },
+  // Czechy (CZE) – 
+  { name: "Sparta Praga", country: "CZE", tier: 2, colors: ["#000000", "#FF0000", "#FFFFFF"], stadium: "Generali \u010Cesk\xE1 poji\u0161\u0165ovna Arena", capacity: 19316, reputation: 14 },
+  { name: "Viktoria Pilzno", country: "CZE", tier: 2, colors: ["#FF6600", "#000000", "#FFFFFF"], stadium: "Doosan Arena", capacity: 11700, reputation: 10 },
+  { name: "Ban\xEDk Ostrawa", country: "CZE", tier: 2, colors: ["#000000", "#FFA500", "#FFFFFF"], stadium: "M\u011Bstsk\xFD stadion v Ostrav\u011B-V\xEDtkovic\xEDch", capacity: 15275, reputation: 9 },
+  // Czarnogóra (MNE) – typowe pucharowicze z 1. CFL (poziom EL/ECL qualifiers)
+  { name: "Budu\u0107nost Podgorica", country: "MNE", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "Gradski stadion Podgorica", capacity: 15230, reputation: 7 },
+  { name: "Sutjeska Nik\u0161i\u0107", country: "MNE", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Gradski stadion Nik\u0161i\u0107", capacity: 5184, reputation: 6 },
+  { name: "De\u010Di\u0107 Tuzi", country: "MNE", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Tu\u0161ko Polje", capacity: 3e3, reputation: 7 },
+  // Dania (DEN) – po FC Kopenhaga
+  { name: "FC Midtjylland", country: "DEN", tier: 3, colors: ["#000000", "#FF0000", "#FFFFFF"], stadium: "MCH Arena", capacity: 11432, reputation: 9 },
+  { name: "Br\xF8ndby IF", country: "DEN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFFF00"], stadium: "Br\xF8ndby Stadium", capacity: 28e3, reputation: 12 },
+  { name: "FC Nordsj\xE6lland", country: "DEN", tier: 3, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Right to Dream Park", capacity: 10300, reputation: 11 },
+  //ESTONIA (EST) – więc solidni pucharowicze z Meistriliiga
+  { name: "Levadia Tallinn", country: "EST", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kadriorg Stadium", capacity: 5e3, reputation: 5 },
+  { name: "N\xF5mme Kalju", country: "EST", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Hiiu Stadium", capacity: 800, reputation: 5 },
+  { name: "Paide Linnameeskond", country: "EST", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FFD700"], stadium: "Paide linnastaadion", capacity: 268, reputation: 5 },
+  // Finlandia (FIN) 
+  { name: "KuPS Kuopio", country: "FIN", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Savon Sanomat Areena", capacity: 4700, reputation: 7 },
+  { name: "SJK Sein\xE4joki", country: "FIN", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FFCC00"], stadium: "OmaSP Stadion", capacity: 4300, reputation: 6 },
+  { name: "Ilves Tampere", country: "FIN", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Tammela Stadion", capacity: 8012, reputation: 7 },
+  // Francja (FRA) – 
+  { name: "Lille OSC", country: "FRA", tier: 2, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "Decathlon Arena - Stade Pierre-Mauroy", capacity: 5e4, reputation: 13 },
+  { name: "OGC Nice", country: "FRA", tier: 2, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Allianz Riviera", capacity: 35624, reputation: 13 },
+  { name: "RC Lens", country: "FRA", tier: 2, colors: ["#FFD700", "#000000", "#FF0000"], stadium: "Stade Bollaert-Delelis", capacity: 38223, reputation: 13 },
+  { name: "Olympique Lyon", country: "FRA", tier: 2, colors: ["#FFFFFF", "#C8102E", "#000000"], stadium: "Groupama Stadium", capacity: 59186, reputation: 14 },
+  { name: "Olympique Marsylia", country: "FRA", tier: 2, colors: ["#00AEEF", "#FFFFFF", "#000000"], stadium: "Stade V\xE9lodrome", capacity: 67394, reputation: 14 },
+  // Gruzja (GEO) – 
+  { name: "Dinamo Batumi", country: "GEO", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Batumi Stadium", capacity: 2e4, reputation: 6 },
+  { name: "Dila Gori", country: "GEO", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Tengiz Burjanadze Stadium", capacity: 5e3, reputation: 6 },
+  { name: "Torpedo Kutaisi", country: "GEO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Ramaz Shengelia Stadium", capacity: 11978, reputation: 6 },
+  // Grecja (GRE) – po Olympiakos (z CL)
+  { name: "PAOK Saloniki", country: "GRE", tier: 2, colors: ["#000000", "#FFFFFF", "#000000"], stadium: "Toumba Stadium", capacity: 28803, reputation: 12 },
+  { name: "AEK Ateny", country: "GRE", tier: 2, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "OPAP Arena", capacity: 32500, reputation: 14 },
+  { name: "Panathinaikos Ateny", country: "GRE", tier: 2, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Apostolos Nikolaidis Stadium", capacity: 68703, reputation: 14 },
+  // Holandia (NED)  
+  { name: "Feyenoord Rotterdam", country: "NED", tier: 2, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "De Kuip", capacity: 51177, reputation: 14 },
+  { name: "AZ Alkmaar", country: "NED", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "AFAS Stadion", capacity: 19e3, reputation: 11 },
+  { name: "Twente Enschede", country: "NED", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "De Grolsch Veste", capacity: 3e4, reputation: 11 },
+  // Węgry (HUN) – po Ferencváros (z CL)
+  { name: "Mol Feh\xE9rv\xE1r FC", country: "HUN", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "MOL Ar\xE9na S\xF3st\xF3", capacity: 14300, reputation: 7 },
+  { name: "Pusk\xE1s Akad\xE9mia", country: "HUN", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Pusk\xE1s Ar\xE9na", capacity: 67215, reputation: 8 },
+  // grają tam mecze, ale stadion akademii mniejszy
+  { name: "\xDAjpest FC", country: "HUN", tier: 3, colors: ["#9932CC", "#FFFFFF", "#000000"], stadium: "Szusza Ferenc Stadion", capacity: 13500, reputation: 9 },
+  // Islandia (ISL)
+  { name: "V\xEDkingur Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#D50032", "#000000", "#D50032"], stadium: "V\xEDkingsv\xF6llur", capacity: 1200, reputation: 7 },
+  { name: "Brei\xF0ablik K\xF3pavogur", country: "ISL", tier: 4, colors: ["#006633", "#FFFFFF", "#006633"], stadium: "K\xF3pavogsv\xF6llur", capacity: 5501, reputation: 6 },
+  { name: "FH Hafnarfj\xF6r\xF0ur", country: "ISL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Kaplakrikav\xF6llur", capacity: 6450, reputation: 5 },
+  // Irlandia (IRL)
+  { name: "Shamrock Rovers", country: "IRL", tier: 4, colors: ["#007A33", "#FFFFFF", "#007A33"], stadium: "Tallaght Stadium", capacity: 8e3, reputation: 4 },
+  { name: "St Patrick's Athletic", country: "IRL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Richmond Park", capacity: 5347, reputation: 5 },
+  { name: "Derry City", country: "IRL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Brandywell Stadium", capacity: 7700, reputation: 5 },
+  // Izrael (ISR)  top Ligat ha'Al
+  { name: "Maccabi Tel Awiw", country: "ISR", tier: 3, colors: ["#FFD700", "#0000FF", "#FFFFFF"], stadium: "Bloomfield Stadium", capacity: 29300, reputation: 7 },
+  { name: "Hapoel Beer Szewa", country: "ISR", tier: 3, colors: ["#E30613", "#FFFFFF", "#E30613"], stadium: "Turner Stadium", capacity: 16126, reputation: 8 },
+  // jeśli nie w CL w Twojej liście – solidny
+  { name: "Maccabi Hajfa", country: "ISR", tier: 3, colors: ["#FFFFFF", "#006633", "#000000"], stadium: "Sammy Ofer Stadium", capacity: 30800, reputation: 10 },
+  // Włochy (ITA) –  Serie A
+  { name: "Bologna FC", country: "ITA", tier: 2, colors: ["#00529B", "#FFFFFF", "#FF0000"], stadium: "Stadio Renato Dall'Ara", capacity: 36462, reputation: 13 },
+  { name: "Udinese Calcio", country: "ITA", tier: 2, colors: ["#000000", "#FFFFFF", "#FFCC00"], stadium: "Bluenergy Stadium", capacity: 25132, reputation: 12 },
+  // Kazachstan (KAZ)  top Premier Liga
+  { name: "Kairat A\u0142maty", country: "KAZ", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Central Stadium Almaty", capacity: 23804, reputation: 4 },
+  { name: "Ordabasy Szymkent", country: "KAZ", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kazybek-Bi Stadium", capacity: 16400, reputation: 5 },
+  { name: "Tobo\u0142 Kostanaj", country: "KAZ", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Central Stadium Kostanay", capacity: 8320, reputation: 6 },
+  // Kosowo (KOS) – top Superliga e Kosovës (najmocniejsze kluby w pucharach)
+  { name: "FC Ballkani", country: "KOS", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadiumi Fadil Vokrri", capacity: 13500, reputation: 4 },
+  { name: "FC Drita", country: "KOS", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gjilan City Stadium", capacity: 1e4, reputation: 4 },
+  { name: "FC Prishtina", country: "KOS", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadiumi Fadil Vokrri", capacity: 13500, reputation: 4 },
+  // Łotwa (LAT) – top Virslīga (po RFS Ryga z CL? – unikamy dubli, więc reszta top)
+  { name: "FK Riga", country: "LAT", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Skonto Stadium", capacity: 8083, reputation: 5 },
+  { name: "FK Auda", country: "LAT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Skonto Stadium", capacity: 8083, reputation: 6 },
+  { name: "FK Liep\u0101ja", country: "LAT", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Daugava Stadium Liep\u0101ja", capacity: 8e3, reputation: 5 },
+  // Litwa (LTU) – top A Lyga (po Žalgiris Wilno z CL – unikamy, reszta top)
+  { name: "FK Kauno \u017Dalgiris", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Darius and Gir\u0117nas Stadium", capacity: 15315, reputation: 6 },
+  { name: "FK \u017Dalgiris Vilnius", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "LFF Stadium", capacity: 5400, reputation: 6 },
+  { name: "FK Banga Garg\u017Edai", country: "LTU", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Garg\u017Edai Stadium", capacity: 2300, reputation: 6 },
+  // Luksemburg (LUX) – top BGL Ligue (Differdange, Dudelange, UNA Strassen itp.)
+  { name: "F91 Dudelange", country: "LUX", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Jos Nosbaum", capacity: 2550, reputation: 5 },
+  { name: "FC Differdange 03", country: "LUX", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stade Parc des Sports", capacity: 2400, reputation: 3 },
+  { name: "UNA Strassen", country: "LUX", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Complexe Sportif Jean Wirtz", capacity: 2e3, reputation: 4 },
+  // Macedonia Północna (MKD) – top 1. MFL (Vardar, Shkendija, Struga dominują w 2025/26)
+  { name: "FK Vardar Skopje", country: "MKD", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "To\u0161e Proeski Arena", capacity: 33e3, reputation: 5 },
+  { name: "KF Shk\xEBndija Tetovo", country: "MKD", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Ecolog Arena", capacity: 15e3, reputation: 5 },
+  { name: "FC Struga Trim-Lum", country: "MKD", tier: 4, colors: ["#1E90FF", "#FFFFFF", "#1E90FF"], stadium: "Gradska Pla\u017Ea", capacity: 8e3, reputation: 5 },
+  // Malta (MLT) – top Premier League (Hamrun, Floriana, Valletta, Marsaxlokk itp.)
+  { name: "Hamrun Spartans", country: "MLT", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Victor Tedesco Stadium", capacity: 6e3, reputation: 5 },
+  { name: "Floriana FC", country: "MLT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Independence Ground", capacity: 3e3, reputation: 5 },
+  { name: "Valletta FC", country: "MLT", tier: 4, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "Centenary Stadium", capacity: 2e3, reputation: 6 },
+  // Mołdawia (MDA) – top Super Liga (Petrocub, Zimbru, Sheriff, Milsami w 2025/26)
+  { name: "FC Petrocub H\xEEnce\u0219ti", country: "MDA", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadionul Municipal H\xEEnce\u0219ti", capacity: 1500, reputation: 5 },
+  { name: "FC Zimbru Chi\u0219in\u0103u", country: "MDA", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadionul Zimbru", capacity: 10500, reputation: 5 },
+  { name: "FC Milsami Orhei", country: "MDA", tier: 4, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "Complexul Sportiv Raional Orhei", capacity: 2500, reputation: 4 },
+  // Norwegia (NOR) – top Eliteserien (Bodø/Glimt już w CL, więc reszta mocnych: Molde, Viking, Brann, Rosenborg, Lillestrøm itp.)
+  { name: "Molde FK", country: "NOR", tier: 4, colors: ["#FFFFFF", "#0000FF", "#000000"], stadium: "Aker Stadion", capacity: 11249, reputation: 10 },
+  { name: "SK Brann Bergen", country: "NOR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Brann Stadion", capacity: 17767, reputation: 9 },
+  { name: "Rosenborg BK", country: "NOR", tier: 4, colors: ["#000000", "#FFFFFF", "#000000"], stadium: "Lerkendal Stadion", capacity: 21421, reputation: 9 },
+  // Rumunia (ROU) – top Liga I / SuperLiga (aktualnie liderzy: U Craiova, Rapid, U Cluj, Dinamo, CFR itd.)
+  { name: "Universitatea Craiova", country: "ROU", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Ion Oblemenco Stadium", capacity: 3e4, reputation: 9 },
+  { name: "FC Rapid Bucure\u0219ti", country: "ROU", tier: 3, colors: ["#000000", "#FFFFFF", "#C8102E"], stadium: "Rapid-Giule\u0219ti Stadium", capacity: 14047, reputation: 9 },
+  { name: "Universitatea Cluj", country: "ROU", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Cluj Arena", capacity: 30201, reputation: 8 },
+  // Szkocja (SCO) – top Premiership (aktualnie Hearts lider, Celtic/Rangers blisko, Motherwell, Hibs itd.; Celtic w CL?)
+  { name: "Heart of Midlothian", country: "SCO", tier: 3, colors: ["#8B0000", "#FFFFFF", "#FFD700"], stadium: "Tynecastle Park", capacity: 20099, reputation: 9 },
+  { name: "Motherwell FC", country: "SCO", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Fir Park", capacity: 13677, reputation: 8 },
+  { name: "Hibernian FC", country: "SCO", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Easter Road", capacity: 20421, reputation: 8 },
+  { name: "Glasgow Rangers", country: "SCO", tier: 2, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Ibrox Stadium", capacity: 5e4, reputation: 13 },
+  // Słowacja (SVK) – top Super Liga (Slovan w CL? – unikamy, reszta: DAC, Žilina, Spartak Trnava, Podbrezová)
+  { name: "FC DAC 1904 Dunajsk\xE1 Streda", country: "SVK", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "MOL Ar\xE9na", capacity: 12500, reputation: 8 },
+  { name: "M\u0160K \u017Dilina", country: "SVK", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "\u0160tadi\xF3n pod Dub\u0148om", capacity: 11258, reputation: 8 },
+  { name: "Spartak Trnava", country: "SVK", tier: 3, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "City Arena \u2013 \u0160tadi\xF3n Antona Malatinsk\xE9ho", capacity: 19200, reputation: 8 },
+  // Portugalia (POR) – top Primeira Liga (Porto/Benfica/Sporting w CL, więc mid-top: Braga, Gil Vicente, Famalicão, Moreirense, Estoril)
+  { name: "SC Braga", country: "POR", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Est\xE1dio Municipal de Braga", capacity: 30186, reputation: 12 },
+  { name: "FC Famalic\xE3o", country: "POR", tier: 3, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Est\xE1dio Municipal 22 de Junho", capacity: 5307, reputation: 13 },
+  { name: "Moreirense FC", country: "POR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Est\xE1dio Comendador Joaquim de Almeida Freitas", capacity: 6153, reputation: 12 },
+  // Rosja (RUS) – mocne kluby z RPL poza Zenit/CSKA/Spartak
+  { name: "FK Krasnodar", country: "RUS", tier: 2, colors: ["#000000", "#FFFFFF", "#006633"], stadium: "Krasnodar Stadium", capacity: 35574, reputation: 13 },
+  { name: "Lokomotiw Moskwa", country: "RUS", tier: 2, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "RZD Arena", capacity: 28800, reputation: 12 },
+  { name: "Dynamo Moskwa", country: "RUS", tier: 2, colors: ["#0033A0", "#FFFFFF", "#000000"], stadium: "VTB Arena", capacity: 26047, reputation: 12 },
+  // Szwecja (SWE) – po Malmö FF i Häcken (z CL), aktualnie mocne: Mjällby, Hammarby, GAIS, Elfsborg, Djurgården itd.
+  { name: "Mj\xE4llby AIF", country: "SWE", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Strandvallen", capacity: 7500, reputation: 10 },
+  { name: "Hammarby IF", country: "SWE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "3Arena", capacity: 33e3, reputation: 10 },
+  { name: "GAIS G\xF6teborg", country: "SWE", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Gamla Ullevi", capacity: 18454, reputation: 9 },
+  // Szwajcaria (SUI) – po Young Boys i Basel (z CL), aktualnie liderzy: Thun, St. Gallen, Lugano, Sion
+  { name: "FC Thun", country: "SUI", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Arena Thun", capacity: 10300, reputation: 10 },
+  { name: "FC St. Gallen", country: "SUI", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kybunpark", capacity: 19456, reputation: 10 },
+  { name: "FC Lugano", country: "SUI", tier: 4, colors: ["#000000", "#FFFFFF", "#0000FF"], stadium: "Cornaredo Stadium", capacity: 6310, reputation: 9 },
+  // Turcja (TUR) – po Galatasaray, Fenerbahçe (z CL), aktualnie top: Trabzonspor, Beşiktaş, Başakşehir, Göztepe
+  { name: "Trabzonspor", country: "TUR", tier: 4, colors: ["#C8102E", "#FFFFFF", "#000000"], stadium: "\u015Eenol G\xFCne\u015F Spor Kompleksi", capacity: 40882, reputation: 11 },
+  { name: "Be\u015Fikta\u015F JK", country: "TUR", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Vodafone Park", capacity: 41588, reputation: 11 },
+  { name: "\u0130stanbul Ba\u015Fak\u015Fehir", country: "TUR", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Ba\u015Fak\u015Fehir Fatih Terim Stadium", capacity: 17319, reputation: 10 },
+  // Ukraina (UKR) – po Szachtar i Dynamo (z CL), aktualnie mocne: LNZ Cherkasy, Polissya Zhytomyr, Kryvbas, Metalist 1925
+  { name: "LNZ Cherkasy", country: "UKR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Cherkasy Arena", capacity: 10321, reputation: 8 },
+  { name: "Polissya Zhytomyr", country: "UKR", tier: 4, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Stadion im. O. Oleksandriya", capacity: 5926, reputation: 8 },
+  { name: "Kryvbas Kryvyj Rih", country: "UKR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Hirnyk Stadium", capacity: 2500, reputation: 8 },
+  // Walia (WAL) – top Cymru Premier (liderzy: The New Saints, Connah's Quay, Penybont, Colwyn Bay, Caernarfon)
+  { name: "The New Saints", country: "WAL", tier: 4, colors: ["#00A650", "#FFFFFF", "#00A650"], stadium: "Park Hall", capacity: 2034, reputation: 5 },
+  { name: "Connah's Quay Nomads", country: "WAL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Deeside Stadium", capacity: 1500, reputation: 5 },
+  { name: "Penybont FC", country: "WAL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "SDA Wales Stadium", capacity: 1e3, reputation: 4 },
+  // Andora (AND) – najsłabsza federacja, reputacja max 4–5
+  { name: "FC Santa Coloma", country: "AND", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Camp Nou Municipal d'Andorra", capacity: 500, reputation: 2 },
+  { name: "Inter Club d'Escaldes", country: "AND", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 2 },
+  { name: "Atl\xE8tic Club d'Escaldes", country: "AND", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 2 },
+  // Gibraltar (GIB) – po Lincoln Red Imps (z CL)
+  { name: "Europa FC", country: "GIB", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 1 },
+  { name: "Bruno's Magpies", country: "GIB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 1 },
+  { name: "Manchester 62", country: "GIB", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 1 },
+  // Liechtenstein (LIE) – tylko jedna liga (w Szwajcarii), ale pucharowicze
+  { name: "FC Vaduz", country: "LIE", tier: 4, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Rheinpark Stadion", capacity: 7838, reputation: 2 },
+  { name: "USV Eschen/Mauren", country: "LIE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Sportpark Eschen-Mauren", capacity: 2e3, reputation: 2 },
+  { name: "FC Balzers", country: "LIE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sportanlage Rheinau", capacity: 2e3, reputation: 2 },
+  // San Marino (SMR) – najsłabsza federacja w Europie
+  { name: "La Fiorita", country: "SMR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
+  { name: "Tre Penne", country: "SMR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
+  { name: "Virtus Acquaviva", country: "SMR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
+  // Wyspy Owcze (FRO) – po KÍ Klaksvík (z CL)
+  { name: "HB T\xF3rshavn", country: "FRO", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "T\xF3rsv\xF8llur", capacity: 6e3, reputation: 1 },
+  { name: "V\xEDkingur G\xF8ta", country: "FRO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sarpuger\xF0i", capacity: 3e3, reputation: 1 },
+  { name: "B36 T\xF3rshavn", country: "FRO", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Gundadalur", capacity: 5e3, reputation: 1 },
+  // Niemcy (GER) – mid-table Bundesliga (po Bayern, Dortmund, Leverkusen, RB Lipsk, Union Berlin, Gladbach z CL)
+  { name: "VfB Stuttgart", country: "GER", tier: 2, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "MHPArena", capacity: 60449, reputation: 13 },
+  { name: "Eintracht Frankfurt", country: "GER", tier: 2, colors: ["#000000", "#FFFFFF", "#E1001A"], stadium: "Deutsche Bank Park", capacity: 51500, reputation: 13 },
+  // już był w CL, ale jeśli chcesz mid
+  { name: "SC Freiburg", country: "GER", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Europa-Park Stadion", capacity: 34700, reputation: 12 },
+  { name: "1. FC K\xF6ln", country: "GER", tier: 2, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "RheinEnergieStadion", capacity: 5e4, reputation: 12 },
+  { name: "VfL Wolfsburg", country: "GER", tier: 2, colors: ["#00A650", "#FFFFFF", "#000000"], stadium: "Volkswagen Arena", capacity: 3e4, reputation: 12 },
+  // Hiszpania (ESP) – mid-table La Liga (po Real, Barca, Atletico, Athletic, Sevilla, Villarreal z CL)
+  { name: "Real Sociedad", country: "ESP", tier: 2, colors: ["#0033A0", "#FFFFFF", "#FF0000"], stadium: "Reale Arena", capacity: 4e4, reputation: 14 },
+  { name: "Valencia CF", country: "ESP", tier: 2, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "Mestalla", capacity: 49e3, reputation: 13 },
+  { name: "Real Betis", country: "ESP", tier: 2, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Benito Villamar\xEDn", capacity: 60720, reputation: 13 },
+  { name: "Osasuna", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "El Sadar", capacity: 23189, reputation: 12 },
+  // Słowenia (SVN) – mocne z PrvaLiga Telemach
+  { name: "NK Koper", country: "SVN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "\u0160tadion Bonifika", capacity: 4010, reputation: 8 },
+  { name: "NK Aluminij", country: "SVN", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Aluminij Sports Park", capacity: 1200, reputation: 8 },
+  { name: "NS Mura", country: "SVN", tier: 3, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Fazanerija City Stadium", capacity: 4120, reputation: 8 },
+  // Serbia (SRB) – mocne z SuperLiga Srbije (po Crvena Zvezda, Partizan)
+  { name: "FK Vojvodina Novi Sad", country: "SRB", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Kara\u0111or\u0111e Stadium", capacity: 14458, reputation: 8 },
+  { name: "FK Novi Pazar", country: "SRB", tier: 3, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Stadion Novi Pazar", capacity: 12e3, reputation: 8 },
+  { name: "Partizan Belgrad", country: "SRB", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadion Partizana", capacity: 32e3, reputation: 10 }
+];
+var generateELClubId = (name) => {
+  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return `EU_EL_${slug}`;
+};
+
+// resources/static_db/clubs/ConferenceLeagueTeams.tsx
+var RAW_CONFERENCE_LEAGUE_CLUBS = [
+  // Andora (AND) – najsłabsza federacja
+  { name: "FC Santa Coloma", country: "AND", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Camp Nou Municipal d'Andorra", capacity: 500, reputation: 1 },
+  { name: "Inter Club d'Escaldes", country: "AND", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 1 },
+  { name: "Atl\xE8tic Club d'Escaldes", country: "AND", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Camp de Futbol d'Aixovall", capacity: 1e3, reputation: 1 },
+  // Gibraltar (GIB)
+  { name: "Europa FC", country: "GIB", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 2 },
+  { name: "Bruno's Magpies", country: "GIB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 2 },
+  // Liechtenstein (LIE) – tylko puchar Liechtensteinu, kluby grają w szwajcarskiej lidze
+  { name: "USV Eschen/Mauren", country: "LIE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Sportpark Eschen-Mauren", capacity: 2e3, reputation: 3 },
+  { name: "FC Balzers", country: "LIE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sportanlage Rheinau", capacity: 2e3, reputation: 2 },
+  { name: "FC Ruggell", country: "LIE", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Rheinpark Stadion", capacity: 7838, reputation: 2 },
+  // San Marino (SMR)
+  { name: "Tre Penne", country: "SMR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
+  { name: "Virtus Acquaviva", country: "SMR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
+  { name: "Folgore/Falciano", country: "SMR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadio Olimpico di Serravalle", capacity: 7e3, reputation: 1 },
+  // Wyspy Owcze (FRO) – bardzo nisko, nawet HB i Víkingur rzadko przechodzą rundy
+  { name: "HB T\xF3rshavn", country: "FRO", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "T\xF3rsv\xF8llur", capacity: 6e3, reputation: 1 },
+  { name: "V\xEDkingur G\xF8ta", country: "FRO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Sarpuger\xF0i", capacity: 3e3, reputation: 1 },
+  { name: "B36 T\xF3rshavn", country: "FRO", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Gundadalur", capacity: 5e3, reputation: 1 },
+  // Malta (MLT)
+  { name: "Floriana FC", country: "MLT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Independence Ground", capacity: 3e3, reputation: 3 },
+  { name: "Valletta FC", country: "MLT", tier: 4, colors: ["#FFFFFF", "#FF0000", "#000000"], stadium: "Centenary Stadium", capacity: 2e3, reputation: 2 },
+  { name: "G\u017Cira United", country: "MLT", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Centenary Stadium", capacity: 2e3, reputation: 2 },
+  // Luksemburg (LUX)
+  { name: "UNA Strassen", country: "LUX", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Complexe Sportif Jean Wirtz", capacity: 2e3, reputation: 3 },
+  { name: "FC Progr\xE8s Niederkorn", country: "LUX", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stade Jos Haupert", capacity: 1800, reputation: 2 },
+  { name: "Fola Esch", country: "LUX", tier: 4, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Stade \xC9mile Mayrisch", capacity: 3826, reputation: 2 },
+  // Kosowo (KOS)
+  { name: "KF Llapi", country: "KOS", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Fadil Vokrri Stadium", capacity: 13500, reputation: 5 },
+  { name: "KF Malisheva", country: "KOS", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Malisheva Stadium", capacity: 2e3, reputation: 5 },
+  { name: "KF Dukagjini", country: "KOS", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "P\xEBrparim Tha\xE7i Stadium", capacity: 2e3, reputation: 5 },
+  // Łotwa (LAT)
+  { name: "FK Auda", country: "LAT", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Skonto Stadium", capacity: 8083, reputation: 5 },
+  { name: "FK Liep\u0101ja", country: "LAT", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Daugava Stadium Liep\u0101ja", capacity: 8e3, reputation: 5 },
+  { name: "FK Metta", country: "LAT", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Daugava Stadium", capacity: 10800, reputation: 5 },
+  // Litwa (LTU)
+  { name: "FK Hegelmann", country: "LTU", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Hegelmann Arena", capacity: 3500, reputation: 5 },
+  { name: "FK D\u017Eiugas Tel\u0161iai", country: "LTU", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Tel\u0161iai Central Stadium", capacity: 2400, reputation: 6 },
+  // Albania (ALB) – po Tirana, Egnatia, Vllaznia (już w EL)
+  { name: "KF Teuta Durr\xEBs", country: "ALB", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadiumi Niko Dovana", capacity: 12e3, reputation: 4 },
+  { name: "KF Bylis Ballsh", country: "ALB", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Adush Mu\xE7a Stadium", capacity: 5e3, reputation: 4 },
+  { name: "KF La\xE7i", country: "ALB", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadiumi La\xE7i", capacity: 5e3, reputation: 4 },
+  // Armenia (ARM) – po Ararat-Armenia, Noah, Pyunik (już w EL)
+  { name: "FC Urartu", country: "ARM", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Urartu Stadium", capacity: 7e3, reputation: 4 },
+  { name: "FC Alashkert", country: "ARM", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Alashkert Stadium", capacity: 6850, reputation: 4 },
+  { name: "FC Van", country: "ARM", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Charentsavan City Stadium", capacity: 5e3, reputation: 4 },
+  // Austria (AUT) – po Rapid, Austria Wiedeń, LASK (już w EL)
+  { name: "SCR Altach", country: "AUT", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Cashpoint Arena", capacity: 8500, reputation: 8 },
+  { name: "TSV Hartberg", country: "AUT", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Profertil Arena Hartberg", capacity: 4635, reputation: 8 },
+  { name: "Wolfsberger AC", country: "AUT", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Lavanttal-Arena", capacity: 8100, reputation: 8 },
+  // Azerbejdżan (AZE) – po Neftçi, Sabah, Zira (już w EL)
+  { name: "Sumgayit FK", country: "AZE", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Kapital Bank Arena", capacity: 1600, reputation: 4 },
+  { name: "Kapaz PFK", country: "AZE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Ganja City Stadium", capacity: 15e3, reputation: 4 },
+  { name: "Sabail FK", country: "AZE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Bayil Arena", capacity: 3e3, reputation: 4 },
+  // Białoruś (BLR)
+  { name: "FK Isloch Mi\u0144sk", country: "BLR", tier: 4, colors: ["#FFFFFF", "#0000FF", "#FF0000"], stadium: "Stadion FC Minsk", capacity: 3100, reputation: 6 },
+  { name: "FK Slutsk", country: "BLR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion Haradski", capacity: 2150, reputation: 5 },
+  { name: "FK Smolevichi", country: "BLR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Ozyorny Stadium", capacity: 1500, reputation: 5 },
+  // Bośnia i Hercegowina (BIH)
+  { name: "FK Igman Konjic", country: "BIH", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Gradski stadion Igman", capacity: 5e3, reputation: 6 },
+  { name: "FK Posu\u0161je", country: "BIH", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadion Mokri Dolac", capacity: 8e3, reputation: 5 },
+  { name: "FK Sloga Meridian", country: "BIH", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion Tu\u0161anj", capacity: 7e3, reputation: 5 },
+  // Bułgaria (BUL)
+  { name: "FK Arda Kardzhali", country: "BUL", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Arena Arda", capacity: 12500, reputation: 6 },
+  { name: "FK Beroe Stara Zagora", country: "BUL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Beroe Stadium", capacity: 12128, reputation: 6 },
+  { name: "FK Hebar Pazardzhik", country: "BUL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadion Georgi Benkovski", capacity: 13128, reputation: 5 },
+  { name: "PFC Slavia Sofia", country: "BUL", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Ovcha Kupel Stadium", capacity: 25e3, reputation: 6 },
+  { name: "PFC Lokomotiv Sofia 1929", country: "BUL", tier: 3, colors: ["#ca0707", "#000000", "#FF0000"], stadium: "Lokomotiv Stadium Sofia", capacity: 22e3, reputation: 6 },
+  { name: "PFC Septemvri Sofia", country: "BUL", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Stadion Dragalevtsi", capacity: 1e3, reputation: 5 },
+  // Chorwacja (CRO)
+  { name: "NK Istra 1961", country: "CRO", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadion Aldo Drosina", capacity: 9921, reputation: 6 },
+  { name: "NK \u0160ibenik", country: "CRO", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion \u0160ubi\u0107evac", capacity: 3928, reputation: 5 },
+  { name: "HNK Gorica", country: "CRO", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion HNK Gorica", capacity: 4826, reputation: 5 },
+  // Cypr (CYP) – 
+  { name: "Anorthosis Famagusta", country: "CYP", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Antonis Papadopoulos Stadium", capacity: 10800, reputation: 6 },
+  { name: "Apollon Limassol", country: "CYP", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Tsirio Stadium", capacity: 13261, reputation: 6 },
+  { name: "Pafos FC", country: "CYP", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadio Stelios Kyriakides", capacity: 9394, reputation: 5 },
+  // Czechy (CZE) 
+  { name: "FK Jablonec", country: "CZE", tier: 3, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Stadion St\u0159elnice", capacity: 6108, reputation: 6 },
+  { name: "FK Teplice", country: "CZE", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Na St\xEDnadlech", capacity: 18221, reputation: 5 },
+  { name: "FK Mlad\xE1 Boleslav", country: "CZE", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Lokotrans Ar\xE9na", capacity: 5e3, reputation: 5 },
+  // Dania (DEN) 
+  { name: "Aarhus GF", country: "DEN", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Ceres Park & Arena", capacity: 19433, reputation: 6 },
+  { name: "Randers FC", country: "DEN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Cepheus Park Randers", capacity: 10300, reputation: 5 },
+  { name: "Viborg FF", country: "DEN", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Viborg Stadion", capacity: 9600, reputation: 5 },
+  // Estonia (EST) 
+  { name: "JK Tammeka Tartu", country: "EST", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Tamme staadion", capacity: 1600, reputation: 5 },
+  { name: "JK Narva Trans", country: "EST", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Kreenholmi staadion", capacity: 1800, reputation: 5 },
+  { name: "FC Kuressaare", country: "EST", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kuressaare linnastaadion", capacity: 2e3, reputation: 4 },
+  // Finlandia (FIN) 
+  { name: "FC Honka Espoo", country: "FIN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Tapiolan Urheilupuisto", capacity: 6e3, reputation: 6 },
+  { name: "FC Inter Turku", country: "FIN", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Veritas Stadion", capacity: 9300, reputation: 6 },
+  { name: "AC Oulu", country: "FIN", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Raatin stadion", capacity: 4900, reputation: 5 },
+  // Gruzja (GEO) 
+  { name: "FC Telavi", country: "GEO", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Municipal Stadium Telavi", capacity: 12e3, reputation: 6 },
+  { name: "FC Samtredia", country: "GEO", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Erosi Manjgaladze Stadium", capacity: 15e3, reputation: 5 },
+  { name: "FC Gagra", country: "GEO", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gagra Stadium", capacity: 2e3, reputation: 5 },
+  // Irlandia (IRL) 
+  { name: "Dundalk FC", country: "IRL", tier: 4, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Oriel Park", capacity: 4500, reputation: 6 },
+  { name: "Sligo Rovers", country: "IRL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "The Showgrounds", capacity: 5500, reputation: 5 },
+  { name: "Waterford FC", country: "IRL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "RSC", capacity: 5500, reputation: 5 },
+  // Irlandia Północna (NIR)
+  { name: "Cliftonville FC", country: "NIR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Solitude", capacity: 2462, reputation: 6 },
+  { name: "Crusaders FC", country: "NIR", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Seaview", capacity: 3383, reputation: 5 },
+  { name: "Glentoran FC", country: "NIR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "The Oval", capacity: 26556, reputation: 5 },
+  // Islandia (ISL) – po Víkingur, Breiðablik, FH, Stjarnan (już w CL/EL)
+  { name: "KR Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "KR-v\xF6llur", capacity: 6450, reputation: 6 },
+  { name: "Valur Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Hl\xED\xF0arendi", capacity: 3e3, reputation: 6 },
+  { name: "Fram Reykjav\xEDk", country: "ISL", tier: 4, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Framv\xF6llur \xDAlfars\xE1rdal", capacity: 1500, reputation: 5 },
+  // Izrael (ISR) – kluby z Ligat ha'Al (najwyższa liga)
+  { name: "Hapoel Tel Aviv", country: "ISR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Bloomfield Stadium", capacity: 29300, reputation: 6 },
+  { name: "Ironi Tiberias", country: "ISR", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Tiberias Municipal Stadium", capacity: 8e3, reputation: 5 },
+  { name: "Maccabi Bnei Raina", country: "ISR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Green Stadium", capacity: 3800, reputation: 5 },
+  // Kazachstan (KAZ) – kluby z Premier League (najwyższa liga)
+  { name: "FC Aktobe", country: "KAZ", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Central Stadium Aktobe", capacity: 13500, reputation: 7 },
+  { name: "FC Kairat Almaty", country: "KAZ", tier: 4, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Central Stadium Almaty", capacity: 23804, reputation: 6 },
+  { name: "FC Ordabasy Shymkent", country: "KAZ", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Kazybek-Bi Stadium", capacity: 16400, reputation: 6 },
+  // Macedonia Północna (MKD)
+  { name: "FK Tikvesh Kavadarci", country: "MKD", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Gradski Stadion Kavadarci", capacity: 7500, reputation: 6 },
+  { name: "FK Shkupi", country: "MKD", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "\u010Cair Stadium", capacity: 6e3, reputation: 6 },
+  { name: "KF Gostivar", country: "MKD", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gostivar Stadium", capacity: 1e3, reputation: 5 },
+  // Mołdawia (MDA) – po Sheriff, Petrocub, Zimbru (już w CL/EL)
+  { name: "FC Milsami Orhei", country: "MDA", tier: 4, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "Complexul Sportiv Raional Orhei", capacity: 2500, reputation: 6 },
+  { name: "FC Spartanii Selemet", country: "MDA", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadionul Orhei", capacity: 2500, reputation: 5 },
+  { name: "FC Flore\u0219ti", country: "MDA", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Stadionul Flore\u0219ti", capacity: 1e3, reputation: 5 },
+  // Niemcy 
+  { name: "1. FC Kaiserslautern", country: "GER", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Fritz-Walter-Stadion", capacity: 49780, reputation: 10 },
+  { name: "Hannover 96", country: "GER", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "HDI-Arena", capacity: 49200, reputation: 10 },
+  { name: "Karlsruher SC", country: "GER", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "BBBank Wildpark", capacity: 28762, reputation: 9 },
+  { name: "St. Pauli", country: "GER", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Millerntor-Stadion", capacity: 29e3, reputation: 9 },
+  { name: "1. FC N\xFCrnberg", country: "GER", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Max-Morlock-Stadion", capacity: 5e4, reputation: 9 },
+  { name: "Eintracht Braunschweig", country: "GER", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Eintracht-Stadion", capacity: 25e3, reputation: 8 },
+  { name: "Mainz 05", country: "GER", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Mewa Arena", capacity: 34e3, reputation: 8 },
+  // Norwegia (NOR) – tier 4
+  { name: "Viking FK", country: "NOR", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "SR-Bank Arena", capacity: 15600, reputation: 6 },
+  { name: "Sarpsborg 08 FF", country: "NOR", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Sarpsborg Stadion", capacity: 8e3, reputation: 5 },
+  { name: "HamKam", country: "NOR", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Briskeby Arena", capacity: 7800, reputation: 5 },
+  // Portugalia (POR) – tier 3, mid-table / niższe Primeira Liga
+  { name: "Gil Vicente FC", country: "POR", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Est\xE1dio Cidade de Barcelos", capacity: 12046, reputation: 8 },
+  { name: "Estoril Praia", country: "POR", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Est\xE1dio Ant\xF3nio Coimbra da Mota", capacity: 8e3, reputation: 9 },
+  { name: "Rio Ave FC", country: "POR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Est\xE1dio dos Arcos", capacity: 9065, reputation: 9 },
+  // Rumunia (ROU) – tier 4
+  { name: "FC Hermannstadt", country: "ROU", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Municipal Stadium Sibiu", capacity: 14400, reputation: 6 },
+  { name: "FC UTA Arad", country: "ROU", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stadionul Francisc Neuman", capacity: 12800, reputation: 5 },
+  { name: "FC Politehnica Ia\u0219i", country: "ROU", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "Stadionul Emil Alexandrescu", capacity: 12800, reputation: 5 },
+  // Szkocja (SCO)
+  { name: "Livingston FC", country: "SCO", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Tony Macaroni Arena", capacity: 9528, reputation: 6 },
+  { name: "Raith Rovers", country: "SCO", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Stark's Park", capacity: 8798, reputation: 5 },
+  { name: "Partick Thistle", country: "SCO", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Firhill Stadium", capacity: 10102, reputation: 5 },
+  // Słowacja (SVK)
+  { name: "FK Ko\u0161ice", country: "SVK", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Futbal Tatran Ar\xE9na", capacity: 12458, reputation: 6 },
+  { name: "MFK Zempl\xEDn Michalovce", country: "SVK", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "\u0160tadi\xF3n pod Zoborom", capacity: 7200, reputation: 5 },
+  { name: "MFK Skalica", country: "SVK", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Futbalov\xFD \u0161tadi\xF3n Skalica", capacity: 4e3, reputation: 5 },
+  // Szwecja (SWE)
+  { name: "IK Sirius", country: "SWE", tier: 3, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Studenternas IP", capacity: 10522, reputation: 6 },
+  { name: "IF Brommapojkarna", country: "SWE", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Grimsta IP", capacity: 5e3, reputation: 5 },
+  { name: "Degerfors IF", country: "SWE", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stora Valla", capacity: 12500, reputation: 5 },
+  // Szwajcaria (SUI)
+  { name: "FC Winterthur", country: "SUI", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Sch\xFCtzenwiese", capacity: 8500, reputation: 6 },
+  { name: "FC Sion", country: "SUI", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Stade de Tourbillon", capacity: 14283, reputation: 6 },
+  { name: "FC Schaffhausen", country: "SUI", tier: 3, colors: ["#000000", "#FFFFFF", "#FFD700"], stadium: "Wefox Arena Schaffhausen", capacity: 8200, reputation: 5 },
+  // Turcja (TUR)
+  { name: "Konyaspor", country: "TUR", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Konya B\xFCy\xFCk\u015Fehir Stadium", capacity: 42076, reputation: 6 },
+  { name: "Adana Demirspor", country: "TUR", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Yeni Adana Stadium", capacity: 33500, reputation: 6 },
+  { name: "Alanyaspor", country: "TUR", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Bah\xE7e\u015Fehir Okullar\u0131 Stadium", capacity: 10842, reputation: 5 },
+  { name: "Gaziantep FK", country: "TUR", tier: 3, colors: ["#e41919", "#FFFFFF", "#000000"], stadium: "Gaziantep Atat\xFCrk Stadium", capacity: 42222, reputation: 6 },
+  { name: "Kocaelispor", country: "TUR", tier: 3, colors: ["#00590c", "#000000", "#ffffff"], stadium: "\u0130zmit Stadium", capacity: 34400, reputation: 5 },
+  // Ukraina (UKR)
+  { name: "FC Oleksandriya", country: "UKR", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "CSC Nika Stadium", capacity: 5682, reputation: 6 },
+  { name: "FC Veres Rivne", country: "UKR", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Avanhard Stadium", capacity: 7200, reputation: 5 },
+  { name: "FC Inhulets Petrove", country: "UKR", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Inhulets Stadium", capacity: 1720, reputation: 5 },
+  // Walia (WAL)
+  { name: "Connah's Quay Nomads", country: "WAL", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Deeside Stadium", capacity: 1500, reputation: 5 },
+  { name: "Bala Town FC", country: "WAL", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Maes Tegid", capacity: 3e3, reputation: 4 },
+  { name: "Caernarfon Town", country: "WAL", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "The Oval", capacity: 3e3, reputation: 4 },
+  // Rosja (RUS)
+  { name: "FK Ural Jekaterynburg", country: "RUS", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Central Stadium", capacity: 35061, reputation: 6 },
+  { name: "FK Orenburg", country: "RUS", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Gazovik Stadium", capacity: 7500, reputation: 5 },
+  { name: "FK Akhmat Grozny", country: "RUS", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Akhmat-Arena", capacity: 30597, reputation: 6 },
+  // Włochy (ITA) – tier 3, reputacja 8–11 (mid/niższe Serie A lub spadkowicze / solidni z Serie B)
+  { name: "Torino FC", country: "ITA", tier: 3, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Stadio Olimpico Grande Torino", capacity: 27994, reputation: 10 },
+  { name: "Genoa CFC", country: "ITA", tier: 3, colors: ["#FF0000", "#000000", "#FFFFFF"], stadium: "Stadio Luigi Ferraris", capacity: 36585, reputation: 9 },
+  { name: "Palermo", country: "ITA", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadio Renzo Barbera", capacity: 36e3, reputation: 8 },
+  // Węgry (HUN) – tier 4
+  { name: "MTK Budapest", country: "HUN", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Hidegkuti N\xE1ndor Stadion", capacity: 5322, reputation: 6 },
+  { name: "Di\xF3sgy\u0151ri VTK", country: "HUN", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Di\xF3sgy\u0151ri Stadion", capacity: 9680, reputation: 5 },
+  { name: "Kecskem\xE9ti TE", country: "HUN", tier: 3, colors: ["#006633", "#FFFFFF", "#FFD700"], stadium: "Sz\xE9kt\xF3i Stadion", capacity: 6300, reputation: 5 },
+  // Anglia (ENG) – najniżej sklasyfikowane w Premier League w danym sezonie
+  { name: "Ipswich Town", country: "ENG", tier: 3, colors: ["#0000FF", "#FFFFFF", "#000000"], stadium: "Portman Road", capacity: 30311, reputation: 10 },
+  { name: "Southampton FC", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "St Mary's Stadium", capacity: 32384, reputation: 10 },
+  { name: "Leicester City", country: "ENG", tier: 3, colors: ["#0033A0", "#FFFFFF", "#FFCC00"], stadium: "King Power Stadium", capacity: 32312, reputation: 11 },
+  { name: "Leeds United", country: "ENG", tier: 3, colors: ["#FFFFFF", "#1E90FF", "#FFD700"], stadium: "Elland Road", capacity: 53e3, reputation: 10 },
+  { name: "West Ham United", country: "ENG", tier: 3, colors: ["#7A263A", "#FFFFFF", "#000000"], stadium: "London Stadium", capacity: 6e4, reputation: 10 },
+  { name: "Fulham", country: "ENG", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Craven Cottage", capacity: 25700, reputation: 9 },
+  { name: "Sunderland AFC", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadium of Light", capacity: 49e3, reputation: 9 },
+  { name: "Bournemouth AFC", country: "ENG", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Vitality Stadium", capacity: 11e3, reputation: 8 },
+  { name: "QPR", country: "ENG", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Loftus Road", capacity: 18800, reputation: 8 },
+  { name: "Hull City", country: "ENG", tier: 3, colors: ["#ff8800", "#FFFFFF", "#000000"], stadium: "KCOM Stadium", capacity: 25e3, reputation: 8 },
+  // Belgia (BEL) – niższe miejsce w Jupiler Pro League
+  { name: "KVC Westerlo", country: "BEL", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Het Kuipje", capacity: 8035, reputation: 6 },
+  { name: "KV Mechelen", country: "BEL", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "AFAS Stadion", capacity: 16700, reputation: 7 },
+  { name: "Sint-Truidense VV", country: "BEL", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Stayen", capacity: 14500, reputation: 7 },
+  // Czarnogóra (MNE) – najwyższa liga (1. CFL)
+  { name: "FK Jezero Plav", country: "MNE", tier: 4, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Stadion pod Golubinjem", capacity: 5e3, reputation: 5 },
+  { name: "FK Arsenal Tivat", country: "MNE", tier: 4, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stadion u Parku", capacity: 2e3, reputation: 5 },
+  { name: "OFK Petrovac", country: "MNE", tier: 4, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stadion pod Malim brdom", capacity: 1630, reputation: 4 },
+  // Francja (FRA) – niższe miejsce w Ligue 1 / Ligue 2 spadkowicze
+  { name: "Le Havre AC", country: "FRA", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stade Oceane", capacity: 25178, reputation: 7 },
+  { name: "Stade de Reims", country: "FRA", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Stade Auguste-Delaune", capacity: 21684, reputation: 7 },
+  { name: "FC Lorient", country: "FRA", tier: 3, colors: ["#FF6600", "#000000", "#FFFFFF"], stadium: "Stade du Moustoir", capacity: 18970, reputation: 7 },
+  { name: "Strasbourg", country: "FRA", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Stade de la Meinau", capacity: 29e3, reputation: 8 },
+  { name: "Stade Rennais", country: "FRA", tier: 3, colors: ["#FF0000", "#000000", "#ffffff"], stadium: "Stade de la Mosqu\xE9e", capacity: 38512, reputation: 8 },
+  // Grecja (GRE) – niższe miejsce w Super League
+  { name: "Panetolikos GFS", country: "GRE", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "Panetolikos Stadium", capacity: 7321, reputation: 6 },
+  { name: "Panserraikos FC", country: "GRE", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Serres Municipal Stadium", capacity: 9500, reputation: 7 },
+  { name: "Kallithea FC", country: "GRE", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FFD700"], stadium: "Grigorios Lambrakis Stadium", capacity: 4e3, reputation: 7 },
+  // Hiszpania (ESP) – niższe miejsce w La Liga
+  { name: "CD Legan\xE9s", country: "ESP", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Estadio Municipal de Butarque", capacity: 12450, reputation: 7 },
+  { name: "Real Valladolid", country: "ESP", tier: 3, colors: ["#FFFFFF", "#000000", "#FF6600"], stadium: "Estadio Jos\xE9 Zorrilla", capacity: 26512, reputation: 8 },
+  { name: "UD Las Palmas", country: "ESP", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Estadio Gran Canaria", capacity: 32200, reputation: 8 },
+  { name: "Espanyol FC", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Estadio de Cornell\xE0-El Prat", capacity: 4e4, reputation: 9 },
+  { name: "Rayo Vallecano", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Campo de F\xFAtbol de Vallecas", capacity: 14950, reputation: 8 },
+  { name: "Mallorca FC", country: "ESP", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "Visit Mallorca Stadium", capacity: 23e3, reputation: 8 },
+  // Holandia (NED) – niższe miejsce w Eredivisie
+  { name: "FC Volendam", country: "NED", tier: 3, colors: ["#FF6600", "#FFFFFF", "#000000"], stadium: "Kras Stadion", capacity: 7384, reputation: 6 },
+  { name: "Almere City FC", country: "NED", tier: 3, colors: ["#0000FF", "#FFFFFF", "#FF0000"], stadium: "Yanmar Stadion", capacity: 4501, reputation: 5 },
+  { name: "RKC Waalwijk", country: "NED", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "Mandemakers Stadion", capacity: 7500, reputation: 5 },
+  // Słowenia (SVN)
+  { name: "NK Bravo", country: "SVN", tier: 3, colors: ["#000000", "#FFFFFF", "#FF0000"], stadium: "\u0160tadion Sto\u017Eice", capacity: 16152, reputation: 6 },
+  { name: "NK Celje", country: "SVN", tier: 3, colors: ["#0057B8", "#FFD200", "#0057B8"], stadium: "Stadion Z'de\u017Eele", capacity: 13059, reputation: 6 },
+  { name: "NK Dom\u017Eale", country: "SVN", tier: 3, colors: ["#FFD700", "#000000", "#FFFFFF"], stadium: "\u0160portni park Dom\u017Eale", capacity: 2341, reputation: 5 },
+  // Serbia (SRB)
+  { name: "FK \u010Cukari\u010Dki", country: "SRB", tier: 3, colors: ["#FFFFFF", "#000000", "#FF0000"], stadium: "Stadion na Banovom brdu", capacity: 4070, reputation: 6 },
+  { name: "FK Radni\u010Dki 1923", country: "SRB", tier: 3, colors: ["#FF0000", "#FFFFFF", "#000000"], stadium: "\u010Cika Da\u010Da Stadium", capacity: 15100, reputation: 6 },
+  { name: "FK TSC Ba\u010Dka Topola", country: "SRB", tier: 3, colors: ["#006633", "#FFFFFF", "#000000"], stadium: "TSC Arena", capacity: 4500, reputation: 6 }
+];
+var generateCONFClubId = (name) => {
+  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return `EU_CONF_${slug}`;
+};
+
+// resources/static_db/clubs/SouthamericanTeams.tsx
+var CLUBS_SOUTH_AMERICA = [
+  // Argentyna
+  {
+    name: "River Plate",
+    country: "ARG",
+    tier: 1,
+    colors: ["#FFFFFF", "#E30613", "#000000"],
+    stadium: "Estadio M\xE1s Monumental",
+    capacity: 85018,
+    reputation: 16
+  },
+  {
+    name: "Boca Juniors",
+    country: "ARG",
+    tier: 1,
+    colors: ["#003087", "#F5C518", "#FFFFFF"],
+    stadium: "La Bombonera",
+    capacity: 57200,
+    reputation: 15
+  },
+  {
+    name: "Racing Club",
+    country: "ARG",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF", "#E30613"],
+    stadium: "Estadio Presidente Per\xF3n",
+    capacity: 55e3,
+    reputation: 13
+  },
+  {
+    name: "Independiente",
+    country: "ARG",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Estadio Libertadores de Am\xE9rica",
+    capacity: 42e3,
+    reputation: 15
+  },
+  {
+    name: "San Lorenzo",
+    country: "ARG",
+    tier: 2,
+    colors: ["#E30613", "#000000", "#FFFFFF"],
+    stadium: "Estadio Pedro Bidegain",
+    capacity: 47e3,
+    reputation: 14
+  },
+  // Brazylia
+  {
+    name: "Flamengo",
+    country: "BRA",
+    tier: 1,
+    colors: ["#E30613", "#000000", "#F5C518"],
+    stadium: "Maracan\xE3",
+    capacity: 78838,
+    reputation: 16
+  },
+  {
+    name: "Palmeiras",
+    country: "BRA",
+    tier: 1,
+    colors: ["#006633", "#FFFFFF"],
+    stadium: "Allianz Parque",
+    capacity: 43713,
+    reputation: 15
+  },
+  {
+    name: "S\xE3o Paulo",
+    country: "BRA",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF", "#000000"],
+    stadium: "Morumbi",
+    capacity: 66795,
+    reputation: 15
+  },
+  {
+    name: "Fluminense",
+    country: "BRA",
+    tier: 2,
+    colors: ["#E30613", "#008000", "#FFFFFF"],
+    stadium: "Maracan\xE3",
+    capacity: 78838,
+    reputation: 16
+  },
+  {
+    name: "Botafogo",
+    country: "BRA",
+    tier: 2,
+    colors: ["#000000", "#FFFFFF"],
+    stadium: "Nilton Santos",
+    capacity: 46e3,
+    reputation: 15
+  },
+  {
+    name: "Atl\xE9tico Mineiro",
+    country: "BRA",
+    tier: 2,
+    colors: ["#000000", "#FFFFFF", "#E30613"],
+    stadium: "Arena MRV",
+    capacity: 47e3,
+    reputation: 15
+  },
+  // Urugwaj
+  {
+    name: "Pe\xF1arol",
+    country: "URU",
+    tier: 2,
+    colors: ["#000000", "#F5C518"],
+    stadium: "Estadio Campe\xF3n del Siglo",
+    capacity: 42e3,
+    reputation: 15
+  },
+  {
+    name: "Nacional",
+    country: "URU",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Estadio Gran Parque Central",
+    capacity: 34e3,
+    reputation: 14
+  },
+  // Kolumbia
+  {
+    name: "Atl\xE9tico Nacional",
+    country: "COL",
+    tier: 2,
+    colors: ["#008000", "#FFFFFF"],
+    stadium: "Atanasio Girardot",
+    capacity: 40500,
+    reputation: 13
+  },
+  {
+    name: "Millonarios",
+    country: "COL",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "El Camp\xEDn",
+    capacity: 36e3,
+    reputation: 13
+  },
+  // Ekwador
+  {
+    name: "LDU Quito",
+    country: "ECU",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF", "#E30613"],
+    stadium: "Rodrigo Paz Delgado",
+    capacity: 41083,
+    reputation: 13
+  },
+  {
+    name: "Barcelona SC",
+    country: "ECU",
+    tier: 2,
+    colors: ["#F5C518", "#003087"],
+    stadium: "Monumental Banco Pichincha",
+    capacity: 57e3,
+    reputation: 12
+  },
+  {
+    name: "Independiente del Valle",
+    country: "ECU",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Banco Guayaquil",
+    capacity: 12e3,
+    reputation: 13
+  },
+  // Pozostałe kraje
+  {
+    name: "Olimpia",
+    country: "PAR",
+    tier: 2,
+    colors: ["#000000", "#FFFFFF"],
+    stadium: "Defensores del Chaco",
+    capacity: 42e3,
+    reputation: 11
+  },
+  {
+    name: "Colo-Colo",
+    country: "CHI",
+    tier: 2,
+    colors: ["#000000", "#FFFFFF"],
+    stadium: "Monumental David Arellano",
+    capacity: 47347,
+    reputation: 12
+  },
+  {
+    name: "Universitario",
+    country: "PER",
+    tier: 4,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Estadio Monumental",
+    capacity: 80093,
+    reputation: 10
+  },
+  {
+    name: "Bol\xEDvar",
+    country: "BOL",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "Hernando Siles",
+    capacity: 41e3,
+    reputation: 8
+  }
+];
+var generateSAClubId = (name) => "SA_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+
+// resources/static_db/clubs/asian_teams.tsx
+var CLUBS_ASIAN = [
+  // === Arabia Saudyjska – absolutna czołówka (reputacja do 10) ===
+  { name: "Neom SC", country: "KSA", tier: 2, colors: ["#0022ff", "#FFFFFF", "#0022ff"], stadium: "Neom Stadium", capacity: 22e3, reputation: 10 },
+  {
+    name: "Al-Hilal",
+    country: "KSA",
+    tier: 2,
+    colors: ["#0033A0", "#FFFFFF"],
+    stadium: "Kingdom Arena",
+    capacity: 26e3,
+    reputation: 10
+  },
+  {
+    name: "Al-Nassr",
+    country: "KSA",
+    tier: 2,
+    colors: ["#1E3A8A", "#FACC15"],
+    stadium: "Al-Awwal Park",
+    capacity: 25e3,
+    reputation: 10
+  },
+  {
+    name: "Al-Ahli",
+    country: "KSA",
+    tier: 2,
+    colors: ["#1E3A8A", "#FFFFFF"],
+    stadium: "King Abdullah Sports City",
+    capacity: 62345,
+    reputation: 9
+  },
+  {
+    name: "Al-Ittihad",
+    country: "KSA",
+    tier: 2,
+    colors: ["#FFD700", "#000000"],
+    stadium: "King Abdullah Sports City",
+    capacity: 62345,
+    reputation: 9
+  },
+  // === ZEA ===
+  {
+    name: "Al Ain",
+    country: "UAE",
+    tier: 2,
+    colors: ["#003087", "#F4C300"],
+    stadium: "Hazza bin Zayed Stadium",
+    capacity: 25100,
+    reputation: 9
+  },
+  {
+    name: "Shabab Al Ahli",
+    country: "UAE",
+    tier: 2,
+    colors: ["#C8102E", "#FFFFFF"],
+    stadium: "Rashid Stadium",
+    capacity: 12e3,
+    reputation: 8
+  },
+  {
+    name: "Al-Wahda",
+    country: "UAE",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Al Nahyan Stadium",
+    capacity: 12e3,
+    reputation: 8
+  },
+  // === Katar ===
+  {
+    name: "Al Sadd",
+    country: "QAT",
+    tier: 2,
+    colors: ["#FFFFFF", "#000000"],
+    stadium: "Jassim Bin Hamad Stadium",
+    capacity: 15e3,
+    reputation: 9
+  },
+  {
+    name: "Al-Duhail",
+    country: "QAT",
+    tier: 2,
+    colors: ["#C8102E", "#FFFFFF"],
+    stadium: "Abdullah bin Khalifa Stadium",
+    capacity: 10221,
+    reputation: 8
+  },
+  // === Japonia ===
+  {
+    name: "Urawa Red Diamonds",
+    country: "JPN",
+    tier: 2,
+    colors: ["#E30613", "#000000"],
+    stadium: "Saitama Stadium 2002",
+    capacity: 63700,
+    reputation: 9
+  },
+  {
+    name: "Vissel Kobe",
+    country: "JPN",
+    tier: 2,
+    colors: ["#E30613", "#000000"],
+    stadium: "Noevir Stadium Kobe",
+    capacity: 30132,
+    reputation: 9
+  },
+  {
+    name: "Kashima Antlers",
+    country: "JPN",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Kashima Soccer Stadium",
+    capacity: 40728,
+    reputation: 9
+  },
+  {
+    name: "Yokohama F. Marinos",
+    country: "JPN",
+    tier: 2,
+    colors: ["#00AEEF", "#FFFFFF"],
+    stadium: "Nissan Stadium",
+    capacity: 72327,
+    reputation: 8
+  },
+  {
+    name: "Sanfrecce Hiroshima",
+    country: "JPN",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Edion Stadium Hiroshima",
+    capacity: 36e3,
+    reputation: 8
+  },
+  // === Korea Południowa ===
+  {
+    name: "Jeonbuk Hyundai Motors",
+    country: "KOR",
+    tier: 2,
+    colors: ["#00AEEF", "#FFFFFF"],
+    stadium: "Jeonju World Cup Stadium",
+    capacity: 42477,
+    reputation: 9
+  },
+  {
+    name: "Ulsan HD",
+    country: "KOR",
+    tier: 2,
+    colors: ["#E30613", "#000000"],
+    stadium: "Ulsan Munsu Football Stadium",
+    capacity: 44102,
+    reputation: 9
+  },
+  // === Iran ===
+  {
+    name: "Persepolis",
+    country: "IRN",
+    tier: 2,
+    colors: ["#C8102E", "#FFFFFF"],
+    stadium: "Azadi Stadium",
+    capacity: 78450,
+    reputation: 9
+  },
+  {
+    name: "Esteghlal",
+    country: "IRN",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "Azadi Stadium",
+    capacity: 78450,
+    reputation: 8
+  },
+  {
+    name: "Tractor",
+    country: "IRN",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Yadegar-e Emam Stadium",
+    capacity: 66e3,
+    reputation: 8
+  },
+  // === Chiny ===
+  {
+    name: "Shanghai Port",
+    country: "CHN",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Shanghai Stadium",
+    capacity: 72e3,
+    reputation: 8
+  },
+  {
+    name: "Shanghai Shenhua",
+    country: "CHN",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "Shanghai Stadium",
+    capacity: 72e3,
+    reputation: 8
+  },
+  // === Tajlandia ===
+  {
+    name: "Buriram United",
+    country: "THA",
+    tier: 3,
+    colors: ["#E30613", "#000000"],
+    stadium: "Chang Arena",
+    capacity: 32600,
+    reputation: 8
+  },
+  {
+    name: "Bangkok United",
+    country: "THA",
+    tier: 3,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Thammasat Stadium",
+    capacity: 25e3,
+    reputation: 7
+  },
+  // === Malezja ===
+  {
+    name: "Johor Darul Ta'zim",
+    country: "MAS",
+    tier: 3,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Sultan Ibrahim Stadium",
+    capacity: 4e4,
+    reputation: 8
+  },
+  // === Australia ===
+  {
+    name: "Melbourne City",
+    country: "AUS",
+    tier: 3,
+    colors: ["#00AEEF", "#FFFFFF"],
+    stadium: "AAMI Park",
+    capacity: 30050,
+    reputation: 7
+  }
+];
+var generateAsianClubId = (name) => "ASIA_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+
+// resources/static_db/clubs/african_teams.tsx
+var CLUBS_AFRICAN = [
+  // === Egipt – najsilniejsza reprezentacja ===
+  {
+    name: "Al Ahly",
+    country: "EGY",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Cairo International Stadium",
+    capacity: 75e3,
+    reputation: 10
+  },
+  {
+    name: "Pyramids FC",
+    country: "EGY",
+    tier: 2,
+    colors: ["#E30613", "#000000"],
+    stadium: "30 June Stadium",
+    capacity: 75e3,
+    reputation: 10
+  },
+  {
+    name: "Zamalek",
+    country: "EGY",
+    tier: 1,
+    colors: ["#FFFFFF", "#E30613"],
+    stadium: "Cairo International Stadium",
+    capacity: 75e3,
+    reputation: 9
+  },
+  // === Południowa Afryka ===
+  {
+    name: "Mamelodi Sundowns",
+    country: "RSA",
+    tier: 2,
+    colors: ["#003087", "#FFD700"],
+    stadium: "Loftus Versfeld Stadium",
+    capacity: 51900,
+    reputation: 10
+  },
+  {
+    name: "Orlando Pirates",
+    country: "RSA",
+    tier: 2,
+    colors: ["#000000", "#E30613"],
+    stadium: "Orlando Stadium",
+    capacity: 4e4,
+    reputation: 9
+  },
+  {
+    name: "Kaizer Chiefs",
+    country: "RSA",
+    tier: 2,
+    colors: ["#000000", "#FFD700"],
+    stadium: "FNB Stadium (Soccer City)",
+    capacity: 94736,
+    reputation: 9
+  },
+  // === Maroko ===
+  {
+    name: "Wydad AC",
+    country: "MAR",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Stade Mohammed V",
+    capacity: 68e3,
+    reputation: 9
+  },
+  {
+    name: "Raja Club Athletic",
+    country: "MAR",
+    tier: 2,
+    colors: ["#009900", "#FFFFFF"],
+    stadium: "Stade Mohammed V",
+    capacity: 68e3,
+    reputation: 9
+  },
+  {
+    name: "RS Berkane",
+    country: "MAR",
+    tier: 2,
+    colors: ["#E30613", "#FFD700"],
+    stadium: "Stade Municipal de Berkane",
+    capacity: 15e3,
+    reputation: 8
+  },
+  {
+    name: "AS FAR Rabat",
+    country: "MAR",
+    tier: 2,
+    colors: ["#003087", "#E30613"],
+    stadium: "Prince Moulay Abdellah Stadium",
+    capacity: 52e3,
+    reputation: 8
+  },
+  // === Tunezja ===
+  {
+    name: "Esp\xE9rance de Tunis",
+    country: "TUN",
+    tier: 2,
+    colors: ["#E30613", "#FFD700"],
+    stadium: "Stade Olympique de Rad\xE8s",
+    capacity: 65e3,
+    reputation: 9
+  },
+  {
+    name: "Club Africain",
+    country: "TUN",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Stade Olympique de Rad\xE8s",
+    capacity: 65e3,
+    reputation: 8
+  },
+  // === Algieria ===
+  {
+    name: "USM Alger",
+    country: "ALG",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Stade du 5 Juillet 1962",
+    capacity: 64e3,
+    reputation: 8
+  },
+  {
+    name: "CR Belouizdad",
+    country: "ALG",
+    tier: 2,
+    colors: ["#E30613", "#000000"],
+    stadium: "Stade du 20 Ao\xFBt 1955",
+    capacity: 2e4,
+    reputation: 8
+  },
+  {
+    name: "MC Alger",
+    country: "ALG",
+    tier: 2,
+    colors: ["#008000", "#FFFFFF"],
+    stadium: "Stade du 5 Juillet 1962",
+    capacity: 64e3,
+    reputation: 8
+  },
+  // === Inne mocne kluby z Afryki (regularnie w CAF) ===
+  {
+    name: "Simba SC",
+    country: "TZA",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Benjamin Mkapa Stadium",
+    capacity: 6e4,
+    reputation: 8
+  },
+  {
+    name: "Young Africans (Yanga)",
+    country: "TZA",
+    tier: 2,
+    colors: ["#00AEEF", "#FFD700"],
+    stadium: "Benjamin Mkapa Stadium",
+    capacity: 6e4,
+    reputation: 8
+  },
+  {
+    name: "TP Mazembe",
+    country: "COD",
+    tier: 2,
+    colors: ["#000000", "#FFFFFF"],
+    stadium: "Stade TP Mazembe",
+    capacity: 18e3,
+    reputation: 8
+  }
+];
+var generateAfricanClubId = (name) => "AFR_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+
+// resources/static_db/clubs/northAME_teams.tsx
+var CLUBS_NORTH_AMERICA = [
+  // === Meksyk - Liga MX (najsilniejsza liga w CONCACAF) ===
+  {
+    name: "Club Am\xE9rica",
+    country: "MEX",
+    tier: 2,
+    colors: ["#FFCC00", "#000000"],
+    stadium: "Estadio Azteca",
+    capacity: 87428,
+    reputation: 10
+  },
+  {
+    name: "Cruz Azul",
+    country: "MEX",
+    tier: 2,
+    colors: ["#004B9F", "#FFFFFF"],
+    stadium: "Estadio Azteca",
+    capacity: 87428,
+    reputation: 10
+  },
+  {
+    name: "Tigres UANL",
+    country: "MEX",
+    tier: 2,
+    colors: ["#E30613", "#FFD700"],
+    stadium: "Estadio Universitario",
+    capacity: 41890,
+    reputation: 10
+  },
+  {
+    name: "CF Monterrey",
+    country: "MEX",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "Estadio BBVA",
+    capacity: 53500,
+    reputation: 9
+  },
+  {
+    name: "Deportivo Toluca",
+    country: "MEX",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Estadio Nemesio D\xEDez",
+    capacity: 3e4,
+    reputation: 9
+  },
+  {
+    name: "Chivas Guadalajara",
+    country: "MEX",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "Estadio Akron",
+    capacity: 49850,
+    reputation: 9
+  },
+  {
+    name: "Pumas UNAM",
+    country: "MEX",
+    tier: 2,
+    colors: ["#003087", "#FFD700"],
+    stadium: "Estadio Ol\xEDmpico Universitario",
+    capacity: 72e3,
+    reputation: 9
+  },
+  {
+    name: "Pachuca",
+    country: "MEX",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "Estadio Hidalgo",
+    capacity: 3e4,
+    reputation: 8
+  },
+  // === USA - MLS (główna siła) ===
+  {
+    name: "Inter Miami CF",
+    country: "USA",
+    tier: 2,
+    colors: ["#FF6F00", "#000000"],
+    stadium: "Chase Stadium",
+    capacity: 21550,
+    reputation: 11
+  },
+  {
+    name: "LAFC",
+    country: "USA",
+    tier: 2,
+    colors: ["#000000", "#E30613"],
+    stadium: "BMO Stadium",
+    capacity: 22e3,
+    reputation: 9
+  },
+  {
+    name: "LA Galaxy",
+    country: "USA",
+    tier: 2,
+    colors: ["#003087", "#FFD700"],
+    stadium: "Dignity Health Sports Park",
+    capacity: 27e3,
+    reputation: 11
+  },
+  {
+    name: "Seattle Sounders FC",
+    country: "USA",
+    tier: 2,
+    colors: ["#00AEEF", "#003087"],
+    stadium: "Lumen Field",
+    capacity: 68740,
+    reputation: 8
+  },
+  {
+    name: "FC Cincinnati",
+    country: "USA",
+    tier: 2,
+    colors: ["#E30613", "#003087"],
+    stadium: "TQL Stadium",
+    capacity: 26e3,
+    reputation: 8
+  },
+  {
+    name: "Columbus Crew",
+    country: "USA",
+    tier: 2,
+    colors: ["#FFD700", "#000000"],
+    stadium: "Lower.com Field",
+    capacity: 20500,
+    reputation: 8
+  },
+  {
+    name: "Nashville SC",
+    country: "USA",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "GEODIS Park",
+    capacity: 3e4,
+    reputation: 8
+  },
+  {
+    name: "New York City FC",
+    country: "USA",
+    tier: 2,
+    colors: ["#00AEEF", "#FFFFFF"],
+    stadium: "Yankee Stadium",
+    capacity: 47300,
+    reputation: 7
+  },
+  {
+    name: "Philadelphia Union",
+    country: "USA",
+    tier: 3,
+    colors: ["#003087", "#E30613"],
+    stadium: "Subaru Park",
+    capacity: 18500,
+    reputation: 7
+  },
+  {
+    name: "Orlando City SC",
+    country: "USA",
+    tier: 3,
+    colors: ["#003087", "#E30613"],
+    stadium: "Inter&Co Stadium",
+    capacity: 25500,
+    reputation: 7
+  },
+  // === Kanada - MLS + CPL (tak, Kanada ma dobre drużyny!) ===
+  {
+    name: "Vancouver Whitecaps FC",
+    country: "CAN",
+    tier: 2,
+    colors: ["#003087", "#FFFFFF"],
+    stadium: "BC Place",
+    capacity: 22120,
+    reputation: 8
+  },
+  {
+    name: "Toronto FC",
+    country: "CAN",
+    tier: 2,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "BMO Field",
+    capacity: 28500,
+    reputation: 8
+  },
+  {
+    name: "CF Montr\xE9al",
+    country: "CAN",
+    tier: 3,
+    colors: ["#003087", "#E30613"],
+    stadium: "Stade Saputo",
+    capacity: 19619,
+    reputation: 7
+  },
+  // Canadian Premier League (CPL) - popularne i utytułowane drużyny
+  {
+    name: "Forge FC",
+    country: "CAN",
+    tier: 3,
+    colors: ["#E30613", "#000000"],
+    stadium: "Tim Hortons Field",
+    capacity: 23e3,
+    reputation: 7
+  },
+  {
+    name: "Cavalry FC",
+    country: "CAN",
+    tier: 3,
+    colors: ["#003087", "#FFD700"],
+    stadium: "ATCO Field",
+    capacity: 6e3,
+    reputation: 7
+  },
+  {
+    name: "Chicago Fire FC",
+    country: "USA",
+    tier: 3,
+    colors: ["#E30613", "#003087"],
+    stadium: "Soldier Field",
+    capacity: 61500,
+    reputation: 7
+  },
+  {
+    name: "Atl\xE9tico Ottawa",
+    country: "CAN",
+    tier: 3,
+    colors: ["#E30613", "#FFFFFF"],
+    stadium: "TD Place Stadium",
+    capacity: 24e3,
+    reputation: 6
+  }
+];
+var generateNorthAmericaClubId = (name) => "NA_" + name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+
+// services/ManagerNegotiationInfluenceService.ts
+var clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+var getExperience = (managerProfile) => {
+  if (!managerProfile || !Number.isFinite(managerProfile.experience)) return 50;
+  return clamp(managerProfile.experience, 1, 99);
+};
+var ManagerNegotiationInfluenceService = {
+  calculate(managerProfile) {
+    const experience = getExperience(managerProfile);
+    const normalized = clamp((experience - 50) / 49, -1, 1);
+    return {
+      experience,
+      normalized,
+      scoreAdjustment: Math.round(normalized * 8),
+      chanceAdjustment: normalized * 0.06,
+      expectationMultiplier: clamp(1 - normalized * 0.045, 0.955, 1.045),
+      realisticCeilingBonus: normalized * 3.5
+    };
+  }
+};
+
+// services/FinanceService.ts
+var MATCHDAY_ADDITIONAL_REVENUE_PARAMS = {
+  //                             tier: [  0,    1,    2,    3,    4 ]
+  cateringPerFan: [0, 4.5, 2, 0.8, 0.5],
+  merchandisingPerFan: [0, 2, 0.8, 0.22, 0.15],
+  programsPerFan: [0, 0.6, 0.3, 0.15, 0.07],
+  parkingPerFan: [0, 0.7, 0.4, 0.16, 0.1]
+};
+var VIP_BOX_REVENUE_PARAMS = {
+  base: 15e4,
+  repScale: 2e5,
+  // * (rep / 10)
+  capacityScale: 6e4,
+  // * (capacity / 40 000)
+  minRevenue: 24e4,
+  maxRevenue: 5e5
+};
+var MATCHDAY_COST_PARAMS = {
+  home: {
+    //                       tier: [  0,       1,       2,      3,     4  ]
+    baseCost: [0, 5e4, 15e3, 5e3, 1500],
+    perFanCost: [0, 9, 4.5, 2, 0.8],
+    // PLN za kibica
+    repScale: [0, 12e3, 4e3, 1200, 400],
+    // PLN * reputacja
+    minFloor: [0, 2e5, 4e4, 1e4, 3500],
+    // minim. koszt meczu u siebie
+    maxCap: [0, 7e5, 22e4, 7e4, 2e4]
+    // maks. koszt meczu u siebie
+  },
+  away: {
+    baseCost: [0, 35e3, 12e3, 5e3, 1500],
+    // koszty bazy wyjazdu
+    repScale: [0, 3500, 1500, 600, 150],
+    // wkład reputacji w koszty
+    maxCap: [0, 14e4, 55e3, 2e4, 7e3]
+    // maks. koszt wyjazdu
+  }
+};
+var EUR_TO_PLN_NBP_2026 = 4.271;
+var eurMillionsToPln = (amount) => Math.round(amount * EUR_TO_PLN_NBP_2026 * 1e6);
+var EUROPEAN_TIER_BASE_REVENUE_EUR_M = {
+  1: 190,
+  2: 90,
+  3: 50,
+  4: 8
+};
+var EUROPEAN_COUNTRY_FINANCE_FACTOR = {
+  ENG: 2.4,
+  ESP: 1.7,
+  GER: 1.8,
+  ITA: 1.45,
+  FRA: 1.15,
+  POR: 1,
+  NED: 0.95,
+  BEL: 0.75,
+  SCO: 0.7,
+  TUR: 0.8,
+  AUT: 0.55,
+  SUI: 0.6,
+  CZE: 0.45,
+  DEN: 0.45,
+  GRE: 0.45,
+  NOR: 0.35,
+  CRO: 0.3,
+  SRB: 0.3,
+  UKR: 0.3,
+  RUS: 0.45,
+  SWE: 0.3,
+  ISR: 0.28,
+  CYP: 0.25,
+  HUN: 0.2,
+  AZE: 0.2,
+  KAZ: 0.2,
+  SVK: 0.18,
+  SVN: 0.18,
+  BUL: 0.18,
+  BIH: 0.14,
+  MNE: 0.12,
+  MKD: 0.1,
+  ALB: 0.1,
+  ARM: 0.09,
+  GEO: 0.09,
+  BLR: 0.09,
+  KOS: 0.09,
+  MDA: 0.08,
+  FIN: 0.14,
+  LTU: 0.08,
+  LAT: 0.08,
+  EST: 0.08,
+  IRL: 0.1,
+  NIR: 0.08,
+  WAL: 0.06,
+  ISL: 0.08,
+  FRO: 0.06,
+  AND: 0.04,
+  GIB: 0.05,
+  LIE: 0.04,
+  SMR: 0.04,
+  MLT: 0.06,
+  LUX: 0.07
+};
+var EUROPEAN_CLUB_REVENUE_OVERRIDE_PLN = {
+  "Real Madryt": eurMillionsToPln(1161),
+  "FC Barcelona": eurMillionsToPln(893),
+  "Bayern Monachium": eurMillionsToPln(860.6),
+  "Paris Saint-Germain": eurMillionsToPln(837),
+  "Liverpool FC": eurMillionsToPln(836.1),
+  "Manchester City": eurMillionsToPln(829.3),
+  "Arsenal Londyn": eurMillionsToPln(821.7),
+  "Manchester United": eurMillionsToPln(793.1),
+  "Tottenham Hotspur": eurMillionsToPln(672.6),
+  "Chelsea Londyn": eurMillionsToPln(584.1),
+  "Borussia Dortmund": eurMillionsToPln(531.3),
+  "Inter Mediolan": eurMillionsToPln(537.5),
+  "Atl\xE9tico Madryt": eurMillionsToPln(454.5),
+  "Milan AC": eurMillionsToPln(410.4),
+  "Juventus Turyn": eurMillionsToPln(401.7),
+  "Newcastle United": eurMillionsToPln(398.4),
+  "Benfica Lizbona": eurMillionsToPln(283.4)
+};
+var EUROPEAN_COMMERCIAL_LEAGUES = /* @__PURE__ */ new Set(["L_CL", "L_EL", "L_CONF"]);
+var isEuropeanCommercialClub = (club) => EUROPEAN_COMMERCIAL_LEAGUES.has(club.leagueId);
+var clamp2 = (value, min, max) => Math.max(min, Math.min(max, value));
+var POLISH_MARKET_CAP_BY_TIER = {
+  1: 21e6,
+  2: 65e5,
+  3: 18e5,
+  4: 35e4,
+  5: 175e3
+};
+var getPolishAgeMarketCap = (player, tier) => {
+  const tierScale = {
+    1: 1,
+    2: 0.34,
+    3: 0.11,
+    4: 0.035,
+    5: 0.018
+  }[tier] ?? 0.018;
+  let ekstraklasaCap = 0;
+  switch (player.position) {
+    case "GK" /* GK */:
+      if (player.age <= 23) ekstraklasaCap = 8e6;
+      else if (player.age <= 29) ekstraklasaCap = 11e6;
+      else if (player.age <= 32) ekstraklasaCap = 65e5;
+      else if (player.age <= 34) ekstraklasaCap = 38e5;
+      else ekstraklasaCap = 22e5;
+      break;
+    case "DEF" /* DEF */:
+      if (player.age <= 21) ekstraklasaCap = 1e7;
+      else if (player.age <= 24) ekstraklasaCap = 13e6;
+      else if (player.age <= 29) ekstraklasaCap = 11e6;
+      else if (player.age <= 32) ekstraklasaCap = 65e5;
+      else if (player.age <= 34) ekstraklasaCap = 38e5;
+      else ekstraklasaCap = 22e5;
+      break;
+    default:
+      if (player.age <= 21) ekstraklasaCap = 16e6;
+      else if (player.age <= 24) ekstraklasaCap = 18e6;
+      else if (player.age <= 29) ekstraklasaCap = 14e6;
+      else if (player.age <= 32) ekstraklasaCap = 55e5;
+      else if (player.age <= 34) ekstraklasaCap = 28e5;
+      else ekstraklasaCap = 17e5;
+      break;
+  }
+  return ekstraklasaCap * tierScale;
+};
+var getRecentAverageRating = (player, sampleSize = 10) => {
+  const history = player.stats?.ratingHistory?.slice(-sampleSize) ?? [];
+  if (history.length === 0) return null;
+  return history.reduce((sum, rating) => sum + rating, 0) / history.length;
+};
+var getCareerMatches = (player) => {
+  const currentMatches = player.stats?.matchesPlayed || 0;
+  const historicalMatches = (player.history || []).reduce(
+    (sum, entry) => sum + (entry.statsSnapshot?.matchesPlayed || 0),
+    0
+  );
+  return currentMatches + historicalMatches;
+};
+var getPolishBaseMarketValue = (ovr) => {
+  if (ovr >= 82) return 125e5 + (ovr - 82) * 14e5;
+  if (ovr >= 78) return 88e5 + (ovr - 78) * 9e5;
+  if (ovr >= 74) return 58e5 + (ovr - 74) * 75e4;
+  if (ovr >= 70) return 34e5 + (ovr - 70) * 6e5;
+  if (ovr >= 65) return 17e5 + (ovr - 65) * 34e4;
+  if (ovr >= 60) return 65e4 + (ovr - 60) * 21e4;
+  return 1e5 + Math.max(0, ovr - 40) * 27500;
+};
+var getPolishAgeFactor = (player) => {
+  switch (player.position) {
+    case "DEF" /* DEF */:
+      if (player.age <= 20) return 0.94;
+      if (player.age <= 23) return 1;
+      if (player.age <= 27) return 1.08;
+      if (player.age <= 30) return 1.02;
+      if (player.age === 31) return 0.92;
+      if (player.age === 32) return 0.8;
+      if (player.age === 33) return 0.68;
+      if (player.age === 34) return 0.56;
+      if (player.age === 35) return 0.46;
+      if (player.age === 36) return 0.36;
+      return 0.28;
+    case "GK" /* GK */:
+      if (player.age <= 21) return 0.96;
+      if (player.age <= 25) return 1;
+      if (player.age <= 30) return 1.06;
+      if (player.age <= 32) return 1.02;
+      if (player.age === 33) return 0.94;
+      if (player.age === 34) return 0.84;
+      if (player.age === 35) return 0.74;
+      if (player.age === 36) return 0.62;
+      if (player.age === 37) return 0.5;
+      return 0.4;
+    default:
+      if (player.age <= 19) return 1.16;
+      if (player.age <= 21) return 1.12;
+      if (player.age <= 24) return 1.08;
+      if (player.age <= 28) return 1;
+      if (player.age === 29) return 0.94;
+      if (player.age === 30) return 0.86;
+      if (player.age === 31) return 0.74;
+      if (player.age === 32) return 0.6;
+      if (player.age === 33) return 0.48;
+      if (player.age === 34) return 0.36;
+      if (player.age === 35) return 0.27;
+      if (player.age === 36) return 0.2;
+      return 0.15;
+  }
+};
+var getPolishExperienceFactor = (player) => {
+  const careerMatches = getCareerMatches(player);
+  switch (player.position) {
+    case "DEF" /* DEF */:
+      return 0.94 + clamp2(careerMatches / 260, 0, 1) * 0.2;
+    case "GK" /* GK */:
+      return 0.92 + clamp2(careerMatches / 240, 0, 1) * 0.24;
+    default:
+      return 0.94 + clamp2(careerMatches / 260, 0, 1) * 0.08;
+  }
+};
+var getPolishVeteranUsageFactor = (player) => {
+  const minutesPlayed = Math.max(0, player.stats?.minutesPlayed || 0);
+  if (player.age <= 32) return 1;
+  switch (player.position) {
+    case "GK" /* GK */:
+    case "DEF" /* DEF */:
+      if (minutesPlayed >= 1800) return 1;
+      if (minutesPlayed >= 900) return 0.9;
+      if (minutesPlayed >= 450) return 0.78;
+      return 0.64;
+    default:
+      if (minutesPlayed >= 1800) return 1;
+      if (minutesPlayed >= 900) return 0.86;
+      if (minutesPlayed >= 450) return 0.72;
+      return 0.55;
+  }
+};
+var getPolishPerformanceFactor = (player) => {
+  const minutesPlayed = Math.max(0, player.stats?.minutesPlayed || 0);
+  const matchesPlayed = Math.max(0, player.stats?.matchesPlayed || 0);
+  const goals = Math.max(0, player.stats?.goals || 0);
+  const assists = Math.max(0, player.stats?.assists || 0);
+  const averageRating = getRecentAverageRating(player);
+  const fullMatches = Math.max(1, minutesPlayed / 90);
+  const sampleFactor = clamp2(minutesPlayed / 900, 0, 1);
+  const ratingDelta = averageRating === null ? 0 : averageRating - 6.7;
+  switch (player.position) {
+    case "FWD" /* FWD */: {
+      const goalsPer90 = goals / fullMatches;
+      const assistsPer90 = assists / fullMatches;
+      const goalsBoost = clamp2(goals / 20, 0, 1) * 0.2 + clamp2(goalsPer90 / 0.75, 0, 1) * 0.18;
+      const assistsBoost = clamp2(assists / 10, 0, 1) * 0.07 + clamp2(assistsPer90 / 0.35, 0, 1) * 0.05;
+      const ratingBoost = clamp2(ratingDelta * 0.1, -0.08, 0.1);
+      return 1 + clamp2(sampleFactor * (goalsBoost + assistsBoost + ratingBoost), -0.1, 0.52);
+    }
+    case "MID" /* MID */: {
+      const goalsPer90 = goals / fullMatches;
+      const assistsPer90 = assists / fullMatches;
+      const assistsBoost = clamp2(assists / 14, 0, 1) * 0.18 + clamp2(assistsPer90 / 0.45, 0, 1) * 0.15;
+      const goalsBoost = clamp2(goals / 12, 0, 1) * 0.08 + clamp2(goalsPer90 / 0.35, 0, 1) * 0.06;
+      const ratingBoost = clamp2(ratingDelta * 0.11, -0.08, 0.12);
+      return 1 + clamp2(sampleFactor * (assistsBoost + goalsBoost + ratingBoost), -0.1, 0.46);
+    }
+    case "DEF" /* DEF */: {
+      const matchFactor = clamp2(matchesPlayed / 30, 0, 1) * 0.1;
+      const experienceBoost = clamp2(getCareerMatches(player) / 260, 0, 1) * 0.12;
+      const ratingBoost = averageRating === null ? 0 : clamp2((averageRating - 6.6) * 0.18, -0.1, 0.22) * clamp2(matchesPlayed / 10, 0, 1);
+      return 1 + clamp2(matchFactor + experienceBoost + ratingBoost, -0.1, 0.42);
+    }
+    case "GK" /* GK */: {
+      const matchFactor = clamp2(matchesPlayed / 30, 0, 1) * 0.1;
+      const experienceBoost = clamp2(getCareerMatches(player) / 240, 0, 1) * 0.14;
+      const ratingBoost = averageRating === null ? 0 : clamp2((averageRating - 6.6) * 0.22, -0.1, 0.24) * clamp2(matchesPlayed / 8, 0, 1);
+      return 1 + clamp2(matchFactor + experienceBoost + ratingBoost, -0.12, 0.46);
+    }
+    default:
+      return 1;
+  }
+};
+var calculatePolishMarketValue = (player, reputation, tier) => {
+  const baseValue = getPolishBaseMarketValue(player.overallRating);
+  const tierMultiplier = {
+    1: 1,
+    2: 0.38,
+    3: 0.14,
+    4: 0.05,
+    5: 0.025
+  }[tier] ?? 0.05;
+  const reputationFactor = 0.88 + clamp2(reputation, 1, 10) * 0.025;
+  const ageFactor = getPolishAgeFactor(player);
+  const experienceFactor = getPolishExperienceFactor(player);
+  const performanceFactor = getPolishPerformanceFactor(player);
+  const veteranUsageFactor = getPolishVeteranUsageFactor(player);
+  const randomFactor = 0.985 + Math.random() * 0.03;
+  const tierCap = Math.min(
+    POLISH_MARKET_CAP_BY_TIER[tier] ?? 175e3,
+    getPolishAgeMarketCap(player, tier)
+  );
+  const rawValue = baseValue * tierMultiplier * reputationFactor * ageFactor * experienceFactor * performanceFactor * veteranUsageFactor * randomFactor;
+  const cappedValue = Math.min(rawValue, tierCap);
+  const step = cappedValue >= 1e7 ? 25e4 : cappedValue >= 1e6 ? 1e5 : cappedValue >= 1e5 ? 25e3 : 1e4;
+  return Math.round(cappedValue / step) * step;
+};
+var getEuropeanCommercialIndex = (club) => {
+  const countryFactorRaw = EUROPEAN_COUNTRY_FINANCE_FACTOR[club.country || ""] ?? 0.1;
+  const countryFactor = 0.4 + Math.sqrt(Math.max(0.01, countryFactorRaw));
+  const reputationFactor = 0.7 + Math.pow(Math.max(1, Math.min(20, club.reputation)) / 20, 1.2) * 0.9;
+  const stadiumFactor = 0.78 + Math.pow(Math.max(2e3, Math.min(1e5, club.stadiumCapacity)) / 1e5, 0.8) * 0.42;
+  const competitionFactor = club.leagueId === "L_CL" ? 1.12 : club.leagueId === "L_EL" ? 1 : 0.92;
+  return clamp2(countryFactor * reputationFactor * stadiumFactor * competitionFactor / 1.45, 0.45, 2.6);
+};
+var INTERNATIONAL_DEFAULT_TIER_CAPS = {
+  1: 9e7,
+  2: 22e6,
+  3: 6e6,
+  4: 15e5,
+  5: 5e5
+};
+var INTERNATIONAL_MARKET_PROFILE_BY_COUNTRY = {
+  ENG: {
+    marketFactor: 1.28,
+    tierCaps: { 1: 22e7, 2: 7e7, 3: 18e6, 4: 4e6, 5: 12e5 }
+  },
+  ESP: {
+    marketFactor: 1.18,
+    tierCaps: { 1: 2e8, 2: 45e6, 3: 12e6, 4: 3e6, 5: 1e6 }
+  },
+  GER: {
+    marketFactor: 1.08,
+    tierCaps: { 1: 15e7, 2: 4e7, 3: 1e7, 4: 25e5, 5: 8e5 }
+  },
+  ITA: {
+    marketFactor: 1,
+    tierCaps: { 1: 11e7, 2: 28e6, 3: 8e6, 4: 2e6, 5: 7e5 }
+  },
+  FRA: {
+    marketFactor: 0.97,
+    tierCaps: { 1: 12e7, 2: 24e6, 3: 7e6, 4: 18e5, 5: 6e5 }
+  },
+  POR: {
+    marketFactor: 0.78,
+    tierCaps: { 1: 6e7, 2: 15e6, 3: 4e6, 4: 1e6, 5: 35e4 }
+  },
+  DEN: {
+    marketFactor: 0.43,
+    tierCaps: { 1: 22e6, 2: 1e7, 3: 35e5, 4: 1e6, 5: 325e3 }
+  },
+  NOR: {
+    marketFactor: 0.3,
+    tierCaps: { 1: 11e6, 2: 6e6, 3: 22e5, 4: 65e4, 5: 225e3 }
+  },
+  SWE: {
+    marketFactor: 0.22,
+    tierCaps: { 1: 65e5, 2: 35e5, 3: 13e5, 4: 4e5, 5: 15e4 }
+  },
+  FIN: {
+    marketFactor: 0.07,
+    tierCaps: { 1: 12e5, 2: 7e5, 3: 3e5, 4: 1e5, 5: 4e4 }
+  },
+  ISL: {
+    marketFactor: 0.035,
+    tierCaps: { 1: 6e5, 2: 35e4, 3: 15e4, 4: 5e4, 5: 2e4 }
+  },
+  GRE: {
+    marketFactor: 0.52,
+    tierCaps: { 1: 25e6, 2: 12e6, 3: 4e6, 4: 11e5, 5: 35e4 }
+  },
+  CRO: {
+    marketFactor: 0.34,
+    tierCaps: { 1: 15e6, 2: 8e6, 3: 3e6, 4: 85e4, 5: 275e3 }
+  },
+  SRB: {
+    marketFactor: 0.32,
+    tierCaps: { 1: 12e6, 2: 7e6, 3: 28e5, 4: 8e5, 5: 25e4 }
+  },
+  ROU: {
+    marketFactor: 0.28,
+    tierCaps: { 1: 1e7, 2: 6e6, 3: 24e5, 4: 7e5, 5: 225e3 }
+  },
+  BUL: {
+    marketFactor: 0.22,
+    tierCaps: { 1: 55e5, 2: 35e5, 3: 15e5, 4: 45e4, 5: 15e4 }
+  },
+  SVN: {
+    marketFactor: 0.14,
+    tierCaps: { 1: 28e5, 2: 18e5, 3: 8e5, 4: 25e4, 5: 9e4 }
+  },
+  BIH: {
+    marketFactor: 0.11,
+    tierCaps: { 1: 22e5, 2: 14e5, 3: 65e4, 4: 2e5, 5: 7e4 }
+  },
+  MNE: {
+    marketFactor: 0.06,
+    tierCaps: { 1: 1e6, 2: 65e4, 3: 3e5, 4: 1e5, 5: 4e4 }
+  },
+  MKD: {
+    marketFactor: 0.07,
+    tierCaps: { 1: 12e5, 2: 75e4, 3: 35e4, 4: 12e4, 5: 45e3 }
+  },
+  ALB: {
+    marketFactor: 0.09,
+    tierCaps: { 1: 16e5, 2: 1e6, 3: 45e4, 4: 15e4, 5: 55e3 }
+  },
+  BRA: {
+    marketFactor: 0.72,
+    tierCaps: { 1: 42e6, 2: 18e6, 3: 6e6, 4: 15e5, 5: 5e5 }
+  },
+  ARG: {
+    marketFactor: 0.58,
+    tierCaps: { 1: 28e6, 2: 12e6, 3: 4e6, 4: 11e5, 5: 35e4 }
+  },
+  URU: {
+    marketFactor: 0.24,
+    tierCaps: { 1: 8e6, 2: 5e6, 3: 18e5, 4: 5e5, 5: 175e3 }
+  },
+  COL: {
+    marketFactor: 0.27,
+    tierCaps: { 1: 9e6, 2: 55e5, 3: 18e5, 4: 5e5, 5: 175e3 }
+  },
+  ECU: {
+    marketFactor: 0.3,
+    tierCaps: { 1: 11e6, 2: 6e6, 3: 2e6, 4: 6e5, 5: 2e5 }
+  },
+  PAR: {
+    marketFactor: 0.23,
+    tierCaps: { 1: 7e6, 2: 4e6, 3: 14e5, 4: 4e5, 5: 15e4 }
+  },
+  CHI: {
+    marketFactor: 0.26,
+    tierCaps: { 1: 75e5, 2: 4e6, 3: 14e5, 4: 4e5, 5: 15e4 }
+  },
+  PER: {
+    marketFactor: 0.18,
+    tierCaps: { 1: 45e5, 2: 25e5, 3: 9e5, 4: 25e4, 5: 1e5 }
+  },
+  BOL: {
+    marketFactor: 0.12,
+    tierCaps: { 1: 25e5, 2: 15e5, 3: 5e5, 4: 15e4, 5: 6e4 }
+  },
+  KSA: {
+    marketFactor: 1.2,
+    tierCaps: { 1: 9e7, 2: 4e7, 3: 12e6, 4: 3e6, 5: 9e5 }
+  },
+  UAE: {
+    marketFactor: 0.48,
+    tierCaps: { 1: 18e6, 2: 12e6, 3: 4e6, 4: 11e5, 5: 35e4 }
+  },
+  QAT: {
+    marketFactor: 0.64,
+    tierCaps: { 1: 22e6, 2: 16e6, 3: 5e6, 4: 15e5, 5: 5e5 }
+  },
+  JPN: {
+    marketFactor: 0.3,
+    tierCaps: { 1: 1e7, 2: 6e6, 3: 2e6, 4: 6e5, 5: 2e5 }
+  },
+  KOR: {
+    marketFactor: 0.22,
+    tierCaps: { 1: 7e6, 2: 45e5, 3: 15e5, 4: 45e4, 5: 15e4 }
+  },
+  IRN: {
+    marketFactor: 0.26,
+    tierCaps: { 1: 8e6, 2: 5e6, 3: 18e5, 4: 5e5, 5: 175e3 }
+  },
+  CHN: {
+    marketFactor: 0.28,
+    tierCaps: { 1: 9e6, 2: 6e6, 3: 2e6, 4: 6e5, 5: 2e5 }
+  },
+  THA: {
+    marketFactor: 0.17,
+    tierCaps: { 1: 5e6, 2: 3e6, 3: 18e5, 4: 5e5, 5: 15e4 }
+  },
+  MAS: {
+    marketFactor: 0.16,
+    tierCaps: { 1: 45e5, 2: 28e5, 3: 16e5, 4: 45e4, 5: 15e4 }
+  },
+  AUS: {
+    marketFactor: 0.2,
+    tierCaps: { 1: 6e6, 2: 35e5, 3: 2e6, 4: 6e5, 5: 2e5 }
+  },
+  EGY: {
+    marketFactor: 0.3,
+    tierCaps: { 1: 1e7, 2: 6e6, 3: 2e6, 4: 6e5, 5: 2e5 }
+  },
+  RSA: {
+    marketFactor: 0.21,
+    tierCaps: { 1: 7e6, 2: 4e6, 3: 15e5, 4: 45e4, 5: 15e4 }
+  },
+  MAR: {
+    marketFactor: 0.24,
+    tierCaps: { 1: 8e6, 2: 5e6, 3: 18e5, 4: 5e5, 5: 175e3 }
+  },
+  TUN: {
+    marketFactor: 0.15,
+    tierCaps: { 1: 45e5, 2: 3e6, 3: 11e5, 4: 35e4, 5: 12e4 }
+  },
+  ALG: {
+    marketFactor: 0.14,
+    tierCaps: { 1: 4e6, 2: 28e5, 3: 1e6, 4: 3e5, 5: 1e5 }
+  },
+  TZA: {
+    marketFactor: 0.1,
+    tierCaps: { 1: 25e5, 2: 18e5, 3: 7e5, 4: 22e4, 5: 8e4 }
+  },
+  COD: {
+    marketFactor: 0.09,
+    tierCaps: { 1: 22e5, 2: 16e5, 3: 6e5, 4: 2e5, 5: 7e4 }
+  }
+};
+var normalizeMarketCountry = (country) => {
+  if (!country) return null;
+  const normalized = country.trim().toUpperCase();
+  return normalized.length >= 3 ? normalized.slice(0, 3) : normalized;
+};
+var getInternationalMarketProfile = (country) => {
+  const normalizedCountry = normalizeMarketCountry(country);
+  if (normalizedCountry && INTERNATIONAL_MARKET_PROFILE_BY_COUNTRY[normalizedCountry]) {
+    return INTERNATIONAL_MARKET_PROFILE_BY_COUNTRY[normalizedCountry];
+  }
+  const financeFactor = EUROPEAN_COUNTRY_FINANCE_FACTOR[normalizedCountry || ""] ?? 0.25;
+  const marketFactor = clamp2(0.5 + Math.sqrt(financeFactor / 1.45) * 0.55, 0.45, 1.1);
+  const capScale = clamp2(marketFactor / 0.9, 0.55, 1.22);
+  return {
+    marketFactor,
+    tierCaps: Object.fromEntries(
+      Object.entries(INTERNATIONAL_DEFAULT_TIER_CAPS).map(([tierKey, value]) => [
+        Number(tierKey),
+        Math.round(value * capScale)
+      ])
+    )
+  };
+};
+var getInternationalBaseMarketValue = (ovr) => {
+  if (ovr >= 92) return 155e6 + (ovr - 92) * 15e6;
+  if (ovr >= 89) return 105e6 + (ovr - 89) * 16e6;
+  if (ovr >= 86) return 68e6 + (ovr - 86) * 12e6;
+  if (ovr >= 83) return 4e7 + (ovr - 83) * 9e6;
+  if (ovr >= 80) return 24e6 + (ovr - 80) * 5e6;
+  if (ovr >= 76) return 11e6 + (ovr - 76) * 3e6;
+  if (ovr >= 72) return 5e6 + (ovr - 72) * 15e5;
+  if (ovr >= 68) return 18e5 + (ovr - 68) * 8e5;
+  if (ovr >= 60) return 35e4 + (ovr - 60) * 18e4;
+  return 5e4 + Math.max(0, ovr - 40) * 15e3;
+};
+var getInternationalAgeFactor = (player) => {
+  switch (player.position) {
+    case "DEF" /* DEF */:
+      if (player.age <= 20) return 1.08;
+      if (player.age <= 24) return 1.04;
+      if (player.age <= 29) return 1;
+      if (player.age <= 31) return 0.94;
+      if (player.age <= 33) return 0.82;
+      if (player.age <= 35) return 0.68;
+      if (player.age <= 37) return 0.52;
+      return 0.4;
+    case "GK" /* GK */:
+      if (player.age <= 21) return 1.02;
+      if (player.age <= 25) return 1;
+      if (player.age <= 31) return 1.05;
+      if (player.age <= 34) return 0.96;
+      if (player.age <= 36) return 0.82;
+      if (player.age <= 38) return 0.66;
+      return 0.52;
+    default:
+      if (player.age <= 20) return 1.18;
+      if (player.age <= 23) return 1.1;
+      if (player.age <= 27) return 1;
+      if (player.age <= 29) return 0.94;
+      if (player.age <= 31) return 0.82;
+      if (player.age <= 33) return 0.68;
+      if (player.age <= 35) return 0.54;
+      if (player.age <= 37) return 0.4;
+      return 0.28;
+  }
+};
+var calculateInternationalMarketValue = (player, reputation, tier, country) => {
+  const baseValue = getInternationalBaseMarketValue(player.overallRating);
+  const tierMultiplier = {
+    1: 1,
+    2: 0.36,
+    3: 0.16,
+    4: 0.06,
+    5: 0.03
+  }[tier] ?? 0.08;
+  const reputationFactor = 0.9 + clamp2(reputation, 1, 20) * 0.015;
+  const ageFactor = getInternationalAgeFactor(player);
+  const marketProfile = getInternationalMarketProfile(country);
+  const randomFactor = 0.97 + Math.random() * 0.06;
+  const tierCap = marketProfile.tierCaps[tier] ?? INTERNATIONAL_DEFAULT_TIER_CAPS[5];
+  const rawValue = baseValue * tierMultiplier * marketProfile.marketFactor * reputationFactor * ageFactor * randomFactor;
+  const cappedValue = Math.min(rawValue, tierCap);
+  const step = cappedValue >= 1e8 ? 1e6 : cappedValue >= 25e6 ? 5e5 : cappedValue >= 1e7 ? 25e4 : cappedValue >= 1e6 ? 1e5 : cappedValue >= 1e5 ? 25e3 : 1e4;
+  return Math.round(cappedValue / step) * step;
+};
+var FinanceService = {
+  /**
+   * Oblicza budżet początkowy na podstawie poziomu ligi i reputacji (1-10)
+   */
+  calculateInitialBudget: (tier, reputation) => {
+    let min = 0;
+    let max = 0;
+    switch (tier) {
+      case 1:
+        min = 5e7;
+        max = 217e6;
+        break;
+      case 2:
+        min = 128e5;
+        max = 448e5;
+        break;
+      case 3:
+        min = 28e5;
+        max = 128e5;
+        break;
+      case 4:
+        min = 8e5;
+        max = 1e7;
+        break;
+      default:
+        min = 1e6;
+        max = 5e6;
+    }
+    const reputationFactor = (Math.min(10, Math.max(1, reputation)) - 1) / 9;
+    const baseBudget = min + (max - min) * reputationFactor;
+    const variability = 0.95 + Math.random() * 0.1;
+    return Math.floor(baseBudget * variability);
+  },
+  calculateTransferBudgetCap: (budget, reputation, wageBill = 0) => {
+    if (!Number.isFinite(budget) || budget <= 0) return 0;
+    const rep = Math.max(1, Math.min(20, reputation || 1));
+    const wagePressure = wageBill > 0 ? wageBill / Math.max(1, budget) : 0;
+    let ratio = 0.34 + Math.min(0.14, rep * 7e-3);
+    if (wagePressure >= 0.85) ratio -= 0.14;
+    else if (wagePressure >= 0.65) ratio -= 0.09;
+    else if (wagePressure >= 0.45) ratio -= 0.04;
+    const cappedRatio = Math.max(0.18, Math.min(0.52, ratio));
+    return Math.floor(budget * cappedRatio);
+  },
+  calculateInitialTransferBudget: (budget, reputation) => {
+    const cap = FinanceService.calculateTransferBudgetCap(budget, reputation);
+    const rep = Math.max(1, Math.min(20, reputation || 1));
+    const allocationRatio = 0.52 + Math.min(0.28, rep * 0.018) + Math.random() * 0.14;
+    return Math.floor(cap * Math.min(0.95, allocationRatio));
+  },
+  calculateInitialReserveBudget: (budget, reputation) => {
+    if (!Number.isFinite(budget) || budget <= 0) return 0;
+    const rep = Math.max(1, Math.min(20, reputation || 1));
+    const reserveRatio = 0.045 + Math.min(0.08, rep * 4e-3);
+    return Math.floor(budget * reserveRatio);
+  },
+  normalizeTransferBudget: (budget, transferBudget, reputation, wageBill = 0) => {
+    const cap = FinanceService.calculateTransferBudgetCap(budget, reputation, wageBill);
+    return Math.max(0, Math.min(Math.floor(transferBudget || 0), cap));
+  },
+  getClubTier: (club) => {
+    if (!club) return 4;
+    if (typeof club.tier === "number" && Number.isFinite(club.tier)) {
+      return club.tier;
+    }
+    const parsedTier = parseInt((club.leagueId || "").split("_")[2] || "4", 10);
+    return Number.isFinite(parsedTier) ? parsedTier : 4;
+  },
+  calculateEuropeanInitialBudget: (tier, reputation, country, clubName, stadiumCapacity = 15e3) => {
+    if (clubName && EUROPEAN_CLUB_REVENUE_OVERRIDE_PLN[clubName]) {
+      return EUROPEAN_CLUB_REVENUE_OVERRIDE_PLN[clubName];
+    }
+    const baseRevenueEurM = EUROPEAN_TIER_BASE_REVENUE_EUR_M[tier] ?? EUROPEAN_TIER_BASE_REVENUE_EUR_M[4];
+    const countryFactor = EUROPEAN_COUNTRY_FINANCE_FACTOR[country] ?? 0.1;
+    const cappedReputation = Math.max(1, Math.min(20, reputation));
+    const cappedCapacity = Math.max(2e3, Math.min(1e5, stadiumCapacity));
+    const reputationFactor = 0.62 + Math.pow(cappedReputation / 20, 1.35) * 0.98;
+    const stadiumFactor = 0.85 + (cappedCapacity - 2e3) / 98e3 * 0.3;
+    const continentalPremium = tier === 1 ? 1.08 : tier === 2 ? 1 : tier === 3 ? 0.96 : 0.92;
+    const variability = 0.97 + Math.random() * 0.06;
+    const estimatedRevenueEurM = baseRevenueEurM * countryFactor * reputationFactor * stadiumFactor * continentalPremium * variability;
+    return eurMillionsToPln(estimatedRevenueEurM);
+  },
+  getWagePool: (totalBudget) => {
+    return totalBudget * 0.45;
+  },
+  calculatePolishLeagueSalaryCeiling: (tier, reputation) => {
+    if (tier !== 2) return null;
+    const reputationFactor = clamp2((Math.max(1, Math.min(10, reputation)) - 4) / 6, 0, 1);
+    const ceiling = 12e4 + 24e4 * reputationFactor;
+    return Math.round(ceiling / 1e4) * 1e4;
+  },
+  normalizePolishLeagueAnnualSalary: (rawSalary, tier, reputation) => {
+    const salary = Math.max(0, Math.floor(rawSalary));
+    const ceiling = FinanceService.calculatePolishLeagueSalaryCeiling(tier, reputation);
+    return ceiling ? Math.min(salary, ceiling) : salary;
+  },
+  calculateTotalSalaries: (squad) => {
+    return squad.reduce((sum, p) => sum + (p.annualSalary || 0), 0);
+  },
+  calculateAvailableFunds: (totalBudget, squad) => {
+    const expenses = FinanceService.calculateTotalSalaries(squad);
+    return totalBudget - expenses;
+  },
+  calculateSalaryWeight: (ovr, age) => {
+    const baseWeight = Math.pow(Math.max(1, ovr - 35), 1.5);
+    const ageMod = age < 20 ? 0.8 : 1;
+    return baseWeight * ageMod;
+  },
+  calculateNewgenSalary: (clubBudget, overall, age) => {
+    const wagePool = FinanceService.getWagePool(clubBudget);
+    const avgSquadSalary = wagePool / 31;
+    const youthDiscount = age <= 17 ? 0.38 : age <= 19 ? 0.46 : age <= 21 ? 0.58 : 0.72;
+    const overallModifier = Math.min(1.2, Math.max(0.55, 0.55 + (overall - 45) * 0.03));
+    let salary = avgSquadSalary * youthDiscount * overallModifier;
+    if (overall >= 70) {
+      const starBonus = 1.12 + Math.min(0.18, (overall - 70) * 0.02);
+      salary *= starBonus;
+    }
+    const fairMarketSalary = FinanceService.getFairMarketSalary(overall);
+    const fairMarketCapMultiplier = overall >= 70 ? 0.55 : 0.4;
+    const cappedSalary = Math.min(salary, fairMarketSalary * fairMarketCapMultiplier);
+    const salaryStep = cappedSalary >= 1e6 ? 1e5 : cappedSalary >= 1e5 ? 1e4 : 5e3;
+    return Math.max(15e3, Math.round(cappedSalary / salaryStep) * salaryStep);
+  },
+  // Koszty organizacji meczu — progresywna formuła wg. ligi, reputacji i frekwencji
+  // attendance (opcjonalne) — liczba kibiców na trybunach (dla meczów u siebie)
+  calculateMatchdayExpenses: (club, isHome, attendance) => {
+    const cfoFactor = 1.15 - (club.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20 * 0.3;
+    if (isEuropeanCommercialClub(club)) {
+      const marketIndex = getEuropeanCommercialIndex(club);
+      if (isHome) {
+        const att = attendance ?? 0;
+        const fillRate = club.stadiumCapacity > 0 ? att / club.stadiumCapacity : 0;
+        const fillMultiplier = fillRate >= 0.95 ? 1.3 : fillRate >= 0.85 ? 1.18 : fillRate >= 0.7 ? 1.08 : 1;
+        const rawCost2 = (18e4 + club.stadiumCapacity * (5.5 + marketIndex * 1.8) + att * (7 + marketIndex * 2.4) + club.reputation * (16e3 + marketIndex * 8e3)) * fillMultiplier * cfoFactor;
+        const minFloor = 18e4 + club.stadiumCapacity * (2 + marketIndex * 0.8);
+        const maxCap = 35e4 + club.stadiumCapacity * (14 + marketIndex * 4);
+        return Math.round(clamp2(rawCost2, minFloor, maxCap));
+      }
+      const awayRaw = (12e4 + club.stadiumCapacity * (1 + marketIndex * 0.35) + club.reputation * (7e3 + marketIndex * 3e3)) * cfoFactor;
+      const awayCap = 22e4 + club.stadiumCapacity * (3.5 + marketIndex);
+      return Math.round(Math.min(awayRaw, awayCap));
+    }
+    const tier = Math.min(4, Math.max(1, parseInt(club.leagueId.split("_")[2] || "4")));
+    const p = MATCHDAY_COST_PARAMS;
+    if (isHome) {
+      const att = attendance ?? 0;
+      const fillRate = club.stadiumCapacity > 0 ? att / club.stadiumCapacity : 0;
+      const fillMultiplier = fillRate >= 0.95 ? 1.5 : fillRate >= 0.85 ? 1.3 : fillRate >= 0.7 ? 1.1 : 1;
+      const rawCost2 = (p.home.baseCost[tier] + att * p.home.perFanCost[tier] + club.reputation * p.home.repScale[tier]) * fillMultiplier * cfoFactor;
+      return Math.min(
+        p.home.maxCap[tier],
+        Math.max(p.home.minFloor[tier], Math.floor(rawCost2))
+      );
+    }
+    const rawCost = (p.away.baseCost[tier] + club.reputation * p.away.repScale[tier]) * cfoFactor;
+    return Math.min(p.away.maxCap[tier], Math.floor(rawCost));
+  },
+  calculateManagementMonthlySalary: (club) => {
+    if (!club.management) return 0;
+    const { owner, ceo, cfo, coo, marketingDirector, academyDirector } = club.management;
+    return owner.monthlySalary + (ceo?.monthlySalary ?? 0) + cfo.monthlySalary + coo.monthlySalary + marketingDirector.monthlySalary + (academyDirector?.monthlySalary ?? 0);
+  },
+  calculateMonthlyOperationalCosts: (club) => {
+    const KOMPETENCJA_MULTIPLIER = {
+      bardzo_niska: 1.35,
+      niska: 1.2,
+      przecietna: 1.05,
+      wysoka: 0.95,
+      bardzo_wysoka: 0.85
+    };
+    const kompetencja = club.board?.kompetencja ?? "przecietna";
+    const kompetencjaFactor = KOMPETENCJA_MULTIPLIER[kompetencja] ?? 1.05;
+    const cfoFactor = 1.15 - (club.management?.cfo?.dyscyplinaFinansowa ?? 10) / 20 * 0.3;
+    if (isEuropeanCommercialClub(club)) {
+      const tier2 = Math.min(4, Math.max(1, club.tier ?? 1));
+      const monthlyFactor = { 1: 0.015, 2: 0.012, 3: 0.01, 4: 8e-3 }[tier2] ?? 0.01;
+      const rawCost2 = club.budget * monthlyFactor * kompetencjaFactor * cfoFactor;
+      return Math.round(clamp2(rawCost2, 5e4, 8e7) / 1e3) * 1e3;
+    }
+    const tier = Math.min(4, Math.max(1, parseInt(club.leagueId.split("_")[2] || "4")));
+    const cappedCapacity = Math.max(500, Math.min(8e4, club.stadiumCapacity));
+    const cappedRep = Math.max(1, Math.min(10, club.reputation));
+    const costPerSeat = { 1: 18, 2: 9, 3: 4.5, 4: 2 }[tier] ?? 2;
+    const opsBase = { 1: 35e4, 2: 65e3, 3: 16e3, 4: 5e3 }[tier] ?? 5e3;
+    const opsPerRep = { 1: 65e3, 2: 16e3, 3: 4500, 4: 1500 }[tier] ?? 1500;
+    const tierMin = { 1: 35e4, 2: 7e4, 3: 18e3, 4: 5e3 }[tier] ?? 5e3;
+    const tierMax = { 1: 3e6, 2: 9e5, 3: 18e4, 4: 55e3 }[tier] ?? 55e3;
+    const stadiumCost = cappedCapacity * costPerSeat;
+    const opsCost = opsBase + cappedRep * opsPerRep;
+    const rawCost = (stadiumCost + opsCost) * 1.3 * kompetencjaFactor * cfoFactor;
+    return Math.round(clamp2(rawCost, tierMin, tierMax) / 1e3) * 1e3;
+  },
+  calculateSeasonalIncome: (tier, reputation, rank, sponsorshipMult = 1) => {
+    const cappedReputation = Math.max(1, Math.min(10, reputation));
+    if (tier === 3) {
+      const tvRights2 = 2e6;
+      const sponsorship2 = cappedReputation * 5e5 * sponsorshipMult;
+      const prizeMoney2 = Math.max(0, (19 - rank) * 15e4);
+      return Math.floor(tvRights2 + sponsorship2 + prizeMoney2);
+    }
+    if (tier === 4) {
+      const tvRights2 = 75e4;
+      const sponsorship2 = cappedReputation * 15e4 * sponsorshipMult;
+      const prizeMoney2 = Math.max(0, (20 - rank) * 4e4);
+      return Math.floor(tvRights2 + sponsorship2 + prizeMoney2);
+    }
+    const tvRights = [0, 35e6, 15e6, 6e6, 2e6][tier] || 1e6;
+    const sponsorship = cappedReputation * 4e6 * sponsorshipMult;
+    const prizeMoney = Math.max(0, (19 - rank) * 15e5);
+    return Math.floor(tvRights + sponsorship + prizeMoney);
+  },
+  calculateMarketValue: (player, reputation, tier, clubCountry) => {
+    const playerClubId = player.clubId ?? "";
+    if (playerClubId === "FREE_AGENTS") return 0;
+    const ovr = player.overallRating;
+    const normalizedCountry = normalizeMarketCountry(clubCountry);
+    const isPolishClub = playerClubId.startsWith("PL_") || normalizedCountry === "POL";
+    if (isPolishClub) {
+      return calculatePolishMarketValue(player, reputation, tier);
+    }
+    return calculateInternationalMarketValue(player, reputation, tier, normalizedCountry);
+  },
+  /**
+   * Board Intervention Engine (BIE)
+   * Oblicza WOZ (Wskaźnik Oporu Zarządu)
+   */
+  evaluateReleaseRequest: (player, club, squad) => {
+    const penalty = Math.floor(player.annualSalary * 0.4);
+    const budget = club.budget;
+    const financialPain = penalty / budget * 100;
+    let financialScore = financialPain * 4;
+    if (financialPain > 20) financialScore += 50;
+    const avgOvr = squad.reduce((acc, p) => acc + p.overallRating, 0) / squad.length;
+    const starGap = player.overallRating - avgOvr;
+    let sportScore = 0;
+    if (starGap > 10) sportScore = 95;
+    else if (starGap > 5) sportScore = 50;
+    else if (starGap < -5) sportScore = -20;
+    const strictnessScore = (club.boardStrictness - 5) * 10;
+    const chaosScore = Math.random() * 20 - 10;
+    let woz = Math.max(0, Math.min(100, financialScore * 0.45 + sportScore * 0.4 + strictnessScore * 0.1 + chaosScore));
+    const top11Ids = [...squad].sort((a, b) => b.overallRating - a.overallRating).slice(0, 11).map((p) => p.id);
+    const isPillar = top11Ids.includes(player.id);
+    if (isPillar && Math.random() > 0.05) {
+      woz = Math.max(woz, 90);
+    }
+    if (player.isUntouchable && Math.random() > 0.01) {
+      woz = 100;
+    }
+    if (woz < 30) return { status: "APPROVED", woz, reason: "Zarz\u0105d akceptuje Pana decyzj\u0119. Koszty s\u0105 akceptowalne, a zawodnik nie jest kluczowy dla wizerunku klubu." };
+    if (woz < 60) return { status: "WARNING", woz, reason: "Zarz\u0105d ma pewne w\u0105tpliwo\u015Bci co do op\u0142acalno\u015Bci tego ruchu. Ostatecznie ufa Pana os\u0105dowi, ale oczekuje wynik\xF3w." };
+    if (woz < 85) return { status: "SOFT_BLOCK", woz, reason: "Wniosek odrzucony. Obecnie nie mo\u017Cemy sobie pozwoli\u0107 na tak\u0105 strat\u0119 finansow\u0105. Prosz\u0119 spr\xF3bowa\u0107 za 3 miesi\u0105ce." };
+    return { status: "VETO", woz, reason: "ABSOLUTNE VETO! Ten zawodnik jest ikon\u0105 klubu, a koszty jego zwolnienia zrujnowa\u0142yby nasz bud\u017Cet transferowy!" };
+  },
+  /**
+   * Oblicza ile klub ma w puli na bonusy za podpis (5-10% budżetu)
+   */
+  calculateInitialSigningPool: (budget, reputation) => {
+    const repFactor = reputation / 10 * 0.05;
+    const finalPercent = 0.05 + repFactor;
+    return Math.floor(budget * finalPercent);
+  },
+  /**
+   * Oblicza ile zawodnik żąda za sam podpis (25-100% pensji)
+   */
+  calculatePlayerBonusDemand: (player, proposedSalary, clubReputation) => {
+    const salaryBase = player.annualSalary > 0 ? player.annualSalary : proposedSalary;
+    const ovr = player.overallRating;
+    let baseMultiplier;
+    if (ovr >= 90) baseMultiplier = 2.1;
+    else if (ovr >= 85) baseMultiplier = 1.7;
+    else if (ovr >= 80) baseMultiplier = 1.4;
+    else if (ovr >= 75) baseMultiplier = 1.15;
+    else if (ovr >= 70) baseMultiplier = 0.95;
+    else if (ovr >= 65) baseMultiplier = 0.8;
+    else baseMultiplier = 0.6;
+    const age = player.age;
+    let ageModifier;
+    if (age >= 34) ageModifier = 1.35;
+    else if (age >= 30) ageModifier = 1.15;
+    else if (age <= 22) ageModifier = 0.75;
+    else ageModifier = 1;
+    const personality = player.moralePersonality;
+    let personalityModifier = 1;
+    if (personality === "EGOIST") personalityModifier = 1.35;
+    else if (personality === "AMBITIOUS") personalityModifier = 1.2;
+    else if (personality === "CONFIDENT") personalityModifier = 1.1;
+    else if (personality === "LOYAL") personalityModifier = 0.7;
+    else if (personality === "PROFESSIONAL") personalityModifier = 0.85;
+    else if (personality === "CALM") personalityModifier = 0.9;
+    const repModifier = clubReputation > 8 ? 1.15 : clubReputation < 5 ? 0.9 : 1;
+    const variation = 0.85 + Math.random() * 0.3;
+    const demand = salaryBase * baseMultiplier * ageModifier * personalityModifier * repModifier * variation;
+    const step = demand >= 5e5 ? 25e3 : demand >= 1e5 ? 1e4 : demand >= 2e4 ? 5e3 : 1e3;
+    return Math.round(demand / step) * step;
+  },
+  /**
+   * Sprawdza czy oferta nie jest "manipulacją" (poniżej 40% żądań)
+   */
+  isOfferInsulting: (proposedBonus, demand) => {
+    return proposedBonus < demand * 0.4;
+  },
+  /**
+   * Główny silnik prawdopodobieństwa akceptacji (FM HARDCORE MODE)
+   */
+  evaluateContractLogic: (player, newSalary, newBonus, newEndDate, currentDate, clubReputation, clubTier, managerProfile) => {
+    const now = currentDate.getTime();
+    const currentEnd = new Date(player.contractEndDate).getTime();
+    const newEnd = new Date(newEndDate).getTime();
+    const rawExpectedSalary = player.annualSalary > 0 ? player.annualSalary : FinanceService.getFairMarketSalary(player.overallRating);
+    const salaryCeiling = clubTier ? FinanceService.calculatePolishLeagueSalaryCeiling(clubTier, clubReputation) : null;
+    const managerInfluence = ManagerNegotiationInfluenceService.calculate(managerProfile);
+    const managerExpectationMultiplier = managerProfile ? managerInfluence.expectationMultiplier : 1;
+    const expectedSalaryBase = salaryCeiling ? Math.min(rawExpectedSalary, salaryCeiling) : rawExpectedSalary;
+    const expectedSalary = Math.max(5e4, Math.round(expectedSalaryBase * managerExpectationMultiplier / 5e3) * 5e3);
+    const expectedBonus = Math.max(0, Math.round(FinanceService.calculatePlayerBonusDemand(player, expectedSalary, clubReputation) * managerExpectationMultiplier / 5e3) * 5e3);
+    const isSalaryWithin15Percent = newSalary >= expectedSalary * 0.85;
+    const isBonusWithin15Percent = newBonus >= expectedBonus * 0.85;
+    if (isSalaryWithin15Percent && isBonusWithin15Percent && Math.random() < 0.1) {
+      return {
+        accepted: true,
+        reason: "M\xF3j klient liczy\u0142 na nieco lepsze warunki, ale po namy\u015Ble uznali\u015Bmy, \u017Ce ten zesp\xF3\u0142 jest wart pewnych ust\u0119pstw finansowych. Podpisujemy!",
+        demands: null
+      };
+    }
+    const salaryScore = newSalary / expectedSalary;
+    const bonusScore = expectedBonus > 0 ? newBonus / expectedBonus : 1.1;
+    const salarySurplus = Math.max(0, salaryScore - 1);
+    const effectiveBonusScore = bonusScore + salarySurplus * 2.5;
+    const bonusSurplus = Math.max(0, bonusScore - 1);
+    const effectiveSalaryScore = salaryScore + bonusSurplus * 0.12;
+    if (effectiveSalaryScore < 0.65) {
+      return {
+        accepted: false,
+        reason: "Nie traktujecie mnie powaznie wiec nie b\u0119dziemy o niczym rozmawiac. Do widzenia!",
+        demands: null
+      };
+    }
+    if (newBonus < expectedBonus * 0.2 && effectiveSalaryScore < 1.15) {
+      return {
+        accepted: false,
+        reason: "M\xF3j agent uwa\u017Ca, \u017Ce kwota za sam podpis jest zdecydowanie za niska. Prosz\u0119 o przedstawienie nowej oferty uwzgl\u0119dniaj\u0105cej godny bonus.",
+        demands: { salary: Math.ceil(expectedSalary * 1.05), bonus: expectedBonus }
+      };
+    }
+    let wSal = 0.6, wBon = 0.3, wLen = 0.1;
+    if (player.age >= 32) {
+      wSal = 0.4;
+      wBon = 0.5;
+      wLen = 0.1;
+    } else if (player.age <= 23) {
+      wSal = 0.7;
+      wBon = 0.1;
+      wLen = 0.2;
+    }
+    const proposedYears = (newEnd - now) / (365 * 24 * 60 * 60 * 1e3);
+    const remainingYears = (currentEnd - now) / (365 * 24 * 60 * 60 * 1e3);
+    let lengthScore = 1;
+    if (proposedYears < remainingYears) lengthScore = 0.5;
+    if (player.age > 33 && proposedYears >= 2) lengthScore = 1.3;
+    const finalScore = effectiveSalaryScore * wSal + effectiveBonusScore * wBon + lengthScore * wLen;
+    const isDemandingHigher = Math.random() < 0.9;
+    let demandSalary = expectedSalary;
+    let demandBonus = expectedBonus;
+    if (isDemandingHigher) {
+      const multiplier = 1.05 + Math.random() * 0.15;
+      demandSalary = Math.ceil(expectedSalary * multiplier);
+      demandBonus = Math.ceil(expectedBonus * multiplier);
+    } else {
+      demandSalary = expectedSalary;
+      demandBonus = expectedBonus;
+    }
+    if (salaryCeiling) {
+      demandSalary = Math.min(demandSalary, salaryCeiling);
+    }
+    const demands = {
+      salary: demandSalary,
+      bonus: demandBonus
+    };
+    if (finalScore >= 0.98) {
+      return { accepted: true, reason: "Zgadzam si\u0119 na te warunki.", demands: null };
+    }
+    if (finalScore >= 0.7) {
+      return {
+        accepted: false,
+        reason: "Jeste\u015Bmy blisko porozumienia, ale m\xF3j klient oczekuje lepszych kwot, bior\u0105c pod uwag\u0119 jego status w zespole. Oto nasze oczekiwania.",
+        demands
+      };
+    }
+    return {
+      accepted: false,
+      reason: "Z ca\u0142ym szacunkiem, ale te warunki s\u0105 nieakceptowalne. Prosz\u0119 o przedstawienie oferty godnej zawodnika tej klasy.",
+      demands: finalScore > 0.4 ? demands : null
+    };
+  },
+  // Oblicza sumę wszystkich pensji w drużynie
+  calculateCurrentWageBill: (squad) => {
+    return squad.reduce((sum, p) => sum + (p.annualSalary || 0), 0);
+  },
+  /**
+   * Full guaranteed value used to compare the offer with the agent's expectations.
+   * Contract length belongs here because a longer deal is genuinely worth more to
+   * the player, even though the club does not prepay every future season at signing.
+   */
+  calculateFreeAgentContractCommitment: (annualSalary, years, signingBonus) => Math.max(0, annualSalary) * Math.max(1, years) + Math.max(0, signingBonus),
+  /**
+   * Immediate charge against the current season's transfer/contract budget.
+   * Future annual salaries are funded from future season budgets, so only the first
+   * annual salary and the one-time signing bonus are reserved when the deal is signed.
+   */
+  calculateFreeAgentCurrentSeasonCost: (annualSalary, signingBonus) => Math.max(0, annualSalary) + Math.max(0, signingBonus),
+  calculateRemainingContractBudget: (availableBudget, annualSalary, _years, signingBonus) => Math.max(0, availableBudget - FinanceService.calculateFreeAgentCurrentSeasonCost(annualSalary, signingBonus)),
+  // Orientacyjna wartość używana przez agentów i symulację rynku; nie jest limitem zarządu.
+  getFairMarketSalary: (ovr) => {
+    const base = Math.pow(ovr / 50, 4) * 125e3;
+    const step = base >= 1e6 ? 1e5 : base >= 1e5 ? 1e4 : 5e3;
+    return Math.round(base / step) * step;
+  },
+  calculateFAExpectations: (player, clubReputation, avgSquadSalary) => {
+    const base = Math.pow(player.overallRating, 2.9) * 0.45;
+    const repTax = (10 - clubReputation) * 0.05;
+    const anchor = avgSquadSalary * 0.3 + base * 0.7;
+    const chaos = 0.85 + Math.random() * 0.3;
+    return Math.floor(anchor * (1 + repTax) * chaos);
+  },
+  evaluateFASigningBoardDecision: (player, proposedSalary, proposedBonus, squad, club) => {
+    const tier = FinanceService.getClubTier(club);
+    const wageBill = FinanceService.calculateTotalSalaries(squad);
+    const projectedWageBill = wageBill + Math.max(0, proposedSalary);
+    const liquiditySalaryCap = club.budget * (tier >= 3 ? 0.35 : 0.3);
+    const projectedWagePressure = projectedWageBill / Math.max(1, club.budget);
+    if (proposedSalary > liquiditySalaryCap || projectedWagePressure > 0.82) {
+      return {
+        approved: false,
+        reason: "Dyrektor finansowy ocenia, \u017Ce ten kontrakt zbyt mocno obci\u0105\u017Cy roczne finanse klubu i ograniczy mo\u017Cliwo\u015B\u0107 wykonania kolejnych ruch\xF3w kadrowych.",
+        reasonCode: "LIQUIDITY",
+        appealable: true
+      };
+    }
+    const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
+    const averageOverall = squad.length > 0 ? squad.reduce((sum, squadPlayer) => sum + squadPlayer.overallRating, 0) / squad.length : player.overallRating;
+    const bestSamePositionOverall = squad.filter((squadPlayer) => squadPlayer.position === player.position).reduce((best, squadPlayer) => Math.max(best, squadPlayer.overallRating), 0);
+    const isClearSportingUpgrade = player.overallRating >= averageOverall + 4 || player.overallRating >= bestSamePositionOverall + 2;
+    const hierarchyMultiplier = isClearSportingUpgrade ? tier >= 3 ? 3.5 : 3.1 : player.overallRating >= averageOverall ? tier >= 3 ? 2.75 : 2.55 : tier >= 3 ? 2.4 : 2.25;
+    const financialStructureFloor = club.budget * (tier === 1 ? 0.045 : tier === 2 ? 0.035 : tier === 3 ? 0.025 : 0.02);
+    const hierarchySalaryCap = Math.max(highestSalary * hierarchyMultiplier, financialStructureFloor);
+    if (highestSalary > 0 && proposedSalary > hierarchySalaryCap) {
+      return {
+        approved: false,
+        reason: `Prezes uwa\u017Ca, \u017Ce proponowana pensja zbyt gwa\u0142townie zmieni obecn\u0105 hierarchi\u0119 wynagrodze\u0144. Najwy\u017Csza pensja w kadrze wynosi obecnie ${highestSalary.toLocaleString("pl-PL")} PLN, dlatego zarz\u0105d oczekuje dodatkowego uzasadnienia dla ustanowienia nowego poziomu p\u0142ac.`,
+        reasonCode: "WAGE_STRUCTURE",
+        appealable: true
+      };
+    }
+    if (proposedBonus > club.budget * 0.5) {
+      return {
+        approved: false,
+        reason: "Zarz\u0105d uwa\u017Ca, \u017Ce jednorazowy bonus za podpis jest zbyt wysoki w stosunku do wolnych \u015Brodk\xF3w klubu.",
+        reasonCode: "SIGNING_BONUS",
+        appealable: true
+      };
+    }
+    return { approved: true, reason: "" };
+  },
+  evaluateRenewalBoardDecision: (player, proposedSalary, proposedBonus, squad, club) => {
+    if (Math.random() < 1 / 365) {
+      return { approved: true, reason: "PREZES: Wiecie co, id\u0119 na ca\u0142o\u015B\u0107. Podpisujemy!" };
+    }
+    const currentWageBill = FinanceService.calculateCurrentWageBill(squad);
+    const wageBillAfter = currentWageBill - player.annualSalary + proposedSalary;
+    if (wageBillAfter > club.budget * 0.65) {
+      return {
+        approved: false,
+        reason: "DYREKTOR FINANSOWY: \u0141\u0105czny fundusz p\u0142ac po tej podwy\u017Cce przekroczy\u0142by nasze mo\u017Cliwo\u015Bci bud\u017Cetowe."
+      };
+    }
+    if (proposedSalary > player.annualSalary * 2 && player.annualSalary > 0) {
+      return {
+        approved: false,
+        reason: `PREZES: Podwojenie pensji to za du\u017Cy skok naraz. Zawodnik zarabia teraz ${player.annualSalary.toLocaleString()} PLN \u2014 wr\xF3\u0107cie z rozs\u0105dniejsz\u0105 propozycj\u0105.`
+      };
+    }
+    const highestSalary = squad.length > 0 ? Math.max(...squad.map((p) => p.annualSalary)) : 0;
+    if (proposedSalary > highestSalary * 1.5 && highestSalary > 0 && player.overallRating < 80) {
+      return {
+        approved: false,
+        reason: `PREZES: Ten zawodnik zarabia\u0142by wi\u0119cej ni\u017C 1.5x tyle co najlepiej op\u0142acany gracz w zespole (${highestSalary.toLocaleString()} PLN). Szatnia tego nie zaakceptuje.`
+      };
+    }
+    if (proposedBonus > club.budget * 0.3) {
+      return {
+        approved: false,
+        reason: "DYREKTOR FINANSOWY: Bonus za podpis jest zbyt wysoki wobec aktualnych rezerw got\xF3wkowych klubu."
+      };
+    }
+    return { approved: true, reason: "" };
+  },
+  classifyFAOffer: (proposed, expected) => {
+    const ratio = proposed / expected;
+    if (ratio >= 1.1) return "IDEAL";
+    if (ratio >= 0.9) return "ATTRACTIVE";
+    if (ratio >= 0.7) return "AVERAGE";
+    if (ratio >= 0.45) return "WEAK";
+    return "INSULT";
+  },
+  compareMultipleOffers: (offers, clubs) => {
+    return [...offers].sort((a, b) => {
+      const clubA = clubs.find((c) => c.id === a.clubId);
+      const clubB = clubs.find((c) => c.id === b.clubId);
+      const repA = clubA ? clubA.reputation : 1;
+      const repB = clubB ? clubB.reputation : 1;
+      const scoreA = a.salary + a.bonus / 2 + repA * 5e4;
+      const scoreB = b.salary + b.bonus / 2 + repB * 5e4;
+      return scoreB - scoreA;
+    })[0];
+  },
+  evaluateReleaseVsList: (player) => {
+    const marketValue = player.marketValue || 0;
+    const releaseCost = player.annualSalary * 0.4;
+    if (marketValue > player.annualSalary * 0.5) {
+      return "TRANSFER_LIST";
+    }
+    return "RELEASE";
+  },
+  // Funkcja zwraca cenę biletu jednorazowego w zależności od ligi i reputacji
+  calculateTicketPrice: (tier, reputation) => {
+    let basePrice = 0;
+    switch (tier) {
+      case 1:
+        basePrice = 20 + reputation / 10 * 160;
+        break;
+      case 2:
+        const ekstraPrice = 20 + reputation / 10 * 160;
+        basePrice = ekstraPrice * (0.4 + reputation / 10 * 0.2);
+        break;
+      case 3:
+        const refPrice = 20 + reputation / 10 * 160;
+        basePrice = refPrice * (0.15 + reputation / 10 * 0.25);
+        break;
+      case 4:
+        basePrice = 8 + reputation / 10 * 16;
+        break;
+      default:
+        basePrice = 12;
+    }
+    if (tier === 3) {
+      basePrice = 8 + reputation / 10 * 18;
+    }
+    return Math.floor(basePrice);
+  },
+  calculateTicketPriceForClub: (club) => {
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      return FinanceService.calculateTicketPrice(tier, club.reputation);
+    }
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const maxPrice = 18 + marketIndex * 110 + club.reputation / 20 * 85;
+    return Math.round(clamp2(maxPrice, 45, 420));
+  },
+  // Przychód z biletów jednorazowych
+  calculateMatchTicketRevenue: (attendance, tier, reputation) => {
+    const maxPrice = FinanceService.calculateTicketPrice(tier, reputation);
+    const minPrice = maxPrice <= 20 ? Math.max(5, Math.floor(maxPrice * 0.65)) : 20;
+    const avgPrice = maxPrice <= minPrice ? maxPrice : Math.floor(minPrice + Math.random() * (maxPrice - minPrice));
+    return { revenue: Math.floor(attendance * avgPrice), avgPrice };
+  },
+  calculateMatchTicketRevenueForClub: (attendance, club) => {
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      return FinanceService.calculateMatchTicketRevenue(attendance, tier, club.reputation);
+    }
+    const maxPrice = FinanceService.calculateTicketPriceForClub(club);
+    const avgPrice = Math.round(maxPrice * (0.58 + Math.random() * 0.2));
+    return { revenue: Math.floor(attendance * avgPrice), avgPrice };
+  },
+  // Przychód z karnetów na sezon (tylko dla gospodarza)
+  calculateSeasonTicketRevenue: (stadiumCapacity, reputation, tier) => {
+    let percentageOfCapacity = 0.1 + reputation / 10 * 0.2;
+    const singlePrice = FinanceService.calculateTicketPrice(tier, reputation);
+    const matchesPerSeason = 19;
+    const seasonTicketPrice = singlePrice * matchesPerSeason;
+    const minSeasonPrice = 200;
+    const maxSeasonPrice = 1300;
+    const finalSeasonPrice = Math.max(minSeasonPrice, Math.min(maxSeasonPrice, seasonTicketPrice));
+    const seasonTicketsSold = Math.floor(stadiumCapacity * percentageOfCapacity);
+    return Math.floor(seasonTicketsSold * finalSeasonPrice);
+  },
+  calculateSeasonTicketPackageForClub: (club) => {
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      const revenue = FinanceService.calculateSeasonTicketRevenue(club.stadiumCapacity, club.reputation, tier);
+      const ticketsSold2 = Math.floor(club.stadiumCapacity * (0.1 + club.reputation / 10 * 0.2));
+      const ticketPrice = FinanceService.calculateTicketPrice(tier, club.reputation);
+      const seasonTicketPrice2 = Math.max(200, Math.min(1300, ticketPrice * 19));
+      return { revenue, ticketsSold: ticketsSold2, seasonTicketPrice: seasonTicketPrice2 };
+    }
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const seasonTicketShare = clamp2(0.14 + marketIndex * 0.1 + club.reputation / 20 * 0.18, 0.16, 0.65);
+    const ticketsSold = Math.floor(club.stadiumCapacity * seasonTicketShare);
+    const singleMatchPrice = FinanceService.calculateTicketPriceForClub(club);
+    const seasonDiscount = clamp2(0.68 + marketIndex * 0.05, 0.7, 0.82);
+    const seasonTicketPrice = Math.round(clamp2(singleMatchPrice * 19 * seasonDiscount, 900, 8500));
+    return {
+      revenue: ticketsSold * seasonTicketPrice,
+      ticketsSold,
+      seasonTicketPrice
+    };
+  },
+  // Dodatkowe przychody dnia meczowego per mecz domowy:
+  // catering, merchandising, programy/LED, parkingi — proporcjonalne do frekwencji
+  calculateMatchdayAdditionalRevenues: (attendance, tier, reputation) => {
+    const t = Math.min(4, Math.max(1, tier));
+    const p = MATCHDAY_ADDITIONAL_REVENUE_PARAMS;
+    const repMultiplier = 0.8 + reputation / 10 * 0.4;
+    const rand = () => 0.8 + Math.random() * 0.4;
+    const catering = Math.floor(attendance * p.cateringPerFan[t] * repMultiplier * rand());
+    const merchandising = Math.floor(attendance * p.merchandisingPerFan[t] * repMultiplier * rand());
+    const programs = Math.floor(attendance * p.programsPerFan[t] * repMultiplier * rand());
+    const parking = Math.floor(attendance * p.parkingPerFan[t] * repMultiplier * rand());
+    return { catering, merchandising, programs, parking };
+  },
+  calculateMatchdayAdditionalRevenuesForClub: (attendance, club) => {
+    const mktFactor = 0.85 + (club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20 * 0.3;
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      const base = FinanceService.calculateMatchdayAdditionalRevenues(attendance, tier, club.reputation);
+      return {
+        catering: Math.floor(base.catering * mktFactor),
+        merchandising: Math.floor(base.merchandising * mktFactor),
+        programs: Math.floor(base.programs * mktFactor),
+        parking: Math.floor(base.parking * mktFactor)
+      };
+    }
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const repMultiplier = 0.9 + club.reputation / 20 * 0.45;
+    const rand = () => 0.82 + Math.random() * 0.36;
+    const catering = Math.floor(attendance * (2.5 + marketIndex * 2.6) * repMultiplier * rand() * mktFactor);
+    const merchandising = Math.floor(attendance * (0.9 + marketIndex * 1.4) * repMultiplier * rand() * mktFactor);
+    const programs = Math.floor(attendance * (0.3 + marketIndex * 0.45) * repMultiplier * rand() * mktFactor);
+    const parking = Math.floor(attendance * (0.4 + marketIndex * 0.65) * repMultiplier * rand() * mktFactor);
+    return { catering, merchandising, programs, parking };
+  },
+  // Roczny przychód z wynajmu stref VIP i lóż (Skybox).
+  // Warunki: tier === 1 (Ekstraklasa) ORAZ stadiumCapacity > 15 000
+  calculateVIPBoxRevenue: (stadiumCapacity, reputation) => {
+    const p = VIP_BOX_REVENUE_PARAMS;
+    const raw = p.base + reputation / 10 * p.repScale + stadiumCapacity / 4e4 * p.capacityScale;
+    const jitter = 0.85 + Math.random() * 0.3;
+    return Math.min(p.maxRevenue, Math.max(p.minRevenue, Math.floor(raw * jitter)));
+  },
+  calculateVIPBoxRevenueForClub: (club) => {
+    const mktFactor = 0.85 + (club.management?.marketingDirector?.zdolnosciMarketingowe ?? 10) / 20 * 0.3;
+    if (!isEuropeanCommercialClub(club)) {
+      const tier = FinanceService.getClubTier(club);
+      if (tier !== 1 || club.stadiumCapacity <= 15e3) return 0;
+      return Math.floor(FinanceService.calculateVIPBoxRevenue(club.stadiumCapacity, club.reputation) * mktFactor);
+    }
+    if (club.stadiumCapacity < 4e3) return 0;
+    const marketIndex = getEuropeanCommercialIndex(club);
+    const suitesSold = Math.max(4, Math.round(club.stadiumCapacity / 2200));
+    const avgSuitePrice = 25e3 + marketIndex * 12e4 + club.reputation / 20 * 1e5;
+    const occupancyFactor = club.leagueId === "L_CL" ? 1 : club.leagueId === "L_EL" ? 0.92 : 0.86;
+    const jitter = 0.9 + Math.random() * 0.2;
+    return Math.round(suitesSold * avgSuitePrice * occupancyFactor * jitter * mktFactor);
+  },
+  // Bonusy za pozycję końcową w lidze (Ekstraklasa)
+  calculateLeagueFinishBonus: (position, tier) => {
+    if (tier !== 1) return 0;
+    const bonuses = {
+      1: 35e6 + Math.random() * 3e6,
+      // 35-38 mln
+      2: 28e6 + Math.random() * 4e6,
+      // 28-32 mln
+      3: 24e6 + Math.random() * 4e6,
+      // 24-28 mln
+      4: 2e7 + Math.random() * 5e6
+      // 20-25 mln
+    };
+    if (bonuses[position]) return Math.floor(bonuses[position]);
+    if (position > 4) {
+      const baseBonus = 1e7;
+      const decrement = 5e5 * (position - 4);
+      return Math.max(0, Math.floor(baseBonus - decrement));
+    }
+    return 0;
+  },
+  // Bonusy za Puchar Polski
+  calculatePolishCupBonus: (cupPosition) => {
+    const bonuses = {
+      "WINNER": 5e6,
+      "FINALIST": 1e6,
+      "SEMIFINALIST": 38e4,
+      "QUARTERFINALIST": 19e4,
+      "ROUND_8": 9e4,
+      "ROUND_16": 45e3,
+      "ROUND_32": 2e4,
+      "ROUND_64": 1e4
+    };
+    return bonuses[cupPosition] || 0;
+  },
+  // Bonus za Superpuchar Polski
+  calculateSuperCupBonus: (isWinner) => {
+    return isWinner ? 2e5 : 1e5;
+  },
+  // Premie UEFA za Puchary Europejskie (sezon 2025/26, przeliczone na PLN wg kursu 4,25 EUR/PLN)
+  calculateEuropeanPrizeMoney: (competition, event) => {
+    const EUR_PLN = 4.25;
+    const prizes = {
+      CL: {
+        Q1_ADVANCE: Math.round(4e5 * EUR_PLN),
+        //   1 700 000
+        Q2_ADVANCE: Math.round(1e6 * EUR_PLN),
+        //   4 250 000
+        GROUP_STAGE_ENTRY: Math.round(1862e4 * EUR_PLN),
+        //  79 135 000
+        WIN: Math.round(21e5 * EUR_PLN),
+        //   8 925 000
+        DRAW: Math.round(7e5 * EUR_PLN),
+        //   2 975 000
+        KO_PLAYOFF: Math.round(11e5 * EUR_PLN),
+        //   4 675 000
+        R16: Math.round(11e6 * EUR_PLN),
+        //  46 750 000
+        QF: Math.round(125e5 * EUR_PLN),
+        //  53 125 000
+        SF: Math.round(15e6 * EUR_PLN),
+        //  63 750 000
+        FINALIST: Math.round(185e5 * EUR_PLN),
+        //  78 625 000
+        WINNER: Math.round(25e6 * EUR_PLN)
+        // 106 250 000
+      },
+      EL: {
+        Q1_ADVANCE: Math.round(1e5 * EUR_PLN),
+        //     425 000
+        Q2_ADVANCE: Math.round(25e4 * EUR_PLN),
+        //   1 062 500
+        GROUP_STAGE_ENTRY: Math.round(431e4 * EUR_PLN),
+        //  18 317 500
+        WIN: Math.round(63e4 * EUR_PLN),
+        //   2 677 500
+        DRAW: Math.round(21e4 * EUR_PLN),
+        //     892 500
+        KO_PLAYOFF: Math.round(5e5 * EUR_PLN),
+        //   2 125 000
+        R16: Math.round(15e5 * EUR_PLN),
+        //   6 375 000
+        QF: Math.round(22e5 * EUR_PLN),
+        //   9 350 000
+        SF: Math.round(39e5 * EUR_PLN),
+        //  16 575 000
+        FINALIST: Math.round(61e5 * EUR_PLN),
+        //  25 925 000
+        WINNER: Math.round(52e5 * EUR_PLN)
+        //  22 100 000
+      },
+      CONF: {
+        Q1_ADVANCE: Math.round(75e3 * EUR_PLN),
+        //     318 750
+        Q2_ADVANCE: Math.round(15e4 * EUR_PLN),
+        //     637 500
+        GROUP_STAGE_ENTRY: Math.round(317e4 * EUR_PLN),
+        //  13 472 500
+        WIN: Math.round(4e5 * EUR_PLN),
+        //   1 700 000
+        DRAW: Math.round(133e3 * EUR_PLN),
+        //     565 250
+        KO_PLAYOFF: Math.round(2e5 * EUR_PLN),
+        //     850 000
+        R16: Math.round(8e5 * EUR_PLN),
+        //   3 400 000
+        QF: Math.round(13e5 * EUR_PLN),
+        //   5 525 000
+        SF: Math.round(25e5 * EUR_PLN),
+        //  10 625 000
+        FINALIST: Math.round(4e6 * EUR_PLN),
+        //  17 000 000
+        WINNER: Math.round(3e6 * EUR_PLN)
+        //  12 750 000
+      }
+    };
+    return prizes[competition]?.[event] ?? 0;
+  },
+  // Premie dla zawodników i sztabu za osiągnięcia — wypłacane z budżetu klubu
+  calculateAchievementBonus: (achievement, reputation, hojnosc) => {
+    const BASE_RANGES = {
+      CHAMPION: [15e5, 25e5],
+      RUNNER_UP: [8e5, 14e5],
+      THIRD: [5e5, 9e5],
+      FOURTH: [2e5, 5e5],
+      PROMOTE_L2_L1: [6e5, 1e6],
+      PROMOTE_L3_L2: [2e5, 4e5],
+      CUP_WINNER: [7e5, 12e5],
+      CUP_FINALIST: [2e5, 5e5],
+      CUP_SEMI: [5e4, 15e4]
+    };
+    const REP_MULTIPLIER = reputation >= 7 ? 3 : reputation >= 4 ? 1.5 : 1;
+    const HOJNOSC_MULTIPLIER = {
+      bardzo_wysoka: 2,
+      wysoka: 1.5,
+      przecietna: 1,
+      niska: 0.6,
+      bardzo_niska: 0.3
+    };
+    const [min, max] = BASE_RANGES[achievement] ?? [0, 0];
+    const base = min + Math.random() * (max - min);
+    const hMult = HOJNOSC_MULTIPLIER[hojnosc] ?? 1;
+    return Math.floor(base * REP_MULTIPLIER * hMult);
+  },
+  getSponsorCheckProbability: (avg) => {
+    const f = Math.floor(Math.max(1, Math.min(20, avg)));
+    if (f >= 20) return 0.5;
+    if (f === 19) return 0.4;
+    if (f === 18) return 0.35;
+    if (f === 17) return 0.3;
+    if (f === 16) return 0.25;
+    if (f === 15) return 0.2;
+    if (f === 14) return 0.15;
+    if (f === 13) return 0.1;
+    if (f === 12) return 0.05;
+    if (f === 11) return 0.035;
+    if (f === 10) return 0.025;
+    if (f === 9) return 0.018;
+    if (f === 8) return 0.012;
+    if (f === 7) return 8e-3;
+    if (f === 6) return 5e-3;
+    if (f === 5) return 3e-3;
+    if (f === 4) return 2e-3;
+    if (f === 3) return 1e-3;
+    if (f === 2) return 5e-4;
+    return 2e-4;
+  },
+  getSponsorAmount: (avg) => {
+    const MIN = 1e5;
+    const MAX = 1e8;
+    const clamped = Math.max(1, Math.min(20, avg));
+    const exponent = 0.5 + (20 - clamped) * 0.175;
+    const biasedR = Math.pow(Math.random(), exponent);
+    const raw = MIN + (MAX - MIN) * biasedR;
+    return Math.round(raw / 1e5) * 1e5;
+  },
+  getOwnerRescueProbability: (hojnosc) => {
+    const h = Math.floor(Math.max(1, Math.min(20, hojnosc)));
+    if (h >= 18) return 0.9;
+    if (h >= 16) return 0.75;
+    if (h >= 14) return 0.6;
+    if (h >= 12) return 0.45;
+    if (h >= 10) return 0.3;
+    if (h >= 8) return 0.18;
+    if (h >= 6) return 0.1;
+    if (h >= 4) return 0.05;
+    if (h >= 2) return 0.02;
+    return 0.01;
+  },
+  getOwnerRescueBonus: (hojnosc) => {
+    const h = Math.max(1, Math.min(20, hojnosc));
+    if (Math.random() >= h / 20) return 0;
+    const raw = 1e5 + Math.random() * h * 25e4;
+    return Math.round(raw / 1e5) * 1e5;
+  }
+};
+
+// resources/static_db/NationalTeams/NationalTeamsEurope.tsx
+var NATIONAL_TEAMS_EUROPE = [
+  { name: "Albania", continent: "Europe", tier: 4, colors: ["#E41E20", "#000000", "#E41E20"], stadium: "Air Albania Stadium", capacity: 22500, reputation: 9, region: "ALBANIA" /* ALBANIA */ },
+  { name: "Andora", continent: "Europe", tier: 5, colors: ["#0032A0", "#FEDD00", "#D52B1E"], stadium: "Estadi Nacional", capacity: 3306, reputation: 2, region: "IBERIA" /* IBERIA */ },
+  { name: "Armenia", continent: "Europe", tier: 4, colors: ["#D90012", "#0033A0", "#F2A800"], stadium: "Republican Stadium", capacity: 14200, reputation: 7, region: "ARMENIA" /* ARMENIA */ },
+  { name: "Austria", continent: "Europe", tier: 2, colors: ["#ED2939", "#FFFFFF", "#ED2939"], stadium: "Ernst-Happel-Stadion", capacity: 50708, reputation: 14, region: "GERMANY" /* GERMANY */ },
+  { name: "Azerbejd\u017Can", continent: "Europe", tier: 4, colors: ["#00B9E4", "#ED2939", "#3F9C35"], stadium: "Baku Olympic Stadium", capacity: 69870, reputation: 6, region: "AZERBAIJANI" /* AZERBAIJANI */ },
+  { name: "Belgia", continent: "Europe", tier: 1, colors: ["#000000", "#FFD100", "#EF3340"], stadium: "King Baudouin Stadium", capacity: 50093, reputation: 17, region: "BENELUX" /* BENELUX */ },
+  { name: "Bia\u0142oru\u015B", continent: "Europe", tier: 4, colors: ["#D22730", "#00AF66", "#FFFFFF"], stadium: "Dinamo Stadium", capacity: 22346, reputation: 6, region: "EX_USSR" /* EX_USSR */ },
+  { name: "Bo\u015Bnia i Hercegowina", continent: "Europe", tier: 3, colors: ["#002395", "#FECB00", "#002395"], stadium: "Bilino Polje", capacity: 15292, reputation: 9, region: "BALKANS" /* BALKANS */ },
+  { name: "Bu\u0142garia", continent: "Europe", tier: 4, colors: ["#FFFFFF", "#00966E", "#D62612"], stadium: "Vasil Levski", capacity: 43230, reputation: 8, region: "BALKANS" /* BALKANS */ },
+  { name: "Chorwacja", continent: "Europe", tier: 2, colors: ["#FF0000", "#FFFFFF", "#0000FF"], stadium: "Maksimir", capacity: 35e3, reputation: 17, region: "BALKANS" /* BALKANS */ },
+  { name: "Cypr", continent: "Europe", tier: 4, colors: ["#FFFFFF", "#D57800", "#FFFFFF"], stadium: "GSP Stadium", capacity: 22859, reputation: 6, region: "GREEK" /* GREEK */ },
+  { name: "Czarnog\xF3ra", continent: "Europe", tier: 3, colors: ["#C40308", "#FFD700", "#C40308"], stadium: "Pod Goricom", capacity: 17e3, reputation: 7, region: "BALKANS" /* BALKANS */ },
+  { name: "Czechy", continent: "Europe", tier: 2, colors: ["#11457E", "#FFFFFF", "#D7141A"], stadium: "Eden Arena", capacity: 20800, reputation: 13, region: "CZ_SK" /* CZ_SK */ },
+  { name: "Dania", continent: "Europe", tier: 2, colors: ["#C60C30", "#FFFFFF", "#C60C30"], stadium: "Parken", capacity: 38065, reputation: 15, region: "SCANDINAVIA" /* SCANDINAVIA */ },
+  { name: "Estonia", continent: "Europe", tier: 5, colors: ["#4891D9", "#000000", "#FFFFFF"], stadium: "A. Le Coq Arena", capacity: 14336, reputation: 5, region: "BALTIC" /* BALTIC */ },
+  { name: "Finlandia", continent: "Europe", tier: 3, colors: ["#FFFFFF", "#003580", "#FFFFFF"], stadium: "Olympic Stadium Helsinki", capacity: 36300, reputation: 9, region: "FINLAND" /* FINLAND */ },
+  { name: "Francja", continent: "Europe", tier: 1, colors: ["#0055A4", "#FFFFFF", "#EF4135"], stadium: "Stade de France", capacity: 8e4, reputation: 20, region: "FRANCE" /* FRANCE */ },
+  { name: "Gibraltar", continent: "Europe", tier: 5, colors: ["#D40000", "#FFFFFF", "#D40000"], stadium: "Victoria Stadium", capacity: 5e3, reputation: 2, region: "IBERIA" /* IBERIA */ },
+  { name: "Grecja", continent: "Europe", tier: 2, colors: ["#0D5EAF", "#FFFFFF", "#0D5EAF"], stadium: "Olympic Stadium Athens", capacity: 69618, reputation: 12, region: "GREEK" /* GREEK */ },
+  { name: "Gruzja", continent: "Europe", tier: 4, colors: ["#FFFFFF", "#E41E20", "#FFFFFF"], stadium: "Boris Paichadze", capacity: 54949, reputation: 9, region: "GEORGIA" /* GEORGIA */ },
+  { name: "Hiszpania", continent: "Europe", tier: 1, colors: ["#AA151B", "#F1BF00", "#AA151B"], stadium: "Santiago Bernab\xE9u", capacity: 81044, reputation: 20, region: "SPAIN" /* SPAIN */ },
+  { name: "Holandia", continent: "Europe", tier: 1, colors: ["#FF4F00", "#FFFFFF", "#0000FF"], stadium: "Johan Cruijff Arena", capacity: 55500, reputation: 18, region: "BENELUX" /* BENELUX */ },
+  { name: "Irlandia", continent: "Europe", tier: 3, colors: ["#169B62", "#FFFFFF", "#FF883E"], stadium: "Aviva Stadium", capacity: 51711, reputation: 11, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Irlandia P\xF3\u0142nocna", continent: "Europe", tier: 4, colors: ["#007A37", "#FFFFFF", "#007A37"], stadium: "Windsor Park", capacity: 18500, reputation: 7, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Islandia", continent: "Europe", tier: 3, colors: ["#02529C", "#FFFFFF", "#DC1E35"], stadium: "Laugardalsv\xF6llur", capacity: 15e3, reputation: 9, region: "SCANDINAVIA" /* SCANDINAVIA */ },
+  { name: "Izrael", continent: "Europe", tier: 3, colors: ["#0038B8", "#FFFFFF", "#0038B8"], stadium: "Sammy Ofer Stadium", capacity: 30858, reputation: 12, region: "ISRAELI" /* ISRAELI */ },
+  { name: "Kazachstan", continent: "Europe", tier: 4, colors: ["#00AFCA", "#FEC50C", "#00AFCA"], stadium: "Astana Arena", capacity: 3e4, reputation: 7, region: "KAZAKH" /* KAZAKH */ },
+  { name: "Kosovo", continent: "Europe", tier: 3, colors: ["#244AA5", "#D0A650", "#244AA5"], stadium: "Fadil Vokrri Stadium", capacity: 13800, reputation: 8, region: "ALBANIA" /* ALBANIA */ },
+  { name: "Liechtenstein", continent: "Europe", tier: 5, colors: ["#002B7F", "#CE1126", "#FFD100"], stadium: "Rheinpark Stadion", capacity: 7838, reputation: 2, region: "GERMANY" /* GERMANY */ },
+  { name: "Litwa", continent: "Europe", tier: 5, colors: ["#FDB913", "#006A44", "#C1272D"], stadium: "LFF Stadium", capacity: 5067, reputation: 5, region: "BALTIC" /* BALTIC */ },
+  { name: "Luksemburg", continent: "Europe", tier: 5, colors: ["#00A3E0", "#FFFFFF", "#EF3340"], stadium: "Stade de Luxembourg", capacity: 9385, reputation: 4, region: "BENELUX" /* BENELUX */ },
+  { name: "\u0141otwa", continent: "Europe", tier: 5, colors: ["#9E3039", "#FFFFFF", "#9E3039"], stadium: "Daugava Stadium", capacity: 1e4, reputation: 5, region: "BALTIC" /* BALTIC */ },
+  { name: "Macedonia P\xF3\u0142nocna", continent: "Europe", tier: 4, colors: ["#D20000", "#FFD700", "#D20000"], stadium: "To\u0161e Proeski Arena", capacity: 33500, reputation: 8, region: "BALKANS" /* BALKANS */ },
+  { name: "Malta", continent: "Europe", tier: 5, colors: ["#FFFFFF", "#CF142B", "#FFFFFF"], stadium: "Ta' Qali", capacity: 17797, reputation: 3, region: "MALTESE" /* MALTESE */ },
+  { name: "Mo\u0142dawia", continent: "Europe", tier: 5, colors: ["#0033A0", "#FFD100", "#CE1126"], stadium: "Zimbru", capacity: 10400, reputation: 6, region: "EX_USSR" /* EX_USSR */ },
+  { name: "Niemcy", continent: "Europe", tier: 1, colors: ["#000000", "#DD0000", "#FFCE00"], stadium: "Olympiastadion Berlin", capacity: 74475, reputation: 20, region: "GERMANY" /* GERMANY */ },
+  { name: "Norwegia", continent: "Europe", tier: 2, colors: ["#BA0C2F", "#FFFFFF", "#00205B"], stadium: "Ullevaal", capacity: 28e3, reputation: 11, region: "SCANDINAVIA" /* SCANDINAVIA */ },
+  { name: "Polska", continent: "Europe", tier: 2, colors: ["#FFFFFF", "#DC143C", "#FFFFFF"], stadium: "Stadion Narodowy", capacity: 58580, reputation: 14, region: "POLAND" /* POLAND */ },
+  { name: "Portugalia", continent: "Europe", tier: 1, colors: ["#006600", "#FF0000", "#006600"], stadium: "Est\xE1dio da Luz", capacity: 64642, reputation: 18, region: "IBERIA" /* IBERIA */ },
+  { name: "Rosja", continent: "Europe", tier: 2, colors: ["#FFFFFF", "#0039A6", "#D52B1E"], stadium: "Luzhniki Stadium", capacity: 81e3, reputation: 13, region: "EX_USSR" /* EX_USSR */ },
+  { name: "Rumunia", continent: "Europe", tier: 3, colors: ["#002B7F", "#FCD116", "#CE1126"], stadium: "Arena Na\u021Bional\u0103", capacity: 55634, reputation: 12, region: "ROMANIA" /* ROMANIA */ },
+  { name: "San Marino", continent: "Europe", tier: 5, colors: ["#5EB6E4", "#FFFFFF", "#5EB6E4"], stadium: "San Marino Stadium", capacity: 6664, reputation: 1, region: "ITALY" /* ITALY */ },
+  { name: "Serbia", continent: "Europe", tier: 2, colors: ["#C6363C", "#0C4076", "#FFFFFF"], stadium: "Rajko Miti\u0107", capacity: 53530, reputation: 14, region: "BALKANS" /* BALKANS */ },
+  { name: "S\u0142owacja", continent: "Europe", tier: 3, colors: ["#FFFFFF", "#0B4EA2", "#EF3340"], stadium: "Teheln\xE9 pole", capacity: 22500, reputation: 10, region: "CZ_SK" /* CZ_SK */ },
+  { name: "S\u0142owenia", continent: "Europe", tier: 3, colors: ["#FFFFFF", "#005DA4", "#ED1C24"], stadium: "Sto\u017Eice", capacity: 16038, reputation: 10, region: "BALKANS" /* BALKANS */ },
+  { name: "Szkocja", continent: "Europe", tier: 2, colors: ["#0065BD", "#FFFFFF", "#0065BD"], stadium: "Hampden Park", capacity: 51866, reputation: 12, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Szwajcaria", continent: "Europe", tier: 2, colors: ["#FF0000", "#FFFFFF", "#FF0000"], stadium: "St. Jakob-Park", capacity: 38512, reputation: 15, region: "GERMANY" /* GERMANY */ },
+  { name: "Szwecja", continent: "Europe", tier: 2, colors: ["#006AA7", "#FECC00", "#006AA7"], stadium: "Friends Arena", capacity: 5e4, reputation: 15, region: "SWEDEN" /* SWEDEN */ },
+  { name: "Turcja", continent: "Europe", tier: 2, colors: ["#E30A17", "#FFFFFF", "#E30A17"], stadium: "Atat\xFCrk Olympic", capacity: 76092, reputation: 16, region: "TURKEY" /* TURKEY */ },
+  { name: "Ukraina", continent: "Europe", tier: 2, colors: ["#005BBB", "#FFD500", "#005BBB"], stadium: "NSK Olimpiyskiy", capacity: 70050, reputation: 13, region: "EX_USSR" /* EX_USSR */ },
+  { name: "Walia", continent: "Europe", tier: 3, colors: ["#FFFFFF", "#D30731", "#006400"], stadium: "Millennium Stadium", capacity: 74500, reputation: 11, region: "ENGLAND" /* ENGLAND */ },
+  { name: "W\u0119gry", continent: "Europe", tier: 3, colors: ["#CD2A3E", "#FFFFFF", "#436F4D"], stadium: "Pusk\xE1s Ar\xE9na", capacity: 67215, reputation: 12, region: "HUNGARIAN" /* HUNGARIAN */ },
+  { name: "W\u0142ochy", continent: "Europe", tier: 1, colors: ["#009246", "#FFFFFF", "#CE2B37"], stadium: "Stadio Olimpico", capacity: 70634, reputation: 19, region: "ITALY" /* ITALY */ },
+  { name: "Wyspy Owcze", continent: "Europe", tier: 5, colors: ["#FFFFFF", "#0035AD", "#D21034"], stadium: "T\xF3rsv\xF8llur", capacity: 6040, reputation: 3, region: "SCANDINAVIA" /* SCANDINAVIA */ },
+  { name: "Anglia", continent: "Europe", tier: 1, colors: ["#FFFFFF", "#C8102E", "#FFFFFF"], stadium: "Wembley", capacity: 9e4, reputation: 20, region: "ENGLAND" /* ENGLAND */ }
+];
+
+// resources/static_db/NationalTeams/NationalTeamsAfrica.tsx
+var NATIONAL_TEAMS_AFRICA = [
+  { name: "Algieria", continent: "Africa", tier: 3, colors: ["#006233", "#FFFFFF", "#D21034"], stadium: "Stade du 5 Juillet", capacity: 8e4, reputation: 12, region: "ARABIA" /* ARABIA */ },
+  { name: "Angola", continent: "Africa", tier: 5, colors: ["#CE1126", "#000000", "#FCD116"], stadium: "Est\xE1dio 11 de Novembro", capacity: 5e4, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Benin", continent: "Africa", tier: 5, colors: ["#008751", "#FCD116", "#E8112D"], stadium: "Stade de l'Amiti\xE9", capacity: 4e4, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Botswana", continent: "Africa", tier: 5, colors: ["#75AADB", "#000000", "#FFFFFF"], stadium: "Obed Itani Chilume Stadium", capacity: 26e3, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Burkina Faso", continent: "Africa", tier: 4, colors: ["#EF2B2D", "#FCD116", "#009E49"], stadium: "Stade du 4 Ao\xFBt", capacity: 35e3, reputation: 9, region: "SSA" /* SSA */ },
+  { name: "Burundi", continent: "Africa", tier: 5, colors: ["#CE1126", "#FFFFFF", "#1EB53A"], stadium: "Stade Prince Louis Rwagasore", capacity: 22e3, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Czad", continent: "Africa", tier: 5, colors: ["#002664", "#FECB00", "#C60C30"], stadium: "Stade Idriss Mahamat Ouya", capacity: 3e4, reputation: 4, region: "SSA" /* SSA */ },
+  { name: "D\u017Cibuti", continent: "Africa", tier: 5, colors: ["#6AB2E7", "#FFFFFF", "#12AD2B"], stadium: "Stade du Ville", capacity: 2e4, reputation: 3, region: "ARABIA" /* ARABIA */ },
+  { name: "Egipt", continent: "Africa", tier: 2, colors: ["#CE1126", "#FFFFFF", "#000000"], stadium: "Cairo International Stadium", capacity: 75e3, reputation: 12, region: "ARABIA" /* ARABIA */ },
+  { name: "Erytrea", continent: "Africa", tier: 5, colors: ["#EA0437", "#0B5ED7", "#0A7E38"], stadium: "Cicero Stadium", capacity: 2e4, reputation: 3, region: "SSA" /* SSA */ },
+  { name: "Eswatini", continent: "Africa", tier: 5, colors: ["#3E5EB9", "#FFD100", "#B10C2E"], stadium: "Somhlolo National Stadium", capacity: 2e4, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Etiopia", continent: "Africa", tier: 5, colors: ["#078930", "#FCDD09", "#DA121A"], stadium: "Addis Ababa Stadium", capacity: 35e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Gabon", continent: "Africa", tier: 5, colors: ["#009E60", "#FCD116", "#3A75C4"], stadium: "Stade de l'Amiti\xE9", capacity: 4e4, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Gambia", continent: "Africa", tier: 5, colors: ["#CE1126", "#0C1C8C", "#3A7728"], stadium: "Independence Stadium", capacity: 3e4, reputation: 6, region: "SSA" /* SSA */ },
+  { name: "Ghana", continent: "Africa", tier: 2, colors: ["#CE1126", "#FCD116", "#006B3F"], stadium: "Accra Sports Stadium", capacity: 40500, reputation: 11, region: "SSA" /* SSA */ },
+  { name: "Gwinea", continent: "Africa", tier: 5, colors: ["#CE1126", "#FCD116", "#009460"], stadium: "Stade du 28 Septembre", capacity: 5e4, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Gwinea Bissau", continent: "Africa", tier: 5, colors: ["#CE1126", "#FCD116", "#009460"], stadium: "Est\xE1dio 24 de Setembro", capacity: 2e4, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Gwinea R\xF3wnikowa", continent: "Africa", tier: 5, colors: ["#3E9A00", "#FFFFFF", "#D21034"], stadium: "Nuevo Estadio de Malabo", capacity: 15e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Kamerun", continent: "Africa", tier: 2, colors: ["#007A5E", "#CE1126", "#FCD116"], stadium: "Stade Ahmadou Ahidjo", capacity: 42e3, reputation: 11, region: "SSA" /* SSA */ },
+  { name: "Kenia", continent: "Africa", tier: 5, colors: ["#000000", "#CE1126", "#006600"], stadium: "Nyayo National Stadium", capacity: 3e4, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Komory", continent: "Africa", tier: 5, colors: ["#3D8E33", "#FFFFFF", "#FFC61E"], stadium: "Stade Omnisports de Malouzini", capacity: 6e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Kongo", continent: "Africa", tier: 5, colors: ["#009543", "#FBDE4A", "#DC241F"], stadium: "Stade Alphonse Massamba-D\xE9bat", capacity: 33e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Demokratyczna Republika Konga", continent: "Africa", tier: 2, colors: ["#00A3E0", "#CE1126", "#FCD116"], stadium: "Stade des Martyrs", capacity: 8e4, reputation: 9, region: "SSA" /* SSA */ },
+  { name: "Lesotho", continent: "Africa", tier: 5, colors: ["#00209F", "#FFFFFF", "#009543"], stadium: "Setsoto Stadium", capacity: 2e4, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Liberia", continent: "Africa", tier: 5, colors: ["#BF0A30", "#FFFFFF", "#002868"], stadium: "Samuel Kanyon Doe Stadium", capacity: 35e3, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Libia", continent: "Africa", tier: 5, colors: ["#E70013", "#000000", "#239E46"], stadium: "Martyrs of February Stadium", capacity: 45e3, reputation: 7, region: "ARABIA" /* ARABIA */ },
+  { name: "Madagaskar", continent: "Africa", tier: 5, colors: ["#FFFFFF", "#FC3D32", "#007E3A"], stadium: "Stade Municipal de Mahamasina", capacity: 22e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Malawi", continent: "Africa", tier: 5, colors: ["#000000", "#CE1126", "#007A3D"], stadium: "Bingu National Stadium", capacity: 4e4, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Mali", continent: "Africa", tier: 3, colors: ["#14B53A", "#FCD116", "#CE1126"], stadium: "Stade du 26 Mars", capacity: 5e4, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Maroko", continent: "Africa", tier: 2, colors: ["#C1272D", "#006233", "#C1272D"], stadium: "Stade Mohammed V", capacity: 67e3, reputation: 13, region: "ARABIA" /* ARABIA */ },
+  { name: "Mauretania", continent: "Africa", tier: 5, colors: ["#006233", "#FFD100", "#006233"], stadium: "Stade Olympique Nouakchott", capacity: 2e4, reputation: 6, region: "ARABIA" /* ARABIA */ },
+  { name: "Mauritius", continent: "Africa", tier: 5, colors: ["#EA2839", "#1A206D", "#FFD500"], stadium: "Stade George V", capacity: 5e3, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Mozambik", continent: "Africa", tier: 5, colors: ["#007A3D", "#000000", "#FCD116"], stadium: "Est\xE1dio do Zimpeto", capacity: 42e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Namibia", continent: "Africa", tier: 5, colors: ["#003580", "#D21034", "#009543"], stadium: "Independence Stadium", capacity: 25e3, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Niger", continent: "Africa", tier: 5, colors: ["#E05206", "#FFFFFF", "#0DB02B"], stadium: "Stade G\xE9n\xE9ral Seyni Kountch\xE9", capacity: 35e3, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Nigeria", continent: "Africa", tier: 2, colors: ["#008753", "#FFFFFF", "#008753"], stadium: "Moshood Abiola Stadium", capacity: 6e4, reputation: 12, region: "SSA" /* SSA */ },
+  { name: "Republika Po\u0142udniowej Afryki", continent: "Africa", tier: 3, colors: ["#007A4D", "#FFB612", "#000000"], stadium: "FNB Stadium", capacity: 94736, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Republika \u015Arodkowoafryka\u0144ska", continent: "Africa", tier: 5, colors: ["#003082", "#FFFFFF", "#289728"], stadium: "Stade Barth\xE9lemy Boganda", capacity: 2e4, reputation: 4, region: "SSA" /* SSA */ },
+  { name: "Rwanda", continent: "Africa", tier: 5, colors: ["#00A1DE", "#FAD201", "#20603D"], stadium: "Amahoro Stadium", capacity: 45e3, reputation: 6, region: "SSA" /* SSA */ },
+  { name: "Senegal", continent: "Africa", tier: 2, colors: ["#00853F", "#FDEF42", "#E31B23"], stadium: "Stade Abdoulaye Wade", capacity: 5e4, reputation: 14, region: "SSA" /* SSA */ },
+  { name: "Seszele", continent: "Africa", tier: 5, colors: ["#003F87", "#FCD116", "#CE1126"], stadium: "Stade Linite", capacity: 1e4, reputation: 3, region: "SSA" /* SSA */ },
+  { name: "Sierra Leone", continent: "Africa", tier: 5, colors: ["#1EB53A", "#FFFFFF", "#0072C6"], stadium: "Siaka Stevens Stadium", capacity: 36e3, reputation: 5, region: "SSA" /* SSA */ },
+  { name: "Somalia", continent: "Africa", tier: 5, colors: ["#4189DD", "#FFFFFF", "#4189DD"], stadium: "Mogadishu Stadium", capacity: 65e3, reputation: 3, region: "SSA" /* SSA */ },
+  { name: "Sudan", continent: "Africa", tier: 5, colors: ["#D21034", "#FFFFFF", "#000000"], stadium: "Al-Merrikh Stadium", capacity: 43e3, reputation: 6, region: "ARABIA" /* ARABIA */ },
+  { name: "Sudan Po\u0142udniowy", continent: "Africa", tier: 5, colors: ["#000000", "#CE1126", "#078930"], stadium: "Juba National Stadium", capacity: 3e4, reputation: 4, region: "SSA" /* SSA */ },
+  { name: "Wyspy \u015Awi\u0119tego Tomasza i Ksi\u0105\u017C\u0119ca", continent: "Africa", tier: 5, colors: ["#009E49", "#FCD116", "#CE1126"], stadium: "Est\xE1dio Nacional 12 de Julho", capacity: 6500, reputation: 3, region: "SSA" /* SSA */ },
+  { name: "Tanzania", continent: "Africa", tier: 5, colors: ["#1EB53A", "#FCD116", "#00A3DD"], stadium: "Benjamin Mkapa Stadium", capacity: 6e4, reputation: 7, region: "SSA" /* SSA */ },
+  { name: "Togo", continent: "Africa", tier: 5, colors: ["#006A4E", "#FCD116", "#D21034"], stadium: "Stade de K\xE9gu\xE9", capacity: 3e4, reputation: 6, region: "SSA" /* SSA */ },
+  { name: "Tunezja", continent: "Africa", tier: 2, colors: ["#E70013", "#FFFFFF", "#E70013"], stadium: "Stade Olympique de Rad\xE8s", capacity: 6e4, reputation: 11, region: "ARABIA" /* ARABIA */ },
+  { name: "Uganda", continent: "Africa", tier: 5, colors: ["#000000", "#FCD116", "#CE1126"], stadium: "Mandela National Stadium", capacity: 45e3, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Wybrze\u017Ce Ko\u015Bci S\u0142oniowej", continent: "Africa", tier: 2, colors: ["#F77F00", "#FFFFFF", "#009E60"], stadium: "Stade Olympique d'Ebimp\xE9", capacity: 6e4, reputation: 14, region: "SSA" /* SSA */ },
+  { name: "Wyspy Zielonego Przyl\u0105dka", continent: "Africa", tier: 2, colors: ["#003893", "#FFFFFF", "#CF2027"], stadium: "Est\xE1dio Nacional de Cabo Verde", capacity: 15e3, reputation: 8, region: "SSA" /* SSA */ },
+  { name: "Zambia", continent: "Africa", tier: 5, colors: ["#198A00", "#EF3340", "#000000"], stadium: "National Heroes Stadium", capacity: 6e4, reputation: 9, region: "SSA" /* SSA */ },
+  { name: "Zimbabwe", continent: "Africa", tier: 5, colors: ["#006400", "#FFD100", "#D21034"], stadium: "National Sports Stadium", capacity: 6e4, reputation: 7, region: "SSA" /* SSA */ }
+];
+
+// resources/static_db/NationalTeams/NationalTeamsAFC.tsx
+var NATIONAL_TEAMS_AFC = [
+  { name: "Arabia Saudyjska", continent: "Asia", tier: 4, colors: ["#006C35", "#FFFFFF", "#006C35"], stadium: "King Fahd International Stadium", capacity: 68752, reputation: 12, region: "ARABIA" /* ARABIA */ },
+  { name: "Bahrajn", continent: "Asia", tier: 4, colors: ["#CE1126", "#FFFFFF", "#CE1126"], stadium: "Bahrain National Stadium", capacity: 24e3, reputation: 7, region: "ARABIA" /* ARABIA */ },
+  { name: "Irak", continent: "Asia", tier: 3, colors: ["#CE1126", "#FFFFFF", "#000000"], stadium: "Basra International Stadium", capacity: 65e3, reputation: 10, region: "ARABIA" /* ARABIA */ },
+  { name: "Iran", continent: "Asia", tier: 3, colors: ["#239F40", "#FFFFFF", "#DA0000"], stadium: "Azadi Stadium", capacity: 78116, reputation: 11, region: "ARABIA" /* ARABIA */ },
+  { name: "Jemen", continent: "Asia", tier: 5, colors: ["#CE1126", "#FFFFFF", "#000000"], stadium: "Al-Thawra Stadium", capacity: 3e4, reputation: 5, region: "ARABIA" /* ARABIA */ },
+  { name: "Jordania", continent: "Asia", tier: 3, colors: ["#000000", "#FFFFFF", "#007A3D"], stadium: "Amman International Stadium", capacity: 25e3, reputation: 9, region: "ARABIA" /* ARABIA */ },
+  { name: "Katar", continent: "Asia", tier: 4, colors: ["#8A1538", "#FFFFFF", "#8A1538"], stadium: "Lusail Stadium", capacity: 88966, reputation: 12, region: "ARABIA" /* ARABIA */ },
+  { name: "Kuwejt", continent: "Asia", tier: 4, colors: ["#007A3D", "#FFFFFF", "#CE1126"], stadium: "Jaber Al-Ahmad International Stadium", capacity: 6e4, reputation: 9, region: "ARABIA" /* ARABIA */ },
+  { name: "Liban", continent: "Asia", tier: 4, colors: ["#CE1126", "#FFFFFF", "#CE1126"], stadium: "Beirut Municipal Stadium", capacity: 22e3, reputation: 7, region: "ARABIA" /* ARABIA */ },
+  { name: "Oman", continent: "Asia", tier: 4, colors: ["#D21034", "#FFFFFF", "#009543"], stadium: "Sultan Qaboos Sports Complex", capacity: 39e3, reputation: 9, region: "ARABIA" /* ARABIA */ },
+  { name: "Palestyna", continent: "Asia", tier: 5, colors: ["#000000", "#FFFFFF", "#007A3D"], stadium: "Faisal Al-Husseini Stadium", capacity: 12e3, reputation: 7, region: "ARABIA" /* ARABIA */ },
+  { name: "Syria", continent: "Asia", tier: 4, colors: ["#CE1126", "#FFFFFF", "#000000"], stadium: "Abbasiyyin Stadium", capacity: 3e4, reputation: 8, region: "ARABIA" /* ARABIA */ },
+  { name: "ZEA", continent: "Asia", tier: 3, colors: ["#00732F", "#FFFFFF", "#000000"], stadium: "Zayed Sports City Stadium", capacity: 43e3, reputation: 10, region: "ARABIA" /* ARABIA */ },
+  { name: "Australia", continent: "Asia", tier: 2, colors: ["#1F8A43", "#FFD100", "#1F8A43"], stadium: "Stadium Australia", capacity: 83500, reputation: 13, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Chiny", continent: "Asia", tier: 4, colors: ["#DE2910", "#FFDE00", "#DE2910"], stadium: "Workers' Stadium", capacity: 68e3, reputation: 10, region: "JAPAN" /* JAPAN */ },
+  { name: "Filipiny", continent: "Asia", tier: 5, colors: ["#0038A8", "#FFFFFF", "#CE1126"], stadium: "Rizal Memorial Stadium", capacity: 12e3, reputation: 7, region: "JAPAN" /* JAPAN */ },
+  { name: "Indonezja", continent: "Asia", tier: 5, colors: ["#CE1126", "#FFFFFF", "#CE1126"], stadium: "Gelora Bung Karno", capacity: 77e3, reputation: 9, region: "JAPAN" /* JAPAN */ },
+  { name: "Japonia", continent: "Asia", tier: 2, colors: ["#BC002D", "#FFFFFF", "#BC002D"], stadium: "Saitama Stadium", capacity: 63700, reputation: 14, region: "JAPAN" /* JAPAN */ },
+  { name: "Kambod\u017Ca", continent: "Asia", tier: 5, colors: ["#032EA1", "#E00025", "#032EA1"], stadium: "Morodok Techo National Stadium", capacity: 6e4, reputation: 5, region: "JAPAN" /* JAPAN */ },
+  { name: "Korea P\u0141D", continent: "Asia", tier: 2, colors: ["#FFFFFF", "#C60C30", "#FFFFFF"], stadium: "Seoul World Cup Stadium", capacity: 66806, reputation: 14, region: "KOREA" /* KOREA */ },
+  { name: "Korea P\u0141N", continent: "Asia", tier: 5, colors: ["#024FA2", "#ED1C27", "#024FA2"], stadium: "Kim Il-sung Stadium", capacity: 5e4, reputation: 9, region: "KOREA" /* KOREA */ },
+  { name: "Laos", continent: "Asia", tier: 5, colors: ["#CE1126", "#002868", "#CE1126"], stadium: "New Laos National Stadium", capacity: 25e3, reputation: 4, region: "JAPAN" /* JAPAN */ },
+  { name: "Malezja", continent: "Asia", tier: 5, colors: ["#010066", "#FFCC00", "#CE1126"], stadium: "Bukit Jalil National Stadium", capacity: 87411, reputation: 6, region: "JAPAN" /* JAPAN */ },
+  {
+    name: "Macau",
+    continent: "Asia",
+    tier: 5,
+    colors: ["#006600", "#FFD700", "#FFFFFF"],
+    stadium: "Centro Desportivo Ol\xEDmpico - Est\xE1dio",
+    capacity: 16272,
+    reputation: 3,
+    region: "JAPAN" /* JAPAN */
+  },
+  { name: "Mjanma", continent: "Asia", tier: 5, colors: ["#FECB00", "#34B233", "#EA2839"], stadium: "Thuwunna Stadium", capacity: 32e3, reputation: 6, region: "JAPAN" /* JAPAN */ },
+  { name: "Singapur", continent: "Asia", tier: 5, colors: ["#EF3340", "#FFFFFF", "#EF3340"], stadium: "National Stadium", capacity: 55e3, reputation: 8, region: "JAPAN" /* JAPAN */ },
+  { name: "Tajlandia", continent: "Asia", tier: 5, colors: ["#CE1126", "#002868", "#CE1126"], stadium: "Rajamangala Stadium", capacity: 49e3, reputation: 7, region: "JAPAN" /* JAPAN */ },
+  { name: "Timor Wschodni", continent: "Asia", tier: 5, colors: ["#DA121A", "#000000", "#FCD116"], stadium: "Est\xE1dio Nacional de Dili", capacity: 3e4, reputation: 4, region: "JAPAN" /* JAPAN */ },
+  { name: "Wietnam", continent: "Asia", tier: 5, colors: ["#DA251D", "#FFDE00", "#DA251D"], stadium: "M\u1EF9 \u0110\xECnh National Stadium", capacity: 40192, reputation: 9, region: "JAPAN" /* JAPAN */ },
+  { name: "Afganistan", continent: "Asia", tier: 5, colors: ["#000000", "#DA0000", "#007A36"], stadium: "Ghazi Stadium", capacity: 25e3, reputation: 5, region: "ARABIA" /* ARABIA */ },
+  { name: "Bangladesz", continent: "Asia", tier: 5, colors: ["#006A4E", "#F42A41", "#006A4E"], stadium: "Bangabandhu National Stadium", capacity: 36e3, reputation: 3, region: "ARABIA" /* ARABIA */ },
+  { name: "Bhutan", continent: "Asia", tier: 5, colors: ["#FFCC00", "#FFFFFF", "#FF6600"], stadium: "Changlimithang Stadium", capacity: 25e3, reputation: 3, region: "JAPAN" /* JAPAN */ },
+  { name: "Hongkong", continent: "Asia", tier: 5, colors: ["#DE2910", "#FFFFFF", "#DE2910"], stadium: "Hong Kong Stadium", capacity: 4e4, reputation: 4, region: "JAPAN" /* JAPAN */ },
+  { name: "Indie", continent: "Asia", tier: 5, colors: ["#FF9933", "#FFFFFF", "#138808"], stadium: "Salt Lake Stadium", capacity: 85e3, reputation: 8, region: "ARABIA" /* ARABIA */ },
+  { name: "Kirgistan", continent: "Asia", tier: 5, colors: ["#E8112D", "#FFD100", "#E8112D"], stadium: "Dolen Omurzakov Stadium", capacity: 23e3, reputation: 8, region: "KAZAKH" /* KAZAKH */ },
+  { name: "Malediwy", continent: "Asia", tier: 5, colors: ["#D21034", "#007A3D", "#D21034"], stadium: "National Football Stadium", capacity: 7e3, reputation: 5, region: "ARABIA" /* ARABIA */ },
+  { name: "Mongolia", continent: "Asia", tier: 5, colors: ["#C4272F", "#0033A0", "#F9CF02"], stadium: "MFF Football Centre", capacity: 5e3, reputation: 3, region: "JAPAN" /* JAPAN */ },
+  { name: "Nepal", continent: "Asia", tier: 5, colors: ["#DC143C", "#003893", "#DC143C"], stadium: "Dasarath Rangasala", capacity: 15e3, reputation: 5, region: "ARABIA" /* ARABIA */ },
+  { name: "Pakistan", continent: "Asia", tier: 5, colors: ["#01411C", "#FFFFFF", "#01411C"], stadium: "Jinnah Sports Stadium", capacity: 3e4, reputation: 5, region: "ARABIA" /* ARABIA */ },
+  { name: "Sri Lanka", continent: "Asia", tier: 5, colors: ["#8D153A", "#F9E547", "#1C4FA1"], stadium: "Racecourse Stadium", capacity: 35e3, reputation: 5, region: "ARABIA" /* ARABIA */ },
+  { name: "Tad\u017Cykistan", continent: "Asia", tier: 5, colors: ["#CE1126", "#FFFFFF", "#007A3D"], stadium: "Central Republican Stadium", capacity: 23e3, reputation: 9, region: "EX_USSR" /* EX_USSR */ },
+  { name: "Turkmenistan", continent: "Asia", tier: 5, colors: ["#009E60", "#FFFFFF", "#CE1126"], stadium: "Ashgabat Stadium", capacity: 2e4, reputation: 7, region: "KAZAKH" /* KAZAKH */ },
+  { name: "Uzbekistan", continent: "Asia", tier: 4, colors: ["#0099B5", "#FFFFFF", "#1EB53A"], stadium: "Milliy Stadium", capacity: 34e3, reputation: 12, region: "KAZAKH" /* KAZAKH */ },
+  {
+    name: "Brunei",
+    continent: "Asia",
+    tier: 5,
+    colors: ["#000000", "#FFFFFF", "#CF1126"],
+    stadium: "Hassanal Bolkiah National Stadium",
+    capacity: 28e3,
+    reputation: 4,
+    region: "JAPAN" /* JAPAN */
+  },
+  {
+    name: "Chinese Taipei",
+    continent: "Asia",
+    tier: 5,
+    colors: ["#002868", "#FFFFFF", "#CE1126"],
+    stadium: "Kaohsiung National Stadium",
+    capacity: 55e3,
+    reputation: 6,
+    region: "JAPAN" /* JAPAN */
+  },
+  {
+    name: "Guam",
+    continent: "Asia",
+    tier: 5,
+    colors: ["#0033A0", "#FFFFFF", "#CE1126"],
+    stadium: "Guam National Football Stadium",
+    capacity: 3500,
+    reputation: 3,
+    region: "JAPAN" /* JAPAN */
+  }
+];
+
+// resources/static_db/NationalTeams/NationalTeamsCONCACAF.tsx
+var NATIONAL_TEAMS_CONCACAF = [
+  { name: "Stany Zjednoczone", continent: "North America", tier: 3, colors: ["#B22234", "#FFFFFF", "#3C3B6E"], stadium: "MetLife Stadium", capacity: 82500, reputation: 13, region: "NORTH_AMERICA" /* NORTH_AMERICA */ },
+  { name: "Meksyk", continent: "North America", tier: 2, colors: ["#006847", "#FFFFFF", "#CE1126"], stadium: "Estadio Azteca", capacity: 87e3, reputation: 14, region: "MEXICO" /* MEXICO */ },
+  { name: "Kanada", continent: "North America", tier: 3, colors: ["#D52B1E", "#FFFFFF", "#D52B1E"], stadium: "BMO Field", capacity: 3e4, reputation: 12, region: "NORTH_AMERICA" /* NORTH_AMERICA */ },
+  { name: "Kostaryka", continent: "North America", tier: 2, colors: ["#002B7F", "#FFFFFF", "#CE1126"], stadium: "Estadio Nacional", capacity: 35e3, reputation: 12, region: "IBERIA" /* IBERIA */ },
+  { name: "Panama", continent: "North America", tier: 2, colors: ["#0052A5", "#FFFFFF", "#EF3340"], stadium: "Estadio Rommel Fern\xE1ndez", capacity: 32e3, reputation: 12, region: "IBERIA" /* IBERIA */ },
+  { name: "Honduras", continent: "North America", tier: 5, colors: ["#0073CF", "#FFFFFF", "#0073CF"], stadium: "Estadio Ol\xEDmpico Metropolitano", capacity: 38e3, reputation: 10, region: "IBERIA" /* IBERIA */ },
+  { name: "Salwador", continent: "North America", tier: 4, colors: ["#0F47AF", "#FFFFFF", "#0F47AF"], stadium: "Estadio Cuscatl\xE1n", capacity: 53e3, reputation: 9, region: "IBERIA" /* IBERIA */ },
+  { name: "Gwatemala", continent: "North America", tier: 5, colors: ["#4997D0", "#FFFFFF", "#4997D0"], stadium: "Estadio Doroteo Guamuch Flores", capacity: 26e3, reputation: 8, region: "IBERIA" /* IBERIA */ },
+  { name: "Nikaragua", continent: "North America", tier: 5, colors: ["#0067C6", "#FFFFFF", "#0067C6"], stadium: "Estadio Nacional de F\xFAtbol", capacity: 15e3, reputation: 7, region: "IBERIA" /* IBERIA */ },
+  { name: "Belize", continent: "North America", tier: 5, colors: ["#003F87", "#FFFFFF", "#CE1126"], stadium: "FFB Stadium", capacity: 5e3, reputation: 4, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Jamajka", continent: "North America", tier: 3, colors: ["#009B3A", "#FED100", "#000000"], stadium: "Independence Park", capacity: 35e3, reputation: 10, region: "NORTH_AMERICA" /* NORTH_AMERICA */ },
+  { name: "Trynidad i Tobago", continent: "North America", tier: 3, colors: ["#CE1126", "#FFFFFF", "#000000"], stadium: "Hasely Crawford Stadium", capacity: 23e3, reputation: 9, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Haiti", continent: "North America", tier: 3, colors: ["#00209F", "#D21034", "#FFFFFF"], stadium: "Stade Sylvio Cator", capacity: 15e3, reputation: 9, region: "FRANCE" /* FRANCE */ },
+  { name: "Cura\xE7ao", continent: "North America", tier: 3, colors: ["#0033A0", "#FFD100", "#CE1126"], stadium: "Ergilio Hato Stadium", capacity: 15e3, reputation: 9, region: "BENELUX" /* BENELUX */ },
+  { name: "Surinam", continent: "North America", tier: 5, colors: ["#377E3F", "#FFFFFF", "#B40A2D"], stadium: "Andr\xE9 Kamperveen Stadium", capacity: 6e3, reputation: 7, region: "BENELUX" /* BENELUX */ },
+  { name: "Kuba", continent: "North America", tier: 5, colors: ["#002A8F", "#FFFFFF", "#CF142B"], stadium: "Estadio Pedro Marrero", capacity: 3e4, reputation: 8, region: "IBERIA" /* IBERIA */ },
+  { name: "Republika Dominikany", continent: "North America", tier: 5, colors: ["#002D62", "#FFFFFF", "#CE1126"], stadium: "Estadio Cibao FC", capacity: 14e3, reputation: 8, region: "IBERIA" /* IBERIA */ },
+  { name: "Antigua i Barbuda", continent: "North America", tier: 5, colors: ["#000000", "#CE1126", "#FFFFFF"], stadium: "Sir Vivian Richards Stadium", capacity: 1e4, reputation: 5, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Aruba", continent: "North America", tier: 5, colors: ["#418FDE", "#FFD100", "#CE1126"], stadium: "Guillermo Prospero Trinidad Stadium", capacity: 8e3, reputation: 5, region: "BENELUX" /* BENELUX */ },
+  { name: "Bahamy", continent: "North America", tier: 5, colors: ["#00ABC9", "#FFD100", "#000000"], stadium: "Thomas A. Robinson Stadium", capacity: 15e3, reputation: 4, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Barbados", continent: "North America", tier: 5, colors: ["#00267F", "#FFD100", "#000000"], stadium: "Wildey Turf", capacity: 3e3, reputation: 5, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Bermudy", continent: "North America", tier: 5, colors: ["#CE1126", "#FFFFFF", "#00247D"], stadium: "National Sports Centre", capacity: 8e3, reputation: 6, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Dominika", continent: "North America", tier: 5, colors: ["#006B3F", "#FFD100", "#000000"], stadium: "Windsor Park", capacity: 12e3, reputation: 4, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Grenada", continent: "North America", tier: 5, colors: ["#CE1126", "#FFD100", "#006B3F"], stadium: "Kirani James Athletic Stadium", capacity: 8e3, reputation: 5, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Kajmany", continent: "North America", tier: 5, colors: ["#00247D", "#FFFFFF", "#CF142B"], stadium: "Truman Bodden Sports Complex", capacity: 3e3, reputation: 4, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Montserrat", continent: "North America", tier: 5, colors: ["#00247D", "#FFFFFF", "#CF142B"], stadium: "Blakes Estate Stadium", capacity: 3e3, reputation: 3, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Saint Kitts i Nevis", continent: "North America", tier: 5, colors: ["#009E60", "#FCD116", "#CE1126"], stadium: "Warner Park Stadium", capacity: 8e3, reputation: 5, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Saint Lucia", continent: "North America", tier: 5, colors: ["#6CF", "#FFD100", "#000000"], stadium: "Daren Sammy Cricket Ground", capacity: 15e3, reputation: 5, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Saint Vincent i Grenadyny", continent: "North America", tier: 5, colors: ["#0052A5", "#FFD100", "#009E60"], stadium: "Arnos Vale Stadium", capacity: 18e3, reputation: 5, region: "ENGLAND" /* ENGLAND */ },
+  { name: "Turks i Caicos", continent: "North America", tier: 5, colors: ["#00247D", "#FFFFFF", "#CF142B"], stadium: "TCIFA National Academy", capacity: 3e3, reputation: 3, region: "ENGLAND" /* ENGLAND */ },
+  {
+    name: "Anguilla",
+    continent: "North America",
+    tier: 5,
+    colors: ["#FFFFFF", "#CE1126", "#00247D"],
+    stadium: "Raymond E. Lee Football Field",
+    capacity: 2500,
+    reputation: 5,
+    region: "ENGLAND" /* ENGLAND */
+  },
+  {
+    name: "Brytyjskie Wyspy Dziewicze",
+    continent: "North America",
+    tier: 5,
+    colors: ["#FFFFFF", "#00247D", "#CE1126"],
+    stadium: "A.O. Shirley Recreation Ground",
+    capacity: 5e3,
+    reputation: 5,
+    region: "ENGLAND" /* ENGLAND */
+  },
+  {
+    name: "Francuska Gujana",
+    continent: "North America",
+    tier: 5,
+    colors: ["#002395", "#FFFFFF", "#ED2939"],
+    stadium: "Stade de Badminton",
+    capacity: 7e3,
+    reputation: 6,
+    region: "FRANCE" /* FRANCE */
+  },
+  {
+    name: "Gujana",
+    continent: "North America",
+    tier: 5,
+    colors: ["#009E49", "#FFD100", "#CE1126"],
+    stadium: "Providence Stadium",
+    capacity: 15e3,
+    reputation: 6,
+    region: "ENGLAND" /* ENGLAND */
+  },
+  {
+    name: "Portoryko",
+    continent: "North America",
+    tier: 5,
+    colors: ["#002D62", "#FFFFFF", "#CE1126"],
+    stadium: "Estadio Juan Ram\xF3n Loubriel",
+    capacity: 22e3,
+    reputation: 7,
+    region: "IBERIA" /* IBERIA */
+  },
+  {
+    name: "Stany Zjednoczone Wyspy Dziewicze",
+    continent: "North America",
+    tier: 5,
+    colors: ["#FFFFFF", "#0033A0", "#CE1126"],
+    stadium: "Lionel Roberts Stadium",
+    capacity: 3500,
+    reputation: 3,
+    region: "ENGLAND" /* ENGLAND */
+  },
+  {
+    name: "Bonaire",
+    continent: "North America",
+    tier: 5,
+    colors: ["#FFFFFF", "#E30613", "#002395"],
+    stadium: "Stadion Kralendijk",
+    capacity: 3e3,
+    reputation: 4,
+    region: "BENELUX" /* BENELUX */
+  },
+  {
+    name: "Gwadelupa",
+    continent: "North America",
+    tier: 5,
+    colors: ["#002395", "#FFFFFF", "#ED2939"],
+    stadium: "Stade Jos\xE9phine-Charlotte",
+    capacity: 18e3,
+    reputation: 6,
+    region: "FRANCE" /* FRANCE */
+  },
+  {
+    name: "Martynika",
+    continent: "North America",
+    tier: 5,
+    colors: ["#002395", "#FFFFFF", "#ED2939"],
+    stadium: "Stade Pierre-Aliker",
+    capacity: 18e3,
+    reputation: 7,
+    region: "FRANCE" /* FRANCE */
+  },
+  {
+    name: "Saint-Martin",
+    continent: "North America",
+    tier: 5,
+    colors: ["#002395", "#FFFFFF", "#ED2939"],
+    stadium: "Stade de Marigot",
+    capacity: 2e3,
+    reputation: 3,
+    region: "FRANCE" /* FRANCE */
+  },
+  {
+    name: "Sint Maarten",
+    continent: "North America",
+    tier: 5,
+    colors: ["#CE1126", "#FFFFFF", "#00247D"],
+    stadium: "Raoul Illidge Sports Complex",
+    capacity: 3e3,
+    reputation: 3,
+    region: "BENELUX" /* BENELUX */
+  }
+];
+
+// resources/static_db/NationalTeams/NationalTeamsCONMEBOL.tsx
+var NATIONAL_TEAMS_CONMEBOL = [
+  { name: "Argentyna", continent: "South America", tier: 1, colors: ["#75AADB", "#FFFFFF", "#75AADB"], stadium: "Estadio Monumental", capacity: 84567, reputation: 20, region: "ARGENTINA" /* ARGENTINA */ },
+  { name: "Brazylia", continent: "South America", tier: 1, colors: ["#009C3B", "#FFDF00", "#002776"], stadium: "Maracan\xE3", capacity: 78838, reputation: 20, region: "BRAZIL" /* BRAZIL */ },
+  { name: "Urugwaj", continent: "South America", tier: 2, colors: ["#6CACE4", "#FFFFFF", "#6CACE4"], stadium: "Estadio Centenario", capacity: 60235, reputation: 15, region: "ARGENTINA" /* ARGENTINA */ },
+  { name: "Kolumbia", continent: "South America", tier: 2, colors: ["#FCD116", "#003893", "#CE1126"], stadium: "Estadio Metropolitano", capacity: 46e3, reputation: 14, region: "IBERIA" /* IBERIA */ },
+  { name: "Chile", continent: "South America", tier: 2, colors: ["#0039A6", "#FFFFFF", "#D52B1E"], stadium: "Estadio Nacional", capacity: 48665, reputation: 13, region: "IBERIA" /* IBERIA */ },
+  { name: "Peru", continent: "South America", tier: 3, colors: ["#D91023", "#FFFFFF", "#D91023"], stadium: "Estadio Nacional", capacity: 43086, reputation: 13, region: "IBERIA" /* IBERIA */ },
+  { name: "Ekwador", continent: "South America", tier: 3, colors: ["#FCD116", "#003893", "#CE1126"], stadium: "Estadio Rodrigo Paz Delgado", capacity: 41575, reputation: 12, region: "IBERIA" /* IBERIA */ },
+  { name: "Paragwaj", continent: "South America", tier: 3, colors: ["#D52B1E", "#FFFFFF", "#0038A8"], stadium: "Estadio Defensores del Chaco", capacity: 42e3, reputation: 11, region: "IBERIA" /* IBERIA */ },
+  { name: "Boliwia", continent: "South America", tier: 3, colors: ["#D52B1E", "#FCD116", "#007A33"], stadium: "Estadio Hernando Siles", capacity: 41e3, reputation: 9, region: "IBERIA" /* IBERIA */ },
+  { name: "Wenezuela", continent: "South America", tier: 3, colors: ["#F4C300", "#003DA5", "#C8102E"], stadium: "Estadio Ol\xEDmpico UCV", capacity: 24e3, reputation: 9, region: "IBERIA" /* IBERIA */ }
+];
+
+// resources/static_db/NationalTeams/NationalTeamsOFC.tsx
+var NATIONAL_TEAMS_OFC = [
+  { name: "Nowa Zelandia", continent: "Oceania", tier: 2, colors: ["#00247D", "#FFFFFF", "#CF142B"], stadium: "Eden Park", capacity: 5e4, reputation: 10, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Fid\u017Ci", continent: "Oceania", tier: 5, colors: ["#68BFE5", "#FFFFFF", "#CE1126"], stadium: "HFC Bank Stadium", capacity: 15e3, reputation: 5, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Wyspy Salomona", continent: "Oceania", tier: 5, colors: ["#215B33", "#0051BA", "#FCD116"], stadium: "Lawson Tama Stadium", capacity: 2e4, reputation: 5, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Papua-Nowa Gwinea", continent: "Oceania", tier: 5, colors: ["#000000", "#CE1126", "#FCD116"], stadium: "National Football Stadium", capacity: 15e3, reputation: 4, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Tahiti", continent: "Oceania", tier: 5, colors: ["#CE1126", "#FFFFFF", "#CE1126"], stadium: "Stade Pater", capacity: 1e4, reputation: 5, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Nowa Kaledonia", continent: "Oceania", tier: 5, colors: ["#0035AD", "#ED2939", "#009543"], stadium: "Stade Numa-Daly Magenta", capacity: 16e3, reputation: 5, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Vanuatu", continent: "Oceania", tier: 5, colors: ["#D21034", "#000000", "#009543"], stadium: "Korman Stadium", capacity: 6500, reputation: 5, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Samoa", continent: "Oceania", tier: 5, colors: ["#002B7F", "#CE1126", "#FFFFFF"], stadium: "Apia Park", capacity: 12e3, reputation: 4, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Samoa Ameryka\u0144skie", continent: "Oceania", tier: 5, colors: ["#002B7F", "#FFFFFF", "#CE1126"], stadium: "Pago Park Soccer Stadium", capacity: 2e3, reputation: 2, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Tonga", continent: "Oceania", tier: 5, colors: ["#CE1126", "#FFFFFF", "#CE1126"], stadium: "Teufaiva Sport Stadium", capacity: 1e4, reputation: 3, region: "OCEANIA" /* OCEANIA */ },
+  { name: "Wyspy Cooka", continent: "Oceania", tier: 5, colors: ["#00247D", "#FFFFFF", "#CF142B"], stadium: "National Stadium (Rarotonga)", capacity: 3e3, reputation: 3, region: "OCEANIA" /* OCEANIA */ }
+];
+
+// services/PlayerMoraleService.ts
+var DAY_MS = 24 * 60 * 60 * 1e3;
+
+// constants.ts
+var BOARD_LEVELS = ["bardzo_niska", "niska", "przecietna", "wysoka", "bardzo_wysoka"];
+var generateRandomBoard = () => ({
+  hojnosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  ambicja: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  cierpliwosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  chciwosc: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  oczekiwania: BOARD_LEVELS[Math.floor(Math.random() * 5)],
+  kompetencja: BOARD_LEVELS[Math.floor(Math.random() * 5)]
+});
+var REGION_NATIONALITY_LABEL = {
+  ["POLAND" /* POLAND */]: "Polska",
+  ["GERMANY" /* GERMANY */]: "Niemcy",
+  ["SPAIN" /* SPAIN */]: "Hiszpania",
+  ["ENGLAND" /* ENGLAND */]: "Anglia",
+  ["ITALY" /* ITALY */]: "W\u0142ochy",
+  ["FRANCE" /* FRANCE */]: "Francja",
+  ["BALKANS" /* BALKANS */]: "Ba\u0142kany",
+  ["CZ_SK" /* CZ_SK */]: "Czechy/S\u0142owacja",
+  ["SSA" /* SSA */]: "Afryka Subsaharyjska",
+  ["IBERIA" /* IBERIA */]: "P\xF3\u0142wysep Iberyjski",
+  ["NORTH_AMERICA" /* NORTH_AMERICA */]: "Ameryka P\xF3\u0142nocna",
+  ["MEXICO" /* MEXICO */]: "Meksyk",
+  ["OCEANIA" /* OCEANIA */]: "Oceania",
+  ["SWEDEN" /* SWEDEN */]: "Szwecja",
+  ["SCANDINAVIA" /* SCANDINAVIA */]: "Skandynawia",
+  ["EX_USSR" /* EX_USSR */]: "Europa Wschodnia",
+  ["JAPAN" /* JAPAN */]: "Japonia",
+  ["KOREA" /* KOREA */]: "Korea",
+  ["ARGENTINA" /* ARGENTINA */]: "Argentyna",
+  ["BRAZIL" /* BRAZIL */]: "Brazylia",
+  ["TURKEY" /* TURKEY */]: "Turcja",
+  ["ARABIA" /* ARABIA */]: "Arabia",
+  ["FINLAND" /* FINLAND */]: "Finlandia",
+  ["GEORGIA" /* GEORGIA */]: "Gruzja",
+  ["ARMENIA" /* ARMENIA */]: "Armenia",
+  ["ALBANIA" /* ALBANIA */]: "Albania",
+  ["ROMANIA" /* ROMANIA */]: "Rumunia",
+  ["BALTIC" /* BALTIC */]: "Kraje Ba\u0142tyckie",
+  ["BENELUX" /* BENELUX */]: "Benelux",
+  ["HUNGARIAN" /* HUNGARIAN */]: "W\u0119gry",
+  ["MALTESE" /* MALTESE */]: "Malta",
+  ["ISRAELI" /* ISRAELI */]: "Izrael",
+  ["GREEK" /* GREEK */]: "Grecja",
+  ["AZERBAIJANI" /* AZERBAIJANI */]: "Azerbejd\u017Can",
+  ["KAZAKH" /* KAZAKH */]: "Kazachstan",
+  ["SOUTH_AMERICAN" /* SOUTH_AMERICAN */]: "Ameryka Po\u0142udniowa"
+};
+var generateNTId = (name) => `NT_${name.toUpperCase().replace(/\s+/g, "_")}`;
+var processNT = (data) => data.map((t) => ({
+  ...t,
+  id: generateNTId(t.name),
+  colorsHex: t.colors,
+  stadiumName: t.stadium,
+  stadiumCapacity: t.capacity
+}));
+var STATIC_NATIONAL_TEAMS = [
+  ...processNT(NATIONAL_TEAMS_EUROPE),
+  ...processNT(NATIONAL_TEAMS_AFRICA),
+  ...processNT(NATIONAL_TEAMS_CONCACAF),
+  ...processNT(NATIONAL_TEAMS_CONMEBOL),
+  ...processNT(NATIONAL_TEAMS_OFC),
+  ...processNT(NATIONAL_TEAMS_AFC)
+];
+var STATIC_LEAGUES = [
+  { id: "L_PL_1", name: "Ekstraklasa", level: "TIER_1" /* TIER_1 */, teamIds: [] },
+  { id: "L_PL_2", name: "1. Liga", level: "TIER_2" /* TIER_2 */, teamIds: [] },
+  { id: "L_PL_3", name: "2. Liga", level: "TIER_3" /* TIER_3 */, teamIds: [] },
+  { id: "L_PL_4", name: "Liga Regionalna (starsze kariery)", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G1", name: "Betclic 3. Liga \u2013 Grupa 1", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G2", name: "Betclic 3. Liga \u2013 Grupa 2", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G3", name: "Betclic 3. Liga \u2013 Grupa 3", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_4_G4", name: "Betclic 3. Liga \u2013 Grupa 4", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_PL_5", name: "Regionalna pula IV lig", level: "TIER_4_HIDDEN" /* TIER_4_HIDDEN */, teamIds: [] },
+  { id: "L_CL", name: "UEFA Champions League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] },
+  { id: "L_EL", name: "UEFA Europa League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] },
+  { id: "L_CONF", name: "UEFA Conference League", level: "EUROPEAN" /* EUROPEAN */, teamIds: [] }
+];
+var generatePlaceholderClub = (leagueId, index, tier) => {
+  const id = `PL_TIER${tier}_PLACEHOLDER_${String(index).padStart(3, "0")}`;
+  const budget = FinanceService.calculateInitialBudget(tier, 1);
+  return {
+    id,
+    name: `Klub Placeholder ${index}`,
+    shortName: `P${index}`,
+    leagueId,
+    tier,
+    colorsHex: ["#808080", "#FFFFFF", "#000000"],
+    budget,
+    stadiumName: "Stadion Miejski TBD",
+    stadiumCapacity: 1e3,
+    reputation: 1,
+    isDefaultActive: true,
+    colorPrimary: "#808080",
+    colorSecondary: "#FFFFFF",
+    rosterIds: [],
+    stats: {
+      points: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      goalDifference: 0,
+      played: 0,
+      form: []
+    },
+    boardStrictness: Math.floor(Math.random() * 10) + 1,
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, 1),
+    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, 1),
+    boardBudgetRequestsThisSeason: 0,
+    signingBonusPool: 0,
+    board: generateRandomBoard(),
+    boardConfidence: 75
+  };
+};
+var loadClubsForTier = (tier, leagueId, limit) => {
+  const rawClubs = RAW_PL_CLUBS.filter((c) => c.tier === tier);
+  const clubs = [];
+  rawClubs.forEach((raw, index) => {
+    const isActive = index < limit;
+    const assignedLeagueId = isActive ? leagueId : "NONE";
+    const budget = FinanceService.calculateInitialBudget(tier, raw.reputation);
+    const club = {
+      id: generateClubId(raw.name),
+      name: raw.name,
+      shortName: raw.name.substring(0, 3).toUpperCase(),
+      leagueId: assignedLeagueId,
+      tier: raw.tier,
+      colorsHex: raw.colors,
+      stadiumName: raw.stadium,
+      stadiumCapacity: raw.capacity,
+      reputation: raw.reputation,
+      isDefaultActive: isActive,
+      budget,
+      transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
+      reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
+      boardBudgetRequestsThisSeason: 0,
+      boardStrictness: Math.floor(Math.random() * 10) + 1,
+      signingBonusPool: FinanceService.calculateInitialSigningPool(
+        budget,
+        raw.reputation
+      ),
+      logoFile: raw.logoFile,
+      stadiumSeatColors: raw.stadiumSeatColors,
+      board: generateRandomBoard(),
+      boardConfidence: 75,
+      colorPrimary: raw.colors[0],
+      colorSecondary: raw.colors[1] || "#FFFFFF",
+      rosterIds: [],
+      stats: {
+        points: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        goalDifference: 0,
+        played: 0,
+        form: []
+      }
+    };
+    clubs.push(club);
+  });
+  if (tier < 4) {
+    const activeCount = clubs.filter((c) => c.isDefaultActive).length;
+    if (activeCount < limit) {
+      const missing = limit - activeCount;
+      for (let i = 0; i < missing; i++) {
+        clubs.push(generatePlaceholderClub(leagueId, i + 1, tier));
+      }
+    }
+  }
+  return clubs;
+};
+var clubsTier1 = loadClubsForTier(1, "L_PL_1", 18);
+var clubsTier2 = loadClubsForTier(2, "L_PL_2", 18);
+var clubsTier3 = loadClubsForTier(3, "L_PL_3", 18);
+var clubsTier4 = loadClubsForTier(4, "L_PL_5", 100);
+var STATIC_CLUBS = [
+  ...clubsTier1,
+  ...clubsTier2,
+  ...clubsTier3,
+  ...clubsTier4
+];
+var STATIC_CL_CLUBS = RAW_CHAMPIONS_LEAGUE_CLUBS.map((raw) => {
+  const budget = FinanceService.calculateEuropeanInitialBudget(raw.tier, raw.reputation, raw.country, raw.name, raw.capacity);
+  return {
+    id: generateEuropeanClubId(raw.name),
+    name: raw.name,
+    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
+    leagueId: "L_CL",
+    tier: raw.tier,
+    colorsHex: raw.colors,
+    stadiumName: raw.stadium,
+    stadiumCapacity: raw.capacity,
+    reputation: raw.reputation,
+    country: raw.country,
+    isDefaultActive: true,
+    colorPrimary: raw.colors[0],
+    colorSecondary: raw.colors[1] || "#FFFFFF",
+    rosterIds: [],
+    budget,
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
+    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
+    boardBudgetRequestsThisSeason: 0,
+    boardStrictness: 5,
+    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
+    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+    isInPolishCup: false,
+    board: generateRandomBoard(),
+    boardConfidence: 75
+  };
+});
+var STATIC_EL_CLUBS = RAW_EUROPA_LEAGUE_CLUBS.map((raw) => {
+  const budget = FinanceService.calculateEuropeanInitialBudget(raw.tier, raw.reputation, raw.country, raw.name, raw.capacity);
+  return {
+    id: generateELClubId(raw.name),
+    name: raw.name,
+    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
+    leagueId: "L_EL",
+    tier: raw.tier,
+    colorsHex: raw.colors,
+    stadiumName: raw.stadium,
+    stadiumCapacity: raw.capacity,
+    reputation: raw.reputation,
+    country: raw.country,
+    isDefaultActive: true,
+    colorPrimary: raw.colors[0],
+    colorSecondary: raw.colors[1] || "#FFFFFF",
+    rosterIds: [],
+    budget,
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
+    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
+    boardBudgetRequestsThisSeason: 0,
+    boardStrictness: 5,
+    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
+    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+    isInPolishCup: false,
+    board: generateRandomBoard(),
+    boardConfidence: 75
+  };
+});
+var STATIC_CONF_CLUBS = RAW_CONFERENCE_LEAGUE_CLUBS.map((raw) => {
+  const budget = FinanceService.calculateEuropeanInitialBudget(raw.tier, raw.reputation, raw.country, raw.name, raw.capacity);
+  return {
+    id: generateCONFClubId(raw.name),
+    name: raw.name,
+    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
+    leagueId: "L_CONF",
+    tier: raw.tier,
+    colorsHex: raw.colors,
+    stadiumName: raw.stadium,
+    stadiumCapacity: raw.capacity,
+    reputation: raw.reputation,
+    country: raw.country,
+    isDefaultActive: true,
+    colorPrimary: raw.colors[0],
+    colorSecondary: raw.colors[1] || "#FFFFFF",
+    rosterIds: [],
+    budget,
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
+    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
+    boardBudgetRequestsThisSeason: 0,
+    boardStrictness: 5,
+    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
+    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+    isInPolishCup: false
+  };
+});
+var buildInternationalClub = (raw, id, leagueId) => {
+  const budget = FinanceService.calculateInitialBudget(raw.tier, raw.reputation);
+  return {
+    id,
+    name: raw.name,
+    shortName: raw.name.split(" ").pop()?.substring(0, 6).toUpperCase() || raw.name.substring(0, 6).toUpperCase(),
+    leagueId,
+    tier: raw.tier,
+    colorsHex: raw.colors,
+    stadiumName: raw.stadium,
+    stadiumCapacity: raw.capacity,
+    reputation: raw.reputation,
+    country: raw.country,
+    isDefaultActive: true,
+    colorPrimary: raw.colors[0],
+    colorSecondary: raw.colors[1] || "#FFFFFF",
+    rosterIds: [],
+    budget,
+    transferBudget: FinanceService.calculateInitialTransferBudget(budget, raw.reputation),
+    reserveBudget: FinanceService.calculateInitialReserveBudget(budget, raw.reputation),
+    boardBudgetRequestsThisSeason: 0,
+    boardStrictness: 5,
+    signingBonusPool: FinanceService.calculateInitialSigningPool(budget, raw.reputation),
+    stats: { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, played: 0, form: [] },
+    isInPolishCup: false,
+    board: generateRandomBoard(),
+    boardConfidence: 75
+  };
+};
+var STATIC_SA_CLUBS = CLUBS_SOUTH_AMERICA.map(
+  (raw) => buildInternationalClub(raw, generateSAClubId(raw.name), "L_SA")
+);
+var STATIC_ASIAN_CLUBS = CLUBS_ASIAN.map(
+  (raw) => buildInternationalClub(raw, generateAsianClubId(raw.name), "L_ASIA")
+);
+var STATIC_AFRICAN_CLUBS = CLUBS_AFRICAN.map(
+  (raw) => buildInternationalClub(raw, generateAfricanClubId(raw.name), "L_AFRICA")
+);
+var STATIC_NA_CLUBS = CLUBS_NORTH_AMERICA.map(
+  (raw) => buildInternationalClub(raw, generateNorthAmericaClubId(raw.name), "L_NA")
+);
+STATIC_LEAGUES.forEach((l) => {
+  l.teamIds = [...STATIC_CLUBS, ...STATIC_CL_CLUBS, ...STATIC_EL_CLUBS, ...STATIC_CONF_CLUBS].filter((c) => c.leagueId === l.id && c.isDefaultActive).map((c) => c.id);
+});
+
+// resources/tactics_db.ts
+var createSlot = (index, role, x, y) => ({ index, role, x, y });
+var TACTICS_DB = [
+  {
+    id: "4-4-2",
+    name: "4-4-2 Classic",
+    category: "Neutral",
+    attackBias: 50,
+    defenseBias: 50,
+    pressingIntensity: 50,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      // GK
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      // LB
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      // CB
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      // CB
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      // RB
+      createSlot(5, "MID" /* MID */, 0.15, 0.45),
+      // LM
+      createSlot(6, "MID" /* MID */, 0.38, 0.45),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.62, 0.45),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.85, 0.45),
+      // RM
+      createSlot(9, "FWD" /* FWD */, 0.35, 0.2),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.65, 0.2)
+      // ST
+    ]
+  },
+  {
+    id: "4-4-2-OFF",
+    name: "4-4-2 Offensive",
+    category: "Offensive",
+    attackBias: 75,
+    defenseBias: 35,
+    pressingIntensity: 75,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.1, 0.3),
+      // LM (Wysoko)
+      createSlot(6, "MID" /* MID */, 0.4, 0.5),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.6, 0.5),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.9, 0.3),
+      // RM (Wysoko)
+      createSlot(9, "FWD" /* FWD */, 0.4, 0.15),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.6, 0.15)
+      // ST
+    ]
+  },
+  {
+    id: "4-4-2-DEF",
+    name: "4-4-2 Defensive",
+    category: "Defensive",
+    attackBias: 30,
+    defenseBias: 80,
+    pressingIntensity: 40,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.15, 0.51),
+      // LM (Cofnięty)
+      createSlot(6, "MID" /* MID */, 0.4, 0.61),
+      // CDM
+      createSlot(7, "MID" /* MID */, 0.6, 0.61),
+      // CDM
+      createSlot(8, "MID" /* MID */, 0.85, 0.51),
+      // RM (Cofnięty)
+      createSlot(9, "FWD" /* FWD */, 0.43, 0.3),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.57, 0.3)
+      // ST
+    ]
+  },
+  {
+    id: "4-4-2-DIAMOND",
+    name: "4-4-2 Diamond",
+    category: "Technical",
+    attackBias: 60,
+    defenseBias: 55,
+    pressingIntensity: 60,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.5, 0.65),
+      // CDM
+      createSlot(6, "MID" /* MID */, 0.25, 0.45),
+      // CM (Lewy)
+      createSlot(7, "MID" /* MID */, 0.75, 0.45),
+      // CM (Prawy)
+      createSlot(8, "MID" /* MID */, 0.5, 0.3),
+      // CAM
+      createSlot(9, "FWD" /* FWD */, 0.35, 0.15),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.65, 0.15)
+      // ST
+    ]
+  },
+  {
+    id: "6-3-1",
+    name: "6-3-1 Ultra Defensive",
+    category: "Park Bus",
+    attackBias: 5,
+    defenseBias: 95,
+    pressingIntensity: 20,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.08, 0.75),
+      // LWB
+      createSlot(2, "DEF" /* DEF */, 0.25, 0.8),
+      // CB
+      createSlot(3, "DEF" /* DEF */, 0.42, 0.82),
+      // CB
+      createSlot(4, "DEF" /* DEF */, 0.58, 0.82),
+      // CB
+      createSlot(5, "DEF" /* DEF */, 0.75, 0.8),
+      // CB
+      createSlot(6, "DEF" /* DEF */, 0.92, 0.75),
+      // RWB
+      createSlot(7, "MID" /* MID */, 0.25, 0.55),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.5, 0.6),
+      // CDM
+      createSlot(9, "MID" /* MID */, 0.75, 0.55),
+      // CM
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.3)
+      // ST (Samotny)
+    ]
+  },
+  {
+    id: "4-2-4",
+    name: "4-2-4 Brazilian",
+    category: "Ultra-Offensive",
+    attackBias: 90,
+    defenseBias: 10,
+    pressingIntensity: 85,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.35, 0.55),
+      // CM
+      createSlot(6, "MID" /* MID */, 0.65, 0.55),
+      // CM
+      createSlot(7, "FWD" /* FWD */, 0.1, 0.2),
+      // LW
+      createSlot(8, "FWD" /* FWD */, 0.4, 0.15),
+      // ST
+      createSlot(9, "FWD" /* FWD */, 0.6, 0.15),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.9, 0.2)
+      // RW
+    ]
+  },
+  {
+    id: "4-3-3",
+    name: "4-3-3 Offensive",
+    category: "Offensive",
+    attackBias: 75,
+    defenseBias: 30,
+    pressingIntensity: 80,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.5, 0.55),
+      // CDM
+      createSlot(6, "MID" /* MID */, 0.3, 0.45),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.7, 0.45),
+      // CM
+      createSlot(8, "FWD" /* FWD */, 0.15, 0.2),
+      // LW
+      createSlot(9, "FWD" /* FWD */, 0.5, 0.15),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.85, 0.2)
+      // RW
+    ]
+  },
+  {
+    id: "4-2-3-1",
+    name: "4-2-3-1 Wide",
+    category: "Neutral",
+    attackBias: 60,
+    defenseBias: 60,
+    pressingIntensity: 60,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.4, 0.6),
+      // CDM
+      createSlot(6, "MID" /* MID */, 0.6, 0.6),
+      // CDM
+      createSlot(7, "MID" /* MID */, 0.15, 0.35),
+      // LM/LW
+      createSlot(8, "MID" /* MID */, 0.5, 0.35),
+      // CAM
+      createSlot(9, "MID" /* MID */, 0.85, 0.35),
+      // RM/RW
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.15)
+      // ST
+    ]
+  },
+  {
+    id: "3-5-2",
+    name: "3-5-2 Possession",
+    category: "Neutral",
+    attackBias: 65,
+    defenseBias: 45,
+    pressingIntensity: 70,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.3, 0.75),
+      // CB
+      createSlot(2, "DEF" /* DEF */, 0.5, 0.75),
+      // CB
+      createSlot(3, "DEF" /* DEF */, 0.7, 0.75),
+      // CB
+      createSlot(4, "MID" /* MID */, 0.1, 0.5),
+      // LWB
+      createSlot(5, "MID" /* MID */, 0.35, 0.55),
+      // CM
+      createSlot(6, "MID" /* MID */, 0.5, 0.6),
+      // CDM
+      createSlot(7, "MID" /* MID */, 0.65, 0.55),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.9, 0.5),
+      // RWB
+      createSlot(9, "FWD" /* FWD */, 0.4, 0.2),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.6, 0.2)
+      // ST
+    ]
+  },
+  {
+    id: "5-3-2",
+    name: "5-3-2 Fortress",
+    category: "Defensive",
+    attackBias: 20,
+    defenseBias: 90,
+    pressingIntensity: 30,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.1, 0.65),
+      // LWB
+      createSlot(2, "DEF" /* DEF */, 0.3, 0.75),
+      // CB
+      createSlot(3, "DEF" /* DEF */, 0.5, 0.75),
+      // CB
+      createSlot(4, "DEF" /* DEF */, 0.7, 0.75),
+      // CB
+      createSlot(5, "DEF" /* DEF */, 0.9, 0.65),
+      // RWB
+      createSlot(6, "MID" /* MID */, 0.35, 0.5),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.5, 0.5),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.65, 0.5),
+      // CM
+      createSlot(9, "FWD" /* FWD */, 0.4, 0.25),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.6, 0.25)
+      // ST
+    ]
+  },
+  {
+    id: "4-5-1",
+    name: "4-5-1 Park Bus",
+    category: "Defensive",
+    attackBias: 30,
+    defenseBias: 85,
+    pressingIntensity: 40,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.1, 0.5),
+      // LM
+      createSlot(6, "MID" /* MID */, 0.3, 0.55),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.5, 0.55),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.7, 0.55),
+      // CM
+      createSlot(9, "MID" /* MID */, 0.9, 0.5),
+      // RM
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.25)
+      // ST
+    ]
+  },
+  {
+    id: "4-1-4-1",
+    name: "4-1-4-1 Control",
+    category: "Neutral",
+    attackBias: 55,
+    defenseBias: 55,
+    pressingIntensity: 65,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.5, 0.65),
+      // CDM
+      createSlot(6, "MID" /* MID */, 0.15, 0.45),
+      // LM
+      createSlot(7, "MID" /* MID */, 0.38, 0.45),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.62, 0.45),
+      // CM
+      createSlot(9, "MID" /* MID */, 0.85, 0.45),
+      // RM
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.2)
+      // ST
+    ]
+  },
+  {
+    id: "3-4-3",
+    name: "3-4-3 Total",
+    category: "Offensive",
+    attackBias: 85,
+    defenseBias: 20,
+    pressingIntensity: 90,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.25, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.5, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.75, 0.75),
+      createSlot(4, "MID" /* MID */, 0.1, 0.5),
+      // LM
+      createSlot(5, "MID" /* MID */, 0.4, 0.5),
+      // CM
+      createSlot(6, "MID" /* MID */, 0.6, 0.5),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.9, 0.5),
+      // RM
+      createSlot(8, "FWD" /* FWD */, 0.2, 0.2),
+      // LW
+      createSlot(9, "FWD" /* FWD */, 0.5, 0.15),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.8, 0.2)
+      // RW
+    ]
+  },
+  {
+    id: "5-4-1",
+    name: "5-4-1 Diamond",
+    category: "Defensive",
+    attackBias: 35,
+    defenseBias: 80,
+    pressingIntensity: 50,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.1, 0.65),
+      // LWB
+      createSlot(2, "DEF" /* DEF */, 0.3, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.5, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.7, 0.75),
+      createSlot(5, "DEF" /* DEF */, 0.9, 0.65),
+      // RWB
+      createSlot(6, "MID" /* MID */, 0.5, 0.6),
+      // CDM
+      createSlot(7, "MID" /* MID */, 0.3, 0.5),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.7, 0.5),
+      // CM
+      createSlot(9, "MID" /* MID */, 0.5, 0.4),
+      // CAM
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.2)
+      // ST
+    ]
+  },
+  {
+    id: "4-3-2-1",
+    name: "4-3-2-1 Xmas Tree",
+    category: "Neutral",
+    attackBias: 60,
+    defenseBias: 50,
+    pressingIntensity: 55,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.3, 0.55),
+      createSlot(6, "MID" /* MID */, 0.5, 0.55),
+      createSlot(7, "MID" /* MID */, 0.7, 0.55),
+      createSlot(8, "MID" /* MID */, 0.4, 0.35),
+      // CAM
+      createSlot(9, "MID" /* MID */, 0.6, 0.35),
+      // CAM
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.2)
+      // ST
+    ]
+  },
+  {
+    id: "3-4-2-1",
+    name: "3-4-2-1 Box Control",
+    category: "Technical",
+    attackBias: 65,
+    defenseBias: 40,
+    pressingIntensity: 70,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.25, 0.75),
+      // CB
+      createSlot(2, "DEF" /* DEF */, 0.5, 0.78),
+      // CB
+      createSlot(3, "DEF" /* DEF */, 0.75, 0.75),
+      // CB
+      createSlot(4, "MID" /* MID */, 0.1, 0.5),
+      // LWB
+      createSlot(5, "MID" /* MID */, 0.38, 0.55),
+      // CM
+      createSlot(6, "MID" /* MID */, 0.62, 0.55),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.9, 0.5),
+      // RWB
+      createSlot(8, "MID" /* MID */, 0.38, 0.35),
+      // CAM
+      createSlot(9, "MID" /* MID */, 0.62, 0.35),
+      // CAM
+      createSlot(10, "FWD" /* FWD */, 0.5, 0.15)
+      // ST
+    ]
+  },
+  {
+    id: "4-3-3-F9",
+    name: "4-3-3 False Nine",
+    category: "Possession",
+    attackBias: 80,
+    defenseBias: 35,
+    pressingIntensity: 75,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.15, 0.75),
+      createSlot(2, "DEF" /* DEF */, 0.38, 0.75),
+      createSlot(3, "DEF" /* DEF */, 0.62, 0.75),
+      createSlot(4, "DEF" /* DEF */, 0.85, 0.75),
+      createSlot(5, "MID" /* MID */, 0.5, 0.65),
+      // CDM
+      createSlot(6, "MID" /* MID */, 0.3, 0.45),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.7, 0.45),
+      // CM
+      createSlot(8, "FWD" /* FWD */, 0.15, 0.25),
+      // LW
+      createSlot(9, "FWD" /* FWD */, 0.5, 0.35),
+      // CF (False Nine)
+      createSlot(10, "FWD" /* FWD */, 0.85, 0.25)
+      // RW
+    ]
+  },
+  {
+    id: "5-2-1-2",
+    name: "5-2-1-2 Vertical Counter",
+    category: "Counter",
+    attackBias: 45,
+    defenseBias: 85,
+    pressingIntensity: 45,
+    slots: [
+      createSlot(0, "GK" /* GK */, 0.5, 0.92),
+      createSlot(1, "DEF" /* DEF */, 0.1, 0.72),
+      // LWB
+      createSlot(2, "DEF" /* DEF */, 0.3, 0.78),
+      // CB
+      createSlot(3, "DEF" /* DEF */, 0.5, 0.82),
+      // CB
+      createSlot(4, "DEF" /* DEF */, 0.7, 0.78),
+      // CB
+      createSlot(5, "DEF" /* DEF */, 0.9, 0.72),
+      // RWB
+      createSlot(6, "MID" /* MID */, 0.4, 0.55),
+      // CM
+      createSlot(7, "MID" /* MID */, 0.6, 0.55),
+      // CM
+      createSlot(8, "MID" /* MID */, 0.5, 0.35),
+      // CAM
+      createSlot(9, "FWD" /* FWD */, 0.38, 0.18),
+      // ST
+      createSlot(10, "FWD" /* FWD */, 0.62, 0.18)
+      // ST
+    ]
+  }
+];
+var TacticRepository = {
+  getAll: () => TACTICS_DB,
+  getById: (id) => TACTICS_DB.find((t) => t.id === id) || TACTICS_DB[0],
+  getDefault: () => TACTICS_DB[0]
+  // 4-4-2
+};
+
+// services/PolishThirdLeagueService.ts
+var THIRD_LEAGUE_GROUP_IDS = [
+  "L_PL_4_G1",
+  "L_PL_4_G2",
+  "L_PL_4_G3",
+  "L_PL_4_G4"
+];
+var GROUP_BY_VOIVODESHIP = {
+  "\u0142\xF3dzkie": "L_PL_4_G1",
+  "mazowieckie": "L_PL_4_G1",
+  "podlaskie": "L_PL_4_G1",
+  "warmi\u0144sko-mazurskie": "L_PL_4_G1",
+  "kujawsko-pomorskie": "L_PL_4_G2",
+  "pomorskie": "L_PL_4_G2",
+  "wielkopolskie": "L_PL_4_G2",
+  "zachodniopomorskie": "L_PL_4_G2",
+  "dolno\u015Bl\u0105skie": "L_PL_4_G3",
+  "lubuskie": "L_PL_4_G3",
+  "opolskie": "L_PL_4_G3",
+  "\u015Bl\u0105skie": "L_PL_4_G3",
+  "lubelskie": "L_PL_4_G4",
+  "ma\u0142opolskie": "L_PL_4_G4",
+  "podkarpackie": "L_PL_4_G4",
+  "\u015Bwi\u0119tokrzyskie": "L_PL_4_G4"
+};
+var PolishThirdLeagueService = {
+  isThirdLeagueId(leagueId) {
+    return THIRD_LEAGUE_GROUP_IDS.includes(leagueId);
+  },
+  isThirdLeagueClub(club) {
+    return this.isThirdLeagueId(club.leagueId);
+  },
+  getGroupForVoivodeship(voivodeship) {
+    return GROUP_BY_VOIVODESHIP[voivodeship];
+  },
+  getGroupForClub(club) {
+    if (!club.polishVoivodeship) {
+      throw new Error(`Club ${club.id} cannot be routed to III liga: polishVoivodeship is missing.`);
+    }
+    return GROUP_BY_VOIVODESHIP[club.polishVoivodeship];
+  },
+  getPolishTier(leagueId) {
+    if (this.isThirdLeagueId(leagueId) || leagueId === "L_PL_4") return 4;
+    if (leagueId === "L_PL_5" || /^L_PL_5_/.test(leagueId ?? "")) return 5;
+    if (/^L_PL_6_/.test(leagueId ?? "")) return 6;
+    const match = /^L_PL_([1-3])$/.exec(leagueId ?? "");
+    return match ? Number(match[1]) : null;
+  }
+};
+
+// resources/static_db/clubs/pl_fourth_league_2026.ts
+var POLISH_FOURTH_LEAGUE_2026 = {
+  "dolno\u015Bl\u0105skie": [
+    "Cement Raciborowice",
+    "Piast \u017Bmigr\xF3d",
+    "Moto-Jelcz O\u0142awa",
+    "AKS Strzegom",
+    "Iskra Ksi\u0119ginice",
+    "Polonia Bielany Wroc\u0142awskie",
+    "WKS Wierzbice",
+    "GKS Mirk\xF3w/D\u0142ugo\u0142\u0119ka",
+    "G\xF3rnik Z\u0142otoryja",
+    "Chrobry II G\u0142og\xF3w",
+    "Lechia Dzier\u017Coni\xF3w",
+    "Piast Nowa Ruda",
+    "B\u0142yskawica Ga\u0107",
+    "Orze\u0142 Z\u0105bkowice \u015Al\u0105skie",
+    "Polonia \u015Aroda \u015Al\u0105ska",
+    "Odra \u015Acinawa",
+    "Polonia-Stal \u015Awidnica",
+    "Prochowiczanka Prochowice"
+  ],
+  "kujawsko-pomorskie": [
+    "Pogo\u0144 Mogilno",
+    "T\u0142uchowia T\u0142uchowo",
+    "Unia Solec Kujawski",
+    "Pomorzanin Toru\u0144",
+    "Unia W\u0105brze\u017Ano",
+    "Mustang Ostaszewo",
+    "Victoria Czernikowo",
+    "Kujawiak Kowal",
+    "Wis\u0142a Dobrzy\u0144 nad Wis\u0142\u0105",
+    "Lech Rypin",
+    "Sparta Brodnica",
+    "Skrwa Skrwilno",
+    "Rawys Raci\u0105\u017C",
+    "Start Pruszcz",
+    "Orl\u0119ta Aleksandr\xF3w Kujawski",
+    "Note\u0107 G\u0119bice",
+    "Cuiavia Inowroc\u0142aw",
+    "\u0141okietek Brze\u015B\u0107 Kujawski"
+  ],
+  "lubelskie": [
+    "Lublinianka Lublin",
+    "Avia II \u015Awidnik",
+    "\u0141ada Bi\u0142goraj",
+    "Orl\u0119ta Radzy\u0144 Podlaski",
+    "Victoria \u0141ukowa",
+    "Tur Milej\xF3w",
+    "Granit Bychawa",
+    "Tomasovia Tomasz\xF3w Lubelski",
+    "Powi\u015Blak Ko\u0144skowola",
+    "Bug Hanna",
+    "MKS Ryki",
+    "Lewart Lubart\xF3w",
+    "Orl\u0119ta \u0141uk\xF3w",
+    "Janowianka Jan\xF3w Lubelski",
+    "\u015Awidniczanka \u015Awidnik",
+    "G\xF3rnik II \u0141\u0119czna"
+  ],
+  "lubuskie": [
+    "Victoria Szczaniec",
+    "Korona Ko\u017Cuch\xF3w",
+    "Czarni \u017Baga\u0144",
+    "Polonia S\u0142ubice",
+    "Ilanka Rzepin",
+    "Odra Nietk\xF3w",
+    "Piast Karnin",
+    "Celuloza Kostrzyn",
+    "R\xF3\u017Ca R\xF3\u017Canki",
+    "Pogo\u0144 Skwierzyna",
+    "Pogo\u0144 \u015Awiebodzin",
+    "Piast I\u0142owa",
+    "\u0141ucznik Strzelce Kraje\u0144skie",
+    "Promie\u0144 \u017Bary",
+    "Sprotavia Szprotawa",
+    "Lechia II Zielona G\xF3ra",
+    "Dozamet Nowa S\xF3l",
+    "Stal Sul\u0119cin"
+  ],
+  "\u0142\xF3dzkie": [
+    "RKS Radomsko",
+    "Zjednoczeni Stryk\xF3w",
+    "Polonia Piotrk\xF3w Trybunalski",
+    "Boruta Zgierz",
+    "Orkan Buczek",
+    "AKS SMS \u0141\xF3d\u017A",
+    "Ceramika Opoczno",
+    "Stal G\u0142owno",
+    "W\u0142\xF3kniarz Pabianice",
+    "GKS Be\u0142chat\xF3w",
+    "Sok\xF3\u0142 Aleksandr\xF3w \u0141\xF3dzki",
+    "Zryw Wygoda",
+    "KS Kutno",
+    "Orze\u0142 Parz\u0119czew",
+    "\u0141KS III \u0141\xF3d\u017A",
+    "Concordia Piotrk\xF3w Trybunalski",
+    "Ekolog Wojs\u0142awice",
+    "LZS Justyn\xF3w"
+  ],
+  "ma\u0142opolskie": [
+    "Cracovia II",
+    "Unia Tarn\xF3w",
+    "Boche\u0144ski KS",
+    "Victoria Jaworzno",
+    "Wolania Wola Rz\u0119dzi\u0144ska",
+    "Poprad Muszyna",
+    "Glinik Gorlice",
+    "Beskid Andrych\xF3w",
+    "Kalwarianka Kalwaria Zebrzydowska",
+    "Termalica II Nieciecza",
+    "Pcimianka Pcim",
+    "B\u0142\u0119kitni Modlnica",
+    "Luba\u0144 Maniowy",
+    "Dalin My\u015Blenice",
+    "Orze\u0142 Rycz\xF3w",
+    "Hutnik II Krak\xF3w",
+    "Limanovia Limanowa",
+    "Watra Bia\u0142ka Tatrza\u0144ska"
+  ],
+  "mazowieckie": [
+    "Hutnik Warszawa",
+    "Legionovia Legionowo",
+    "Podlasie Soko\u0142\xF3w Podlaski",
+    "Polonia II Warszawa",
+    "Bro\u0144 Radom",
+    "Makowianka Mak\xF3w Mazowiecki",
+    "Mazur Karczew",
+    "Ursus Warszawa",
+    "Mszczonowianka Mszczon\xF3w",
+    "MKS Piaseczno",
+    "Energia Kozienice",
+    "Talent Warszawa",
+    "B\u0142onianka B\u0142onie",
+    "KS \u0141omianki",
+    "Victoria Sulej\xF3wek",
+    "Oskar Przysucha",
+    "Nadnarwianka Pu\u0142tusk",
+    "MKS Przasnysz"
+  ],
+  "opolskie": [
+    "Odra II Opole",
+    "Ruch Zdzieszowice",
+    "LZS Domaszkowice",
+    "LZS Staro\u015Bcin",
+    "LZS Starowice Dolne",
+    "Start Namys\u0142\xF3w",
+    "Victoria \u017Byrowa",
+    "\u015Al\u0105sk \u0141ubniany",
+    "Ma\u0142apanew Ozimek",
+    "LKS Kad\u0142ub",
+    "MKS Gogolin",
+    "Stal Zawadzkie",
+    "Fortuna G\u0142og\xF3wek",
+    "Porawie Wi\u0119kszyce"
+  ],
+  "podkarpackie": [
+    "Igloopol D\u0119bica",
+    "KS Wi\u0105zownica",
+    "Ekoball Sanok",
+    "Izolator Boguchwa\u0142a",
+    "B\u0142\u0119kitni Ropczyce",
+    "Sok\xF3\u0142 Nisko",
+    "Polonia Przemy\u015Bl",
+    "Stal II Rzesz\xF3w",
+    "Legion Pilzno",
+    "Czarni Jas\u0142o",
+    "Sok\xF3\u0142 Sieniawa",
+    "Pogo\u0144-Sok\xF3\u0142 II Lubacz\xF3w",
+    "G\xF3rnik Strachocina",
+    "Wis\u0142ok Wi\u015Bniowa",
+    "Radomy\u015Blanka Radomy\u015Bl",
+    "Pogo\u0144 Le\u017Cajsk",
+    "Strug Tyczyn",
+    "Stal \u0141a\u0144cut"
+  ],
+  "podlaskie": [
+    "Warmia Grajewo",
+    "KS Wasilk\xF3w",
+    "Promie\u0144 Mo\u0144ki",
+    "Wissa Szczuczyn",
+    "\u0141KS II \u0141om\u017Ca",
+    "KS Micha\u0142owo",
+    "Hetman Tykocin",
+    "Pionier Bra\u0144sk",
+    "Tur Bielsk Podlaski",
+    "Czarni Czarna Bia\u0142ostocka",
+    "Supra\u015Blanka Supra\u015Bl",
+    "Krypnianka Krypno",
+    "KS \u015Aniadowo",
+    "Ruch Wysokie Mazowieckie",
+    "Pomorzanka Sejny",
+    "LZS Krynki"
+  ],
+  "pomorskie": [
+    "Arka II Gdynia",
+    "Pogo\u0144 L\u0119bork",
+    "Czarni Pruszcz Gda\u0144ski",
+    "Sok\xF3\u0142 Bo\u017Cepole Wielkie",
+    "Gryf Wejherowo",
+    "Jaguar Gda\u0144sk",
+    "Cartusia Kartuzy",
+    "KP Starogard Gda\u0144ski",
+    "Gryf S\u0142upsk",
+    "Wierzyca Pelplin",
+    "Radunia St\u0119\u017Cyca",
+    "Stoczniowiec Gda\u0144sk",
+    "Anio\u0142y Garczegorze",
+    "Powi\u015Ble Dzierzgo\u0144",
+    "Stolem Gniewino",
+    "Dolina Speranda Niepogl\u0119dzie",
+    "Chojniczanka II Chojnice",
+    "Sparta Sycewice"
+  ],
+  "\u015Bl\u0105skie": [
+    "GKS II Katowice",
+    "MRKS Czechowice-Dziedzice",
+    "Przemsza Siewierz",
+    "Ruch Radzionk\xF3w",
+    "Ruch II Chorz\xF3w",
+    "Unia Turza \u015Al\u0105ska",
+    "Podlesianka Katowice",
+    "Szombierki Bytom",
+    "Sp\xF3jnia Landek",
+    "Podbeskidzie II",
+    "Polonia \u0141aziska G\xF3rne",
+    "Drama Zbros\u0142awice",
+    "Rozw\xF3j Katowice",
+    "Ku\u017Ania Ustro\u0144",
+    "Piast II Gliwice",
+    "LKS Be\u0142k",
+    "Gwarek Tarnowskie G\xF3ry",
+    "Victoria Cz\u0119stochowa"
+  ],
+  "\u015Bwi\u0119tokrzyskie": [
+    "Victoria Skalbmierz",
+    "Orl\u0119ta Kielce",
+    "Arka Paw\u0142\xF3w",
+    "Sparta Kazimierza Wielka",
+    "Neptun Ko\u0144skie",
+    "Korona III Kielce",
+    "KKP Korona Kielce",
+    "Spartakus Daleszyce",
+    "GKS Rudki",
+    "Wicher Miedziana G\xF3ra",
+    "OKS Opat\xF3w",
+    "Klimontowianka Klimont\xF3w",
+    "Granat Skar\u017Cysko-Kamienna",
+    "GKS Nowiny",
+    "Hetman W\u0142oszczowa",
+    "Alit O\u017Car\xF3w",
+    "Wierna Ma\u0142ogoszcz",
+    "Orlicz Suchedni\xF3w"
+  ],
+  "warmi\u0144sko-mazurskie": [
+    "Stomil Olsztyn",
+    "Granica K\u0119trzyn",
+    "Rominta Go\u0142dap",
+    "Concordia Elbl\u0105g",
+    "Znicz Bia\u0142a Piska",
+    "Pisa Barczewo",
+    "T\u0119cza Biskupiec",
+    "Mazur E\u0142k",
+    "GKS Wikielec",
+    "Start Nidzica",
+    "Sok\xF3\u0142 Ostr\xF3da",
+    "Mamry Gi\u017Cycko",
+    "Naki Olsztyn",
+    "DKS Dobre Miasto",
+    "Zatoka Braniewo",
+    "Polonia Pas\u0142\u0119k"
+  ],
+  "wielkopolskie": [
+    "Polonia Golina",
+    "Piast Kobylnica",
+    "Pogo\u0144 Nowe Skalmierzyce",
+    "Obra Ko\u015Bcian",
+    "Polonia Leszno",
+    "Kania Gosty\u0144",
+    "LKS Go\u0142uch\xF3w",
+    "Nielba W\u0105growiec",
+    "Polonia Chodzie\u017C",
+    "G\xF3rnik Konin",
+    "Astra Krotoszyn",
+    "Warta \u015Arem",
+    "Mieszko Gniezno",
+    "Avia Kamionki",
+    "Ostrovia Ostr\xF3w Wlkp.",
+    "K\u0142os Budzy\u0144",
+    "Meblorz Swarz\u0119dz",
+    "Huragan Pobiedziska"
+  ],
+  "zachodniopomorskie": [
+    "Pogo\u0144 II Szczecin",
+    "Kotwica Ko\u0142obrzeg",
+    "Biali S\u0105d\xF3w",
+    "D\u0105b D\u0119bno",
+    "Arkonia Szczecin",
+    "\u015Awit II Szczecin",
+    "Astra Ustronie Morskie",
+    "Chemik Police",
+    "Iskierka Szczecin",
+    "Wybrze\u017Ce Rewalskie Rewal",
+    "Gwardia Koszalin",
+    "CRS Barlinek",
+    "Sparta Gryfice",
+    "GKS Manowo",
+    "Ina I\u0144sko",
+    "Orze\u0142 Wa\u0142cz"
+  ]
+};
+
+// services/PolishFourthLeagueService.ts
+var FOURTH_LEAGUE_IDS = [
+  "L_PL_5_DS",
+  "L_PL_5_KP",
+  "L_PL_5_LU",
+  "L_PL_5_LB",
+  "L_PL_5_LD",
+  "L_PL_5_MA",
+  "L_PL_5_MZ",
+  "L_PL_5_OP",
+  "L_PL_5_PK",
+  "L_PL_5_PD",
+  "L_PL_5_PM",
+  "L_PL_5_SL",
+  "L_PL_5_SK",
+  "L_PL_5_WM",
+  "L_PL_5_WP",
+  "L_PL_5_ZP"
+];
+var FOURTH_LEAGUE_FEEDER_IDS = [
+  "L_PL_6_DS",
+  "L_PL_6_KP",
+  "L_PL_6_LU",
+  "L_PL_6_LB",
+  "L_PL_6_LD",
+  "L_PL_6_MA",
+  "L_PL_6_MZ",
+  "L_PL_6_OP",
+  "L_PL_6_PK",
+  "L_PL_6_PD",
+  "L_PL_6_PM",
+  "L_PL_6_SL",
+  "L_PL_6_SK",
+  "L_PL_6_WM",
+  "L_PL_6_WP",
+  "L_PL_6_ZP"
+];
+var FOURTH_LEAGUE_BY_VOIVODESHIP = {
+  "dolno\u015Bl\u0105skie": "L_PL_5_DS",
+  "kujawsko-pomorskie": "L_PL_5_KP",
+  "lubelskie": "L_PL_5_LU",
+  "lubuskie": "L_PL_5_LB",
+  "\u0142\xF3dzkie": "L_PL_5_LD",
+  "ma\u0142opolskie": "L_PL_5_MA",
+  "mazowieckie": "L_PL_5_MZ",
+  "opolskie": "L_PL_5_OP",
+  "podkarpackie": "L_PL_5_PK",
+  "podlaskie": "L_PL_5_PD",
+  "pomorskie": "L_PL_5_PM",
+  "\u015Bl\u0105skie": "L_PL_5_SL",
+  "\u015Bwi\u0119tokrzyskie": "L_PL_5_SK",
+  "warmi\u0144sko-mazurskie": "L_PL_5_WM",
+  "wielkopolskie": "L_PL_5_WP",
+  "zachodniopomorskie": "L_PL_5_ZP"
+};
+var FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP = {
+  "dolno\u015Bl\u0105skie": "L_PL_6_DS",
+  "kujawsko-pomorskie": "L_PL_6_KP",
+  "lubelskie": "L_PL_6_LU",
+  "lubuskie": "L_PL_6_LB",
+  "\u0142\xF3dzkie": "L_PL_6_LD",
+  "ma\u0142opolskie": "L_PL_6_MA",
+  "mazowieckie": "L_PL_6_MZ",
+  "opolskie": "L_PL_6_OP",
+  "podkarpackie": "L_PL_6_PK",
+  "podlaskie": "L_PL_6_PD",
+  "pomorskie": "L_PL_6_PM",
+  "\u015Bl\u0105skie": "L_PL_6_SL",
+  "\u015Bwi\u0119tokrzyskie": "L_PL_6_SK",
+  "warmi\u0144sko-mazurskie": "L_PL_6_WM",
+  "wielkopolskie": "L_PL_6_WP",
+  "zachodniopomorskie": "L_PL_6_ZP"
+};
+var EMPTY_STATS = () => ({
+  points: 0,
+  wins: 0,
+  draws: 0,
+  losses: 0,
+  goalsFor: 0,
+  goalsAgainst: 0,
+  goalDifference: 0,
+  played: 0,
+  form: []
+});
+var hash = (value) => {
+  let result = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    result ^= value.charCodeAt(index);
+    result = Math.imul(result, 16777619);
+  }
+  return result >>> 0;
+};
+var rngFor = (seed, key) => {
+  let state = (seed ^ hash(key)) >>> 0;
+  return () => {
+    state = state * 1664525 + 1013904223 >>> 0;
+    return state / 4294967296;
+  };
+};
+var shuffled = (values, seed, key) => {
+  const result = [...values];
+  const rng = rngFor(seed, key);
+  for (let index = result.length - 1; index > 0; index--) {
+    const other = Math.floor(rng() * (index + 1));
+    [result[index], result[other]] = [result[other], result[index]];
+  }
+  return result;
+};
+var poisson = (expected, rng) => {
+  const limit = Math.exp(-expected);
+  let product = 1;
+  let count = 0;
+  do {
+    count++;
+    product *= rng();
+  } while (product > limit && count < 9);
+  return count - 1;
+};
+var FIRST_NAMES = ["Jakub", "Kacper", "Mateusz", "Micha\u0142", "Bartosz", "Patryk", "Szymon", "Dawid", "Pawe\u0142", "Piotr", "Tomasz"];
+var LAST_NAMES = ["Kowalski", "Nowak", "Wi\u015Bniewski", "W\xF3jcik", "Kami\u0144ski", "Lewandowski", "Zieli\u0144ski", "Szyma\u0144ski", "Wo\u017Aniak", "D\u0105browski", "Koz\u0142owski"];
+var makePlayerStats = (leagueId, clubs) => clubs.flatMap((club) => Array.from({ length: 11 }, (_, index) => {
+  const nameSeed = hash(`${club.id}|${index}`);
+  return {
+    id: `IV_STAT_${club.id}_${index}`,
+    clubId: club.id,
+    name: `${FIRST_NAMES[(nameSeed + index) % FIRST_NAMES.length]} ${LAST_NAMES[(nameSeed >>> 5) % LAST_NAMES.length]}`,
+    appearances: 0,
+    goals: 0,
+    assists: 0,
+    yellowCards: 0,
+    redCards: 0,
+    ratingTotal: 0
+  };
+}));
+var createSchedule = (leagueId, clubIds, template, seed) => {
+  const ids = shuffled(clubIds, seed, leagueId);
+  const fixed = ids[0];
+  let rotating = ids.slice(1);
+  const firstHalf = [];
+  for (let round = 0; round < ids.length - 1; round++) {
+    const pairs = [];
+    const fixedOpponent = rotating[rotating.length - 1];
+    pairs.push(round % 2 === 0 ? { home: fixed, away: fixedOpponent } : { home: fixedOpponent, away: fixed });
+    for (let index = 0; index < ids.length / 2 - 1; index++) {
+      const left = rotating[index];
+      const right = rotating[rotating.length - 2 - index];
+      pairs.push(round % 2 === 0 ? { home: left, away: right } : { home: right, away: left });
+    }
+    firstHalf.push(pairs);
+    rotating = [rotating[rotating.length - 1], ...rotating.slice(0, -1)];
+  }
+  const leagueSlots = template.slots.filter((slot) => String(slot.competition) === "LEAGUE").sort((left, right) => left.start.getTime() - right.start.getTime());
+  const roundCount = (ids.length - 1) * 2;
+  if (leagueSlots.length < roundCount) {
+    throw new Error(`${leagueId} requires ${roundCount} league dates; only ${leagueSlots.length} are available.`);
+  }
+  const lastSlotExclusive = ids.length < 18 ? 33 : 34;
+  const firstSlotIndex = lastSlotExclusive - roundCount;
+  const scheduledLeagueSlots = leagueSlots.slice(firstSlotIndex, lastSlotExclusive);
+  return Array.from({ length: roundCount }, (_, roundIndex) => {
+    const secondHalf = roundIndex >= ids.length - 1;
+    const base = firstHalf[roundIndex % (ids.length - 1)];
+    return base.map((pair, matchIndex) => ({
+      id: `IV_${template.seasonStartYear}_${leagueId}_R${roundIndex + 1}_M${matchIndex + 1}`,
+      leagueId,
+      round: roundIndex + 1,
+      date: scheduledLeagueSlots[roundIndex].start.toISOString(),
+      homeClubId: secondHalf ? pair.away : pair.home,
+      awayClubId: secondHalf ? pair.home : pair.away,
+      homeGoals: null,
+      awayGoals: null,
+      status: "SCHEDULED"
+    }));
+  }).flat();
+};
+var updateTable = (club, goalsFor, goalsAgainst) => {
+  const win = goalsFor > goalsAgainst;
+  const draw = goalsFor === goalsAgainst;
+  const form = win ? "W" : draw ? "R" : "P";
+  return {
+    ...club,
+    stats: {
+      ...club.stats,
+      played: club.stats.played + 1,
+      wins: club.stats.wins + (win ? 1 : 0),
+      draws: club.stats.draws + (draw ? 1 : 0),
+      losses: club.stats.losses + (!win && !draw ? 1 : 0),
+      goalsFor: club.stats.goalsFor + goalsFor,
+      goalsAgainst: club.stats.goalsAgainst + goalsAgainst,
+      goalDifference: club.stats.goalDifference + goalsFor - goalsAgainst,
+      points: club.stats.points + (win ? 3 : draw ? 1 : 0),
+      form: [...club.stats.form ?? [], form].slice(-5)
+    }
+  };
+};
+var applyPlayerStats = (rows, clubId, goals, conceded, rng) => {
+  const clubRows = rows.filter((row) => row.clubId === clubId);
+  const changed = new Map(clubRows.map((row) => [row.id, {
+    ...row,
+    appearances: row.appearances + 1,
+    ratingTotal: row.ratingTotal + Math.max(5.2, Math.min(8.8, 6.45 + goals * 0.18 - conceded * 0.1 + (rng() - 0.5) * 0.8))
+  }]));
+  for (let goal = 0; goal < goals; goal++) {
+    const scorer = clubRows[Math.floor(rng() * Math.min(8, clubRows.length))];
+    const assist = clubRows[Math.floor(rng() * clubRows.length)];
+    changed.get(scorer.id).goals += 1;
+    if (assist.id !== scorer.id && rng() > 0.14) changed.get(assist.id).assists += 1;
+  }
+  const yellowCount = rng() < 0.72 ? 1 + Math.floor(rng() * 3) : 0;
+  for (let card = 0; card < yellowCount; card++) {
+    changed.get(clubRows[Math.floor(rng() * clubRows.length)].id).yellowCards += 1;
+  }
+  if (rng() < 0.055) changed.get(clubRows[Math.floor(rng() * clubRows.length)].id).redCards += 1;
+  return rows.map((row) => changed.get(row.id) ?? row);
+};
+var reserveParentName = (name) => {
+  const stripped = name.replace(/\s+(II|III)$/i, "").replace(/^(.+?)\s+(?:II|III)\s+(.+)$/i, "$1 $2").trim();
+  return stripped === name ? null : stripped;
+};
+var createRegionalPoolClub = (voivodeship, poolId, seasonStartYear, number, occupiedIds) => {
+  let ordinal = number;
+  let id = `PL_DISTRICT_${poolId}_${seasonStartYear}_${ordinal}`;
+  while (occupiedIds.has(id)) {
+    ordinal++;
+    id = `PL_DISTRICT_${poolId}_${seasonStartYear}_${ordinal}`;
+  }
+  occupiedIds.add(id);
+  const name = `Klub okr\u0119gowy ${voivodeship} ${ordinal}`;
+  const reputation = 1 + hash(id) % 3;
+  const budget = FinanceService.calculateInitialBudget(6, reputation);
+  return {
+    id,
+    name,
+    shortName: `KO${ordinal}`,
+    leagueId: poolId,
+    tier: 6,
+    colorsHex: ["#183a5a", "#ffffff"],
+    colorPrimary: "#183a5a",
+    colorSecondary: "#ffffff",
+    stadiumName: `Stadion okr\u0119gowy ${ordinal}`,
+    stadiumCapacity: 500 + hash(`${id}|stadium`) % 1001,
+    reputation,
+    country: "Polska",
+    polishVoivodeship: voivodeship,
+    isDefaultActive: false,
+    rosterIds: [],
+    stats: EMPTY_STATS(),
+    budget,
+    transferBudget: 0,
+    reserveBudget: 0,
+    boardStrictness: 5,
+    signingBonusPool: 0,
+    boardConfidence: 70
+  };
+};
+var PolishFourthLeagueService = {
+  isFourthLeagueId(value) {
+    return FOURTH_LEAGUE_IDS.includes(value);
+  },
+  isFourthLeagueFeederId(value) {
+    return FOURTH_LEAGUE_FEEDER_IDS.includes(value);
+  },
+  isLightweightRegionalLeagueId(value) {
+    return this.isFourthLeagueId(value) || this.isFourthLeagueFeederId(value);
+  },
+  getLeagueForVoivodeship(voivodeship) {
+    return FOURTH_LEAGUE_BY_VOIVODESHIP[voivodeship];
+  },
+  getFeederLeagueForVoivodeship(voivodeship) {
+    return FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship];
+  },
+  getVoivodeshipForFeederLeague(leagueId) {
+    const match = Object.entries(FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP).find(([, candidateLeagueId]) => candidateLeagueId === leagueId);
+    if (!match) throw new Error(`Unknown Polish district-pool id: ${leagueId}.`);
+    return match[0];
+  },
+  getVoivodeshipForLeague(leagueId) {
+    const match = Object.entries(FOURTH_LEAGUE_BY_VOIVODESHIP).find(([, candidateLeagueId]) => candidateLeagueId === leagueId);
+    if (!match) throw new Error(`Unknown Polish IV-liga id: ${leagueId}.`);
+    return match[0];
+  },
+  /**
+   * Merges the researched 2026/27 membership with existing database/datapack
+   * clubs. Existing ids win, so a datapack can improve a club's crest, stadium
+   * or strength without breaking the regional competition. Missing teams are
+   * represented by deliberately inactive lightweight Club records.
+   */
+  mergeCareerClubs(sourceClubs, startYear) {
+    if (startYear !== 2026) return sourceClubs;
+    const result = sourceClubs.map((club) => ({ ...club }));
+    const byId = new Map(result.map((club) => [club.id, club]));
+    const byName = new Map(result.map((club) => [club.name.toLocaleLowerCase("pl-PL"), club]));
+    Object.entries(POLISH_FOURTH_LEAGUE_2026).forEach(([voivodeship, names]) => {
+      const leagueId = FOURTH_LEAGUE_BY_VOIVODESHIP[voivodeship];
+      names.forEach((name, index) => {
+        const generatedId = generateClubId(name);
+        const existing = byId.get(generatedId) ?? byName.get(name.toLocaleLowerCase("pl-PL"));
+        if (existing) {
+          existing.leagueId = leagueId;
+          existing.tier = 5;
+          existing.polishVoivodeship = voivodeship;
+          existing.isDefaultActive = false;
+          existing.stats = EMPTY_STATS();
+          return;
+        }
+        const reputation = 1 + hash(`${voivodeship}|${name}`) % 3;
+        const budget = FinanceService.calculateInitialBudget(5, reputation);
+        const club = {
+          id: generatedId,
+          name,
+          shortName: name.replace(/[^A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g, "").slice(0, 4).toUpperCase(),
+          leagueId,
+          tier: 5,
+          colorsHex: ["#17345f", "#ffffff", "#d9273e"],
+          colorPrimary: "#17345f",
+          colorSecondary: "#ffffff",
+          stadiumName: `Stadion ${name}`,
+          stadiumCapacity: 800 + hash(name) % 2201,
+          reputation,
+          country: "Polska",
+          polishVoivodeship: voivodeship,
+          // Inactive here means "not part of the full playable-world engine".
+          // The dedicated IV-liga service still simulates and displays the club.
+          isDefaultActive: false,
+          rosterIds: [],
+          stats: EMPTY_STATS(),
+          budget,
+          transferBudget: 0,
+          reserveBudget: 0,
+          boardStrictness: 5,
+          signingBonusPool: 0,
+          boardConfidence: 70
+        };
+        result.push(club);
+        byId.set(club.id, club);
+        byName.set(name.toLocaleLowerCase("pl-PL"), club);
+      });
+    });
+    return result;
+  },
+  /**
+   * Creates one private, 18-club promotion pool for every voivodeship. Existing
+   * database or datapack clubs are preferred whenever their regional metadata
+   * is available; deterministic placeholders only fill genuine database gaps.
+   * The pool has no fixtures of its own and exists solely to provide stable,
+   * region-correct candidates for promotion to the appropriate IV liga.
+   */
+  ensureRegionalFeederPools(clubs, seasonStartYear) {
+    let result = clubs.map((club) => ({ ...club }));
+    const occupiedIds = new Set(result.map((club) => club.id));
+    Object.keys(FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP).forEach((voivodeship) => {
+      const poolId = FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship];
+      let poolSize = result.filter((club) => club.leagueId === poolId).length;
+      if (poolSize < 18) {
+        const candidates = result.filter((club) => club.leagueId === "L_PL_5" && club.polishVoivodeship === voivodeship).sort(
+          (left, right) => right.reputation - left.reputation || hash(`${seasonStartYear}|${voivodeship}|${left.id}`) - hash(`${seasonStartYear}|${voivodeship}|${right.id}`)
+        ).slice(0, 18 - poolSize);
+        const selectedIds = new Set(candidates.map((club) => club.id));
+        result = result.map((club) => selectedIds.has(club.id) ? { ...club, leagueId: poolId, tier: 6, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+        poolSize += candidates.length;
+      }
+      while (poolSize < 18) {
+        result.push(createRegionalPoolClub(voivodeship, poolId, seasonStartYear, poolSize + 1, occupiedIds));
+        poolSize++;
+      }
+    });
+    return result;
+  },
+  createSeason(clubs, template, seed) {
+    const resetClubs = clubs.map((club) => this.isFourthLeagueId(club.leagueId) ? { ...club, tier: 5, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+    const fixtures = {};
+    const playerStats = {};
+    FOURTH_LEAGUE_IDS.forEach((leagueId, index) => {
+      const leagueClubs = resetClubs.filter((club) => club.leagueId === leagueId);
+      if (![14, 16, 18].includes(leagueClubs.length)) {
+        throw new Error(`${leagueId} must contain 14, 16 or 18 clubs; received ${leagueClubs.length}.`);
+      }
+      fixtures[leagueId] = createSchedule(leagueId, leagueClubs.map((club) => club.id), template, seed + 500 + index);
+      playerStats[leagueId] = makePlayerStats(leagueId, leagueClubs);
+    });
+    return { state: { seasonStartYear: template.seasonStartYear, fixtures, playerStats }, clubs: resetClubs };
+  },
+  rebalanceForNextSeason(clubs, seasonStartYear, seed) {
+    let result = this.ensureRegionalFeederPools(clubs, seasonStartYear);
+    const reserveConflictIds = new Set(result.filter((club) => this.isFourthLeagueId(club.leagueId)).filter((club) => {
+      const parentName = reserveParentName(club.name);
+      if (!parentName) return false;
+      const normalizedParentName = parentName.toLocaleLowerCase("pl-PL");
+      return result.some(
+        (candidate) => candidate.id !== club.id && this.isFourthLeagueId(candidate.leagueId) && (candidate.name.toLocaleLowerCase("pl-PL") === normalizedParentName || normalizedParentName.length >= 5 && candidate.name.toLocaleLowerCase("pl-PL").includes(normalizedParentName))
+      );
+    }).map((club) => club.id));
+    if (reserveConflictIds.size > 0) {
+      result = result.map((club) => {
+        if (!reserveConflictIds.has(club.id)) return club;
+        const voivodeship = club.polishVoivodeship ?? this.getVoivodeshipForLeague(club.leagueId);
+        return {
+          ...club,
+          leagueId: FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship],
+          tier: 6,
+          isDefaultActive: false,
+          stats: EMPTY_STATS()
+        };
+      });
+    }
+    Object.entries(POLISH_FOURTH_LEAGUE_2026).forEach(([voivodeship, baseline]) => {
+      const leagueId = FOURTH_LEAGUE_BY_VOIVODESHIP[voivodeship];
+      const poolId = FOURTH_LEAGUE_FEEDER_BY_VOIVODESHIP[voivodeship];
+      const targetSize = baseline.length;
+      const current = this.getTable(result, leagueId);
+      const promotionCandidates = result.filter((club) => club.leagueId === poolId && !reserveConflictIds.has(club.id)).filter((club) => this.canReserveEnterFourthLeague(club, result)).map((club) => {
+        const rng = rngFor(seed, `IV_POOL_DRAW|${seasonStartYear}|${poolId}|${club.id}`);
+        const strength = Math.max(0, Math.min(1, (club.reputation - 1) / 19));
+        return { club, score: rng() * 0.7 + strength * 0.3 };
+      }).sort((left, right) => right.score - left.score || left.club.id.localeCompare(right.club.id));
+      if (promotionCandidates.length < 4) {
+        throw new Error(`${poolId} has fewer than four eligible promotion candidates.`);
+      }
+      const promotedIds = new Set(promotionCandidates.slice(0, 4).map((candidate) => candidate.club.id));
+      const relegationCount = Math.max(0, current.length + promotedIds.size - targetSize);
+      const relegatedIds = new Set(current.slice(Math.max(0, current.length - relegationCount)).map((club) => club.id));
+      result = result.map((club) => {
+        if (promotedIds.has(club.id)) {
+          return { ...club, leagueId, tier: 5, isDefaultActive: false, stats: EMPTY_STATS() };
+        }
+        if (relegatedIds.has(club.id)) {
+          return { ...club, leagueId: poolId, tier: 6, isDefaultActive: false, stats: EMPTY_STATS() };
+        }
+        return club;
+      });
+      let poolClubs = result.filter((club) => club.leagueId === poolId);
+      if (poolClubs.length > 18) {
+        const surplusCount = poolClubs.length - 18;
+        const surplusIds = new Set(poolClubs.filter((club) => !relegatedIds.has(club.id)).sort(
+          (left, right) => left.reputation - right.reputation || hash(`${seed}|POOL_SURPLUS|${left.id}`) - hash(`${seed}|POOL_SURPLUS|${right.id}`)
+        ).slice(0, surplusCount).map((club) => club.id));
+        result = result.map((club) => surplusIds.has(club.id) ? { ...club, leagueId: "L_PL_5", tier: 6, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+      }
+      poolClubs = result.filter((club) => club.leagueId === poolId);
+      if (poolClubs.length < 18) {
+        const replacements = result.filter((club) => club.leagueId === "L_PL_5" && club.polishVoivodeship === voivodeship).sort(
+          (left, right) => right.reputation - left.reputation || hash(`${seed}|POOL_REFILL|${left.id}`) - hash(`${seed}|POOL_REFILL|${right.id}`)
+        ).slice(0, 18 - poolClubs.length);
+        const replacementIds = new Set(replacements.map((club) => club.id));
+        result = result.map((club) => replacementIds.has(club.id) ? { ...club, leagueId: poolId, tier: 6, isDefaultActive: false, stats: EMPTY_STATS() } : club);
+      }
+      const occupiedIds = new Set(result.map((club) => club.id));
+      let missing = 18 - result.filter((club) => club.leagueId === poolId).length;
+      while (missing > 0) {
+        const ordinal = 19 - missing;
+        result.push(createRegionalPoolClub(voivodeship, poolId, seasonStartYear, ordinal, occupiedIds));
+        missing--;
+      }
+    });
+    return result;
+  },
+  processDate(state, clubs, date, seed) {
+    if (!state) return { state, clubs, played: 0 };
+    const cutoff = date.getTime();
+    const clubById = new Map(clubs.map((club) => [club.id, club]));
+    const nextFixtures = { ...state.fixtures };
+    const nextPlayerStats = { ...state.playerStats };
+    let played = 0;
+    FOURTH_LEAGUE_IDS.forEach((leagueId) => {
+      let statsRows = nextPlayerStats[leagueId];
+      nextFixtures[leagueId] = state.fixtures[leagueId].map((fixture) => {
+        if (fixture.status === "FINISHED" || new Date(fixture.date).getTime() > cutoff) return fixture;
+        const home = clubById.get(fixture.homeClubId);
+        const away = clubById.get(fixture.awayClubId);
+        if (!home || !away) return fixture;
+        const rng = rngFor(seed, fixture.id);
+        const strengthDifference = (home.reputation - away.reputation) * 2.2;
+        const homeGoals = poisson(Math.max(0.25, Math.min(3.25, 1.48 + strengthDifference / 10)), rng);
+        const awayGoals = poisson(Math.max(0.2, Math.min(3, 1.14 - strengthDifference / 10)), rng);
+        clubById.set(home.id, updateTable(home, homeGoals, awayGoals));
+        clubById.set(away.id, updateTable(away, awayGoals, homeGoals));
+        statsRows = applyPlayerStats(statsRows, home.id, homeGoals, awayGoals, rng);
+        statsRows = applyPlayerStats(statsRows, away.id, awayGoals, homeGoals, rng);
+        played++;
+        return { ...fixture, homeGoals, awayGoals, status: "FINISHED" };
+      });
+      nextPlayerStats[leagueId] = statsRows;
+    });
+    if (played === 0) return { state, clubs, played: 0 };
+    return {
+      state: { ...state, fixtures: nextFixtures, playerStats: nextPlayerStats },
+      clubs: clubs.map((club) => clubById.get(club.id) ?? club),
+      played
+    };
+  },
+  getTable(clubs, leagueId) {
+    return clubs.filter((club) => club.leagueId === leagueId).sort(
+      (left, right) => right.stats.points - left.stats.points || right.stats.goalDifference - left.stats.goalDifference || right.stats.goalsFor - left.stats.goalsFor || left.name.localeCompare(right.name, "pl")
+    );
+  },
+  canReserveEnterThirdLeague(club, clubs) {
+    const parentName = reserveParentName(club.name);
+    if (!parentName) return true;
+    const normalizedParentName = parentName.toLocaleLowerCase("pl-PL");
+    const parent = clubs.find((candidate) => {
+      const candidateName = candidate.name.toLocaleLowerCase("pl-PL");
+      return candidateName === normalizedParentName || normalizedParentName.length >= 5 && candidateName.includes(normalizedParentName);
+    });
+    return !parent || !/^L_PL_4(?:_|$)/.test(parent.leagueId);
+  },
+  canReserveEnterFourthLeague(club, clubs) {
+    const parentName = reserveParentName(club.name);
+    if (!parentName) return true;
+    const normalizedParentName = parentName.toLocaleLowerCase("pl-PL");
+    const parent = clubs.find((candidate) => {
+      if (candidate.id === club.id) return false;
+      const candidateName = candidate.name.toLocaleLowerCase("pl-PL");
+      return candidateName === normalizedParentName || normalizedParentName.length >= 5 && candidateName.includes(normalizedParentName);
+    });
+    return !parent || !this.isFourthLeagueId(parent.leagueId);
+  }
+};
+
+// services/PolishCupDrawService.ts
+var POLISH_CUP_BYE_TEAM_ID = "POLISH_CUP_BYE";
+var createSeededRandom = (seedText) => {
+  let hash2 = 0;
+  for (let i = 0; i < seedText.length; i++) {
+    hash2 = (hash2 << 5) - hash2 + seedText.charCodeAt(i);
+    hash2 |= 0;
+  }
+  return () => {
+    const x = Math.sin(hash2++) * 1e4;
+    return x - Math.floor(x);
+  };
+};
+var shuffleWithSeed = (items, seedText) => {
+  const shuffled2 = [...items];
+  const seededRandom2 = createSeededRandom(seedText);
+  for (let i = shuffled2.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom2() * (i + 1));
+    [shuffled2[i], shuffled2[j]] = [shuffled2[j], shuffled2[i]];
+  }
+  return shuffled2;
+};
+var PolishCupDrawService = {
+  /**
+   * Przygotowuje listę 128 uczestników dla rundy 1/64.
+   */
+  getInitialParticipants: (clubs, sessionSeed, seasonStartYear) => {
+    const tier1 = clubs.filter((c) => c.leagueId === "L_PL_1").map((c) => c.id);
+    const tier2 = clubs.filter((c) => c.leagueId === "L_PL_2").map((c) => c.id);
+    const tier3 = clubs.filter((c) => c.leagueId === "L_PL_3").map((c) => c.id);
+    const thirdLeaguePool = clubs.filter(
+      (c) => PolishThirdLeagueService.isThirdLeagueId(c.leagueId) || c.leagueId === "L_PL_4"
+    );
+    const guaranteedCount = tier1.length + tier2.length + tier3.length;
+    const tier4Places = Math.max(0, 128 - guaranteedCount);
+    const selectedThirdLeague = shuffleWithSeed(
+      thirdLeaguePool,
+      `POLISH_CUP_INITIAL_${seasonStartYear}_${sessionSeed}`
+    ).slice(0, tier4Places).map((c) => c.id);
+    const missingAfterThirdLeague = Math.max(0, tier4Places - selectedThirdLeague.length);
+    const alreadySelected = /* @__PURE__ */ new Set([...tier1, ...tier2, ...tier3, ...selectedThirdLeague]);
+    const fourthLeagueCandidates = clubs.filter(
+      (club) => PolishFourthLeagueService.isFourthLeagueId(club.leagueId) && !alreadySelected.has(club.id)
+    );
+    const selectedFourthLeague = shuffleWithSeed(
+      fourthLeagueCandidates,
+      `POLISH_CUP_FOURTH_LEAGUE_${seasonStartYear}_${sessionSeed}`
+    ).slice(0, missingAfterThirdLeague).map((club) => club.id);
+    const missingAfterFourthLeague = Math.max(
+      0,
+      tier4Places - selectedThirdLeague.length - selectedFourthLeague.length
+    );
+    const selectedBeforeFeeder = /* @__PURE__ */ new Set([
+      ...alreadySelected,
+      ...selectedFourthLeague
+    ]);
+    const feederCandidates = clubs.filter(
+      (club) => PolishFourthLeagueService.isFourthLeagueFeederId(club.leagueId) && !selectedBeforeFeeder.has(club.id)
+    );
+    const selectedFeeders = shuffleWithSeed(
+      feederCandidates,
+      `POLISH_CUP_FEEDER_FALLBACK_${seasonStartYear}_${sessionSeed}`
+    ).slice(0, missingAfterFourthLeague).map((club) => club.id);
+    return [
+      ...tier1,
+      ...tier2,
+      ...tier3,
+      ...selectedThirdLeague,
+      ...selectedFourthLeague,
+      ...selectedFeeders
+    ];
+  },
+  /**
+   * Losuje pary z podanej listy uczestników.
+   * Używa prostego generatora pseudo-losowego z ziarnem (seed), aby wynik był stały dla danej rundy w danym dniu.
+   */
+  drawPairs: (participantIds, clubs, date, roundLabel, sessionSeed) => {
+    const seededRandom2 = createSeededRandom(roundLabel + date.getFullYear() + sessionSeed);
+    const validClubIds = new Set(clubs.map((club) => club.id));
+    const uniqueParticipantIds = Array.from(new Set(participantIds)).filter((id) => validClubIds.has(id));
+    const shuffled2 = [...uniqueParticipantIds];
+    for (let i = shuffled2.length - 1; i > 0; i--) {
+      const j = Math.floor(seededRandom2() * (i + 1));
+      [shuffled2[i], shuffled2[j]] = [shuffled2[j], shuffled2[i]];
+    }
+    const fixtures = [];
+    const getTierValue = (clubId) => {
+      const c = clubs.find((x) => x.id === clubId);
+      if (!c) return 4;
+      if (c.leagueId === "L_PL_1") return 1;
+      if (c.leagueId === "L_PL_2") return 2;
+      if (c.leagueId === "L_PL_3") return 3;
+      return 4;
+    };
+    const isEkstraklasa = (clubId) => getTierValue(clubId) === 1;
+    if (roundLabel.includes("1/64")) {
+      for (let i = 0; i < shuffled2.length; i += 2) {
+        const teamA = shuffled2[i];
+        const teamB = shuffled2[i + 1];
+        if (!teamA || !teamB || !isEkstraklasa(teamA) || !isEkstraklasa(teamB)) continue;
+        for (let j = i + 2; j < shuffled2.length; j++) {
+          if (!isEkstraklasa(shuffled2[j])) {
+            [shuffled2[i + 1], shuffled2[j]] = [shuffled2[j], shuffled2[i + 1]];
+            break;
+          }
+        }
+      }
+    }
+    const cleanRoundLabel = roundLabel.replace("LOSOWANIE ", "");
+    for (let i = 0; i < shuffled2.length; i += 2) {
+      const teamA = shuffled2[i];
+      const teamB = shuffled2[i + 1];
+      if (teamA && !teamB) {
+        fixtures.push({
+          id: `CUP_${cleanRoundLabel.replace(/\s+/g, "_")}_${i}`,
+          leagueId: "POLISH_CUP" /* POLISH_CUP */,
+          homeTeamId: teamA,
+          awayTeamId: POLISH_CUP_BYE_TEAM_ID,
+          date: new Date(date),
+          status: "FINISHED" /* FINISHED */,
+          homeScore: 1,
+          awayScore: 0
+        });
+        continue;
+      }
+      if (!teamA || !teamB) continue;
+      const tierA = getTierValue(teamA);
+      const tierB = getTierValue(teamB);
+      let homeTeamId = teamA;
+      let awayTeamId = teamB;
+      if (tierA > tierB) {
+        homeTeamId = teamA;
+        awayTeamId = teamB;
+      } else if (tierB > tierA) {
+        homeTeamId = teamB;
+        awayTeamId = teamA;
+      }
+      fixtures.push({
+        id: `CUP_${cleanRoundLabel.replace(/\s+/g, "_")}_${i}`,
+        leagueId: "POLISH_CUP" /* POLISH_CUP */,
+        homeTeamId,
+        awayTeamId,
+        date: new Date(date),
+        status: "SCHEDULED" /* SCHEDULED */,
+        homeScore: null,
+        awayScore: null
+      });
+    }
+    return fixtures;
+  }
+};
+
+// services/PolandWeatherService.ts
+var PolandWeatherService = {
+  getWeather: (date, seedStr) => {
+    const month = date.getMonth();
+    let hash2 = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash2 = (hash2 << 5) - hash2 + seedStr.charCodeAt(i);
+      hash2 |= 0;
+    }
+    const r1 = Math.abs(hash2) % 1e4 / 1e4;
+    const r2 = Math.abs(hash2 * 1664525 + 1013904223) % 1e4 / 1e4;
+    const r3 = Math.abs(hash2 * 22695477 + 1) % 1e4 / 1e4;
+    const tempConfigs = {
+      0: { minT: -8, maxT: 3 },
+      // Sty
+      1: { minT: -6, maxT: 5 },
+      // Lut
+      2: { minT: -1, maxT: 10 },
+      // Mar
+      3: { minT: 4, maxT: 16 },
+      // Kwi
+      4: { minT: 9, maxT: 21 },
+      // Maj
+      5: { minT: 13, maxT: 25 },
+      // Cze
+      6: { minT: 15, maxT: 27 },
+      // Lip
+      7: { minT: 14, maxT: 26 },
+      // Sie
+      8: { minT: 9, maxT: 20 },
+      // Wrz
+      9: { minT: 4, maxT: 14 },
+      // Paź
+      10: { minT: 0, maxT: 8 },
+      // Lis
+      11: { minT: -4, maxT: 4 }
+      // Gru
+    };
+    const tc = tempConfigs[month];
+    const tempC = Math.floor(tc.minT + r2 * (tc.maxT - tc.minT));
+    const windKmh = Math.floor(r3 * 55);
+    let description;
+    let precipitationChance;
+    let weatherIntensity;
+    if (month === 0 || month === 1 || month === 11) {
+      if (r1 < 0.07) {
+        description = "Zamie\u0107 \u015Bnie\u017Cna";
+        precipitationChance = 100;
+        weatherIntensity = 1;
+      } else if (r1 < 0.2) {
+        description = "Intensywne opady \u015Bniegu";
+        precipitationChance = 100;
+        weatherIntensity = 0.85;
+      } else if (r1 < 0.37) {
+        description = "Opady \u015Bniegu";
+        precipitationChance = 100;
+        weatherIntensity = 0.6;
+      } else if (r1 < 0.5) {
+        description = tempC <= -4 ? "Silny mr\xF3z" : "Mr\xF3z";
+        precipitationChance = 0;
+        weatherIntensity = tempC <= -5 ? 0.55 : 0.35;
+      } else if (r1 < 0.6) {
+        description = "G\u0119sta mg\u0142a";
+        precipitationChance = 20;
+        weatherIntensity = 0.4;
+      } else if (r1 < 0.72) {
+        description = windKmh > 30 ? "Silny wiatr, pochmurno" : "Pochmurno, zimno";
+        precipitationChance = 0;
+        weatherIntensity = windKmh > 35 ? 0.45 : 0.1;
+      } else if (r1 < 0.88) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0.05;
+      } else {
+        description = "S\u0142onecznie, mro\u017Ano";
+        precipitationChance = 0;
+        weatherIntensity = 0.1;
+      }
+    } else if (month === 2 || month === 3) {
+      if (r1 < 0.05 && month === 2) {
+        description = "Ostatnie opady \u015Bniegu";
+        precipitationChance = 100;
+        weatherIntensity = 0.5;
+      } else if (r1 < 0.22) {
+        description = windKmh > 30 ? "Deszcz ze silnym wiatrem" : "Deszcz";
+        precipitationChance = 100;
+        weatherIntensity = windKmh > 30 ? 0.55 : 0.38;
+      } else if (r1 < 0.35) {
+        description = "Lekki deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.22;
+      } else if (r1 < 0.47) {
+        description = "Silny wiatr";
+        precipitationChance = 0;
+        weatherIntensity = 0.38;
+      } else if (r1 < 0.62) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0.05;
+      } else if (r1 < 0.78) {
+        description = "Pochmurno";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      } else {
+        description = "Bezchmurnie";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      }
+    } else if (month >= 4 && month <= 7) {
+      const thunderChance = month === 5 || month === 6 ? 0.12 : 0.07;
+      const heatChance = month === 6 || month === 7 ? 0.09 : 0.03;
+      if (r1 < thunderChance) {
+        description = "Burza z piorunami";
+        precipitationChance = 100;
+        weatherIntensity = 1;
+      } else if (r1 < thunderChance + heatChance) {
+        description = "Upa\u0142";
+        precipitationChance = 0;
+        weatherIntensity = 0.65;
+      } else if (r1 < 0.32) {
+        description = "Ulewny deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.8;
+      } else if (r1 < 0.5) {
+        description = "Deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.38;
+      } else if (r1 < 0.62) {
+        description = "Lekki deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.2;
+      } else if (r1 < 0.74) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      } else {
+        description = "Bezchmurnie";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      }
+    } else {
+      const fogChance = month === 10 ? 0.18 : month === 9 ? 0.12 : 0.06;
+      const frostChance = month === 10 ? 0.1 : 0;
+      if (r1 < frostChance) {
+        description = "Pierwszy przymrozek";
+        precipitationChance = 0;
+        weatherIntensity = 0.3;
+      } else if (r1 < frostChance + fogChance) {
+        description = "G\u0119sta mg\u0142a";
+        precipitationChance = 20;
+        weatherIntensity = 0.4;
+      } else if (r1 < 0.4) {
+        description = windKmh > 30 ? "Deszcz ze silnym wiatrem" : "Deszcz";
+        precipitationChance = 100;
+        weatherIntensity = windKmh > 30 ? 0.62 : 0.4;
+      } else if (r1 < 0.54) {
+        description = "Lekki deszcz";
+        precipitationChance = 100;
+        weatherIntensity = 0.22;
+      } else if (r1 < 0.65) {
+        description = "Silny wiatr";
+        precipitationChance = 0;
+        weatherIntensity = windKmh > 35 ? 0.45 : 0.25;
+      } else if (r1 < 0.78) {
+        description = "Zachmurzenie umiarkowane";
+        precipitationChance = 0;
+        weatherIntensity = 0.05;
+      } else {
+        description = "Pochmurno";
+        precipitationChance = 0;
+        weatherIntensity = 0;
+      }
+    }
+    return {
+      tempC,
+      precipitationChance,
+      windKmh,
+      description,
+      weatherIntensity
+    };
+  }
+};
+
+// services/PolishCupVenueService.ts
+var POLISH_CUP_NEUTRAL_VENUE = {
+  name: "PGE Narodowy, Warszawa",
+  capacity: 58580
+};
+var isPolishCupFinal = (fixture) => fixture.id.toUpperCase().includes("FINA\u0141");
+var PolishCupVenueService = {
+  getVenue: (fixture, homeClub) => {
+    const isNeutral = fixture.leagueId === "SUPER_CUP" /* SUPER_CUP */ || isPolishCupFinal(fixture);
+    return isNeutral ? { ...POLISH_CUP_NEUTRAL_VENUE, isNeutral: true } : { name: homeClub.stadiumName, capacity: homeClub.stadiumCapacity, isNeutral: false };
+  },
+  getHistoryVenue: (match, homeClub) => {
+    const venue = PolishCupVenueService.getVenue(
+      { id: match.matchId, leagueId: match.competition },
+      homeClub
+    );
+    return venue.isNeutral ? venue.name : match.venue || venue.name;
+  }
+};
+
+// resources/static_db/names/pl_data.ts
+var PL_MALE_FIRSTNAMES = [
+  "Adam",
+  "Adrian",
+  "Alan",
+  "Albert",
+  "Aleks",
+  "Aleksander",
+  "Aleksy",
+  "Amadeusz",
+  "Andrzej",
+  "Antoni",
+  "Arkadiusz",
+  "Artur",
+  "Augustyn",
+  "Bartek",
+  "Bart\u0142omiej",
+  "Bartosz",
+  "Bazyli",
+  "Beniamin",
+  "B\u0142a\u017Cej",
+  "Bogdan",
+  "Boles\u0142aw",
+  "Bonifacy",
+  "Borys",
+  "Bronis\u0142aw",
+  "Bruno",
+  "Cezary",
+  "Cyprian",
+  "Czes\u0142aw",
+  "Damian",
+  "Daniel",
+  "Dariusz",
+  "Dawid",
+  "Denis",
+  "Dionizy",
+  "Dobromi\u0142",
+  "Dominik",
+  "Emil",
+  "Eryk",
+  "Euzebiusz",
+  "Fabian",
+  "Feliks",
+  "Filip",
+  "Florian",
+  "Franciszek",
+  "Fryderyk",
+  "Gabriel",
+  "Gerard",
+  "Grzegorz",
+  "Gustaw",
+  "Henryk",
+  "Hubert",
+  "Hugo",
+  "Igor",
+  "Ignacy",
+  "Ireneusz",
+  "Iwo",
+  "Izaak",
+  "Jacek",
+  "Jakub",
+  "Jan",
+  "Janusz",
+  "Jaromir",
+  "Jaros\u0142aw",
+  "Jeremi",
+  "Jerzy",
+  "J\u0119drzej",
+  "Joachim",
+  "Jonasz",
+  "J\xF3zef",
+  "Julian",
+  "Juliusz",
+  "Justyn",
+  "Kacper",
+  "Kajetan",
+  "Kamil",
+  "Karol",
+  "Kasper",
+  "Klemens",
+  "Konrad",
+  "Kornel",
+  "Korneliusz",
+  "Krystian",
+  "Krzysztof",
+  "Ksawery",
+  "Kuba",
+  "Lech",
+  "Leon",
+  "Leonard",
+  "Leszek",
+  "Lucjan",
+  "Ludwik",
+  "\u0141ukasz",
+  "Maciej",
+  "Maksym",
+  "Maksymilian",
+  "Marcel",
+  "Marceli",
+  "Marcin",
+  "Marek",
+  "Mariusz",
+  "Mateusz",
+  "Maurycy",
+  "Micha\u0142",
+  "Mieczys\u0142aw",
+  "Mieszko",
+  "Miko\u0142aj",
+  "Mi\u0142osz",
+  "Natan",
+  "Nataniel",
+  "Nikodem",
+  "Norbert",
+  "Olaf",
+  "Olgierd",
+  "Oliwier",
+  "Oskar",
+  "Patryk",
+  "Pawe\u0142",
+  "Piotr",
+  "Przemys\u0142aw",
+  "Rados\u0142aw",
+  "Radomi\u0142",
+  "Rafa\u0142",
+  "Remigiusz",
+  "Robert",
+  "Roch",
+  "Roman",
+  "Ryszard",
+  "Sebastian",
+  "Sergiusz",
+  "Seweryn",
+  "S\u0142awomir",
+  "Stanis\u0142aw",
+  "Stefan",
+  "Sylwester",
+  "Szymon",
+  "Tadeusz",
+  "Teodor",
+  "Tobiasz",
+  "Tomasz",
+  "Tymon",
+  "Tymoteusz",
+  "Tytus",
+  "Wac\u0142aw",
+  "Waldemar",
+  "Wawrzyniec",
+  "Wiktor",
+  "Wit",
+  "Witold",
+  "W\u0142adys\u0142aw",
+  "W\u0142odzimierz",
+  "Wojciech",
+  "Zbigniew",
+  "Zbyszko",
+  "Zdzis\u0142aw",
+  "Zenon",
+  "Zygfryd",
+  "Zygmunt",
+  "\u017Belis\u0142aw"
+];
+var PL_MALE_LASTNAMES = [
+  "Nowak",
+  "Kowalski",
+  "Wi\u015Bniewski",
+  "W\xF3jcik",
+  "Kowalczyk",
+  "Kami\u0144ski",
+  "Lewandowski",
+  "Zieli\u0144ski",
+  "Szyma\u0144ski",
+  "Wo\u017Aniak",
+  "D\u0105browski",
+  "Koz\u0142owski",
+  "Jankowski",
+  "Mazur",
+  "Wojciechowski",
+  "Kwiatkowski",
+  "Krawczyk",
+  "Kaczmarek",
+  "Piotrowski",
+  "Grabowski",
+  "Nowakowski",
+  "Paw\u0142owski",
+  "Michalski",
+  "Kr\xF3l",
+  "Wr\xF3bel",
+  "Jab\u0142o\u0144ski",
+  "Majewski",
+  "Olszewski",
+  "Jaworski",
+  "Malinowski",
+  "Pawlak",
+  "Witkowski",
+  "Walczak",
+  "St\u0119pie\u0144",
+  "G\xF3rski",
+  "Rutkowski",
+  "Michalak",
+  "Sikora",
+  "Baran",
+  "Szewczyk",
+  "Ostrowski",
+  "Tomaszewski",
+  "Pietrzak",
+  "Marciniak",
+  "Wr\xF3blewski",
+  "Zalewski",
+  "Jakubowski",
+  "Jasi\u0144ski",
+  "Zawadzki",
+  "Sadowski",
+  "B\u0105k",
+  "Chmielewski",
+  "W\u0142odarczyk",
+  "Borkowski",
+  "Czarnecki",
+  "Sawicki",
+  "Soko\u0142owski",
+  "Urba\u0144ski",
+  "Kubiak",
+  "Maciejewski",
+  "Szczepa\u0144ski",
+  "Kucharski",
+  "Wilk",
+  "Kali\u0144ski",
+  "Wysocki",
+  "Adamski",
+  "Sobczak",
+  "Czerwi\u0144ski",
+  "Andrzejewski",
+  "Cie\u015Blak",
+  "G\u0142owacki",
+  "Zakrzewski",
+  "Ko\u0142odziej",
+  "Sikorski",
+  "Krajewski",
+  "Zaj\u0105c",
+  "Szulc",
+  "Baranowski",
+  "Laskowski",
+  "Brzezi\u0144ski",
+  "Makowski",
+  "Przybylski",
+  "Duda",
+  "Pawlik",
+  "Kruk",
+  "J\xF3\u017Awiak",
+  "Kurek",
+  "Olszak",
+  "Mr\xF3z",
+  "Ka\u017Amierczak",
+  "Sobolewski",
+  "Kaczmarczyk",
+  "Zi\xF3\u0142kowski",
+  "Markowski",
+  "Tomczak",
+  "Weso\u0142owski",
+  "Kurowski",
+  "Krupa",
+  "Lis",
+  "Mazurek",
+  "Klimczak",
+  "Wasilewski",
+  "Zawistowski",
+  "Konieczny",
+  "Fr\u0105ckowiak",
+  "\u017Bukowski",
+  "Doma\u0144ski",
+  "Or\u0142owski",
+  "Wieczorek",
+  "M\u0142ynarczyk",
+  "Bednarek",
+  "Bielecki",
+  "Rogowski",
+  "Kowalewski",
+  "Sowa",
+  "Czajkowski",
+  "Gajewski",
+  "Lipski",
+  "Zarzycki",
+  "Szymczak",
+  "Cichy",
+  "Janicki",
+  "Leszczy\u0144ski",
+  "Kowal",
+  "Paj\u0105k",
+  "Wojtas",
+  "Kozak",
+  "Piotrowicz",
+  "Stankiewicz",
+  "K\u0119dzierski",
+  "Dziedzic",
+  "Kuczy\u0144ski",
+  "B\u0142aszczyk",
+  "Ratajczak",
+  "Chojnacki",
+  "K\u0142os",
+  "Kubicki",
+  "Wojtkowiak",
+  "Romanowski",
+  "Kowalik",
+  "Kaczy\u0144ski",
+  "Witek",
+  "Kozio\u0142",
+  "Pietrzyk",
+  "Janik",
+  "Cie\u015Blik",
+  "Dudek",
+  "Koprowski",
+  "Grzelak",
+  "Nowicki",
+  "Mroczek",
+  "Sroka",
+  "Wojtczak",
+  "Kozakiewicz",
+  "Wierzbicki",
+  "Kaczor",
+  "Banach",
+  "Bara\u0144ski",
+  "Bielecki",
+  "B\u0142aszczak",
+  "Bobrowski",
+  "Borowski",
+  "Brzozowski",
+  "Budzy\u0144ski",
+  "Cebula",
+  "Chmura",
+  "Cicho\u0144",
+  "Ciesielski",
+  "Cybulski",
+  "Dobrowolski",
+  "Domaga\u0142a",
+  "Dudek",
+  "Fabisiak",
+  "Falkowski",
+  "G\u0105sior",
+  "Gajewski",
+  "Graczyk",
+  "Gruszczy\u0144ski",
+  "Grzyb",
+  "Guzik",
+  "Hajduk",
+  "J\u0119drzejczak",
+  "J\u0119drzejewski",
+  "Jurkiewicz",
+  "Kaleta",
+  "Karpi\u0144ski",
+  "Kasprzak",
+  "Kaszuba",
+  "Kawecki",
+  "K\u0119dziora",
+  "Kie\u0142basa",
+  "Kmiecik",
+  "Ko\u0142akowski",
+  "Komorowski",
+  "Kopczy\u0144ski",
+  "Korzeniowski",
+  "Kosowski",
+  "Kostrzewa",
+  "Kot",
+  "Kotowski",
+  "Krawiec",
+  "Krzemi\u0144ski",
+  "Kujawa",
+  "Kujawski",
+  "Kulig",
+  "Lach",
+  "Lenart",
+  "Lisiak",
+  "Lisiecki",
+  "\u0141api\u0144ski",
+  "\u0141uczak",
+  "\u0141ukasiewicz",
+  "Madej",
+  "Madejski",
+  "Majchrzak",
+  "Marczak",
+  "Markiewicz",
+  "Marsza\u0142ek",
+  "Marzec",
+  "Mas\u0142owski",
+  "Matusiak",
+  "Matuszewski",
+  "Matysiak",
+  "Mazurkiewicz",
+  "Michalik",
+  "Mierzejewski",
+  "Mika",
+  "Miko\u0142ajczak",
+  "Miko\u0142ajczyk",
+  "Milewski",
+  "Mi\u0142ek",
+  "Modzelewski",
+  "Morawski",
+  "Murawski",
+  "Musia\u0142",
+  "Muszy\u0144ski",
+  "Nadolski",
+  "Noga",
+  "Olejniczak",
+  "Olejnik",
+  "Orzechowski",
+  "Owczarek",
+  "Paciorek",
+  "Panek",
+  "Paszkiewicz",
+  "Pawlicki",
+  "Pawlikowski",
+  "P\u0119kala",
+  "Pi\u0105tek",
+  "Piekarski",
+  "Pieczy\u0144ski",
+  "Pietras",
+  "Pilch",
+  "Piwowarczyk",
+  "Podg\xF3rski",
+  "Polak",
+  "Pola\u0144ski",
+  "Pop\u0142awski",
+  "Por\u0119bski",
+  "Prus",
+  "Przyby\u0142a",
+  "Pucha\u0142a",
+  "Pyka",
+  "Raczy\u0144ski",
+  "Radomski",
+  "Rakowski",
+  "Rataj",
+  "Reczek",
+  "Rogala",
+  "Rogalski",
+  "Rojek",
+  "Roszak",
+  "Rudnicki",
+  "Rybak",
+  "Rybarczyk",
+  "Rybi\u0144ski",
+  "Rzepka",
+  "Sajdak",
+  "Salamon",
+  "Sasin",
+  "Serafin",
+  "Sidor",
+  "Sienkiewicz",
+  "Skiba",
+  "Skowron",
+  "Skrzypczak",
+  "Skrzypek",
+  "S\u0142awik",
+  "S\u0142o\u0144ski",
+  "Smoli\u0144ski",
+  "Sobczyk",
+  "Sobiech",
+  "Sochacki",
+  "Solecki",
+  "Sowi\u0144ski",
+  "Stachowiak",
+  "Stachura",
+  "Stanek",
+  "Staszewski",
+  "Sta\u0144czyk",
+  "Stolarski",
+  "Strzelecki",
+  "Strzelczyk",
+  "Suchodolski",
+  "Surma",
+  "Szablewski",
+  "Szadkowski",
+  "Szarek",
+  "Szcze\u015Bniak",
+  "Szczotka",
+  "Szczygie\u0142",
+  "Szpak",
+  "Szuba",
+  "Szyd\u0142owski",
+  "\u015Aliwa",
+  "\u015Aliwi\u0144ski",
+  "\u015Awi\u0105tek",
+  "\u015Awiderski",
+  "Taras",
+  "Tatarek",
+  "Tokarski",
+  "Tomczyk",
+  "Tracz",
+  "Trzci\u0144ski",
+  "Turowski",
+  "Twardowski",
+  "Urbanek",
+  "Walkowiak",
+  "Wcis\u0142o",
+  "Wicher",
+  "Wilczek",
+  "Wilczy\u0144ski",
+  "Wnuk",
+  "W\xF3jcicki",
+  "Wrzesi\u0144ski",
+  "Zaborowski",
+  "Zag\xF3rski",
+  "Zaremba",
+  "Zborowski",
+  "Zi\u0119ba",
+  "Zi\u0119tek",
+  "Zych",
+  "\u017Bak",
+  "\u017Bbikowski",
+  "\u017Bebrowski",
+  "\u017Belazny",
+  "\u017Bmuda",
+  "\u017Buk",
+  "\u017Burawski",
+  "\u017Burek"
+];
+
+// resources/static_db/names/balkan_data.ts
+var BALKAN_MALE_FIRSTNAMES = [
+  "Luka",
+  "Marko",
+  "Ivan",
+  "Nikola",
+  "Milo\u0161",
+  "Dragan",
+  "Stefan",
+  "Damir",
+  "Zoran",
+  "Darko",
+  "Vedran",
+  "Ante",
+  "Josip",
+  "Tomislav",
+  "Filip",
+  "Mateo",
+  "Dominik",
+  "Petar",
+  "Aleksandar",
+  "Dejan",
+  "Mirko",
+  "Slobodan",
+  "Goran",
+  "Nenad",
+  "Bojan",
+  "Milan",
+  "Viktor",
+  "Kristijan",
+  "Andrej",
+  "Mihael",
+  "Alen",
+  "Emir",
+  "Amar",
+  "Haris",
+  "Armin",
+  "Edin",
+  "Admir",
+  "Besmir",
+  "Ilir",
+  "Arben",
+  "Sokol",
+  "Valon",
+  "Liridon",
+  "Mergim",
+  "Faton",
+  "Blendi",
+  "Elvin",
+  "Arijan",
+  "Ezgjan",
+  "Visar",
+  "Ahmed",
+  "Daris",
+  "Davud",
+  "Adin",
+  "Hamza",
+  "Ali",
+  "Harun",
+  "Eman",
+  "Ajnur",
+  "Imran",
+  "Tarik",
+  "Emin",
+  "D\u017Ean",
+  "Omar",
+  "Ajdin",
+  "Muhamed",
+  "Vedad",
+  "Bilal",
+  "Benjamin",
+  "Arslan",
+  "Mak",
+  "Faris",
+  "Danin",
+  "Kerim",
+  "Jusuf",
+  "Mahir",
+  "Rejjan",
+  "Fatih",
+  "Mirza",
+  "Rocco",
+  "Simon",
+  "Joseph",
+  "David",
+  "Jakov",
+  "Toma",
+  "Niko",
+  "Vasilije",
+  "Vuka\u0161in",
+  "Vuk",
+  "Vukan",
+  "Bogdan",
+  "Lazar",
+  "Aleksa",
+  "Strahinja",
+  "Uro\u0161",
+  "Andrija",
+  "Jovan",
+  "\u0110or\u0111e",
+  "Kosta",
+  "Sava",
+  "Teodor",
+  "Vojin"
+];
+var BALKAN_MALE_LASTNAMES = [
+  "Kova\u010Di\u0107",
+  "Petrovi\u0107",
+  "Jovanovi\u0107",
+  "Popovi\u0107",
+  "Horvat",
+  "Babi\u0107",
+  "Vukovi\u0107",
+  "Radi\u0107",
+  "\u0160ari\u0107",
+  "Peri\u0107",
+  "Mati\u0107",
+  "Pavlovi\u0107",
+  "Markovi\u0107",
+  "Ili\u0107",
+  "\u0110uri\u0107",
+  "Kova\u010Devi\u0107",
+  "Nikoli\u0107",
+  "Stojanovi\u0107",
+  "Milo\u0161evi\u0107",
+  "Luki\u0107",
+  "Tomi\u0107",
+  "Bla\u017Eevi\u0107",
+  "\u010Covi\u0107",
+  "Hod\u017Ei\u0107",
+  "Halilovi\u0107",
+  "Ahmetovi\u0107",
+  "Muji\u0107",
+  "Deli\u0107",
+  "\u0160i\u0161i\u0107",
+  "Berisha",
+  "Krasniqi",
+  "Gashi",
+  "Tahiri",
+  "Hyseni",
+  "Rexhepi",
+  "Jashari",
+  "Aliu",
+  "Veliu",
+  "Demiri",
+  "Osmani",
+  "Ristovski",
+  "Trajkovski",
+  "Pandevski",
+  "Spirovski",
+  "Stojkovi\u0107",
+  "Marjanovi\u0107",
+  "Dragi\u0107",
+  "Vuli\u0107",
+  "Zori\u0107",
+  "\u0110or\u0111evi\u0107",
+  "Stankovi\u0107",
+  "Ivanovi\u0107",
+  "Kne\u017Eevi\u0107",
+  "Filipovi\u0107",
+  "Juri\u0107",
+  "Anti\u0107",
+  "Bojani\u0107",
+  "Cvetkovi\u0107",
+  "Dimitrijevi\u0107",
+  "Grgi\u0107",
+  "Had\u017Ei\u0107",
+  "Ibrahimovi\u0107",
+  "Hasanovi\u0107",
+  "Mehmedovi\u0107",
+  "Kelmendi",
+  "Shkreli",
+  "Mustafa",
+  "Hoxha",
+  "Prifti",
+  "Dervishi",
+  "Ivanov",
+  "Georgiev",
+  "Dimitrov",
+  "Popov",
+  "Hristov",
+  "Angelov",
+  "Vasilev",
+  "Petrov",
+  "Iliev",
+  "Todorov",
+  "Marinov",
+  "Popescu",
+  "Ionescu",
+  "Constantinescu",
+  "Georgescu",
+  "Radu",
+  "Dumitrescu",
+  "Novak",
+  "Kova\u010D",
+  "Zupan",
+  "Krajnc",
+  "Ho\u010Devar",
+  "Begi\u0107",
+  "Suba\u0161i\u0107",
+  "Zlatar",
+  "Kolar",
+  "Vlah",
+  "Mirkovi\u0107"
+];
+
+// resources/static_db/names/czsk_data.ts
+var CZSK_MALE_FIRSTNAMES = [
+  "Tom\xE1\u0161",
+  "Jakub",
+  "Jan",
+  "Luk\xE1\u0161",
+  "Ond\u0159ej",
+  "Adam",
+  "Mat\u011Bj",
+  "Filip",
+  "Petr",
+  "Ji\u0159\xED",
+  "Martin",
+  "David",
+  "Michal",
+  "Pavel",
+  "Marek",
+  "V\xE1clav",
+  "Josef",
+  "Daniel",
+  "Patrik",
+  "Dominik",
+  "\u0160t\u011Bp\xE1n",
+  "Roman",
+  "Milan",
+  "Franti\u0161ek",
+  "Karel",
+  "Vojt\u011Bch",
+  "Radim",
+  "Zden\u011Bk",
+  "Miroslav",
+  "Jaroslav",
+  "Lubo\u0161",
+  "Radek",
+  "Ale\u0161",
+  "Vladim\xEDr",
+  "Richard",
+  "Samuel",
+  "Kristi\xE1n",
+  "Erik",
+  "Denis",
+  "Peter",
+  "Juraj",
+  "Branislav",
+  "Matej",
+  "Stanislav",
+  "Jozef",
+  "Ladislav",
+  "Du\u0161an",
+  "Ivan",
+  "Tibor",
+  "Oliver",
+  "Mat\xFA\u0161",
+  "Samuel",
+  "Michal",
+  "Tom\xE1\u0161",
+  "Jakub",
+  "Adam",
+  "Martin",
+  "Luk\xE1\u0161",
+  "Filip",
+  "Matej",
+  "Dominik",
+  "Richard",
+  "Nikolas",
+  "Tom\xE1\u0161",
+  "Alex",
+  "Marko",
+  "Timotej",
+  "J\xE1n",
+  "Miroslav",
+  "Jozef",
+  "Vladim\xEDr",
+  "Milan",
+  "Peter",
+  "Andrej",
+  "Marek",
+  "Daniel",
+  "R\xF3bert",
+  "Patrik",
+  "Martin",
+  "Michal",
+  "Luk\xE1\u0161",
+  "Tom\xE1\u0161",
+  "Jakub",
+  "Adam",
+  "Mat\u011Bj",
+  "Filip",
+  "Ond\u0159ej",
+  "Vojt\u011Bch",
+  "Ji\u0159\xED",
+  "Petr",
+  "Josef",
+  "David",
+  "Michal",
+  "Pavel",
+  "V\xE1clav",
+  "Roman",
+  "Milan",
+  "Franti\u0161ek",
+  "Karel",
+  "Radim",
+  "Zden\u011Bk",
+  "Miroslav",
+  "Jaroslav",
+  "Lubo\u0161"
+];
+var CZSK_MALE_LASTNAMES = [
+  "Nov\xE1k",
+  "Svoboda",
+  "Novotn\xFD",
+  "Dvo\u0159\xE1k",
+  "\u010Cern\xFD",
+  "Proch\xE1zka",
+  "Ku\u010Dera",
+  "Vesel\xFD",
+  "Horv\xE1th",
+  "Kov\xE1\u010D",
+  "N\u011Bmec",
+  "Pokorn\xFD",
+  "H\xE1jek",
+  "Jel\xEDnek",
+  "Kr\xE1l",
+  "R\u016F\u017Ei\u010Dka",
+  "Bene\u0161",
+  "Fiala",
+  "Sedl\xE1\u010Dek",
+  "Dole\u017Eal",
+  "Zeman",
+  "Kol\xE1\u0159",
+  "Navr\xE1til",
+  "\u010Cerm\xE1k",
+  "Va\u0161\xED\u010Dek",
+  "Urban",
+  "Van\u011Bk",
+  "Barto\u0161",
+  "Posp\xED\u0161il",
+  "Kopeck\xFD",
+  "Mal\xFD",
+  "\u0158\xEDha",
+  "Bla\u017Eek",
+  "K\u0159\xED\u017E",
+  "Toman",
+  "M\xE1lek",
+  "Pol\xE1k",
+  "\u0160imek",
+  "Bar\xE1k",
+  "Soukup",
+  "Vacek",
+  "Hru\u0161ka",
+  "Strnad",
+  "Moravec",
+  "Valenta",
+  "Varga",
+  "Bal\xE1\u017E",
+  "Moln\xE1r",
+  "Hrn\u010D\xE1r",
+  "Kov\xE1\u010Dik",
+  "Szab\xF3",
+  "Oravec",
+  "Hud\xE1k",
+  "Kov\xE1\u010D",
+  "Hal\xE1sz",
+  "T\xF3th",
+  "Nagy",
+  "Kiss",
+  "Szabo",
+  "Horv\xE1th",
+  "Varga",
+  "Bal\xE1\u017E",
+  "Moln\xE1r",
+  "Kov\xE1\u010Dik",
+  "Kov\xE1\u010D",
+  "Farkas",
+  "Luk\xE1\u010D",
+  "Hlav\xE1\u010D",
+  "Kopeck\xFD",
+  "\u0160vec",
+  "Kov\xE1\u0159",
+  "Zahradn\xEDk",
+  "\u0160t\u011Bp\xE1nek",
+  "Vl\u010Dek",
+  "Kadlec",
+  "\u0160ulc",
+  "Musil",
+  "\u0160im\xE1nek",
+  "Hru\u0161ka",
+  "Dudek",
+  "S\xFDkora",
+  "Havel",
+  "Hol\xEDk",
+  "\u0160pa\u010Dek",
+  "Dvo\u0159\xE1\u010Dek",
+  "V\xE1vra",
+  "Kub\xED\u010Dek",
+  "Pavl\xED\u010Dek",
+  "\u0160t\u011Bp\xE1n",
+  "\u010Cech",
+  "Vondr\xE1\u010Dek",
+  "Bure\u0161",
+  "Mach",
+  "\u010C\xED\u017Eek",
+  "B\xEDlek",
+  "Kov\xE1\u0159\xEDk",
+  "\u0160t\u011Bp\xE1nek",
+  "Vl\u010Dek",
+  "Kadlec",
+  "\u0160vec",
+  "Kov\xE1\u0159"
+];
+
+// resources/static_db/names/ssa_data.ts
+var SSA_MALE_FIRSTNAMES = [
+  "Kwame",
+  "Kofi",
+  "Yao",
+  "Ibrahim",
+  "Mohammed",
+  "Abdoulaye",
+  "Moussa",
+  "Amadou",
+  "Sekou",
+  "Ousmane",
+  "Chukwuemeka",
+  "Olumide",
+  "Tunde",
+  "Adebayo",
+  "Chidera",
+  "Siphiwe",
+  "Thabo",
+  "Lerato",
+  "Katlego",
+  "Themba",
+  "Bongani",
+  "Sibusiso",
+  "Mpho",
+  "Tumelo",
+  "Ayanda",
+  "Njabulo",
+  "Khalid",
+  "Youssef",
+  "Jean-Pierre",
+  "Kalusha",
+  "Mohamed",
+  "Ahmed",
+  "Jean",
+  "Joseph",
+  "David",
+  "John",
+  "Michael",
+  "Samuel",
+  "Daniel",
+  "Emmanuel",
+  "Paul",
+  "Peter",
+  "James",
+  "Isaac",
+  "Abraham",
+  "Jacob",
+  "Joshua",
+  "Benjamin",
+  "Matthew",
+  "Mark",
+  "Luke",
+  "Thomas",
+  "Simon",
+  "Andrew",
+  "Philip",
+  "Stephen",
+  "Francis",
+  "Patrick",
+  "Anthony",
+  "Charles",
+  "George",
+  "William",
+  "Henry",
+  "Edward",
+  "Victor",
+  "Felix",
+  "Bernard",
+  "Christopher",
+  "Nicholas",
+  "Raphael",
+  "Gabriel",
+  "Michael",
+  "Omar",
+  "Ali",
+  "Hassan",
+  "Yusuf",
+  "Abubakar",
+  "Haruna",
+  "Sani",
+  "Musa",
+  "Adamu",
+  "Bello",
+  "Usman",
+  "Idris",
+  "Suleiman",
+  "Aminu",
+  "Chinedu",
+  "Chukwudi",
+  "Obinna",
+  "Emeka",
+  "Oluwaseun",
+  "Babatunde",
+  "Taiwo",
+  "Keita",
+  "Diallo",
+  "Camara",
+  "Ndiaye",
+  "Mensah",
+  "Osei"
+];
+var SSA_MALE_LASTNAMES = [
+  "Traor\xE9",
+  "Konat\xE9",
+  "Diarra",
+  "Coulibaly",
+  "Camara",
+  "Tour\xE9",
+  "Keita",
+  "Diallo",
+  "Bah",
+  "Sow",
+  "Ndiaye",
+  "Adeyemi",
+  "Okafor",
+  "Eze",
+  "Chukwuebuka",
+  "Mokoena",
+  "Zungu",
+  "Zwane",
+  "Shabangu",
+  "Nkosi",
+  "Dlamini",
+  "Mahlangu",
+  "Ndlovu",
+  "Khoza",
+  "Buthelezi",
+  "Mensah",
+  "Boateng",
+  "Appiah",
+  "Ayew",
+  "Banda",
+  "Mwangi",
+  "Ochieng",
+  "Otieno",
+  "Kiprop",
+  "Mutai",
+  "Kimani",
+  "Omondi",
+  "Wanjala",
+  "Ibrahim",
+  "Mohamed",
+  "Musa",
+  "Abdi",
+  "Hassan",
+  "Ali",
+  "Ahmed",
+  "Tesfaye",
+  "Kebede",
+  "Alemu",
+  "Getachew",
+  "Yohannes",
+  "Bekele",
+  "Assefa",
+  "Mensah",
+  "Osei",
+  "Acheampong",
+  "Owusu",
+  "Agyemang",
+  "Asante",
+  "Yeboah",
+  "Adjei",
+  "Opoku",
+  "Amoah",
+  "Nkrumah",
+  "Okonkwo",
+  "Okafor",
+  "Eze",
+  "Adebayo",
+  "Afolabi",
+  "Obi",
+  "Ibrahim",
+  "Sani",
+  "Yusuf",
+  "Abubakar",
+  "Lawal",
+  "Bello",
+  "Usman",
+  "Mohammed",
+  "Adamu",
+  "Rakotomalala",
+  "Randriamanantsoa",
+  "Andriantsitohaina",
+  "Rakotoarivony",
+  "Rakoto",
+  "Nkurunziza",
+  "Manirakiza",
+  "Habimana",
+  "Uwimana",
+  "Ndayishimiye",
+  "Moyo",
+  "Sibanda",
+  "Ncube",
+  "Maphosa",
+  "Mudzonga",
+  "Chigumbura"
+];
+
+// resources/static_db/names/iberia_data.ts
+var IBERIA_MALE_FIRSTNAMES = [
+  "Hugo",
+  "Mateo",
+  "Mart\xEDn",
+  "Leo",
+  "Lucas",
+  "Manuel",
+  "Alejandro",
+  "Pablo",
+  "Daniel",
+  "\xC1lvaro",
+  "Enzo",
+  "Mario",
+  "Adri\xE1n",
+  "Diego",
+  "Thiago",
+  "Bruno",
+  "Oliver",
+  "David",
+  "Alex",
+  "Marco",
+  "Gonzalo",
+  "Marcos",
+  "Nicol\xE1s",
+  "Antonio",
+  "Izan",
+  "Miguel",
+  "Javier",
+  "Luca",
+  "Liam",
+  "Gael",
+  "Marc",
+  "Dylan",
+  "Juan",
+  "\xC1ngel",
+  "Carlos",
+  "Jos\xE9",
+  "Gabriel",
+  "Sergio",
+  "Eric",
+  "Jorge",
+  "Dar\xEDo",
+  "Adam",
+  "Samuel",
+  "H\xE9ctor",
+  "Rodrigo",
+  "Iker",
+  "Pau",
+  "Jes\xFAs",
+  "Guillermo",
+  "Jaime",
+  "Luis",
+  "Ian",
+  "Francisco",
+  "Noah",
+  "Aaron",
+  "V\xEDctor",
+  "Mohamed",
+  "Rafael",
+  "Francisco",
+  "Louren\xE7o",
+  "Tom\xE1s",
+  "Vicente",
+  "Jo\xE3o",
+  "Duarte",
+  "Afonso",
+  "Gabriel",
+  "Miguel",
+  "Santiago",
+  "Rodrigo",
+  "Martim",
+  "Gon\xE7alo",
+  "Pedro",
+  "Diogo",
+  "Rafael",
+  "Tom\xE1s",
+  "Afonso",
+  "Rodrigo",
+  "Jo\xE3o",
+  "Miguel",
+  "Gon\xE7alo",
+  "Bernardo",
+  "Salvador",
+  "Teodoro",
+  "Vicente",
+  "Andr\xE9",
+  "Tiago",
+  "Henrique",
+  "Leonardo",
+  "Guilherme",
+  "Mateus",
+  "Daniel",
+  "David",
+  "Ant\xF3nio",
+  "Eduardo",
+  "Filipe",
+  "Jorge",
+  "Lu\xEDs",
+  "Nuno",
+  "Rui",
+  "V\xEDtor"
+];
+var IBERIA_MALE_LASTNAMES = [
+  "Garc\xEDa",
+  "Rodr\xEDguez",
+  "Gonz\xE1lez",
+  "Fern\xE1ndez",
+  "L\xF3pez",
+  "Mart\xEDnez",
+  "S\xE1nchez",
+  "P\xE9rez",
+  "G\xF3mez",
+  "Jim\xE9nez",
+  "Ruiz",
+  "Hern\xE1ndez",
+  "D\xEDaz",
+  "Moreno",
+  "\xC1lvarez",
+  "Mu\xF1oz",
+  "Romero",
+  "Alonso",
+  "Guti\xE9rrez",
+  "Navarro",
+  "Torres",
+  "Dom\xEDnguez",
+  "V\xE1zquez",
+  "Ramos",
+  "Gil",
+  "Ram\xEDrez",
+  "Serrano",
+  "Blanco",
+  "Molina",
+  "Morales",
+  "Su\xE1rez",
+  "Ortega",
+  "Delgado",
+  "Castro",
+  "Ortiz",
+  "Rubio",
+  "Mar\xEDn",
+  "N\xFA\xF1ez",
+  "Medina",
+  "Iglesias",
+  "Cortes",
+  "Castillo",
+  "Santos",
+  "Silva",
+  "Ferreira",
+  "Pereira",
+  "Costa",
+  "Rodrigues",
+  "Oliveira",
+  "Alves",
+  "Moreira",
+  "Sousa",
+  "Carvalho",
+  "Mendes",
+  "Nogueira",
+  "Vieira",
+  "Lopes",
+  "Soares",
+  "Fernandes",
+  "Martins",
+  "Gon\xE7alves",
+  "Ribeiro",
+  "Dias",
+  "Rocha",
+  "Pinto",
+  "Cardoso",
+  "Teixeira",
+  "Correia",
+  "Monteiro",
+  "Ara\xFAjo",
+  "Cunha",
+  "Barbosa",
+  "Tavares",
+  "Freitas",
+  "Melo",
+  "Coelho",
+  "Pires",
+  "Cruz",
+  "Nunes",
+  "Macedo",
+  "Magalh\xE3es",
+  "Reis",
+  "Figueiredo",
+  "Campos",
+  "Andrade",
+  "Fonseca",
+  "Marques",
+  "Miranda",
+  "Vaz",
+  "Leite",
+  "Batista",
+  "Faria",
+  "Henriques",
+  "Machado",
+  "Antunes",
+  "Baptista",
+  "Coutinho",
+  "Gomes",
+  "Moura"
+];
+
+// resources/static_db/names/scandinavia_data.ts
+var SCANDINAVIA_MALE_LASTNAMES = [
+  "Hansen",
+  "Johansen",
+  "Olsen",
+  "Larsen",
+  "Andersen",
+  "Nielsen",
+  "Pedersen",
+  "Nilsson",
+  "Eriksson",
+  "Karlsson",
+  "Larsson",
+  "Olsson",
+  "Persson",
+  "Svensson",
+  "Gustafsson",
+  "Berg",
+  "J\xF8rgensen",
+  "Kristiansen",
+  "Jensen",
+  "Mogensen",
+  "Poulsen",
+  "Mortensen",
+  "Christiansen",
+  "Thomsen",
+  "Kj\xE6r",
+  "Dahl",
+  "Holm",
+  "Vestergaard",
+  "M\xF8ller",
+  "Jakobsen",
+  "Petersen",
+  "Johansson",
+  "Andersson",
+  "Lindberg",
+  "Lindstr\xF6m",
+  "Lindgren",
+  "Lund",
+  "Hansson",
+  "Forsberg",
+  "Danielsson",
+  "Jonsson",
+  "H\xE5kansson",
+  "Fredriksson",
+  "Bj\xF6rk",
+  "Nystr\xF6m",
+  "Olofsson",
+  "Samuelsson",
+  "Bengtsson",
+  "Axelsson",
+  "Wikstr\xF6m",
+  "Haaland",
+  "\xD8degaard",
+  "Solberg",
+  "Haugen",
+  "Johnsen",
+  "Karlsen",
+  "Eide",
+  "Bakken",
+  "Halvorsen",
+  "Eriksen",
+  "Henriksen",
+  "Mathisen",
+  "Andreassen",
+  "Paulsen",
+  "Moen",
+  "Gundersen",
+  "Evensen",
+  "Str\xF8m",
+  "Lie",
+  "Thorsen",
+  "Rasmussen",
+  "Jenssen",
+  "Nilsen",
+  "S\xF8rensen",
+  "Jeppesen",
+  "Villadsen",
+  "Lauridsen",
+  "Dinesen",
+  "Br\xF8ndum",
+  "Kjeldsen",
+  "Toft",
+  "Bjerregaard",
+  "Fisker",
+  "Dam",
+  "Skov",
+  "Krag",
+  "Frost",
+  "Vinther",
+  "Thygesen",
+  "Busk",
+  "Lassen",
+  "Hedegaard",
+  "Gregersen",
+  "Bay",
+  "Due",
+  "Elkj\xE6r",
+  "H\xF8j",
+  "Lundgaard",
+  "Rosendal",
+  "Skaarup",
+  "Wulff"
+];
+var SCANDINAVIA_MALE_FIRSTNAMES = [
+  "Emil",
+  "Lucas",
+  "William",
+  "Oliver",
+  "Noah",
+  "Elias",
+  "Oscar",
+  "Victor",
+  "Alexander",
+  "Magnus",
+  "Erik",
+  "Rasmus",
+  "Kasper",
+  "Jakob",
+  "Mads",
+  "Jonas",
+  "Martin",
+  "Andreas",
+  "Frederik",
+  "Isak",
+  "Liam",
+  "Matheo",
+  "Theodor",
+  "Hugo",
+  "Adam",
+  "August",
+  "Nils",
+  "Leo",
+  "Otto",
+  "Alfred",
+  "Carl",
+  "Axel",
+  "Arvid",
+  "Malte",
+  "Olle",
+  "Sigge",
+  "Hjalmar",
+  "Noah",
+  "Liam",
+  "Johannes",
+  "Filip",
+  "Anton",
+  "Elliot",
+  "Arthur",
+  "Ludvig",
+  "Felix",
+  "Vincent",
+  "Benjamin",
+  "Matias",
+  "Oskar",
+  "Theo",
+  "Mohammad",
+  "Harald",
+  "Henrik",
+  "Sander",
+  "Olav",
+  "Tor",
+  "Bj\xF8rn",
+  "Per",
+  "Jan",
+  "Lars",
+  "Anders",
+  "Johan",
+  "Peter",
+  "Daniel",
+  "Mikael",
+  "Thomas",
+  "Christian",
+  "S\xF8ren",
+  "Jens",
+  "Niels",
+  "Morten",
+  "Henning",
+  "Kjeld",
+  "Bent",
+  "Leif",
+  "Gunnar",
+  "Sigurd",
+  "Einar",
+  "Knut",
+  "Arne",
+  "Sven",
+  "Ingvar",
+  "Rune",
+  "Vidar",
+  "Thor",
+  "H\xE5kon",
+  "Trygve",
+  "Roar",
+  "Geir",
+  "Stian",
+  "Espen",
+  "J\xF8rgen",
+  "Kristian",
+  "Petter",
+  "Ivar",
+  "Dag",
+  "Even",
+  "Joakim",
+  "Nikolai",
+  "Sebastian",
+  "Tobias",
+  "Valdemar"
+];
+
+// resources/static_db/names/swedish_data.ts
+var SWEDISH_MALE_FIRSTNAMES = [
+  "Noah",
+  "William",
+  "Hugo",
+  "Liam",
+  "Adam",
+  "August",
+  "Nils",
+  "Leo",
+  "Oliver",
+  "Otto",
+  "Sam",
+  "Alfred",
+  "Elias",
+  "Lucas",
+  "Alexander",
+  "Emil",
+  "Oscar",
+  "Filip",
+  "Axel",
+  "Benjamin",
+  "Theo",
+  "Charlie",
+  "Max",
+  "Gabriel",
+  "Isaac",
+  "Leon",
+  "Arvid",
+  "Viggo",
+  "Sebastian",
+  "Milton",
+  "Casper",
+  "Viktor",
+  "Henry",
+  "Elliot",
+  "Alvin",
+  "Samuel",
+  "Adrian",
+  "Ludvig",
+  "Erik",
+  "Anton",
+  "Felix",
+  "Linus",
+  "Simon",
+  "Theodor",
+  "Malte",
+  "Gustav",
+  "Oskar",
+  "Albin",
+  "Sixten",
+  "Ebbe",
+  "Frans",
+  "Hjalmar",
+  "Ivar",
+  "Kasper",
+  "Loke",
+  "Melker",
+  "Rasmus",
+  "Sigge",
+  "Tor",
+  "Wilmer",
+  "Anders",
+  "Johan",
+  "Lars",
+  "Mikael",
+  "Peter",
+  "Daniel",
+  "Jan",
+  "Per",
+  "Fredrik",
+  "Henrik",
+  "Magnus",
+  "Bj\xF6rn",
+  "Karl",
+  "Stefan",
+  "Thomas",
+  "Andreas",
+  "Jonas",
+  "Mattias",
+  "Niklas",
+  "Patrik",
+  "Robin",
+  "Tobias",
+  "Christian",
+  "David",
+  "Jonathan",
+  "Marcus",
+  "Martin",
+  "Robert",
+  "Sebastian",
+  "Victor",
+  "Emmanuel",
+  "Isak",
+  "Jakob",
+  "Joel",
+  "Kevin",
+  "Liam",
+  "Lucas",
+  "Matteo",
+  "Noah",
+  "Oliver",
+  "Philip",
+  "Rasmus",
+  "Samuel",
+  "Tim",
+  "Vincent",
+  "Wilhelm",
+  "\xC5ke",
+  "Arne",
+  "Bengt",
+  "Bo",
+  "Claes",
+  "Elof",
+  "Gunnar",
+  "Hannes",
+  "Ingvar",
+  "Jesper",
+  "Kjell",
+  "Leif",
+  "Mats",
+  "Nils",
+  "Olof",
+  "Pelle",
+  "Quintus",
+  "Ragnar",
+  "Staffan",
+  "Tomas",
+  "Ulf",
+  "Valdemar",
+  "Xavier",
+  "Yngve",
+  "Zacharias",
+  "Algot",
+  "Birger",
+  "Dag",
+  "Edvin",
+  "Folke",
+  "Greger",
+  "Harald",
+  "Ivar",
+  "Joakim",
+  "Kristian",
+  "Lennart",
+  "Morgan",
+  "Nicklas",
+  "Oskar",
+  "Pontus",
+  "Rikard",
+  "Stig",
+  "Torbj\xF6rn",
+  "Urban",
+  "Ville",
+  "Wilfred",
+  "Xander",
+  "Yngvar",
+  "Zlatan"
+];
+var SWEDISH_MALE_LASTNAMES = [
+  "Andersson",
+  "Johansson",
+  "Karlsson",
+  "Nilsson",
+  "Eriksson",
+  "Larsson",
+  "Olsson",
+  "Persson",
+  "Svensson",
+  "Gustafsson",
+  "Pettersson",
+  "Jonsson",
+  "Jansson",
+  "Hansson",
+  "Bengtsson",
+  "Carlsson",
+  "Lindberg",
+  "Magnusson",
+  "Lindstr\xF6m",
+  "Berg",
+  "Axelsson",
+  "Bergstr\xF6m",
+  "Nilsson",
+  "Fredriksson",
+  "Sandberg",
+  "Sj\xF6berg",
+  "Lindgren",
+  "Eriksson",
+  "Forsberg",
+  "Bergman",
+  "Holm",
+  "Lundberg",
+  "Engstr\xF6m",
+  "Lindqvist",
+  "H\xE5kansson",
+  "Danielsson",
+  "Eklund",
+  "Lundgren",
+  "Bj\xF6rk",
+  "Bergqvist",
+  "Fransson",
+  "Nystr\xF6m",
+  "Isaksson",
+  "Arvidsson",
+  "S\xF6derberg",
+  "Blom",
+  "Ekstr\xF6m",
+  "Martinsson",
+  "Str\xF6m",
+  "Wikstr\xF6m",
+  "M\xE5nsson",
+  "\xC5berg",
+  "Wallin",
+  "Samuelsson",
+  "Bj\xF6rklund",
+  "Norberg",
+  "Mattsson",
+  "Gunnarsson",
+  "Nordstr\xF6m",
+  "Holmberg",
+  "Eliasson",
+  "Viklund",
+  "Sundberg",
+  "Claesson",
+  "L\xF6fgren",
+  "Hedlund",
+  "Jakobsson",
+  "Andreasson",
+  "Palm",
+  "M\xE5rtensson",
+  "Sandstr\xF6m",
+  "Olofsson",
+  "Hellstr\xF6m",
+  "\xC5kesson",
+  "Blomberg",
+  "Lundqvist",
+  "Ek",
+  "S\xF6derstr\xF6m",
+  "Nordin",
+  "Hansson",
+  "Dahl",
+  "Falk",
+  "Gr\xF6nberg",
+  "Hedberg",
+  "Ingvarsson",
+  "J\xF6nsson",
+  "Karlsson",
+  "Lind",
+  "Malm",
+  "Nord",
+  "Olsson",
+  "P\xE5lsson",
+  "Qvist",
+  "Rydberg",
+  "Sj\xF6gren",
+  "T\xF6rnqvist",
+  "Ullman",
+  "Vallin",
+  "Wahlberg",
+  "Zetterberg",
+  "Alm",
+  "Backman",
+  "Cederberg",
+  "Dahlberg",
+  "Edstr\xF6m",
+  "Fagerstr\xF6m",
+  "Granberg",
+  "Hagberg",
+  "Ivarsson",
+  "Johansson",
+  "Karlsson",
+  "Lagerberg",
+  "Malmberg",
+  "Nor\xE9n",
+  "Oskarsson",
+  "Persson",
+  "Qvarnstr\xF6m",
+  "Ros\xE9n",
+  "Sundstr\xF6m",
+  "Tengberg",
+  "Ulfsson",
+  "Vik",
+  "Westerberg",
+  "Ylven",
+  "Zander",
+  "\xC5str\xF6m",
+  "\xD6berg",
+  "\xD6stberg",
+  "\xD6sterberg",
+  "Abrahamsson",
+  "Beckman",
+  "Cedervall",
+  "Dahlgren",
+  "Ekman",
+  "Falkenberg",
+  "Granath",
+  "Hult",
+  "Isaksson",
+  "Jansson",
+  "Kling",
+  "Ljung",
+  "Melin",
+  "Nyman",
+  "Olausson",
+  "Pettersson",
+  "Qvist",
+  "Rasmusson",
+  "Svensson",
+  "Thulin",
+  "Ullberg",
+  "Vester",
+  "Wahlgren",
+  "Xenon",
+  "Ytterberg",
+  "Zetterlund"
+];
+
+// resources/static_db/names/exussr_data.ts
+var EXUSSR_MALE_FIRSTNAMES = [
+  "Aleksandr",
+  "Artem",
+  "Maksim",
+  "Dmitrij",
+  "Ivan",
+  "Michai\u0142",
+  "Nikita",
+  "Ilja",
+  "Kiry\u0142",
+  "W\u0142adis\u0142aw",
+  "Danii\u0142",
+  "Andriej",
+  "Roman",
+  "Siergiej",
+  "W\u0142adimir",
+  "Jewgienij",
+  "Pawie\u0142",
+  "Anton",
+  "Denis",
+  "Igor",
+  "Wiktor",
+  "Jurij",
+  "Wasilij",
+  "Oleg",
+  "Stanis\u0142aw",
+  "Bohdan",
+  "Wo\u0142odymyr",
+  "O\u0142eksandr",
+  "Witalij",
+  "Myko\u0142a",
+  "Jaros\u0142aw",
+  "Taras",
+  "Rus\u0142an",
+  "Andrij",
+  "Nazar",
+  "Matviy",
+  "Lev",
+  "Mark",
+  "Matvey",
+  "Timofey",
+  "Miron",
+  "Makar",
+  "Danylo",
+  "Tymofiy",
+  "Mukhammad",
+  "Alikhan",
+  "Aisultan",
+  "Omar",
+  "Aldiyar",
+  "Amir",
+  "Islam",
+  "Arsen",
+  "Alan",
+  "Miras",
+  "Rasul",
+  "Nurislam",
+  "Alinur",
+  "Erasyl",
+  "Sanzhar",
+  "Ibrahim",
+  "J\u0101nis",
+  "Roberts",
+  "Arturs",
+  "Kristaps",
+  "Edgars",
+  "M\u0101ris",
+  "Aivars",
+  "Jurijs",
+  "Andris",
+  "Kaspars",
+  "Rihards",
+  "Dainis",
+  "Gatis",
+  "Martins",
+  "Markuss",
+  "Rokas",
+  "Domantas",
+  "Matas",
+  "Lukas",
+  "Dovydas",
+  "Art\u016Bras",
+  "Jonas",
+  "Tadas",
+  "Vytautas",
+  "Mindaugas",
+  "Petras",
+  "Algirdas",
+  "Saulius",
+  "Darius",
+  "Mantas",
+  "Aurimas",
+  "Deividas",
+  "Paulius",
+  "Tomas",
+  "Karolis",
+  "Ar\u016Bnas",
+  "Giedrius",
+  "\u017Dilvinas",
+  "Eimantas"
+];
+var EXUSSR_MALE_LASTNAMES = [
+  "Ivanov",
+  "Smirnov",
+  "Kuzniecow",
+  "Popow",
+  "Wasiljew",
+  "Pietrow",
+  "Sidorow",
+  "Michaj\u0142ow",
+  "Fiodorow",
+  "Soko\u0142ow",
+  "Jakowlew",
+  "Paw\u0142ow",
+  "Aleksiejew",
+  "Morozow",
+  "Nowikow",
+  "Wo\u0142kow",
+  "Romanow",
+  "Sawicki",
+  "Bielski",
+  "Kuznetsov",
+  "Shevchenko",
+  "Bondarenko",
+  "Melnyk",
+  "Kovalenko",
+  "Boyko",
+  "Tkachenko",
+  "Kravchenko",
+  "Lysenko",
+  "Marchenko",
+  "Kovalchuk",
+  "Novak",
+  "Koval",
+  "Ivanov",
+  "Petrov",
+  "Novikov",
+  "Volkov",
+  "Kozlov",
+  "Moroz",
+  "Lebedev",
+  "Zhukov",
+  "Kovalev",
+  "Novik",
+  "Zhuk",
+  "Kotov",
+  "Kovalevich",
+  "Melnik",
+  "Petrovich",
+  "Ivanovich",
+  "Smirnov",
+  "Kuznetsov",
+  "Popovich",
+  "Petrauskas",
+  "Jankauskas",
+  "Kazlauskas",
+  "Vasiliauskas",
+  "Butkus",
+  "B\u0113rzi\u0146\u0161",
+  "Ozoli\u0146\u0161",
+  "Kalni\u0146\u0161",
+  "Jansons",
+  "P\u0113tersons",
+  "Ivanovs",
+  "Ozols",
+  "Liepi\u0146\u0161",
+  "Kask",
+  "Tamm",
+  "M\xE4gi",
+  "Sepp",
+  "Karimov",
+  "Abdullaev",
+  "Rahmonov",
+  "Sharipov",
+  "Ismailov",
+  "Aliev",
+  "Mukhammadiev",
+  "Bekov",
+  "Yusupov",
+  "Saidov",
+  "Tojiboev",
+  "Abdugafforov",
+  "Rustamov",
+  "Kurbanov",
+  "Nazarov",
+  "Ergashev",
+  "Mirzayev",
+  "Tursunov",
+  "Umarov",
+  "Hasanov",
+  "Sattorov",
+  "Rakhimov",
+  "Akhmedov",
+  "Jumayev",
+  "Sobirov",
+  "Mamatov"
+];
+
+// resources/static_db/names/es_data.ts
+var ES_MALE_FIRSTNAMES = [
+  "Carlos",
+  "Sergio",
+  "Alejandro",
+  "Pablo",
+  "David",
+  "Daniel",
+  "Diego",
+  "Adrian",
+  "Alvaro",
+  "Javier",
+  "Antonio",
+  "Miguel",
+  "Marcos",
+  "Gonzalo",
+  "Raul",
+  "Inigo",
+  "Iker",
+  "Fernando",
+  "Borja",
+  "Mikel",
+  "Jon",
+  "Unai",
+  "Aitor",
+  "Asier",
+  "Ruben",
+  "Victor",
+  "Roberto",
+  "Cristian",
+  "Rodrigo",
+  "Jesus",
+  "Andres",
+  "Hector",
+  "Oscar",
+  "Manuel",
+  "Alberto",
+  "Juanmi",
+  "Gerard",
+  "Marc",
+  "Jordi",
+  "Sergi",
+  "Juan",
+  "Jose",
+  "Francisco",
+  "Luis",
+  "Mario",
+  "Jorge",
+  "Rafael",
+  "Pedro",
+  "Alfonso",
+  "Eduardo",
+  "Ricardo",
+  "Ramon",
+  "Enrique",
+  "Felipe",
+  "Alvaro",
+  "Ivan",
+  "Angel",
+  "Julio",
+  "Santiago",
+  "Hugo",
+  "Nacho",
+  "Ismael",
+  "Victor",
+  "Emilio",
+  "Tomas",
+  "Martin",
+  "Mateo",
+  "Nicolas",
+  "Samuel",
+  "Lucas",
+  "Bruno",
+  "Gabriel",
+  "Adan",
+  "Joel",
+  "Izan",
+  "Pol",
+  "Oriol",
+  "Xavi",
+  "Xavier",
+  "Pau",
+  "Marcelo",
+  "Cesar",
+  "Hernan",
+  "Octavio",
+  "Sebastian",
+  "Agustin",
+  "Alvaro",
+  "Guillermo",
+  "Rogelio",
+  "Elias",
+  "Nestor",
+  "Fermin",
+  "Carmelo",
+  "Salvador",
+  "Vicente",
+  "Arturo",
+  "Humberto",
+  "Leandro",
+  "Fabian",
+  "Cristobal"
+];
+var ES_MALE_LASTNAMES = [
+  "Garcia",
+  "Martinez",
+  "Lopez",
+  "Sanchez",
+  "Gonzalez",
+  "Rodriguez",
+  "Fernandez",
+  "Perez",
+  "Gomez",
+  "Martin",
+  "Jimenez",
+  "Ruiz",
+  "Hernandez",
+  "Diaz",
+  "Moreno",
+  "Alvarez",
+  "Munoz",
+  "Romero",
+  "Alonso",
+  "Gutierrez",
+  "Navarro",
+  "Torres",
+  "Dominguez",
+  "Vazquez",
+  "Ramos",
+  "Gil",
+  "Serrano",
+  "Molina",
+  "Blanco",
+  "Morales",
+  "Suarez",
+  "Ortega",
+  "Delgado",
+  "Castro",
+  "Ortiz",
+  "Rubio",
+  "Marin",
+  "Sanz",
+  "Iglesias",
+  "Medina",
+  "Herrera",
+  "Vega",
+  "Cruz",
+  "Flores",
+  "Reyes",
+  "Aguilar",
+  "Campos",
+  "Carrasco",
+  "Mendez",
+  "Fuentes",
+  "Cortes",
+  "Calvo",
+  "Rojas",
+  "Pascual",
+  "Guerrero",
+  "Cano",
+  "Santos",
+  "Nunez",
+  "Prieto",
+  "Soler",
+  "Vidal",
+  "Mora",
+  "Santana",
+  "Cabrera",
+  "Arias",
+  "Pardo",
+  "Bravo",
+  "Ferrer",
+  "Moya",
+  "Carmona",
+  "Ibarra",
+  "Soria",
+  "Marquez",
+  "Lorenzo",
+  "Valencia",
+  "Duran",
+  "Montes",
+  "Pena",
+  "Rios",
+  "Caceres",
+  "Benitez",
+  "Nieto",
+  "Padilla",
+  "Vargas",
+  "Crespo",
+  "Maldonado",
+  "Esteban",
+  "Pineda",
+  "Rosales",
+  "Montoya",
+  "Avila",
+  "Escudero",
+  "Villanueva",
+  "Cuevas",
+  "Bautista",
+  "Pacheco",
+  "Salas",
+  "Cordero",
+  "Cifuentes",
+  "Aranda"
+];
+
+// resources/static_db/names/en_data.ts
+var EN_MALE_FIRSTNAMES = [
+  "Noah",
+  "Theo",
+  "Freddie",
+  "Leo",
+  "Luca",
+  "Archie",
+  "Arthur",
+  "Oliver",
+  "Oscar",
+  "Arlo",
+  "George",
+  "Alfie",
+  "Charlie",
+  "Elijah",
+  "Jude",
+  "Henry",
+  "Teddy",
+  "Albie",
+  "Reggie",
+  "Oakley",
+  "Lucas",
+  "Harry",
+  "Jack",
+  "Tommy",
+  "Roman",
+  "Rory",
+  "Finley",
+  "Theodore",
+  "Ezra",
+  "Isaac",
+  "Rowan",
+  "Ronnie",
+  "Reuben",
+  "Jacob",
+  "Hudson",
+  "Ethan",
+  "Louie",
+  "Max",
+  "Vinnie",
+  "Thomas",
+  "James",
+  "Alexander",
+  "Hugo",
+  "Sonny",
+  "Kai",
+  "Adam",
+  "Mason",
+  "Frankie",
+  "Hunter",
+  "Harrison",
+  "Logan",
+  "Finn",
+  "Miles",
+  "Yusuf",
+  "Louis",
+  "Riley",
+  "Edward",
+  "Jaxon",
+  "Nathan",
+  "Musa",
+  "William",
+  "Harley",
+  "Jasper",
+  "Ruben",
+  "Yahya",
+  "Toby",
+  "Alex",
+  "Elias",
+  "Brody",
+  "Enzo",
+  "Grayson",
+  "Elliot",
+  "Billy",
+  "Ollie",
+  "Stanley",
+  "Otis",
+  "Levi",
+  "Liam",
+  "Jesse",
+  "Michael",
+  "Muhammad",
+  "Austin",
+  "Albert",
+  "Sebastian",
+  "Joshua",
+  "Jax",
+  "Caleb",
+  "Daniel",
+  "Zachary",
+  "Milo",
+  "Bobby",
+  "Gabriel",
+  "Jenson",
+  "Samuel",
+  "Hamza",
+  "Carter",
+  "Cooper",
+  "Ibrahim",
+  "Lenny",
+  "Dylan"
+];
+var EN_MALE_LASTNAMES = [
+  "Smith",
+  "Jones",
+  "Williams",
+  "Taylor",
+  "Brown",
+  "Davies",
+  "Evans",
+  "Thomas",
+  "Wilson",
+  "Johnson",
+  "Roberts",
+  "Robinson",
+  "Thompson",
+  "Wright",
+  "Walker",
+  "White",
+  "Edwards",
+  "Hughes",
+  "Green",
+  "Hall",
+  "Lewis",
+  "Harris",
+  "Clarke",
+  "Patel",
+  "Jackson",
+  "Wood",
+  "Turner",
+  "Martin",
+  "Cooper",
+  "Hill",
+  "Morris",
+  "Ward",
+  "Moore",
+  "Clark",
+  "Baker",
+  "Harrison",
+  "King",
+  "Morgan",
+  "Lee",
+  "Allen",
+  "James",
+  "Phillips",
+  "Scott",
+  "Watson",
+  "Davis",
+  "Parker",
+  "Bennett",
+  "Price",
+  "Griffiths",
+  "Young",
+  "Khan",
+  "Mitchell",
+  "Cook",
+  "Bailey",
+  "Carter",
+  "Richardson",
+  "Shaw",
+  "Kelly",
+  "Collins",
+  "Bell",
+  "Hussain",
+  "Richards",
+  "Cox",
+  "Miller",
+  "Begum",
+  "Murphy",
+  "Ali",
+  "Marshall",
+  "Simpson",
+  "Anderson",
+  "Ellis",
+  "Adams",
+  "Wilkinson",
+  "Ahmed",
+  "Foster",
+  "Powell",
+  "Chapman",
+  "Singh",
+  "Webb",
+  "Rogers",
+  "Mason",
+  "Gray",
+  "Hunt",
+  "Owen",
+  "Matthews",
+  "Palmer",
+  "Holmes",
+  "Mills",
+  "Campbell",
+  "Lloyd",
+  "Barnes",
+  "Knight",
+  "Butler",
+  "Russell",
+  "Barker",
+  "Stevens",
+  "Jenkins",
+  "Dixon",
+  "Fisher",
+  "Harvey"
+];
+
+// resources/static_db/names/de_data.ts
+var DE_MALE_FIRSTNAMES = [
+  "Felix",
+  "August",
+  "Emmerich",
+  "Friedrich",
+  "Anselm",
+  "Leopold",
+  "Heinrich",
+  "Matteo",
+  "Carl",
+  "Louis",
+  "Theodor",
+  "Reinhard",
+  "Fritz",
+  "Wolfgang",
+  "Lenz",
+  "Isidor",
+  "Hans",
+  "Rafael",
+  "Noah",
+  "Dieter",
+  "Siegfried",
+  "Johann",
+  "Adam",
+  "Andreas",
+  "Arnold",
+  "Bruno",
+  "Hartwin",
+  "Albert",
+  "Alexander",
+  "Gregor",
+  "Wolf",
+  "Marcel",
+  "Armin",
+  "Dennis",
+  "Christoph",
+  "Volker",
+  "Rudolf",
+  "Werner",
+  "Dietrich",
+  "Christian",
+  "Anton",
+  "Cornelius",
+  "Walter",
+  "Niko",
+  "Daniel",
+  "Emil",
+  "Aaron",
+  "Edgar",
+  "Hermann",
+  "Wilhelm",
+  "Archibald",
+  "Oswald",
+  "Alois",
+  "Franz",
+  "Karl",
+  "Siegmund",
+  "Arend",
+  "Engelbert",
+  "Ludolf",
+  "Rainer",
+  "Josef",
+  "Otto",
+  "Arne",
+  "Clemens",
+  "Klaus",
+  "Maximilian",
+  "Oskar",
+  "Frank",
+  "Gunter",
+  "Ben",
+  "Ansgar",
+  "Lennart",
+  "Konrad",
+  "Alwin",
+  "Elias",
+  "Severin",
+  "Erwin",
+  "Rolf",
+  "Ignaz",
+  "Eckhart",
+  "Aldo",
+  "Hans",
+  "Friedemann",
+  "Sascha",
+  "Claus",
+  "Ulrich",
+  "Robert",
+  "Leo",
+  "Alwin",
+  "Gustav",
+  "Hermann",
+  "Sigmar",
+  "Luther",
+  "Philipp",
+  "Norbert",
+  "Ludwig",
+  "Paul",
+  "Rupert",
+  "Hagen",
+  "Moritz"
+];
+var DE_MALE_LASTNAMES = [
+  // Twoja oryginalna lista (bez zmian)
+  "Muller",
+  "Schmidt",
+  "Schneider",
+  "Fischer",
+  "Weber",
+  "Schaefer",
+  "Meyer",
+  "Wagner",
+  "Becker",
+  "Bauer",
+  "Hoffmann",
+  "Schulz",
+  "Koch",
+  "Richter",
+  "Klein",
+  "Wolf",
+  "Schroeder",
+  "Neumann",
+  "Braun",
+  "Werner",
+  "Schwarz",
+  "Hofmann",
+  "Zimmermann",
+  "Schmitt",
+  "Hartmann",
+  "Schmid",
+  "Weiss",
+  "Schmitz",
+  "Krueger",
+  "Lange",
+  "Meier",
+  "Walter",
+  "Koehler",
+  "Maier",
+  "Beck",
+  "Koenig",
+  "Krause",
+  "Schulze",
+  "Huber",
+  "Mayer",
+  "Frank",
+  "Lehmann",
+  "Kaiser",
+  "Fuchs",
+  "Herrmann",
+  "Lang",
+  "Thomas",
+  "Peters",
+  "Stein",
+  "Jung",
+  "Moeller",
+  "Berger",
+  "Martin",
+  "Friedrich",
+  "Scholz",
+  "Keller",
+  "Gross",
+  "Hahn",
+  "Roth",
+  "Guenther",
+  "Vogel",
+  "Schubert",
+  "Winkler",
+  "Schuster",
+  "Lorenz",
+  "Ludwig",
+  "Baumann",
+  "Heinrich",
+  "Otto",
+  "Simon",
+  "Graf",
+  "Kraus",
+  "Kraemer",
+  "Boehm",
+  "Schulte",
+  "Albrecht",
+  "Franke",
+  "Winter",
+  "Schumacher",
+  "Vogt",
+  "Haas",
+  "Sommer",
+  "Schreiber",
+  "Engel",
+  "Ziegler",
+  "Dietrich",
+  "Brandt",
+  "Seidel",
+  "Kuhn",
+  "Busch",
+  "Horn",
+  "Arnold",
+  "Kuehn",
+  "Bergmann",
+  "Pohl",
+  "Pfeiffer",
+  "Wolff",
+  "Voigt",
+  "Sauer",
+  "Goldschmidt",
+  // Nowo dodane – popularne i typowo niemieckie (kolejność mniej więcej od częstszych)
+  "Mueller",
+  "Schafer",
+  "Schroder",
+  "Krueger",
+  "Kruger",
+  "Schmitz",
+  "Hartmann",
+  "Hofmann",
+  "Schmitt",
+  "Schmid",
+  "Lange",
+  "Meier",
+  "Maier",
+  "Mayer",
+  "Koehler",
+  "Schulze",
+  "Huber",
+  "Lehmann",
+  "Herrmann",
+  "Friedrich",
+  "Scholz",
+  "Gross",
+  "Guenther",
+  "Schubert",
+  "Winkler",
+  "Schuster",
+  "Lorenz",
+  "Ludwig",
+  "Baumann",
+  "Heinrich",
+  "Kraus",
+  "Kraemer",
+  "Boehm",
+  "Schulte",
+  "Albrecht",
+  "Franke",
+  "Schumacher",
+  "Haas",
+  "Sommer",
+  "Schreiber",
+  "Ziegler",
+  "Dietrich",
+  "Brandt",
+  "Seidel",
+  "Kuhn",
+  "Kuehn",
+  "Busch",
+  "Horn",
+  "Arnold",
+  "Bergmann",
+  "Pfeiffer",
+  "Voigt",
+  "Sauer",
+  // Kolejne popularne niemieckie nazwiska
+  "Schafers",
+  "Bauer",
+  "Hoffman",
+  "Schultze",
+  "Koch",
+  "Richter",
+  "Wolf",
+  "Neumann",
+  "Braun",
+  "Werner",
+  "Schwarz",
+  "Zimmermann",
+  "Weiss",
+  "Krueger",
+  "Lange",
+  "Walter",
+  "Beck",
+  "Koenig",
+  "Krause",
+  "Mayer",
+  "Frank",
+  "Kaiser",
+  "Fuchs",
+  "Lang",
+  "Thomas",
+  "Peters",
+  "Stein",
+  "Jung",
+  "Moeller",
+  "Berger",
+  "Martin",
+  "Keller",
+  "Hahn",
+  "Roth",
+  "Vogel",
+  "Baumann",
+  "Heinrich",
+  "Otto",
+  "Simon",
+  "Graf",
+  "Kraus",
+  "Kraemer",
+  "Boehm",
+  "Albrecht",
+  "Franke",
+  "Winter",
+  "Vogt",
+  "Haas",
+  "Sommer",
+  "Engel",
+  "Ziegler",
+  "Dietrich",
+  "Seidel",
+  "Kuhn",
+  "Busch",
+  "Horn",
+  "Arnold",
+  "Bergmann",
+  "Pohl",
+  "Pfeiffer",
+  "Wolff",
+  "Sauer",
+  "Goldschmidt",
+  // Rozszerzenie – kolejne typowo niemieckie (z różnych regionów)
+  "Ackermann",
+  "Adam",
+  "Adler",
+  "Bach",
+  "Bachmann",
+  "Baer",
+  "Barth",
+  "Bauer",
+  "Baum",
+  "Bayer",
+  "Behr",
+  "Behrens",
+  "Bender",
+  "Berg",
+  "Betz",
+  "Bischoff",
+  "Bock",
+  "Bode",
+  "Boerner",
+  "Bohn",
+  "Brand",
+  "Braun",
+  "Breuer",
+  "Brinkmann",
+  "Brock",
+  "Bruns",
+  "Buchholz",
+  "Buck",
+  "Buehler",
+  "Buehner",
+  "Burkhardt",
+  "Busch",
+  "Christ",
+  "Conrad",
+  "Dahl",
+  "Damm",
+  "Daniel",
+  "Decker",
+  "Diehl",
+  "Dittmann",
+  "Dorn",
+  "Drescher",
+  "Ebert",
+  "Eckert",
+  "Ehlers",
+  "Ehrlich",
+  "Eichler",
+  "Eilers",
+  "Ernst",
+  "Fahr",
+  "Feldmann",
+  "Fiedler",
+  "Fink",
+  "Fischer",
+  "Fleischer",
+  "Foerster",
+  "Frank",
+  "Freund",
+  "Frey",
+  "Friedrich",
+  "Fritz",
+  "Froehlich",
+  "Fuchs",
+  "Fuhr",
+  "Gebhardt",
+  "Geiger",
+  "Gerber",
+  "Gerlach",
+  "Geyer",
+  "Glaser",
+  "Goetz",
+  "Graf",
+  "Grimm",
+  "Grosse",
+  "Grunwald",
+  "Haag",
+  "Haas",
+  "Hahn",
+  "Haller",
+  "Hamm",
+  "Hammer",
+  "Hansen",
+  "Hartwig",
+  "Hase",
+  "Hass",
+  "Haupt",
+  "Hecht",
+  "Heil",
+  "Hein",
+  "Heinemann",
+  "Heinrich",
+  "Heinz",
+  "Heller",
+  "Hennig",
+  "Henning",
+  "Hentschel",
+  "Herbst",
+  "Hermann",
+  "Herzog",
+  "Hess",
+  "Hildebrandt",
+  "Hinrichs",
+  "Hofer",
+  "Hoffmann",
+  "Hofmann",
+  "Hohmann",
+  "Holz",
+  "Holzapfel",
+  "Horn",
+  "Huber",
+  "Hummel",
+  "Jager",
+  "Jahn",
+  "Jakob",
+  "Jansen",
+  "Jensen",
+  "Jung",
+  "Kaiser",
+  "Kalb",
+  "Kapp",
+  "Kaufmann",
+  "Keller",
+  "Kern",
+  "Kessler",
+  "Kirchhoff",
+  "Kirchner",
+  "Klaus",
+  "Klein",
+  "Kling",
+  "Klotz",
+  "Koch",
+  "Koeppen",
+  "Kohl",
+  "Kohler",
+  "Konig",
+  "Kopp",
+  "Korte",
+  "Kramer",
+  "Krause",
+  "Krebs",
+  "Kretschmer",
+  "Kreuzer",
+  "Kroll",
+  "Krone",
+  "Krug",
+  "Kruger",
+  "Kuhlmann",
+  "Kuhn",
+  "Kunze",
+  "Kurz",
+  "Lamm",
+  "Lang",
+  "Lange",
+  "Lehmann",
+  "Lehr",
+  "Leicht",
+  "Leistner",
+  "Lemke",
+  "Lenz",
+  "Lindemann",
+  "Link",
+  "Loch",
+  "Loeffler",
+  "Lohmann",
+  "Lorenz",
+  "Ludwig",
+  "Maier",
+  "Mann",
+  "Marek",
+  "Marx",
+  "Mayer",
+  "Meier",
+  "Meissner",
+  "Menzel",
+  "Merkel",
+  "Mertens",
+  "Metzger",
+  "Meyer",
+  "Michael",
+  "Michels",
+  "Mielke",
+  "Miller",
+  "Moebius",
+  "Moeller",
+  "Mohr",
+  "Morgenstern",
+  "Moser",
+  "Mueller",
+  "Muller",
+  "Nagel",
+  "Neubauer",
+  "Neumann",
+  "Niemann",
+  "Noll",
+  "Nowak",
+  "Ober",
+  "Ochs",
+  "Otto",
+  "Papke",
+  "Paul",
+  "Peters",
+  "Pfeifer",
+  "Pfeiffer",
+  "Pfister",
+  "Pohl",
+  "Poll",
+  "Preuss",
+  "Probst",
+  "Rabe",
+  "Rauch",
+  "Reich",
+  "Reichel",
+  "Reichert",
+  "Reimann",
+  "Reinhardt",
+  "Reiter",
+  "Renz",
+  "Richter",
+  "Riedel",
+  "Ritter",
+  "Roehm",
+  "Roth",
+  "Rott",
+  "Rupp",
+  "Sander",
+  "Sauer",
+  "Schaaf",
+  "Schaefer",
+  "Schaper",
+  "Scheffler",
+  "Schenk",
+  "Schilling",
+  "Schindler",
+  "Schirmer",
+  "Schlegel",
+  "Schlicht",
+  "Schlosser",
+  "Schmid",
+  "Schmidt",
+  "Schmitt",
+  "Schmitz",
+  "Schneider",
+  "Schnell",
+  "Schoen",
+  "Scholz",
+  "Schott",
+  "Schreiber",
+  "Schroeder",
+  "Schubert",
+  "Schulz",
+  "Schulze",
+  "Schumacher",
+  "Schuster",
+  "Schwarz",
+  "Seidel",
+  "Seifert",
+  "Seitz",
+  "Siebert",
+  "Simon",
+  "Singer",
+  "Sommer",
+  "Sorg",
+  "Specht",
+  "Stark",
+  "Stein",
+  "Steiner",
+  "Stoll",
+  "Strauss",
+  "Strobel",
+  "Sturm",
+  "Suss",
+  "Thiel",
+  "Thomas",
+  "Thomsen",
+  "Timm",
+  "Ulrich",
+  "Urban",
+  "Vetter",
+  "Vogel",
+  "Vogt",
+  "Voigt",
+  "Volk",
+  "Wagner",
+  "Walter",
+  "Weber",
+  "Weidner",
+  "Weiss",
+  "Wenzel",
+  "Werner",
+  "Westermann",
+  "Wiedemann",
+  "Wiese",
+  "Wild",
+  "Wilhelm",
+  "Winkler",
+  "Winter",
+  "Witt",
+  "Witte",
+  "Wolf",
+  "Wolff",
+  "Wulff",
+  "Zander",
+  "Ziegler",
+  "Zimmermann"
+];
+
+// resources/static_db/names/it_data.ts
+var IT_MALE_FIRSTNAMES = [
+  "Lorenzo",
+  "Francesco",
+  "Alessandro",
+  "Andrea",
+  "Matteo",
+  "Marco",
+  "Luca",
+  "Davide",
+  "Federico",
+  "Nicolo",
+  "Simone",
+  "Antonio",
+  "Giuseppe",
+  "Giovanni",
+  "Roberto",
+  "Stefano",
+  "Riccardo",
+  "Fabio",
+  "Daniele",
+  "Emanuele",
+  "Filippo",
+  "Giacomo",
+  "Leonardo",
+  "Edoardo",
+  "Gabriele",
+  "Mattia",
+  "Diego",
+  "Manuel",
+  "Christian",
+  "Salvatore",
+  "Angelo",
+  "Vincenzo",
+  "Dario",
+  "Claudio",
+  "Paolo",
+  "Giorgio",
+  "Massimo",
+  "Gianluca",
+  "Sergio",
+  "Alberto",
+  "Pietro",
+  "Enrico",
+  "Michele",
+  "Cristiano",
+  "Tommaso",
+  "Guglielmo",
+  "Umberto",
+  "Raffaele",
+  "Cesare",
+  "Giulio",
+  "Alessio",
+  "Samuele",
+  "Edoardo",
+  "Elia",
+  "Noah",
+  "Enea",
+  "Nicola",
+  "Saverio",
+  "Ruggero",
+  "Amedeo",
+  "Bruno",
+  "Igor",
+  "Ivan",
+  "Mauro",
+  "Carmine",
+  "Gaetano",
+  "Domenico",
+  "Pasquale",
+  "Ciro",
+  "Rocco",
+  "Pio",
+  "Emilio",
+  "Alfonso",
+  "Gennaro",
+  "Luigi",
+  "Mario",
+  "Pierluigi",
+  "Gianmarco",
+  "Gianfranco",
+  "Gianpiero",
+  "Giancarlo",
+  "Vittorio",
+  "Valerio",
+  "Franco",
+  "Sandro",
+  "Renato",
+  "Piero",
+  "Simeone",
+  "Tiziano",
+  "Leandro",
+  "Mirko",
+  "Eros",
+  "Nerio",
+  "Loris",
+  "Gioele",
+  "Matias"
+];
+var IT_MALE_LASTNAMES = [
+  "Rossi",
+  "Ferrari",
+  "Esposito",
+  "Bianchi",
+  "Romano",
+  "Colombo",
+  "Ricci",
+  "Marino",
+  "Greco",
+  "Bruno",
+  "Gallo",
+  "Conti",
+  "Mancini",
+  "Costa",
+  "Giordano",
+  "Rizzo",
+  "Lombardi",
+  "Moretti",
+  "Barbieri",
+  "Fontana",
+  "Santoro",
+  "Marini",
+  "Rinaldi",
+  "Caruso",
+  "Ferrara",
+  "Galli",
+  "Martini",
+  "Leone",
+  "Longo",
+  "Gentile",
+  "Palumbo",
+  "Martinelli",
+  "Valenti",
+  "Russo",
+  "De Luca",
+  "Ferretti",
+  "Sorrentino",
+  "Sala",
+  "Fabbri",
+  "Villa",
+  "De Santis",
+  "Vitale",
+  "Serra",
+  "D Angelo",
+  "Riva",
+  "Palmieri",
+  "Monti",
+  "Testa",
+  "Grassi",
+  "Ferraro",
+  "Fiore",
+  "Messina",
+  "Lombardo",
+  "Parisi",
+  "Amato",
+  "Sanna",
+  "Fusco",
+  "Coppola",
+  "Ruggiero",
+  "De Rosa",
+  "Marchetti",
+  "Pellegrini",
+  "Bianco",
+  "Bernardi",
+  "Orlando",
+  "Costanzo",
+  "Piras",
+  "Mazza",
+  "Puglisi",
+  "Battaglia",
+  "Farina",
+  "Basile",
+  "Ferri",
+  "Cattaneo",
+  "Pagano",
+  "Neri",
+  "Graziani",
+  "Guidi",
+  "Pace",
+  "Milani",
+  "Benedetti",
+  "Rossetti",
+  "Caputo",
+  "Sartori",
+  "Gatti",
+  "Gatti",
+  "De Angelis",
+  "La Rosa",
+  "Mariani",
+  "Ramosi",
+  "Donati",
+  "Rossiello",
+  "Bernasconi",
+  "Moro",
+  "De Maio",
+  "Pastore",
+  "Bellini",
+  "Fiorentino",
+  "Negri",
+  "Corsi",
+  "Raimondi",
+  "Pini",
+  "Morelli",
+  "Napoletano"
+];
+
+// resources/static_db/names/fr_data.ts
+var FR_MALE_FIRSTNAMES = [
+  "Lucas",
+  "Hugo",
+  "Mathis",
+  "Nathan",
+  "Tom",
+  "Baptiste",
+  "Theo",
+  "Alexis",
+  "Arthur",
+  "Leo",
+  "Jules",
+  "Timeo",
+  "Quentin",
+  "Romain",
+  "Antoine",
+  "Pierre",
+  "Louis",
+  "Clement",
+  "Maxime",
+  "Nicolas",
+  "Julien",
+  "Sebastien",
+  "Kylian",
+  "Karim",
+  "Moussa",
+  "Ousmane",
+  "Youssef",
+  "Mehdi",
+  "Amine",
+  "Samir",
+  "Kevin",
+  "Jordan",
+  "Olivier",
+  "Vincent",
+  "Damien",
+  "Gauthier",
+  "Florian",
+  "Adrien",
+  "Benoit",
+  "Guillaume",
+  "Jean",
+  "Paul",
+  "Marc",
+  "Thomas",
+  "Benjamin",
+  "Alexandre",
+  "Samuel",
+  "Ethan",
+  "Enzo",
+  "Noah",
+  "Gabriel",
+  "Raphael",
+  "Maxence",
+  "Corentin",
+  "Matteo",
+  "Sacha",
+  "Axel",
+  "Valentin",
+  "Dylan",
+  "Yanis",
+  "Ilyes",
+  "Anis",
+  "Rayan",
+  "Yassine",
+  "Mohamed",
+  "Ibrahim",
+  "Idris",
+  "Nassim",
+  "Bilal",
+  "Walid",
+  "Farid",
+  "Tariq",
+  "Rachid",
+  "Mustapha",
+  "Alain",
+  "Patrick",
+  "Christophe",
+  "Frederic",
+  "Jerome",
+  "Laurent",
+  "Philippe",
+  "Stephane",
+  "Gerard",
+  "Bernard",
+  "Michel",
+  "Jacques",
+  "Daniel",
+  "Eric",
+  "Franck",
+  "Cedric",
+  "Remy",
+  "Loic",
+  "Mickael",
+  "Jonathan",
+  "Yohan",
+  "Gael",
+  "Bruno",
+  "Lionel",
+  "Bastien",
+  "Tristan"
+];
+var FR_MALE_LASTNAMES = [
+  "Martin",
+  "Bernard",
+  "Dubois",
+  "Thomas",
+  "Robert",
+  "Richard",
+  "Petit",
+  "Durand",
+  "Leroy",
+  "Moreau",
+  "Simon",
+  "Laurent",
+  "Lefebvre",
+  "Michel",
+  "Garcia",
+  "David",
+  "Bertrand",
+  "Roux",
+  "Vincent",
+  "Fournier",
+  "Morel",
+  "Girard",
+  "Andre",
+  "Lefevre",
+  "Mercier",
+  "Dupont",
+  "Lambert",
+  "Bonnet",
+  "Francois",
+  "Martinez",
+  "Legrand",
+  "Garnier",
+  "Faure",
+  "Rousseau",
+  "Blanc",
+  "Guerin",
+  "Muller",
+  "Henry",
+  "Roussel",
+  "Nicolas",
+  "Mathieu",
+  "Boyer",
+  "Lemaire",
+  "Lopez",
+  "Meunier",
+  "Gauthier",
+  "Chevalier",
+  "Pereira",
+  "Robin",
+  "Leclerc",
+  "Leroux",
+  "Barbier",
+  "Vidal",
+  "Caron",
+  "Picard",
+  "Roger",
+  "Renard",
+  "Schmitt",
+  "Lefort",
+  "Boucher",
+  "Lecomte",
+  "Giraud",
+  "Colin",
+  "Perrin",
+  "Masson",
+  "Dufour",
+  "Fernandez",
+  "Morin",
+  "Girault",
+  "Dumont",
+  "Marie",
+  "Noel",
+  "Clement",
+  "Benoit",
+  "Gilles",
+  "Bourgeois",
+  "Delattre",
+  "Marchand",
+  "Deschamps",
+  "Charpentier",
+  "Hubert",
+  "Brun",
+  "Rey",
+  "Riviere",
+  "Delaunay",
+  "Pasquier",
+  "Paul",
+  "Leger",
+  "Leveque",
+  "Guillot",
+  "Payet",
+  "Adam",
+  "Pichon",
+  "Cousin",
+  "Pelletier",
+  "Remy",
+  "Aubert",
+  "Lemoine",
+  "Rolland",
+  "Olivier"
+];
+
+// resources/static_db/names/Japanese_data.ts
+var JAPANESE_MALE_FIRSTNAMES = [
+  "Haruto",
+  "Minato",
+  "Yuma",
+  "Sota",
+  "Hiroto",
+  "Ren",
+  "Itsuki",
+  "Riku",
+  "Haruki",
+  "Yuto",
+  "Kaito",
+  "Daiki",
+  "Takumi",
+  "Ryusei",
+  "Shota",
+  "Kenta",
+  "Yuki",
+  "Ryota",
+  "Taiga",
+  "Soma",
+  "Aoi",
+  "Hinata",
+  "Asahi",
+  "Yuito",
+  "Ritsu",
+  "Kai",
+  "Sho",
+  "Kenji",
+  "Kenzo",
+  "Akira",
+  "Hiroshi",
+  "Takashi",
+  "Satoshi",
+  "Tatsuya",
+  "Kazuki",
+  "Masato",
+  "Naoki",
+  "Shinji",
+  "Daisuke",
+  "Koji",
+  "Yoshiki",
+  "Tsubasa",
+  "Hayato",
+  "Rei",
+  "Sora",
+  "Koki",
+  "Arata",
+  "Kei",
+  "Ryo",
+  "Tomoya",
+  "Shun",
+  "Yuya",
+  "Seiji",
+  "Hikaru",
+  "Makoto",
+  "Takeshi",
+  "Jun",
+  "Kiyoshi",
+  "Noboru",
+  "Osamu",
+  "Susumu",
+  "Tsuyoshi",
+  "Yasuo",
+  "Akihiko",
+  "Kazuhiro",
+  "Masahiro",
+  "Toshiro",
+  "Yoshio",
+  "Goro",
+  "Hachiro",
+  "Jiro",
+  "Saburo",
+  "Ichiro",
+  "Daichi",
+  "Haruma",
+  "Kota",
+  "Nagi",
+  "Ryoma",
+  "So",
+  "Toma",
+  "Yusei",
+  "Ayato",
+  "Eita",
+  "Fuma",
+  "Gaku",
+  "Hiroki",
+  "Iori",
+  "Kairi",
+  "Mao",
+  "Nao",
+  "Raito",
+  "Shion",
+  "Taichi",
+  "Yuichi",
+  "Yuma",
+  "Zen",
+  "Aoto",
+  "Haru",
+  "Kazu",
+  "Rui",
+  "Takeru"
+];
+var JAPANESE_MALE_SURNAMES = [
+  "Sato",
+  "Suzuki",
+  "Takahashi",
+  "Tanaka",
+  "Watanabe",
+  "Ito",
+  "Yamamoto",
+  "Nakamura",
+  "Kobayashi",
+  "Kato",
+  "Yoshida",
+  "Yamada",
+  "Sasaki",
+  "Yamaguchi",
+  "Matsumoto",
+  "Saito",
+  "Inoue",
+  "Kimura",
+  "Hayashi",
+  "Shimizu",
+  "Yamazaki",
+  "Ikeda",
+  "Abe",
+  "Hashimoto",
+  "Yamashita",
+  "Mori",
+  "Ishikawa",
+  "Nakajima",
+  "Maeda",
+  "Ogawa",
+  "Fujita",
+  "Okada",
+  "Goto",
+  "Hasegawa",
+  "Murakami",
+  "Ishii",
+  "Kondo",
+  "Sakamoto",
+  "Endo",
+  "Aoki",
+  "Fujii",
+  "Nishimura",
+  "Fukuda",
+  "Ota",
+  "Miura",
+  "Fujiwara",
+  "Okamoto",
+  "Matsuda",
+  "Nakagawa",
+  "Nakano",
+  "Harada",
+  "Ono",
+  "Saito",
+  "Takeuchi",
+  "Tamura",
+  "Kaneko",
+  "Wada",
+  "Nakayama",
+  "Ishida",
+  "Ueda",
+  "Morita",
+  "Shibata",
+  "Hara",
+  "Sakai",
+  "Kudo",
+  "Miyazaki",
+  "Yokoyama",
+  "Miyamoto",
+  "Uchida",
+  "Takagi",
+  "Ando",
+  "Taniguchi",
+  "Ono",
+  "Maruyama",
+  "Takada",
+  "Imai",
+  "Kawano",
+  "Kojima",
+  "Fujimoto",
+  "Takeda",
+  "Murata",
+  "Ueno",
+  "Sugiyama",
+  "Masuda",
+  "Koyama",
+  "Sugawara",
+  "Hirano",
+  "Otsuka",
+  "Kubo",
+  "Chiba",
+  "Matsui",
+  "Iwasaki",
+  "Noguchi",
+  "Kinoshita",
+  "Matsuo",
+  "Kikuchi",
+  "Nomura",
+  "Sano",
+  "Watabe",
+  "Arai"
+];
+
+// resources/static_db/names/korean_data.ts
+var KOREAN_MALE_FIRSTNAMES = [
+  "Min-jun",
+  "Seo-jun",
+  "Ha-jun",
+  "Do-yun",
+  "Eun-woo",
+  "Si-woo",
+  "Ji-ho",
+  "Ye-jun",
+  "Yu-jun",
+  "Joo-won",
+  "Su-ho",
+  "Ji-hu",
+  "Jun-seo",
+  "Do-hyun",
+  "Tae-o",
+  "Seon-woo",
+  "I-jun",
+  "Ha-yoon",
+  "Ji-woo",
+  "Min-ho",
+  "Hyun-woo",
+  "Tae-joon",
+  "Seung-ho",
+  "Jae-min",
+  "Dong-hyun",
+  "Sang-hoon",
+  "Woo-jin",
+  "Jin-woo",
+  "Hyeon-jun",
+  "Jun-ho",
+  "Sung-min",
+  "Young-ho",
+  "Jae-hyuk",
+  "Min-seok",
+  "Tae-min",
+  "Hyun-seok",
+  "Seung-min",
+  "Ji-yong",
+  "Chang-ho",
+  "Kyung-ho",
+  "Beom-seok",
+  "Dae-hyun",
+  "Kang-min",
+  "Ho-jun",
+  "Seok-jin",
+  "Jin-hyuk",
+  "Yong-jun",
+  "Hoon",
+  "Jae-joon",
+  "Min-kyu",
+  "Seung-jun",
+  "Tae-hyung",
+  "Ji-seok",
+  "Hyun-tae",
+  "Woo-seok",
+  "Sang-min",
+  "Dong-woo",
+  "Joon-hyuk",
+  "Seung-hyun",
+  "Young-min",
+  "Jae-won",
+  "Min-woo",
+  "Hyun-jin",
+  "Do-won",
+  "Eun-ho",
+  "Si-on",
+  "Ha-min",
+  "Jun-young",
+  "Tae-woo",
+  "Seo-ho",
+  "Ji-an",
+  "Yu-han",
+  "Seon-min",
+  "Hyeon-woo",
+  "Kang-woo",
+  "Jin-seok",
+  "Min-seong",
+  "Woo-bin",
+  "Jae-sung",
+  "Dong-jun",
+  "Sung-hoon",
+  "Tae-sik",
+  "Hyun-soo",
+  "Seung-woo",
+  "Young-joon",
+  "Jae-beom",
+  "Min-tae",
+  "Ho-young",
+  "Chang-min",
+  "Kyung-min",
+  "Beom-jun",
+  "Dae-jun",
+  "Sang-woo",
+  "Jin-ho",
+  "Seok-min",
+  "Woo-jun",
+  "Ji-hyeon",
+  "Min-sik",
+  "Tae-sung",
+  "Hyun-min"
+];
+var KOREAN_MALE_SURNAMES = [
+  "Kim",
+  "Lee",
+  "Park",
+  "Choi",
+  "Jung",
+  "Kang",
+  "Jo",
+  "Yoon",
+  "Jang",
+  "Lim",
+  "Han",
+  "Oh",
+  "Shin",
+  "Seo",
+  "Kwon",
+  "Hwang",
+  "Ahn",
+  "Song",
+  "Ryu",
+  "Hong",
+  "Jeon",
+  "Yang",
+  "Bae",
+  "Son",
+  "Baek",
+  "Go",
+  "Moon",
+  "Yoo",
+  "Cha",
+  "Jeong",
+  "Nam",
+  "Sim",
+  "Yeo",
+  "Kwak",
+  "Seong",
+  "Ha",
+  "Woo",
+  "Im",
+  "Byun",
+  "Heo",
+  "Yun",
+  "Na",
+  "Min",
+  "Ji",
+  "Um",
+  "Jin",
+  "Jwa",
+  "Chae",
+  "Ma",
+  "Bang",
+  "Ko",
+  "Lee",
+  "Park",
+  "Kim",
+  "Choi",
+  "Jung",
+  "Kang",
+  "Yoon",
+  "Jang",
+  "Lim",
+  "Han",
+  "Oh",
+  "Shin",
+  "Seo",
+  "Kwon",
+  "Hwang",
+  "Ahn",
+  "Song",
+  "Ryu",
+  "Hong",
+  "Jeon",
+  "Yang",
+  "Bae",
+  "Son",
+  "Baek",
+  "Go",
+  "Moon",
+  "Yoo",
+  "Cha",
+  "Jeong",
+  "Nam",
+  "Sim",
+  "Yeo",
+  "Kwak",
+  "Seong",
+  "Ha",
+  "Woo",
+  "Im",
+  "Byun",
+  "Heo",
+  "Yun",
+  "Na",
+  "Min",
+  "Ji",
+  "Um",
+  "Jin",
+  "Jwa",
+  "Chae",
+  "Ma",
+  "Bang"
+];
+
+// resources/static_db/names/argentinian_data.ts
+var ARGENTINIAN_MALE_FIRSTNAMES = [
+  "Juan",
+  "Carlos",
+  "Luis",
+  "Jorge",
+  "Miguel",
+  "Roberto",
+  "Pedro",
+  "Jos\xE9",
+  "Antonio",
+  "Francisco",
+  "Diego",
+  "Fernando",
+  "Ricardo",
+  "Pablo",
+  "Andr\xE9s",
+  "Nicol\xE1s",
+  "Santiago",
+  "Mat\xEDas",
+  "Tom\xE1s",
+  "Lucas",
+  "Facundo",
+  "Gonzalo",
+  "Emiliano",
+  "Javier",
+  "Mart\xEDn",
+  "Alejandro",
+  "Leonardo",
+  "Sebasti\xE1n",
+  "Gabriel",
+  "Manuel",
+  "Agust\xEDn",
+  "Federico",
+  "Hern\xE1n",
+  "Ignacio",
+  "Eduardo",
+  "Marcelo",
+  "Ra\xFAl",
+  "Hugo",
+  "Oscar",
+  "Daniel",
+  "Adri\xE1n",
+  "Gustavo",
+  "Sergio",
+  "Ram\xF3n",
+  "Esteban",
+  "Mariano",
+  "Claudio",
+  "V\xEDctor",
+  "Enrique",
+  "Alberto",
+  "Mauricio",
+  "Rub\xE9n",
+  "Patricio",
+  "Cristian",
+  "David",
+  "Maximiliano",
+  "Benjam\xEDn",
+  "Joaqu\xEDn",
+  "Thiago",
+  "Mateo",
+  "Valent\xEDn",
+  "Lautaro",
+  "Franco",
+  "Bruno",
+  "Nicol\xE1s",
+  "Santino",
+  "Liam",
+  "Thiago",
+  "Felipe",
+  "Matteo",
+  "Noah",
+  "Dante",
+  "Jer\xF3nimo",
+  "Tob\xEDas",
+  "Ramiro",
+  "Ezequiel",
+  "Leandro",
+  "Nahuel",
+  "Facundo",
+  "Gonzalo",
+  "Emiliano",
+  "Javier",
+  "Mart\xEDn",
+  "Alejandro",
+  "Leonardo",
+  "Sebasti\xE1n",
+  "Gabriel",
+  "Manuel",
+  "Agust\xEDn",
+  "Federico",
+  "Hern\xE1n",
+  "Ignacio",
+  "Eduardo",
+  "Marcelo",
+  "Ra\xFAl",
+  "Hugo",
+  "Oscar",
+  "Daniel",
+  "Adri\xE1n",
+  "Gustavo",
+  "Sergio",
+  "Ram\xF3n",
+  "Esteban",
+  "Mariano",
+  "Claudio",
+  "V\xEDctor",
+  "Enrique",
+  "Alberto",
+  "Mauricio",
+  "Rub\xE9n",
+  "Patricio",
+  "Cristian",
+  "David",
+  "Maximiliano",
+  "Benjam\xEDn",
+  "Joaqu\xEDn",
+  "Thiago",
+  "Mateo",
+  "Valent\xEDn",
+  "Lautaro",
+  "Franco",
+  "Bruno",
+  "Santino",
+  "Liam",
+  "Felipe",
+  "Matteo",
+  "Noah",
+  "Dante",
+  "Jer\xF3nimo",
+  "Tob\xEDas",
+  "Ramiro",
+  "Ezequiel",
+  "Leandro",
+  "Nahuel",
+  "Alexis",
+  "Brian",
+  "C\xE9sar",
+  "Dami\xE1n",
+  "El\xEDas",
+  "Fabio",
+  "Gast\xF3n",
+  "H\xE9ctor",
+  "Iv\xE1n",
+  "Julio",
+  "Kevin",
+  "Luciano",
+  "Mat\xEDas",
+  "Nicol\xE1s",
+  "Octavio",
+  "Pablo",
+  "Quint\xEDn",
+  "Rodrigo",
+  "Santiago",
+  "Tom\xE1s",
+  "Ulises",
+  "V\xEDctor",
+  "Walter",
+  "Xavier",
+  "Yago",
+  "Zacar\xEDas",
+  "Abel",
+  "Adolfo",
+  "\xC1lvaro",
+  "Amado",
+  "An\xEDbal",
+  "Armando",
+  "Arturo",
+  "Atilio",
+  "Augusto",
+  "Bartolom\xE9",
+  "Benjam\xEDn",
+  "Bernardo",
+  "Blas",
+  "Braulio",
+  "Camilo",
+  "C\xE1ndido",
+  "C\xE9sar",
+  "Crist\xF3bal",
+  "Dami\xE1n",
+  "Dar\xEDo",
+  "Domingo",
+  "Donato",
+  "Edgardo",
+  "Eduardo",
+  "Elio",
+  "Emilio",
+  "Enrique",
+  "Ernesto",
+  "Eugenio",
+  "Fabian",
+  "Fausto",
+  "Felipe",
+  "Ferm\xEDn",
+  "Fernando",
+  "Fidel",
+  "Francisco",
+  "Franco",
+  "Gabriel",
+  "Gast\xF3n",
+  "Gerardo",
+  "Germ\xE1n",
+  "Gilberto",
+  "Gonzalo",
+  "Gregorio",
+  "Guillermo",
+  "Gustavo",
+  "H\xE9ctor",
+  "Hern\xE1n",
+  "Horacio",
+  "Hugo",
+  "Humberto",
+  "Ignacio",
+  "Ildefonso",
+  "Ismael",
+  "Jacinto",
+  "Jaime",
+  "Javier",
+  "Jes\xFAs",
+  "Jorge",
+  "Jos\xE9",
+  "Juan",
+  "Julio",
+  "Justo",
+  "Lautaro",
+  "Leandro",
+  "Leonardo",
+  "Leopoldo",
+  "Lino",
+  "Lorenzo",
+  "Lucas",
+  "Luciano",
+  "Luis",
+  "Manuel",
+  "Marcelo",
+  "Marco",
+  "Marcos",
+  "Mariano",
+  "Mario",
+  "Mart\xEDn",
+  "Mateo",
+  "Mat\xEDas",
+  "Mauricio",
+  "M\xE1ximo",
+  "Miguel",
+  "Milton",
+  "Mois\xE9s",
+  "Nahuel",
+  "N\xE9stor",
+  "Nicol\xE1s",
+  "Norberto",
+  "Octavio",
+  "Omar",
+  "Oscar",
+  "Pablo",
+  "Patricio",
+  "Pedro",
+  "Rafael",
+  "Ram\xF3n",
+  "Ra\xFAl",
+  "Ren\xE9",
+  "Ricardo",
+  "Roberto",
+  "Rodrigo",
+  "Rom\xE1n",
+  "Rub\xE9n",
+  "Rufino",
+  "Salvador",
+  "Santiago",
+  "Sebasti\xE1n",
+  "Sergio",
+  "Sim\xF3n",
+  "Teodoro",
+  "Tom\xE1s",
+  "Ulises",
+  "Uriel",
+  "Valent\xEDn",
+  "Vicente",
+  "V\xEDctor",
+  "Walter",
+  "Xavier",
+  "Yago",
+  "Zacar\xEDas",
+  "Abelardo",
+  "Adalberto",
+  "Ad\xE1n",
+  "Agust\xEDn",
+  "Albano",
+  "Alejandro",
+  "Alfonso",
+  "Alfredo",
+  "Alonso",
+  "\xC1lvaro",
+  "Amancio",
+  "Anselmo",
+  "Antonio",
+  "Ariel",
+  "Armando",
+  "Arturo",
+  "Augusto",
+  "Aurelio",
+  "Baltasar",
+  "Bartolom\xE9",
+  "Basilio",
+  "Benito",
+  "Bernardo",
+  "Blas",
+  "Bonifacio",
+  "Bruno",
+  "Camilo",
+  "Carlos",
+  "C\xE9sar",
+  "Cristian",
+  "Crist\xF3bal",
+  "Dami\xE1n",
+  "Daniel",
+  "Dar\xEDo",
+  "David",
+  "Diego",
+  "Domingo",
+  "Donato",
+  "Edgardo",
+  "Eduardo",
+  "El\xEDas",
+  "Emiliano",
+  "Emilio",
+  "Enrique",
+  "Ernesto",
+  "Esteban",
+  "Eugenio",
+  "Fabio",
+  "Facundo",
+  "Federico",
+  "Felipe",
+  "Fernando",
+  "Francisco",
+  "Franco",
+  "Gabriel",
+  "Gast\xF3n",
+  "Gerardo",
+  "Germ\xE1n",
+  "Gonzalo",
+  "Gregorio",
+  "Guillermo",
+  "Gustavo",
+  "H\xE9ctor",
+  "Hern\xE1n",
+  "Horacio",
+  "Hugo",
+  "Ignacio",
+  "Ismael",
+  "Iv\xE1n",
+  "Jacinto",
+  "Jaime",
+  "Javier",
+  "Jer\xF3nimo",
+  "Jes\xFAs",
+  "Joaqu\xEDn",
+  "Jorge",
+  "Jos\xE9",
+  "Juan",
+  "Julio",
+  "Lautaro",
+  "Leandro",
+  "Leonardo",
+  "Lucas",
+  "Luciano",
+  "Luis",
+  "Manuel",
+  "Marcelo",
+  "Marco",
+  "Mariano",
+  "Mario",
+  "Mart\xEDn",
+  "Mateo",
+  "Mat\xEDas",
+  "Mauricio",
+  "Maximiliano",
+  "Miguel",
+  "Nahuel",
+  "Nicol\xE1s",
+  "Octavio",
+  "Oscar",
+  "Pablo",
+  "Patricio",
+  "Pedro",
+  "Rafael",
+  "Ram\xF3n",
+  "Ra\xFAl",
+  "Ricardo",
+  "Roberto",
+  "Rodrigo",
+  "Rom\xE1n",
+  "Rub\xE9n",
+  "Salvador",
+  "Santiago",
+  "Sebasti\xE1n",
+  "Sergio",
+  "Sim\xF3n",
+  "Tom\xE1s",
+  "Ulises",
+  "Valent\xEDn",
+  "V\xEDctor",
+  "Walter",
+  "Xavier"
+];
+var ARGENTINIAN_MALE_LASTNAMES = [
+  "Garc\xEDa",
+  "Rodr\xEDguez",
+  "L\xF3pez",
+  "Mart\xEDnez",
+  "P\xE9rez",
+  "Gonz\xE1lez",
+  "S\xE1nchez",
+  "Romero",
+  "Fern\xE1ndez",
+  "D\xEDaz",
+  "Moreno",
+  "\xC1lvarez",
+  "Torres",
+  "Ruiz",
+  "Ram\xEDrez",
+  "Flores",
+  "Acosta",
+  "Molina",
+  "Su\xE1rez",
+  "Castro",
+  "Rojas",
+  "Ortiz",
+  "Silva",
+  "Navarro",
+  "Vargas",
+  "Morales",
+  "Herrera",
+  "Medina",
+  "Aguirre",
+  "Guti\xE9rrez",
+  "Ramos",
+  "Jim\xE9nez",
+  "Mendoza",
+  "Delgado",
+  "V\xE1zquez",
+  "Cruz",
+  "Castillo",
+  "Sosa",
+  "Alvarez",
+  "Vega",
+  "Pereyra",
+  "R\xEDos",
+  "Luna",
+  "Mu\xF1oz",
+  "Blanco",
+  "Soto",
+  "Campos",
+  "Ibarra",
+  "Peralta",
+  "Ben\xEDtez",
+  "M\xE9ndez",
+  "Ferrari",
+  "Paz",
+  "Godoy",
+  "Carrizo",
+  "Quiroga",
+  "Rivera",
+  "Cort\xE9s",
+  "Cabrera",
+  "Vera",
+  "C\xE1ceres",
+  "Figueroa",
+  "Dom\xEDnguez",
+  "Reyes",
+  "Guerrero",
+  "Montes",
+  "Santana",
+  "Maldonado",
+  "Correa",
+  "Valdez",
+  "Espinoza",
+  "M\xE1rquez",
+  "Santos",
+  "Ponce",
+  "Villalba",
+  "Arias",
+  "Ojeda",
+  "Salazar",
+  "Miranda",
+  "Leiva",
+  "Barrios",
+  "Galv\xE1n",
+  "Aguilera",
+  "P\xE1ez",
+  "Escobar",
+  "Montero",
+  "Alonso",
+  "Contreras",
+  "Barreto",
+  "Duarte",
+  "Palacios",
+  "Serrano",
+  "Pe\xF1a",
+  "Carrasco",
+  "Gallardo",
+  "Rueda",
+  "Vidal",
+  "Arce",
+  "Guzm\xE1n",
+  "Fuentes",
+  "Salas",
+  "Vallejos",
+  "Coronel",
+  "Bustos",
+  "Ledesma",
+  "Franco",
+  "Cardozo",
+  "Lucero",
+  "Nieto",
+  "Rold\xE1n",
+  "Villanueva",
+  "Sandoval",
+  "Z\xE1rate",
+  "Bianchi",
+  "Morel",
+  "Lombardi",
+  "Russo",
+  "Ferrari",
+  "Romano",
+  "Marino",
+  "Conte",
+  "Bruno",
+  "Rossi",
+  "Bianchi",
+  "Moretti",
+  "Esp\xF3sito",
+  "De Luca",
+  "Rizzo",
+  "Barbieri",
+  "Colombo",
+  "Gallo",
+  "Gentile",
+  "Greco",
+  "Lombardi",
+  "Marchetti",
+  "Martini",
+  "Mazza",
+  "Monti",
+  "Neri",
+  "Orlando",
+  "Pellegrini",
+  "Ricci",
+  "Rinaldi",
+  "Rossi",
+  "Russo",
+  "Santoro",
+  "Serra",
+  "Sorrentino",
+  "Valentini",
+  "Vitale",
+  "Abad",
+  "Acosta",
+  "Aguilar",
+  "Alonso",
+  "\xC1lvarez",
+  "Andrade",
+  "Arias",
+  "Arrieta",
+  "B\xE1ez",
+  "Barrios",
+  "Ben\xEDtez",
+  "Blanco",
+  "Bustos",
+  "Cabrera",
+  "Campos",
+  "C\xE1ceres",
+  "Carrizo",
+  "Castillo",
+  "Castro",
+  "Correa",
+  "Cort\xE9s",
+  "Cruz",
+  "Delgado",
+  "D\xEDaz",
+  "Dom\xEDnguez",
+  "Duarte",
+  "Escobar",
+  "Espinoza",
+  "Fern\xE1ndez",
+  "Figueroa",
+  "Flores",
+  "Franco",
+  "Fuentes",
+  "Galv\xE1n",
+  "Garc\xEDa",
+  "Godoy",
+  "G\xF3mez",
+  "Gonz\xE1lez",
+  "Guerrero",
+  "Guti\xE9rrez",
+  "Herrera",
+  "Ibarra",
+  "Jim\xE9nez",
+  "Ledesma",
+  "Leiva",
+  "L\xF3pez",
+  "Luna",
+  "Maldonado",
+  "M\xE1rquez",
+  "Mart\xEDnez",
+  "Medina",
+  "M\xE9ndez",
+  "Mendoza",
+  "Miranda",
+  "Molina",
+  "Montero",
+  "Montes",
+  "Morales",
+  "Moreno",
+  "Mu\xF1oz",
+  "Navarro",
+  "Nieto",
+  "Ojeda",
+  "Ortiz",
+  "P\xE1ez",
+  "Palacios",
+  "Paz",
+  "Pe\xF1a",
+  "Peralta",
+  "P\xE9rez",
+  "Ponce",
+  "Quiroga",
+  "Ram\xEDrez",
+  "Ramos",
+  "Reyes",
+  "R\xEDos",
+  "Rivera",
+  "Rojas",
+  "Rold\xE1n",
+  "Romero",
+  "Ruiz",
+  "Salas",
+  "Salazar",
+  "S\xE1nchez",
+  "Sandoval",
+  "Santana",
+  "Santos",
+  "Serrano",
+  "Silva",
+  "Sosa",
+  "Soto",
+  "Su\xE1rez",
+  "Torres",
+  "Valdez",
+  "Vallejos",
+  "Vargas",
+  "V\xE1zquez",
+  "Vega",
+  "Vera",
+  "Villalba",
+  "Villanueva",
+  "Z\xE1rate",
+  "Acu\xF1a",
+  "Alarc\xF3n",
+  "Almada",
+  "Almir\xF3n",
+  "Altamirano",
+  "Amaya",
+  "Arce",
+  "Ardiles",
+  "Arellano",
+  "Ayala",
+  "B\xE1ez",
+  "Barreto",
+  "Basualdo",
+  "Battaglia",
+  "Beltr\xE1n",
+  "Berm\xFAdez",
+  "Bogado",
+  "Bonifacio",
+  "Bord\xF3n",
+  "Brizuela",
+  "Bustos",
+  "C\xE1ceres",
+  "Calder\xF3n",
+  "C\xE1mera",
+  "Cantero",
+  "Cardozo",
+  "Carrizo",
+  "Casco",
+  "Cejas",
+  "Centuri\xF3n",
+  "Ch\xE1vez",
+  "Coronel",
+  "Corval\xE1n",
+  "Crespo",
+  "De la Cruz",
+  "Dom\xEDnguez",
+  "Duarte",
+  "Encina",
+  "Escobar",
+  "Esp\xEDnola",
+  "Falc\xF3n",
+  "Far\xEDas",
+  "Ferreira",
+  "Flores",
+  "Franco",
+  "Galarza",
+  "Gallardo",
+  "Gim\xE9nez",
+  "G\xF3mez",
+  "Gonz\xE1lez",
+  "Guerra",
+  "Guerrero",
+  "Guzm\xE1n",
+  "Heredia",
+  "Hern\xE1ndez",
+  "Ibarra",
+  "Insfr\xE1n",
+  "Jara",
+  "Ledesma",
+  "Leiva",
+  "Lencina",
+  "L\xF3pez",
+  "Lozano",
+  "Lucero",
+  "Lugo",
+  "Maldonado",
+  "Mar\xEDn",
+  "Mart\xEDnez",
+  "M\xE9ndez",
+  "Mendoza",
+  "Merlo",
+  "Miranda",
+  "Montiel",
+  "Morales",
+  "Moreno",
+  "N\xFA\xF1ez",
+  "Ojeda",
+  "Oliva",
+  "Ortiz",
+  "Oviedo",
+  "P\xE1ez",
+  "Palacios",
+  "Paredes",
+  "Paz",
+  "Pe\xF1a",
+  "Peralta",
+  "P\xE9rez",
+  "Ponce",
+  "Portillo",
+  "Qui\xF1ones",
+  "Quiroga",
+  "Ram\xEDrez",
+  "Ramos",
+  "Reyes",
+  "R\xEDos",
+  "Rivero",
+  "Rojas",
+  "Romero",
+  "Ruiz",
+  "Salas",
+  "Salazar",
+  "S\xE1nchez",
+  "Sandoval",
+  "Santos",
+  "Serrano",
+  "Sosa",
+  "Soto",
+  "Su\xE1rez",
+  "Tapia",
+  "Torres",
+  "Valdez",
+  "Vallejos",
+  "Vargas",
+  "V\xE1zquez",
+  "Vega",
+  "Vera",
+  "Villalba",
+  "Villanueva",
+  "Z\xE1rate",
+  "Zelaya"
+];
+
+// resources/static_db/names/brazilian_data.ts
+var BRAZILIAN_MALE_FIRSTNAMES = [
+  "Jos\xE9",
+  "Jo\xE3o",
+  "Antonio",
+  "Francisco",
+  "Carlos",
+  "Paulo",
+  "Pedro",
+  "Lucas",
+  "Luiz",
+  "Marcos",
+  "Miguel",
+  "Gabriel",
+  "Arthur",
+  "Heitor",
+  "Davi",
+  "Bernardo",
+  "Jo\xE3o Miguel",
+  "Jo\xE3o Pedro",
+  "Enzo",
+  "Enzo Gabriel",
+  "Rafael",
+  "Felipe",
+  "Rodrigo",
+  "Mateus",
+  "Matheus",
+  "Gustavo",
+  "Bruno",
+  "Eduardo",
+  "Daniel",
+  "Marcelo",
+  "Thiago",
+  "Tiago",
+  "Andr\xE9",
+  "Fernando",
+  "Ricardo",
+  "Roberto",
+  "Jorge",
+  "Alexandre",
+  "Vinicius",
+  "Leonardo",
+  "Henrique",
+  "Caio",
+  "Cau\xE3",
+  "Cau\xEA",
+  "Kaique",
+  "Kauan",
+  "Luan",
+  "Ryan",
+  "Samuel",
+  "Theo",
+  "Noah",
+  "Ben\xEDcio",
+  "Levi",
+  "Ravi",
+  "Gael",
+  "Matteo",
+  "Bento",
+  "Est\xEAv\xE3o",
+  "Felipe",
+  "Francisco",
+  "Afonso",
+  "Alejandro",
+  "Alvaro",
+  "Amarildo",
+  "Anderson",
+  "\xC2ngelo",
+  "Ant\xF4nio",
+  "Arnaldo",
+  "Augusto",
+  "Breno",
+  "Caetano",
+  "C\xE9sar",
+  "Cl\xE1udio",
+  "Cristiano",
+  "Davi Lucas",
+  "Diego",
+  "Diogo",
+  "Dion\xEDsio",
+  "Douglas",
+  "Edson",
+  "Eduardo",
+  "Elton",
+  "Emerson",
+  "Enrico",
+  "Eric",
+  "Erik",
+  "F\xE1bio",
+  "Fabr\xEDcio",
+  "Fausto",
+  "Filipe",
+  "Fl\xE1vio",
+  "Frederico",
+  "Gabriel",
+  "Gilberto",
+  "Giovanni",
+  "Guilherme",
+  "H\xE9lio",
+  "Hugo",
+  "Igor",
+  "\xCDtalo",
+  "Ivan",
+  "Jair",
+  "Jo\xE3o Lucas",
+  "Jo\xE3o Vitor",
+  "Jonas",
+  "J\xFAlio",
+  "J\xFAnior",
+  "Ladislau",
+  "Lauro",
+  "Leandro",
+  "Le\xF4nidas",
+  "L\xE9o",
+  "Louren\xE7o",
+  "Luciano",
+  "Lu\xEDs",
+  "Manoel",
+  "Manuel",
+  "Marcel",
+  "M\xE1rcio",
+  "Marco",
+  "M\xE1rio",
+  "Maur\xEDcio",
+  "Murilo",
+  "Natan",
+  "Nelson",
+  "Nicolas",
+  "N\xEDcolas",
+  "Ot\xE1vio",
+  "Pablo",
+  "Patrick",
+  "Paulo Henrique",
+  "Pedro Henrique",
+  "Philippe",
+  "Raimundo",
+  "Raul",
+  "Renan",
+  "Renato",
+  "Rian",
+  "Richard",
+  "Roberto",
+  "Robson",
+  "Rodrigo",
+  "Rog\xE9rio",
+  "Rom\xE1rio",
+  "R\xF4mulo",
+  "Ronaldo",
+  "R\xFAben",
+  "Sandro",
+  "Sebasti\xE3o",
+  "S\xE9rgio",
+  "Silas",
+  "Sim\xE3o",
+  "Tadeu",
+  "Tarc\xEDsio",
+  "Thales",
+  "Th\xE9o",
+  "Thiago",
+  "Thomas",
+  "Tom\xE1s",
+  "Valdir",
+  "Valter",
+  "Vanderlei",
+  "Vitor",
+  "Vit\xF3ria",
+  "Wagner",
+  "Waldir",
+  "Washington",
+  "Wesley",
+  "William",
+  "Xavier",
+  "Yago",
+  "Yuri",
+  "Z\xE9",
+  "Zeca",
+  "Abel",
+  "Adalberto",
+  "Ad\xE3o",
+  "Ademir",
+  "Adriano",
+  "A\xE9cio",
+  "Ailton",
+  "Airton",
+  "Alan",
+  "Alberto",
+  "Alcides",
+  "Aldo",
+  "Alex",
+  "Allan",
+  "Alo\xEDsio",
+  "Alu\xEDsio",
+  "Amadeu",
+  "Am\xE9rico",
+  "Anselmo",
+  "Antenor",
+  "Aparecido",
+  "Arlindo",
+  "Armando",
+  "Arnaldo",
+  "Artur",
+  "Ata\xEDde",
+  "Aureliano",
+  "Aur\xE9lio",
+  "Baltazar",
+  "Bartolomeu",
+  "Bas\xEDlio",
+  "Batista",
+  "Belmiro",
+  "Benedito",
+  "Benjamim",
+  "Bento",
+  "Bernardo",
+  "Boanerges",
+  "Bonif\xE1cio",
+  "Breno",
+  "Caetano",
+  "C\xE2ndido",
+  "C\xE1ssio",
+  "Celso",
+  "C\xEDcero",
+  "Cl\xE1udio",
+  "Clodomiro",
+  "Cl\xF3vis",
+  "Constantino",
+  "Cristiano",
+  "Crist\xF3v\xE3o",
+  "Dami\xE3o",
+  "Dante",
+  "D\xE1rio",
+  "Davi",
+  "D\xE9cio",
+  "Dem\xE9trio",
+  "Denis",
+  "Deusdedit",
+  "Djalma",
+  "Domingos",
+  "Donato",
+  "Dorival",
+  "Du\xEDlio",
+  "Durval",
+  "Edilson",
+  "Edmar",
+  "Edmilson",
+  "Edson",
+  "Eduardo",
+  "El\xE1dio",
+  "Elias",
+  "El\xEDsio",
+  "Elton",
+  "Emanuel",
+  "Em\xEDlio",
+  "En\xE9as",
+  "Ernesto",
+  "Est\xE1cio",
+  "Eug\xEAnio",
+  "Eurico",
+  "Evaristo",
+  "Everaldo",
+  "Expedito",
+  "F\xE1bio",
+  "Fabricio",
+  "Faustino",
+  "Fausto",
+  "Feliciano",
+  "F\xE9lix",
+  "Fernandes",
+  "Firmino",
+  "Fl\xE1vio",
+  "Flor\xEAncio",
+  "Fortunato",
+  "Francisco",
+  "Franco",
+  "Frederico",
+  "Gabriel",
+  "Geraldo",
+  "Germano",
+  "Get\xFAlio",
+  "Gide\xE3o",
+  "Gil",
+  "Gilberto",
+  "Glauber",
+  "Glauco",
+  "Gon\xE7alo",
+  "Greg\xF3rio",
+  "Guilherme",
+  "Gustavo",
+  "Hamilton",
+  "Haroldo",
+  "H\xE9lio",
+  "Henrique",
+  "Hermes",
+  "Hil\xE1rio",
+  "Humberto",
+  "Ibrahim",
+  "Idal\xEDcio",
+  "In\xE1cio",
+  "Irineu",
+  "Isa\xEDas",
+  "Ismael",
+  "Israel",
+  "Ivan",
+  "Ivo",
+  "Jacinto",
+  "Jackson",
+  "Jaime",
+  "Jair",
+  "Jairo",
+  "James",
+  "J\xE2nio",
+  "Jardel",
+  "Jarbas",
+  "Jeferson",
+  "Jer\xF4nimo",
+  "Jesu\xEDno",
+  "Jo\xE3o",
+  "Joaquim",
+  "Joel",
+  "Jonas",
+  "Jorge",
+  "Jos\xE9",
+  "Josu\xE9",
+  "Joviano",
+  "Juarez",
+  "J\xFAlio",
+  "J\xFAnior",
+  "Juraci",
+  "Justiniano",
+  "Juvenal",
+  "Kl\xE9ber",
+  "Laerte",
+  "Lauro",
+  "Leandro",
+  "Le\xF4ncio",
+  "Leopoldo",
+  "L\xEDdio",
+  "Lino",
+  "Louren\xE7o",
+  "Lucas",
+  "Luciano",
+  "Lu\xEDs",
+  "Maciel",
+  "Manoel",
+  "Manuel",
+  "Marcelo",
+  "M\xE1rcio",
+  "Marco",
+  "Marcos",
+  "M\xE1rio",
+  "Martinho",
+  "Mateus",
+  "Matheus",
+  "Maur\xEDcio",
+  "Mauro",
+  "M\xE1ximo",
+  "Melqu\xEDades",
+  "Micael",
+  "Miguel",
+  "Milton",
+  "Moacir",
+  "Moises",
+  "Murilo",
+  "Nabor",
+  "Nataniel",
+  "N\xE9lio",
+  "Nelson",
+  "Nestor",
+  "Newton",
+  "Nicolau",
+  "Nilo",
+  "Nilton",
+  "Nivaldo",
+  "Norberto",
+  "Olavo",
+  "Ol\xEDmpio",
+  "Onofre",
+  "Oriovaldo",
+  "Oscar",
+  "Osman",
+  "Osmar",
+  "Osvaldo",
+  "Otac\xEDlio",
+  "Ot\xE1vio",
+  "Otoniel",
+  "Ovaldo",
+  "Ozeias",
+  "Pablo",
+  "Pascoal",
+  "Patr\xEDcio",
+  "Paulo",
+  "Pedro",
+  "Pel\xE9",
+  "Percival",
+  "P\xE9ricles",
+  "Pierre",
+  "Pl\xEDnio",
+  "Policarpo",
+  "Prudente",
+  "Quintino",
+  "Rafael",
+  "Raimundo",
+  "Ramiro",
+  "Ra\xFAl",
+  "Reginaldo",
+  "Reinaldo",
+  "Renan",
+  "Renato",
+  "Ricardo",
+  "Roberto",
+  "Robson",
+  "Rodolfo",
+  "Rodrigo",
+  "Rog\xE9rio",
+  "Rom\xE1rio",
+  "R\xF4mulo",
+  "Ronald",
+  "Ronaldo",
+  "Roque",
+  "Rui",
+  "Ruy",
+  "S\xE1lvio",
+  "Samuel",
+  "Sandoval",
+  "Sandro",
+  "Santiago",
+  "Saulo",
+  "Sebasti\xE3o",
+  "S\xE9rgio",
+  "Severino",
+  "Sidney",
+  "Silas",
+  "Silvestre",
+  "Sim\xE3o",
+  "Sime\xE3o",
+  "S\xEDlvio",
+  "Sim\xE3o",
+  "Sotero",
+  "Stanislau",
+  "Tadeu",
+  "Tarc\xEDsio",
+  "Tasso",
+  "Teodoro",
+  "Te\xF3filo",
+  "Ter\xEAncio",
+  "Thales",
+  "Th\xE9o",
+  "Thiago",
+  "Thomas",
+  "Thomaz",
+  "Tib\xE9rio",
+  "Tim\xF3teo",
+  "Tobias",
+  "Tom\xE1s",
+  "Trist\xE3o",
+  "Ubirajara",
+  "Ubiratan",
+  "Ulisses",
+  "Urbano",
+  "Valdemar",
+  "Valdir",
+  "Valter",
+  "Vanderlei",
+  "Vasco",
+  "Ven\xE2ncio",
+  "Venceslau",
+  "Vicente",
+  "Victor",
+  "Vidal",
+  "Vin\xEDcius",
+  "Virg\xEDlio",
+  "V\xEDtor",
+  "Wagner",
+  "Waldemar",
+  "Waldir",
+  "Washington",
+  "Wellington",
+  "Wesley",
+  "William",
+  "Wilson",
+  "Xavier",
+  "Yago",
+  "Yuri",
+  "Zacarias",
+  "Zeno",
+  "Z\xE9",
+  "Zeca"
+];
+var BRAZILIAN_MALE_LASTNAMES = [
+  "Silva",
+  "Santos",
+  "Oliveira",
+  "Souza",
+  "Pereira",
+  "Ferreira",
+  "Lima",
+  "Alves",
+  "Rodrigues",
+  "Costa",
+  "Sousa",
+  "Gomes",
+  "Nascimento",
+  "Araujo",
+  "Ribeiro",
+  "Almeida",
+  "Jesus",
+  "Barbosa",
+  "Soares",
+  "Carvalho",
+  "Martins",
+  "Rocha",
+  "Dias",
+  "Nunes",
+  "Freitas",
+  "Conceicao",
+  "Melo",
+  "Moreira",
+  "Cardoso",
+  "Reis",
+  "Cruz",
+  "Goncalves",
+  "Andrade",
+  "Mendes",
+  "Teixeira",
+  "Vieira",
+  "Machado",
+  "Marques",
+  "Fernandes",
+  "Lopes",
+  "Santana",
+  "Bezerra",
+  "Campos",
+  "Moraes",
+  "Borges",
+  "Monteiro",
+  "Moura",
+  "Miranda",
+  "Castro",
+  "Sampaio",
+  "Siqueira",
+  "Azevedo",
+  "Cavalcante",
+  "Coelho",
+  "Correia",
+  "Duarte",
+  "Figueiredo",
+  "Fonseca",
+  "Garcia",
+  "Leite",
+  "Macedo",
+  "Medeiros",
+  "Moraes",
+  "Morais",
+  "Neves",
+  "Pinto",
+  "Queiroz",
+  "Ramos",
+  "Santos",
+  "Silveira",
+  "Torres",
+  "Vargas",
+  "Vieira",
+  "Xavier",
+  "Abreu",
+  "Aguiar",
+  "Amaral",
+  "Amorim",
+  "Andrade",
+  "Anjos",
+  "Antunes",
+  "Aparecido",
+  "Araujo",
+  "Assis",
+  "Azevedo",
+  "Baptista",
+  "Barreto",
+  "Batista",
+  "Borges",
+  "Brandao",
+  "Brito",
+  "Bueno",
+  "Cabral",
+  "Caldas",
+  "Caldeira",
+  "Camargo",
+  "Campos",
+  "Cardoso",
+  "Carneiro",
+  "Carvalho",
+  "Castilho",
+  "Castro",
+  "Cavalcanti",
+  "Chaves",
+  "Clemente",
+  "Coelho",
+  "Conceicao",
+  "Correa",
+  "Costa",
+  "Coutinho",
+  "Cruz",
+  "Cunha",
+  "Dantas",
+  "Dias",
+  "Diniz",
+  "Domingues",
+  "Duarte",
+  "Farias",
+  "Fernandes",
+  "Ferreira",
+  "Figueira",
+  "Figueiredo",
+  "Fonseca",
+  "Franco",
+  "Freitas",
+  "Furtado",
+  "Gama",
+  "Garcia",
+  "Gomes",
+  "Goncalves",
+  "Guerra",
+  "Guimaraes",
+  "Henrique",
+  "Jesus",
+  "Leal",
+  "Leite",
+  "Lima",
+  "Lopes",
+  "Loureiro",
+  "Luz",
+  "Macedo",
+  "Machado",
+  "Magalhaes",
+  "Marques",
+  "Martins",
+  "Medeiros",
+  "Melo",
+  "Mendes",
+  "Mendonca",
+  "Miranda",
+  "Monteiro",
+  "Montes",
+  "Moraes",
+  "Morais",
+  "Moreira",
+  "Moura",
+  "Muniz",
+  "Nascimento",
+  "Neves",
+  "Nogueira",
+  "Nunes",
+  "Oliveira",
+  "Pacheco",
+  "Paiva",
+  "Peixoto",
+  "Pereira",
+  "Pimentel",
+  "Pinheiro",
+  "Pinto",
+  "Pires",
+  "Queiroz",
+  "Ramos",
+  "Reis",
+  "Rezende",
+  "Ribeiro",
+  "Rocha",
+  "Rodrigues",
+  "Romao",
+  "Sampaio",
+  "Santana",
+  "Santiago",
+  "Santos",
+  "Saraiva",
+  "Silva",
+  "Silveira",
+  "Siqueira",
+  "Soares",
+  "Sobrinho",
+  "Sousa",
+  "Souza",
+  "Tavares",
+  "Teixeira",
+  "Torres",
+  "Valente",
+  "Valeriano",
+  "Vargas",
+  "Vasconcelos",
+  "Ventura",
+  "Vieira",
+  "Xavier",
+  "Afonso",
+  "Aguiar",
+  "Albuquerque",
+  "Alencar",
+  "Almeida",
+  "Alves",
+  "Amaral",
+  "Andrade",
+  "Antunes",
+  "Araujo",
+  "Assuncao",
+  "Azevedo",
+  "Barbosa",
+  "Barros",
+  "Batista",
+  "Bezerra",
+  "Bittencourt",
+  "Borges",
+  "Brandao",
+  "Brito",
+  "Bueno",
+  "Cabral",
+  "Caldas",
+  "Camargo",
+  "Campos",
+  "Cardoso",
+  "Carneiro",
+  "Carvalho",
+  "Castro",
+  "Cavalcanti",
+  "Chaves",
+  "Clemente",
+  "Coelho",
+  "Conceicao",
+  "Correa",
+  "Costa",
+  "Couto",
+  "Cruz",
+  "Cunha",
+  "Dantas",
+  "Dias",
+  "Diniz",
+  "Domingues",
+  "Duarte",
+  "Farias",
+  "Fernandes",
+  "Ferreira",
+  "Figueiredo",
+  "Fonseca",
+  "Franco",
+  "Freitas",
+  "Furtado",
+  "Gama",
+  "Garcia",
+  "Gomes",
+  "Goncalves",
+  "Guimaraes",
+  "Henriques",
+  "Jesus",
+  "Leal",
+  "Leite",
+  "Lima",
+  "Lopes",
+  "Loureiro",
+  "Machado",
+  "Magalhaes",
+  "Marques",
+  "Martins",
+  "Medeiros",
+  "Melo",
+  "Mendes",
+  "Mendonca",
+  "Miranda",
+  "Monteiro",
+  "Moraes",
+  "Moreira",
+  "Moura",
+  "Nascimento",
+  "Neves",
+  "Nogueira",
+  "Nunes",
+  "Oliveira",
+  "Pacheco",
+  "Paiva",
+  "Peixoto",
+  "Pereira",
+  "Pimentel",
+  "Pinheiro",
+  "Pinto",
+  "Pires",
+  "Queiroz",
+  "Ramos",
+  "Reis",
+  "Ribeiro",
+  "Rocha",
+  "Rodrigues",
+  "Sampaio",
+  "Santana",
+  "Santos",
+  "Silva",
+  "Silveira",
+  "Soares",
+  "Sousa",
+  "Souza",
+  "Tavares",
+  "Teixeira",
+  "Torres",
+  "Valente",
+  "Vieira",
+  "Xavier",
+  "Abreu",
+  "Aguiar",
+  "Alencar",
+  "Almeida",
+  "Alves",
+  "Amaral",
+  "Andrade",
+  "Araujo",
+  "Azevedo",
+  "Barbosa",
+  "Barros",
+  "Batista",
+  "Bezerra",
+  "Borges",
+  "Brandao",
+  "Brito",
+  "Cabral",
+  "Campos",
+  "Cardoso",
+  "Carvalho",
+  "Castro",
+  "Cavalcanti",
+  "Coelho",
+  "Correa",
+  "Costa",
+  "Cruz",
+  "Cunha",
+  "Dias",
+  "Duarte",
+  "Fernandes",
+  "Ferreira",
+  "Fonseca",
+  "Freitas",
+  "Garcia",
+  "Gomes",
+  "Goncalves",
+  "Guimaraes",
+  "Jesus",
+  "Leite",
+  "Lima",
+  "Lopes",
+  "Machado",
+  "Marques",
+  "Martins",
+  "Medeiros",
+  "Melo",
+  "Mendes",
+  "Miranda",
+  "Monteiro",
+  "Moraes",
+  "Moreira",
+  "Moura",
+  "Nascimento",
+  "Neves",
+  "Nogueira",
+  "Nunes",
+  "Oliveira",
+  "Pereira",
+  "Pinheiro",
+  "Pinto",
+  "Ramos",
+  "Reis",
+  "Ribeiro",
+  "Rocha",
+  "Rodrigues",
+  "Santos",
+  "Silva",
+  "Silveira",
+  "Soares",
+  "Souza",
+  "Teixeira",
+  "Torres",
+  "Vieira",
+  "Xavier"
+];
+
+// resources/static_db/names/turkish_data.ts
+var TURKISH_MALE_FIRSTNAMES = [
+  "Ahmet",
+  "Mehmet",
+  "Mustafa",
+  "Ali",
+  "Huseyin",
+  "Hasan",
+  "Ibrahim",
+  "Yusuf",
+  "Osman",
+  "Omer",
+  "Emre",
+  "Burak",
+  "Furkan",
+  "Murat",
+  "Kaan",
+  "Can",
+  "Eren",
+  "Baris",
+  "Deniz",
+  "Onur",
+  "Serkan",
+  "Tolga",
+  "Umut",
+  "Yasin",
+  "Batuhan",
+  "Berat",
+  "Cagan",
+  "Dogan",
+  "Efe",
+  "Fatih",
+  "Gokhan",
+  "Halil",
+  "Ismail",
+  "Kerem",
+  "Levent",
+  "Mert",
+  "Nihat",
+  "Okan",
+  "Polat",
+  "Riza",
+  "Selim",
+  "Taha",
+  "Ugur",
+  "Volkan",
+  "Yilmaz",
+  "Zafer",
+  "Adem",
+  "Berk",
+  "Cem",
+  "Derya",
+  "Ege",
+  "Ferhat",
+  "Gokce",
+  "Hakan",
+  "Ilker",
+  "Kemal",
+  "Lutfi",
+  "Muhammed",
+  "Necati",
+  "Orhan",
+  "Poyraz",
+  "Recep",
+  "Salih",
+  "Tuncay",
+  "Ufuk",
+  "Vedat",
+  "Yusuf",
+  "Ziya",
+  "Arda",
+  "Bora",
+  "Cihan",
+  "Doruk",
+  "Efe",
+  "Firat",
+  "Gokturk",
+  "Harun",
+  "Ilhan",
+  "Kadir",
+  "Levent",
+  "Mete",
+  "Nihat",
+  "Oguz",
+  "Pelin",
+  "Rauf",
+  "Sefa",
+  "Tayfun",
+  "Ulas",
+  "Veli",
+  "Yalcin",
+  "Zeki",
+  "Alp",
+  "Baran",
+  "Cemil",
+  "Davut",
+  "Ekin",
+  "Fikret",
+  "Gurkan",
+  "Hamza",
+  "Isik",
+  "Jan",
+  "Kaan",
+  "Lale",
+  "Murat",
+  "Nazim",
+  "Ozan",
+  "Pinar",
+  "Rasim",
+  "Serdar",
+  "Tamer",
+  "Ugur",
+  "Veysel",
+  "Yavuz",
+  "Zeynel",
+  "Ahmet",
+  "Mehmet",
+  "Mustafa",
+  "Ali",
+  "Huseyin",
+  "Hasan",
+  "Ibrahim",
+  "Yusuf",
+  "Osman",
+  "Omer",
+  "Emre",
+  "Burak",
+  "Furkan",
+  "Murat",
+  "Kaan",
+  "Can",
+  "Eren",
+  "Baris",
+  "Deniz",
+  "Onur",
+  "Serkan",
+  "Tolga",
+  "Umut",
+  "Yasin",
+  "Batuhan",
+  "Berat",
+  "Cagan",
+  "Dogan",
+  "Efe",
+  "Fatih",
+  "Gokhan",
+  "Halil",
+  "Ismail",
+  "Kerem",
+  "Levent",
+  "Mert",
+  "Nihat",
+  "Okan",
+  "Polat",
+  "Riza",
+  "Selim",
+  "Taha",
+  "Ugur",
+  "Volkan",
+  "Yilmaz",
+  "Zafer",
+  "Adem",
+  "Berk",
+  "Cem",
+  "Derya",
+  "Ege",
+  "Ferhat",
+  "Gokce",
+  "Hakan",
+  "Ilker",
+  "Kemal",
+  "Lutfi",
+  "Muhammed",
+  "Necati",
+  "Orhan",
+  "Poyraz",
+  "Recep",
+  "Salih",
+  "Tuncay",
+  "Ufuk",
+  "Vedat",
+  "Yusuf",
+  "Ziya",
+  "Arda",
+  "Bora",
+  "Cihan",
+  "Doruk",
+  "Efe",
+  "Firat",
+  "Gokturk",
+  "Harun",
+  "Ilhan",
+  "Kadir",
+  "Levent",
+  "Mete",
+  "Nihat",
+  "Oguz",
+  "Rauf",
+  "Sefa",
+  "Tayfun",
+  "Ulas",
+  "Veli",
+  "Yalcin",
+  "Zeki",
+  "Alp",
+  "Baran",
+  "Cemil",
+  "Davut",
+  "Ekin",
+  "Fikret",
+  "Gurkan",
+  "Hamza",
+  "Isik",
+  "Jan",
+  "Kaan",
+  "Lale",
+  "Murat",
+  "Nazim",
+  "Ozan",
+  "Rasim",
+  "Serdar",
+  "Tamer",
+  "Ugur",
+  "Veysel",
+  "Yavuz",
+  "Zeynel",
+  "Abdullah",
+  "Bilal",
+  "Cahit",
+  "Demir",
+  "Enes",
+  "Feyyaz",
+  "Guven",
+  "Hayri",
+  "Idris",
+  "Kivanc",
+  "Latif",
+  "Metehan",
+  "Nurettin",
+  "Oktay",
+  "Peker",
+  "Ramazan",
+  "Savas",
+  "Tarkan",
+  "Utku",
+  "Vural",
+  "Yasin",
+  "Zulfikar",
+  "Akin",
+  "Bulent",
+  "Cengiz",
+  "Dursun",
+  "Ekrem",
+  "Fikri",
+  "Gokalp",
+  "Huda",
+  "Izzet",
+  "Korkut",
+  "Mahmut",
+  "Naci",
+  "Ozgur",
+  "Ridvan",
+  "Suleyman",
+  "Talat",
+  "Umit",
+  "Vedat",
+  "Yener",
+  "Zekeriya",
+  "Alper",
+  "Baris",
+  "Caner",
+  "Deniz",
+  "Eray",
+  "Fatih",
+  "Gursel",
+  "Hakan",
+  "Ismail",
+  "Kaan",
+  "Levent",
+  "Mert",
+  "Nihat",
+  "Okan",
+  "Polat",
+  "Riza",
+  "Selim",
+  "Taha",
+  "Ugur",
+  "Volkan",
+  "Yilmaz",
+  "Zafer",
+  "Adem"
+];
+var TURKISH_MALE_LASTNAMES = [
+  "Yilmaz",
+  "Kaya",
+  "Demir",
+  "Sahin",
+  "Celik",
+  "Ozturk",
+  "Aydin",
+  "Ozdemir",
+  "Arslan",
+  "Dogan",
+  "Kilic",
+  "Aslan",
+  "Tas",
+  "Kaplan",
+  "Cetin",
+  "Koc",
+  "Kurt",
+  "Polat",
+  "Ozkan",
+  "Simsek",
+  "Erdogan",
+  "Aksoy",
+  "Bulut",
+  "Gunes",
+  "Yildiz",
+  "Tekin",
+  "Guler",
+  "Aktas",
+  "Kara",
+  "Yalcin",
+  "Er",
+  "Sari",
+  "Keskin",
+  "Ozer",
+  "Turk",
+  "Ucar",
+  "Acar",
+  "Korkmaz",
+  "Sen",
+  "Yildirim",
+  "Boz",
+  "Oz",
+  "Ak",
+  "Gok",
+  "Deniz",
+  "Eren",
+  "Yavuz",
+  "Sonmez",
+  "Cakir",
+  "Ozcelik",
+  "Karaca",
+  "Turan",
+  "Gunduz",
+  "Akgun",
+  "Colak",
+  "Sert",
+  "Bayraktar",
+  "Karahan",
+  "Ozkan",
+  "Demirel",
+  "Karakas",
+  "Kilic",
+  "Sahin",
+  "Koc",
+  "Yilmaz",
+  "Demir",
+  "Kaya",
+  "Arslan",
+  "Aydin",
+  "Ozturk",
+  "Ozdemir",
+  "Celik",
+  "Dogan",
+  "Kaplan",
+  "Tas",
+  "Polat",
+  "Kurt",
+  "Erdogan",
+  "Aksoy",
+  "Bulut",
+  "Gunes",
+  "Yildiz",
+  "Tekin",
+  "Guler",
+  "Aktas",
+  "Kara",
+  "Yalcin",
+  "Er",
+  "Sari",
+  "Keskin",
+  "Ozer",
+  "Turk",
+  "Ucar",
+  "Acar",
+  "Korkmaz",
+  "Sen",
+  "Yildirim",
+  "Boz",
+  "Oz",
+  "Ak",
+  "Gok",
+  "Deniz",
+  "Eren",
+  "Yavuz",
+  "Sonmez",
+  "Cakir",
+  "Ozcelik",
+  "Karaca",
+  "Turan",
+  "Gunduz",
+  "Akgun",
+  "Colak",
+  "Sert",
+  "Bayraktar",
+  "Karahan",
+  "Demirel",
+  "Karakas",
+  "Kilic",
+  "Sahin",
+  "Koc",
+  "Yilmaz",
+  "Demir",
+  "Kaya",
+  "Arslan",
+  "Aydin",
+  "Ozturk",
+  "Ozdemir",
+  "Celik",
+  "Dogan",
+  "Kaplan",
+  "Tas",
+  "Polat",
+  "Kurt",
+  "Erdogan",
+  "Aksoy",
+  "Bulut",
+  "Gunes",
+  "Yildiz",
+  "Tekin",
+  "Guler",
+  "Aktas",
+  "Kara",
+  "Yalcin",
+  "Er",
+  "Sari",
+  "Keskin",
+  "Ozer",
+  "Turk",
+  "Ucar",
+  "Acar",
+  "Korkmaz",
+  "Sen",
+  "Yildirim",
+  "Boz",
+  "Oz",
+  "Ak",
+  "Gok",
+  "Deniz",
+  "Eren",
+  "Yavuz",
+  "Sonmez",
+  "Cakir",
+  "Ozcelik",
+  "Karaca",
+  "Turan",
+  "Gunduz",
+  "Akgun",
+  "Colak",
+  "Sert",
+  "Bayraktar",
+  "Karahan",
+  "Demirel",
+  "Karakas",
+  "Kilic",
+  "Sahin",
+  "Koc",
+  "Yilmaz",
+  "Demir",
+  "Kaya",
+  "Arslan",
+  "Aydin",
+  "Ozturk",
+  "Ozdemir",
+  "Celik",
+  "Dogan",
+  "Kaplan",
+  "Tas",
+  "Polat",
+  "Kurt",
+  "Erdogan",
+  "Aksoy",
+  "Bulut",
+  "Gunes",
+  "Yildiz",
+  "Tekin",
+  "Guler",
+  "Aktas",
+  "Kara",
+  "Yalcin",
+  "Er",
+  "Sari",
+  "Keskin",
+  "Ozer",
+  "Turk",
+  "Ucar",
+  "Acar",
+  "Korkmaz",
+  "Sen",
+  "Yildirim",
+  "Boz",
+  "Oz",
+  "Ak",
+  "Gok",
+  "Deniz",
+  "Eren",
+  "Yavuz",
+  "Sonmez",
+  "Cakir",
+  "Ozcelik",
+  "Karaca",
+  "Turan",
+  "Gunduz",
+  "Akgun",
+  "Colak",
+  "Sert",
+  "Bayraktar",
+  "Karahan",
+  "Demirel",
+  "Karakas",
+  "Kilic",
+  "Sahin",
+  "Koc",
+  "Yilmaz",
+  "Demir",
+  "Kaya",
+  "Arslan",
+  "Aydin",
+  "Ozturk",
+  "Ozdemir",
+  "Celik",
+  "Dogan",
+  "Kaplan",
+  "Tas",
+  "Polat",
+  "Kurt",
+  "Erdogan",
+  "Aksoy",
+  "Bulut",
+  "Gunes",
+  "Yildiz",
+  "Tekin",
+  "Guler",
+  "Aktas",
+  "Kara",
+  "Yalcin",
+  "Er",
+  "Sari",
+  "Keskin",
+  "Ozer",
+  "Turk",
+  "Ucar",
+  "Acar",
+  "Korkmaz",
+  "Sen",
+  "Yildirim",
+  "Boz",
+  "Oz",
+  "Ak",
+  "Gok",
+  "Deniz",
+  "Eren",
+  "Yavuz",
+  "Sonmez",
+  "Cakir",
+  "Ozcelik",
+  "Karaca",
+  "Turan",
+  "Gunduz",
+  "Akgun",
+  "Colak",
+  "Sert",
+  "Bayraktar",
+  "Karahan",
+  "Demirel"
+];
+
+// resources/static_db/names/arabic_data.ts
+var ARABIC_MALE_FIRSTNAMES = [
+  "Ahmed",
+  "Mohammed",
+  "Ali",
+  "Omar",
+  "Abdullah",
+  "Hassan",
+  "Hussein",
+  "Ibrahim",
+  "Yusuf",
+  "Hamza",
+  "Amir",
+  "Khalid",
+  "Faisal",
+  "Zayd",
+  "Bilal",
+  "Anas",
+  "Adam",
+  "Yahya",
+  "Zakariya",
+  "Imran",
+  "Musa",
+  "Isa",
+  "Dawoud",
+  "Sulaiman",
+  "Harun",
+  "Idris",
+  "Ayman",
+  "Karim",
+  "Malik",
+  "Nasser",
+  "Rashid",
+  "Saif",
+  "Tariq",
+  "Zain",
+  "Farhan",
+  "Jamal",
+  "Khalil",
+  "Mahmoud",
+  "Mustafa",
+  "Nabil",
+  "Qasim",
+  "Rami",
+  "Sami",
+  "Tamer",
+  "Waleed",
+  "Yasser",
+  "Zaki",
+  "Abbas",
+  "Adel",
+  "Akram",
+  "Amin",
+  "Ashraf",
+  "Basil",
+  "Daniyal",
+  "Ehsan",
+  "Fahad",
+  "Ghaith",
+  "Hadi",
+  "Ihsan",
+  "Jabir",
+  "Kamil",
+  "Latif",
+  "Mansur",
+  "Nadeem",
+  "Osman",
+  "Qadir",
+  "Rafiq",
+  "Saber",
+  "Talib",
+  "Umar",
+  "Waqas",
+  "Younus",
+  "Zahir",
+  "Abdulaziz",
+  "Abdulrahman",
+  "Abdulhamid",
+  "Abdurrahman",
+  "Ahmad",
+  "Ameer",
+  "Ammar",
+  "Arif",
+  "Asad",
+  "Ayyub",
+  "Badr",
+  "Bakr",
+  "Bassam",
+  "Bilal",
+  "Daoud",
+  "Fadi",
+  "Firas",
+  "Ghassan",
+  "Habib",
+  "Hakim",
+  "Hani",
+  "Harith",
+  "Haytham",
+  "Hilal",
+  "Hisham",
+  "Ilyas",
+  "Ismail",
+  "Jafar",
+  "Jalal",
+  "Jasim",
+  "Jawad",
+  "Kareem",
+  "Kays",
+  "Khaled",
+  "Luay",
+  "Maher",
+  "Majid",
+  "Marwan",
+  "Mazen",
+  "Mikhail",
+  "Mubarak",
+  "Muhammed",
+  "Munir",
+  "Murad",
+  "Nader",
+  "Naeem",
+  "Najib",
+  "Nasir",
+  "Nawaf",
+  "Nizar",
+  "Othman",
+  "Qais",
+  "Raed",
+  "Raheem",
+  "Rahim",
+  "Rayan",
+  "Riyad",
+  "Saad",
+  "Saber",
+  "Sadiq",
+  "Saeed",
+  "Salah",
+  "Saleh",
+  "Salim",
+  "Samir",
+  "Saud",
+  "Shadi",
+  "Shakir",
+  "Sherif",
+  "Sufyan",
+  "Taha",
+  "Tawfiq",
+  "Tayyib",
+  "Uthman",
+  "Wael",
+  "Yacoub",
+  "Yasin",
+  "Yazid",
+  "Zafar",
+  "Ziad",
+  "Ziyad",
+  "Abdul",
+  "Abdulkarim",
+  "Abdulqadir",
+  "Abdurrahim",
+  "Adnan",
+  "Aftab",
+  "Ahab",
+  "Akil",
+  "Alaa",
+  "Alim",
+  "Amjad",
+  "Anwar",
+  "Aqeel",
+  "Arslan",
+  "Asim",
+  "Ata",
+  "Atef",
+  "Aziz",
+  "Bahir",
+  "Baha",
+  "Barak",
+  "Bashir",
+  "Bassem",
+  "Bayram",
+  "Burhan",
+  "Dahir",
+  "Daud",
+  "Dhia",
+  "Diyar",
+  "Emad",
+  "Fadel",
+  "Fahd",
+  "Farid",
+  "Fathi",
+  "Fawzi",
+  "Fayez",
+  "Fayyad",
+  "Fuad",
+  "Gamal",
+  "Ghazi",
+  "Hafez",
+  "Hafiz",
+  "Hajjaj",
+  "Halim",
+  "Hamid",
+  "Hamza",
+  "Hanif",
+  "Haqqi",
+  "Harbi",
+  "Hashem",
+  "Hatim",
+  "Hayder",
+  "Hazem",
+  "Husam",
+  "Hussam",
+  "Ihab",
+  "Ilyan",
+  "Imad",
+  "Irfan",
+  "Iskandar",
+  "Izz",
+  "Jabbar",
+  "Jaber",
+  "Jibril",
+  "Juma",
+  "Kadar",
+  "Kadir",
+  "Kais",
+  "Kamran",
+  "Kasim",
+  "Kassim",
+  "Kayyum",
+  "Khair",
+  "Khalaf",
+  "Khayyam",
+  "Lutfi",
+  "Madi",
+  "Mahdi",
+  "Mahir",
+  "Mahmud",
+  "Mansoor",
+  "Maruf",
+  "Masoud",
+  "Mazin",
+  "Mehdi",
+  "Mishal",
+  "Mokhtar",
+  "Momin",
+  "Mubashir",
+  "Muhamad",
+  "Muhib",
+  "Muin",
+  "Mujtaba",
+  "Mukhtar",
+  "Munther",
+  "Musab",
+  "Musharraf",
+  "Mutasim",
+  "Nabil",
+  "Nadir",
+  "Nafi",
+  "Najm",
+  "Nasim",
+  "Nassim",
+  "Nawaz",
+  "Nazir",
+  "Nihad",
+  "Noman",
+  "Nur",
+  "Nuri",
+  "Omar",
+  "Qamar",
+  "Qasim",
+  "Qusay",
+  "Rachid",
+  "Radwan",
+  "Rafat",
+  "Rahman",
+  "Raihan",
+  "Rais",
+  "Rajab",
+  "Ramadan",
+  "Ramez",
+  "Rami",
+  "Ramzi",
+  "Rani",
+  "Raouf",
+  "Rauf",
+  "Rayan",
+  "Reda",
+  "Riad",
+  "Riyadh",
+  "Rizwan",
+  "Rohan",
+  "Saad",
+  "Sabbah",
+  "Sabir",
+  "Sabri",
+  "Saeed",
+  "Safwan",
+  "Sahil",
+  "Sahir",
+  "Sajid",
+  "Sajjad",
+  "Sakib",
+  "Salahuddin",
+  "Salam",
+  "Salem",
+  "Sami",
+  "Samir",
+  "Sana",
+  "Saud",
+  "Sayeed",
+  "Shaban",
+  "Shafiq",
+  "Shahid",
+  "Shamil",
+  "Sharif",
+  "Shayan",
+  "Sherif",
+  "Shuaib",
+  "Siddiq",
+  "Siraj",
+  "Sohail",
+  "Sufian",
+  "Suhail",
+  "Suleiman",
+  "Tahir",
+  "Taimur",
+  "Talal",
+  "Talha",
+  "Tamim",
+  "Taqi",
+  "Tarik",
+  "Tawfik",
+  "Tayeb",
+  "Taysir",
+  "Thabit",
+  "Thamer",
+  "Ubaid",
+  "Umar",
+  "Usama",
+  "Usman",
+  "Wadud",
+  "Wafi",
+  "Wahab",
+  "Wahid",
+  "Wajdi",
+  "Wajih",
+  "Walid",
+  "Waqar",
+  "Wasim",
+  "Yahia",
+  "Yakub",
+  "Yaman",
+  "Yamin",
+  "Yasir",
+  "Yassin",
+  "Younis",
+  "Yunis",
+  "Yusri",
+  "Zafir",
+  "Zahid",
+  "Zaid",
+  "Zain",
+  "Zaki",
+  "Zaman",
+  "Zameer",
+  "Ziyad",
+  "Zubair",
+  "Zuhair"
+];
+var ARABIC_MALE_LASTNAMES = [
+  "Ahmed",
+  "Mohammed",
+  "Ali",
+  "Hassan",
+  "Hussein",
+  "Ibrahim",
+  "Abdullah",
+  "Khan",
+  "Al-Ahmad",
+  "Al-Ali",
+  "Al-Masri",
+  "Al-Saud",
+  "Abdul",
+  "Abdullah",
+  "Ahmad",
+  "Al-Farsi",
+  "Al-Haddad",
+  "Al-Hussein",
+  "Al-Masri",
+  "Al-Qadi",
+  "Al-Saadi",
+  "Al-Tamimi",
+  "Abbas",
+  "Abboud",
+  "Abadi",
+  "Abd al-Rashid",
+  "Abdelhamid",
+  "Abdelkrim",
+  "Abdellatif",
+  "Abdelrahman",
+  "Abdulaziz",
+  "Abdulkarim",
+  "Abdulrahman",
+  "Ahmad",
+  "Akram",
+  "Al-Amin",
+  "Al-Aziz",
+  "Al-Baghdadi",
+  "Al-Bakri",
+  "Al-Dawoodi",
+  "Al-Fayed",
+  "Al-Ghamdi",
+  "Al-Hakim",
+  "Al-Harbi",
+  "Al-Jabari",
+  "Al-Juhani",
+  "Al-Khatib",
+  "Al-Mahmoud",
+  "Al-Najjar",
+  "Al-Naimi",
+  "Al-Qasimi",
+  "Al-Rashid",
+  "Al-Sayed",
+  "Al-Sharif",
+  "Al-Shehri",
+  "Al-Zahrani",
+  "Ansari",
+  "Awad",
+  "Ayad",
+  "Aziz",
+  "Badawi",
+  "Bakir",
+  "Bishara",
+  "Darwish",
+  "El-Sayed",
+  "Fahmy",
+  "Farouk",
+  "Ghanem",
+  "Habib",
+  "Haddad",
+  "Hakim",
+  "Hamdan",
+  "Hamid",
+  "Hanna",
+  "Hashem",
+  "Hassan",
+  "Husseini",
+  "Ibrahim",
+  "Isa",
+  "Jabbar",
+  "Jaber",
+  "Jalil",
+  "Jamal",
+  "Karam",
+  "Khalaf",
+  "Khalid",
+  "Khalil",
+  "Khoury",
+  "Mahmoud",
+  "Malik",
+  "Mansour",
+  "Marwan",
+  "Masri",
+  "Matta",
+  "Moussa",
+  "Mustafa",
+  "Nader",
+  "Najjar",
+  "Nasr",
+  "Nassar",
+  "Nawaf",
+  "Nazari",
+  "Omar",
+  "Osman",
+  "Qasim",
+  "Qureshi",
+  "Rahman",
+  "Rashid",
+  "Rizk",
+  "Saad",
+  "Sabri",
+  "Saeed",
+  "Said",
+  "Salah",
+  "Saleh",
+  "Salim",
+  "Samir",
+  "Sayed",
+  "Shaaban",
+  "Shafiq",
+  "Shah",
+  "Sharif",
+  "Sheikh",
+  "Suleiman",
+  "Taha",
+  "Tawfik",
+  "Yassin",
+  "Younes",
+  "Zaid",
+  "Zaki",
+  "Zaman",
+  "Zayed",
+  "Zubair",
+  "Abaza",
+  "Abbas",
+  "Abdallah",
+  "Abdelnour",
+  "Abdelqader",
+  "Abdi",
+  "Abdo",
+  "Abdulhamid",
+  "Abdulqadir",
+  "Abdurrahim",
+  "Adel",
+  "Adnan",
+  "Afif",
+  "Agha",
+  "Ahmad",
+  "Akel",
+  "Alam",
+  "Alami",
+  "Alawi",
+  "Alayyan",
+  "Alfarsi",
+  "Alhassan",
+  "Alkhatib",
+  "Allam",
+  "Almasri",
+  "Alqadi",
+  "Alsaadi",
+  "Altamimi",
+  "Amin",
+  "Amir",
+  "Ammar",
+  "Ansari",
+  "Antar",
+  "Arafat",
+  "Arabi",
+  "Arif",
+  "Asfour",
+  "Ashour",
+  "Aslan",
+  "Assaf",
+  "Atiyeh",
+  "Attar",
+  "Awad",
+  "Ayoub",
+  "Azar",
+  "Aziz",
+  "Badr",
+  "Bahri",
+  "Bakri",
+  "Barakat",
+  "Bassam",
+  "Baydoun",
+  "Bazzi",
+  "Bechara",
+  "Bishara",
+  "Bitar",
+  "Boulos",
+  "Chahine",
+  "Daher",
+  "Dahman",
+  "Darwish",
+  "Dawood",
+  "Deeb",
+  "Diab",
+  "Dib",
+  "Eid",
+  "Elhage",
+  "Elkhoury",
+  "Essa",
+  "Fadel",
+  "Fahad",
+  "Fakhry",
+  "Faraj",
+  "Farhat",
+  "Faris",
+  "Fawaz",
+  "Fayad",
+  "Fayyad",
+  "Fekry",
+  "Fouad",
+  "Gaber",
+  "Gad",
+  "Gamal",
+  "Ghaleb",
+  "Ghanem",
+  "Ghazi",
+  "Habashi",
+  "Haddad",
+  "Hajjar",
+  "Hakim",
+  "Halabi",
+  "Hamed",
+  "Hamid",
+  "Hamza",
+  "Hanna",
+  "Harb",
+  "Hassan",
+  "Hatem",
+  "Hayek",
+  "Hazan",
+  "Hindi",
+  "Hossain",
+  "Hussein",
+  "Ibrahim",
+  "Idris",
+  "Isa",
+  "Ismail",
+  "Jabour",
+  "Jadallah",
+  "Jafar",
+  "Jalil",
+  "Jamal",
+  "Jamil",
+  "Jawad",
+  "Kadi",
+  "Kahil",
+  "Kanaan",
+  "Karim",
+  "Kassab",
+  "Kattan",
+  "Kawash",
+  "Khalaf",
+  "Khalid",
+  "Khalife",
+  "Khalil",
+  "Khatib",
+  "Khayat",
+  "Khoury",
+  "Kobrosly",
+  "Lahoud",
+  "Latif",
+  "Louca",
+  "Maalouf",
+  "Madi",
+  "Mahfouz",
+  "Mahmoud",
+  "Makhoul",
+  "Malek",
+  "Mansour",
+  "Maroun",
+  "Masri",
+  "Matta",
+  "Melhem",
+  "Mikhail",
+  "Mokbel",
+  "Moussa",
+  "Mukhtar",
+  "Musa",
+  "Mustafa",
+  "Nabil",
+  "Nader",
+  "Naeem",
+  "Najjar",
+  "Nasr",
+  "Nassar",
+  "Nawfal",
+  "Nazarian",
+  "Nour",
+  "Obeid",
+  "Omar",
+  "Osman",
+  "Othman",
+  "Qadri",
+  "Qasim",
+  "Qureshi",
+  "Raad",
+  "Rachid",
+  "Radwan",
+  "Rahal",
+  "Rahman",
+  "Raji",
+  "Ramadan",
+  "Rami",
+  "Rashed",
+  "Rashid",
+  "Rizk",
+  "Saab",
+  "Saad",
+  "Sabbagh",
+  "Sabri",
+  "Sadek",
+  "Saeed",
+  "Safadi",
+  "Said",
+  "Sakr",
+  "Salama",
+  "Saleh",
+  "Salim",
+  "Sami",
+  "Samman",
+  "Sarkis",
+  "Semaan",
+  "Shaar",
+  "Shaban",
+  "Shadi",
+  "Shafik",
+  "Shahid",
+  "Shahin",
+  "Shalhoub",
+  "Shamoun",
+  "Sharaf",
+  "Sharif",
+  "Shatila",
+  "Shawky",
+  "Shehadeh",
+  "Sheikh",
+  "Shoukry",
+  "Sleiman",
+  "Suleiman",
+  "Taha",
+  "Tamer",
+  "Tamim",
+  "Tarazi",
+  "Tawil",
+  "Tayyar",
+  "Touma",
+  "Wahba",
+  "Wahid",
+  "Yacoub",
+  "Yaghi",
+  "Yahya",
+  "Yakoub",
+  "Yassin",
+  "Younes",
+  "Youssef",
+  "Zaatari",
+  "Zahran",
+  "Zaid",
+  "Zain",
+  "Zakar",
+  "Zaki",
+  "Zaman",
+  "Zammar",
+  "Zoghbi",
+  "Zoubi",
+  "Zubair",
+  "Zureikat"
+];
+
+// resources/static_db/names/finnish_data.ts
+var FINNISH_MALE_FIRSTNAMES = [
+  "Oliver",
+  "Eino",
+  "V\xE4in\xF6",
+  "Leo",
+  "Elias",
+  "Onni",
+  "Toivo",
+  "Oiva",
+  "Olavi",
+  "Juhani",
+  "Johannes",
+  "Mikael",
+  "Antero",
+  "Tapani",
+  "Kalevi",
+  "Tapio",
+  "Ilmari",
+  "Matias",
+  "Eeli",
+  "Emil",
+  "Aapo",
+  "Aarne",
+  "Akseli",
+  "Aleksi",
+  "Antti",
+  "Armas",
+  "Arttu",
+  "Aukusti",
+  "Eero",
+  "Eetu",
+  "Elias",
+  "Erkki",
+  "Esa",
+  "Hannes",
+  "Harri",
+  "Heikki",
+  "Henrik",
+  "Ilkka",
+  "Iiro",
+  "Jaakko",
+  "Jalmari",
+  "Jani",
+  "Janne",
+  "Jari",
+  "Jere",
+  "Jesse",
+  "Joakim",
+  "Joel",
+  "Joni",
+  "Juha",
+  "Juhani",
+  "Jukka",
+  "Juuso",
+  "Kalle",
+  "Kari",
+  "Kasper",
+  "Kimmo",
+  "Lauri",
+  "Leevi",
+  "Lukas",
+  "Marko",
+  "Markus",
+  "Martti",
+  "Matti",
+  "Mikko",
+  "Niklas",
+  "Niko",
+  "Olli",
+  "Oskari",
+  "Otto",
+  "Paavo",
+  "Panu",
+  "Pekka",
+  "Pentti",
+  "Petri",
+  "Raimo",
+  "Rami",
+  "Risto",
+  "Sakari",
+  "Sami",
+  "Samu",
+  "Samuli",
+  "Sampo",
+  "Seppo",
+  "Simo",
+  "Teemu",
+  "Tero",
+  "Timo",
+  "Tomi",
+  "Tommi",
+  "Tuomas",
+  "Tuomo",
+  "Tuukka",
+  "Urho",
+  "Veikko",
+  "Veli",
+  "Ville",
+  "Vilho",
+  "Viljami",
+  "Yrj\xF6",
+  "Aatu",
+  "Ahti",
+  "Aimo",
+  "Aki",
+  "Anto",
+  "Arto",
+  "Atte",
+  "Aulis",
+  "Eemeli",
+  "Eino",
+  "Eliel",
+  "Elmo",
+  "Ensio",
+  "Erik",
+  "Hannu",
+  "Heimo",
+  "Helmer",
+  "Iisakki",
+  "Ilpo",
+  "Immo",
+  "Isto",
+  "Jarkko",
+  "Jarmo",
+  "Jouni",
+  "Kauko",
+  "Keijo",
+  "Kosti",
+  "Lasse",
+  "Lauri",
+  "Lempi"
+];
+var FINNISH_MALE_LASTNAMES = [
+  "Korhonen",
+  "Virtanen",
+  "M\xE4kinen",
+  "Nieminen",
+  "M\xE4kel\xE4",
+  "Laine",
+  "H\xE4m\xE4l\xE4inen",
+  "Koskinen",
+  "Heikkinen",
+  "J\xE4rvinen",
+  "Lehtonen",
+  "Lehtinen",
+  "Saarinen",
+  "Salminen",
+  "Heinonen",
+  "Niemi",
+  "Kallio",
+  "Salonen",
+  "Tuominen",
+  "Laitinen",
+  "Rantanen",
+  "Turunen",
+  "Kinnunen",
+  "Karjalainen",
+  "Mattila",
+  "Pulkkinen",
+  "Ojala",
+  "Hakala",
+  "Laaksonen",
+  "Lindholm",
+  "Jokinen",
+  "Aalto",
+  "Miettinen",
+  "Mustonen",
+  "Lahtinen",
+  "Peltonen",
+  "R\xE4is\xE4nen",
+  "Ahonen",
+  "Kangas",
+  "V\xE4is\xE4nen",
+  "Toivonen",
+  "Keto",
+  "Pekkanen",
+  "Anttila",
+  "Salo",
+  "Savolainen",
+  "Koivisto",
+  "Nurmi",
+  "Rossi",
+  "Huttunen",
+  "Kekkonen",
+  "Pesonen",
+  "Huhtala",
+  "Autio",
+  "Halonen",
+  "Kivinen",
+  "Partanen",
+  "Paananen",
+  "Rissanen",
+  "Sallinen",
+  "Sepp\xE4l\xE4",
+  "Soininen",
+  "Suominen",
+  "Tikka",
+  "Tolonen",
+  "Uusitalo",
+  "Vanhanen",
+  "Vehvil\xE4inen",
+  "Viitanen",
+  "Vuori",
+  "Yl\xF6nen",
+  "Aaltonen",
+  "Ahola",
+  "Ahtisaari",
+  "Alatalo",
+  "Asikainen",
+  "Eskola",
+  "Forsman",
+  "Haapala",
+  "Hakkarainen",
+  "Hannula",
+  "Harju",
+  "Heino",
+  "Helminen",
+  "Hietanen",
+  "Hirvonen",
+  "Huovinen",
+  "Jokela",
+  "Jussila",
+  "Kankaanp\xE4\xE4",
+  "Kari",
+  "Karppinen",
+  "Kauppinen",
+  "Kemppainen",
+  "Kettunen",
+  "Kivim\xE4ki",
+  "Koponen",
+  "Korpi",
+  "Koskela",
+  "Kukkonen"
+];
+
+// resources/static_db/names/georgian_data.ts
+var GEORGIAN_MALE_FIRSTNAMES = [
+  "Giorgi",
+  "Davit",
+  "Aleksandre",
+  "Demetre",
+  "Noe",
+  "Luka",
+  "Toma",
+  "Dachi",
+  "Ioane",
+  "Vache",
+  "Zurab",
+  "Levan",
+  "Irakli",
+  "Nika",
+  "Saba",
+  "Archil",
+  "Vakhtang",
+  "Guram",
+  "Tamaz",
+  "Zaza",
+  "Gvantsa",
+  "Mate",
+  "Lazare",
+  "Giorgi",
+  "Andria",
+  "Daniel",
+  "Gabriel",
+  "Mikheil",
+  "Nikoloz",
+  "Tengiz",
+  "Bakur",
+  "Beka",
+  "Giga",
+  "Givi",
+  "Gocha",
+  "Kakha",
+  "Koba",
+  "Lasha",
+  "Merab",
+  "Nugzar",
+  "Otar",
+  "Paata",
+  "Ramaz",
+  "Rezo",
+  "Roin",
+  "Shalva",
+  "Tedo",
+  "Tornike",
+  "Ushangi",
+  "Vano",
+  "Akaki",
+  "Avtandil",
+  "Baadur",
+  "Bagrat",
+  "Besik",
+  "Elguja",
+  "Gela",
+  "Giuli",
+  "Ioseb",
+  "Jemal",
+  "Kakhaber",
+  "Levan",
+  "Mamuka",
+  "Malkhaz",
+  "Nodar",
+  "Oleg",
+  "Petre",
+  "Rati",
+  "Revaz",
+  "Roman",
+  "Sandro",
+  "Sergo",
+  "Shota",
+  "Soso",
+  "Temur",
+  "Teimuraz",
+  "Tite",
+  "Ucha",
+  "Vakhtang",
+  "Vano",
+  "Vazha",
+  "Vladimer",
+  "Zviad",
+  "Abesalom",
+  "Adam",
+  "Aleksandre",
+  "Anzor",
+  "Arsen",
+  "Badri",
+  "Besiki",
+  "Dato",
+  "Dato",
+  "Edisher",
+  "Erekle",
+  "Gia",
+  "Giorgi",
+  "Guram",
+  "Iakob",
+  "Ilia",
+  "Irine",
+  "Kakhi",
+  "Kote",
+  "Lado",
+  "Levan",
+  "Mamuka",
+  "Merab",
+  "Mikheil",
+  "Nika",
+  "Nugzar",
+  "Otar",
+  "Paata",
+  "Ramaz",
+  "Revaz",
+  "Roin",
+  "Shalva",
+  "Tamaz",
+  "Tedo",
+  "Temur",
+  "Tornike",
+  "Zurab"
+];
+var GEORGIAN_MALE_LASTNAMES = [
+  "Beridze",
+  "Kapanadze",
+  "Gelashvili",
+  "Maisuradze",
+  "Giorgadze",
+  "Lomidze",
+  "Tsiklauri",
+  "Bolkvadze",
+  "Nozadze",
+  "Chikhladze",
+  "Kvaratskhelia",
+  "Abashidze",
+  "Dadeshkeliani",
+  "Japaridze",
+  "Machabeli",
+  "Orbeliani",
+  "Bagrationi",
+  "Dadiani",
+  "Tarkhan-Mouravi",
+  "Chavchavadze",
+  "Tsereteli",
+  "Eristavi",
+  "Mukhranbatoni",
+  "Amirejibi",
+  "Andronikashvili",
+  "Abuladze",
+  "Adamia",
+  "Akhvlediani",
+  "Batiashvili",
+  "Chubinidze",
+  "Davitashvili",
+  "Gagoshidze",
+  "Gogoberidze",
+  "Gogitidze",
+  "Iashvili",
+  "Javakhishvili",
+  "Kiknadze",
+  "Kobalia",
+  "Kochakidze",
+  "Kutateladze",
+  "Liparteliani",
+  "Maghalashvili",
+  "Makharadze",
+  "Mchedlishvili",
+  "Melikishvili",
+  "Metreveli",
+  "Mikadze",
+  "Nadareishvili",
+  "Nakashidze",
+  "Narimanidze",
+  "Papashvili",
+  "Petriashvili",
+  "Pipia",
+  "Razmadze",
+  "Rukhadze",
+  "Saginashvili",
+  "Shengelia",
+  "Shubitidze",
+  "Sikharulidze",
+  "Tabagari",
+  "Tavadze",
+  "Tskitishvili",
+  "Tskhvediani",
+  "Tumanishvili",
+  "Vachnadze",
+  "Vardanidze",
+  "Zhvania",
+  "Zoidze",
+  "Zukakishvili",
+  "Abesadze",
+  "Akobia",
+  "Alavidze",
+  "Aptsiauri",
+  "Arveladze",
+  "Avalishvili",
+  "Bakradze",
+  "Baramidze",
+  "Basilaia",
+  "Begiashvili",
+  "Berdzenishvili",
+  "Bezhanidze",
+  "Chachanidze",
+  "Chanturia",
+  "Charkviani",
+  "Chkhaidze",
+  "Chkheidze",
+  "Dvali",
+  "Dzidziguri",
+  "Gachechiladze",
+  "Gagnidze",
+  "Gakhokidze",
+  "Gamkrelidze",
+  "Gaprindashvili",
+  "Gedenidze",
+  "Ghviniashvili",
+  "Gogoladze",
+  "Gogua",
+  "Gulua",
+  "Iakobidze",
+  "Iremashvili",
+  "Jishkariani",
+  "Kalandadze",
+  "Kapanadze",
+  "Kavtaradze",
+  "Kereselidze",
+  "Khachidze",
+  "Khatiskatsi",
+  "Khmaladze",
+  "Khomeriki",
+  "Kikabidze",
+  "Kikaleishvili",
+  "Kobakhidze",
+  "Kobuladze",
+  "Kochladze",
+  "Kvaratskhelia",
+  "Labadze",
+  "Lomidze",
+  "Maisuradze",
+  "Mamidze",
+  "Manchkhashvili"
+];
+
+// resources/static_db/names/armenian_data.ts
+var ARMENIAN_MALE_FIRSTNAMES = [
+  "Davit",
+  "Narek",
+  "Hayk",
+  "Tigran",
+  "Areg",
+  "Mark",
+  "Armen",
+  "Aram",
+  "Levon",
+  "Gevorg",
+  "Hakob",
+  "Grigor",
+  "Sargis",
+  "Hovhannes",
+  "Karen",
+  "Vardan",
+  "Arsen",
+  "Gagik",
+  "Vahe",
+  "Samvel",
+  "Andranik",
+  "Ashot",
+  "Artur",
+  "Gor",
+  "Mher",
+  "Harutyun",
+  "Vahan",
+  "Edgar",
+  "Ruben",
+  "Alex",
+  "Aren",
+  "Monte",
+  "Robert",
+  "Daniel",
+  "Leo",
+  "Erik",
+  "Artiom",
+  "Albert",
+  "Van",
+  "Suren",
+  "Raphael",
+  "Max",
+  "Henry",
+  "Noy",
+  "Menua",
+  "Ara",
+  "Arakel",
+  "Ararat",
+  "Arman",
+  "Avet",
+  "Bedros",
+  "Garnik",
+  "Hrant",
+  "Ishkhan",
+  "Jirair",
+  "Kamo",
+  "Krikor",
+  "Levon",
+  "Manvel",
+  "Mesrop",
+  "Mikael",
+  "Nerses",
+  "Norayr",
+  "Petros",
+  "Rafael",
+  "Raffi",
+  "Ruben",
+  "Sevan",
+  "Stepan",
+  "Taron",
+  "Vache",
+  "Vigen",
+  "Yervand",
+  "Zaven",
+  "Zareh",
+  "Abgar",
+  "Aghvan",
+  "Antranig",
+  "Aramayis",
+  "Arshak",
+  "Artashes",
+  "Artavazd",
+  "Avedis",
+  "Bagrat",
+  "Barsegh",
+  "Derenik",
+  "Garegin",
+  "Gurgen",
+  "Hamazasp",
+  "Hovsep",
+  "Karapet",
+  "Mkrtich",
+  "Poghos",
+  "Smbat",
+  "Tatev",
+  "Toros",
+  "Vazgen",
+  "Yeghishe",
+  "Zhirayr",
+  "Zoravar"
+];
+var ARMENIAN_MALE_LASTNAMES = [
+  "Grigoryan",
+  "Sargsyan",
+  "Harutyunyan",
+  "Hovhannisyan",
+  "Khachatryan",
+  "Hakobyan",
+  "Petrosyan",
+  "Vardanyan",
+  "Gevorgyan",
+  "Karapetyan",
+  "Stepanyan",
+  "Abrahamyan",
+  "Manukyan",
+  "Davtyan",
+  "Mkrtchyan",
+  "Poghosyan",
+  "Martirosyan",
+  "Sahakyan",
+  "Minasyan",
+  "Avagyan",
+  "Arakelyan",
+  "Baghdasaryan",
+  "Barseghyan",
+  "Danielyan",
+  "Ghazaryan",
+  "Hambardzumyan",
+  "Hayrapetyan",
+  "Kocharyan",
+  "Melikyan",
+  "Nazaryan",
+  "Ohanyan",
+  "Papikyan",
+  "Simonyan",
+  "Tadevosyan",
+  "Voskanyan",
+  "Yeritsyan",
+  "Zakaryan",
+  "Abajian",
+  "Adamyan",
+  "Agopian",
+  "Alexanian",
+  "Andonian",
+  "Aprahamian",
+  "Arsenyan",
+  "Artinian",
+  "Asatryan",
+  "Avedisian",
+  "Babayan",
+  "Bagratuni",
+  "Balian",
+  "Boghossian",
+  "Boyajian",
+  "Chahinian",
+  "Darbinyan",
+  "Demirchyan",
+  "DerBedrosian",
+  "Djanbazian",
+  "Epremian",
+  "Gasparyan",
+  "Gulian",
+  "Hakopian",
+  "Hovsepian",
+  "Ishkhanian",
+  "Jamgochian",
+  "Kantardjian",
+  "Kevorkian",
+  "Krikorian",
+  "Levoniyan",
+  "Mardoyan",
+  "Markarian",
+  "Matossian",
+  "Mikaelian",
+  "Mirakyan",
+  "Mouradian",
+  "Nalbandian",
+  "Nersesian",
+  "Oganesian",
+  "Ohanessian",
+  "Parseghian",
+  "Patrikian",
+  "Piloyan",
+  "Rafaelian",
+  "Sarkisian",
+  "Soghomonian",
+  "Tashjian",
+  "Terzian",
+  "Tovmasyan",
+  "Vartanian",
+  "Yaghoubian",
+  "Zadikian",
+  "Zarehian",
+  "Zartarian",
+  "Abelyan",
+  "Aghajanian",
+  "Aramian",
+  "Aroyan",
+  "Aslanian",
+  "Avoyan",
+  "Babajanyan",
+  "Baghdassarian"
+];
+
+// resources/static_db/names/albanian_data.ts
+var ALBANIAN_MALE_FIRSTNAMES = [
+  "Arben",
+  "Ilir",
+  "Agim",
+  "Fatmir",
+  "Besnik",
+  "Altin",
+  "Dritan",
+  "Ardit",
+  "Erion",
+  "Klodian",
+  "Gentian",
+  "Endrit",
+  "Fatlum",
+  "Bujar",
+  "Burim",
+  "Dardan",
+  "Afrim",
+  "Agron",
+  "Alban",
+  "Arber",
+  "Arlind",
+  "Armend",
+  "Artan",
+  "Artur",
+  "Besart",
+  "Besian",
+  "Besmir",
+  "Bledar",
+  "Blendi",
+  "Bora",
+  "Dashamir",
+  "Dashnor",
+  "Defrim",
+  "Dhimiter",
+  "Drilon",
+  "Edon",
+  "Edvin",
+  "Elton",
+  "Endi",
+  "Engjell",
+  "Enver",
+  "Ergest",
+  "Ervin",
+  "Fation",
+  "Fisnik",
+  "Flamur",
+  "Florian",
+  "Genc",
+  "Gent",
+  "G\xEBzim",
+  "Gjergj",
+  "Gjon",
+  "Haki",
+  "Ilirian",
+  "Ismail",
+  "Jetmir",
+  "Jon",
+  "Julian",
+  "Kastriot",
+  "Kreshnik",
+  "Kujtim",
+  "Ledion",
+  "Leotrim",
+  "Liridon",
+  "Lorik",
+  "Luan",
+  "Lumturi",
+  "Mariglen",
+  "Mirlind",
+  "Mufit",
+  "Muhamet",
+  "Nderim",
+  "Noel",
+  "Oltion",
+  "Orges",
+  "Petrit",
+  "Qemal",
+  "Redon",
+  "Rezart",
+  "Rilind",
+  "Rinor",
+  "Rrezon",
+  "Shk\xEBlzen",
+  "Shp\xEBtim",
+  "Sokol",
+  "Taulant",
+  "Valon",
+  "Veton",
+  "Visar",
+  "Vjollca",
+  "Xhavit",
+  "Ylli",
+  "Zamir",
+  "Zef",
+  "Zgjim",
+  "Zoran",
+  "Adem",
+  "Adrian",
+  "Arian",
+  "Arjan",
+  "Arsen",
+  "Artin",
+  "Bajram",
+  "Bardhyl",
+  "Bashkim",
+  "Behar",
+  "Bekim",
+  "Blerim",
+  "Dalmat",
+  "Dren",
+  "Edi",
+  "Eduart",
+  "Ermir",
+  "Fitore",
+  "Gjergji",
+  "Jonuz",
+  "Klevis",
+  "Kliton",
+  "Kristaq",
+  "Kujtim",
+  "Laz\xEBr",
+  "Leandro",
+  "Leke",
+  "Lind",
+  "Lindor",
+  "Llesh",
+  "Lorenc",
+  "Luan",
+  "Lulzim",
+  "Mikel",
+  "Milot",
+  "Naim",
+  "Ndue",
+  "Pjet\xEBr",
+  "Preng",
+  "Ramiz",
+  "Rei",
+  "Renis",
+  "Roland",
+  "Saimir",
+  "Sazan",
+  "Shaban",
+  "Shpend",
+  "Sk\xEBnder",
+  "Sokol",
+  "Tahir",
+  "Toni",
+  "Trim",
+  "Valdet",
+  "Valmir",
+  "Vangjel",
+  "Viktor",
+  "Vllaznim",
+  "Xhelal",
+  "Ylber",
+  "Zef",
+  "Zoti"
+];
+var ALBANIAN_MALE_LASTNAMES = [
+  "Hoxha",
+  "\xC7ela",
+  "Kurti",
+  "Marku",
+  "Mu\xE7a",
+  "Shehu",
+  "Dervishi",
+  "Kola",
+  "Prifti",
+  "Elezi",
+  "Leka",
+  "Gjoni",
+  "Sula",
+  "Basha",
+  "Krasniqi",
+  "Mehmeti",
+  "Aliu",
+  "Brahimi",
+  "Ismaili",
+  "Osmani",
+  "Abazi",
+  "Ademi",
+  "Agolli",
+  "Ahmeti",
+  "Alia",
+  "Arifi",
+  "Bajrami",
+  "Balliu",
+  "Begaj",
+  "Berisha",
+  "Bytyqi",
+  "Caka",
+  "Cela",
+  "Deda",
+  "Demiri",
+  "Duka",
+  "Durmishi",
+  "Fazliu",
+  "Gashi",
+  "Gega",
+  "Hajdari",
+  "Halili",
+  "Hasani",
+  "Hyseni",
+  "Ibrahimi",
+  "Jashari",
+  "Jusufi",
+  "Kadriu",
+  "Kaleci",
+  "Kamberi",
+  "Kastrati",
+  "Koci",
+  "Kodra",
+  "Krasniqi",
+  "Kryeziu",
+  "Lala",
+  "Lleshi",
+  "Lulaj",
+  "Lusha",
+  "Mala",
+  "Mati",
+  "Mehmeti",
+  "Mema",
+  "Mesi",
+  "Meta",
+  "Mucaj",
+  "Murati",
+  "Mustafa",
+  "Myftiu",
+  "Nallbani",
+  "Neziri",
+  "Nikolli",
+  "Osmani",
+  "Palaj",
+  "Papa",
+  "Pasha",
+  "Peci",
+  "P\xEBrnaska",
+  "Petro",
+  "Prifti",
+  "Qorri",
+  "Rama",
+  "Rexhepi",
+  "Rrahmani",
+  "Rugova",
+  "Rushiti",
+  "Saliu",
+  "Selimi",
+  "Shala",
+  "Shatri",
+  "Shehu",
+  "Shkreli",
+  "Shyti",
+  "Sina",
+  "Sokolaj",
+  "Spahiu",
+  "Syla",
+  "Tafa",
+  "Tahiraj",
+  "Tola",
+  "Topi",
+  "Toska",
+  "Uka",
+  "Vata",
+  "Veliu",
+  "Veseli",
+  "Xhaferi",
+  "Xhemali",
+  "Ylli",
+  "Zeqiri",
+  "Zogu",
+  "Zymberi",
+  "Abdullahu",
+  "Agalliu",
+  "Ahmetaj",
+  "Alban",
+  "Arditi",
+  "Bajraktari",
+  "Balluku",
+  "Bardhi",
+  "Begolli",
+  "Bektashi",
+  "Biba",
+  "Brahimi",
+  "Cakaj",
+  "\xC7ipi",
+  "Dauti",
+  "Demaj",
+  "Dervishi",
+  "Dibra",
+  "Domi",
+  "Dragusha",
+  "Dreshaj",
+  "Dukagjini",
+  "Duraku",
+  "Durr\xEBs",
+  "Fazli",
+  "Gegaj",
+  "Gjonaj",
+  "Gjoka",
+  "Gjonbalaj",
+  "Hoxhaj",
+  "Hysenaj",
+  "Imeri",
+  "Isufaj",
+  "Jasharaj",
+  "Kadri",
+  "Kajtazi",
+  "Kallaba",
+  "Kameri",
+  "Kapllani",
+  "Kastrati",
+  "Kelmendi",
+  "Koci",
+  "Kola",
+  "Krasniqi",
+  "Kryeziu",
+  "Laj\xE7i",
+  "Leka",
+  "Lleshi",
+  "Lulaj",
+  "Lushaj",
+  "Maliqi",
+  "Markaj",
+  "Mehmetaj",
+  "Mema",
+  "Mhillaj",
+  "Miftari",
+  "Molla",
+  "Morina",
+  "Muci"
+];
+
+// resources/static_db/names/romanian_data.ts
+var ROMANIAN_MALE_FIRSTNAMES = [
+  "Andrei",
+  "Alexandru",
+  "David",
+  "Matei",
+  "\u0218tefan",
+  "Gabriel",
+  "Mihai",
+  "Ion",
+  "George",
+  "Cristian",
+  "Daniel",
+  "Florin",
+  "Adrian",
+  "Bogdan",
+  "C\u0103t\u0103lin",
+  "Darius",
+  "Emil",
+  "Filip",
+  "Gheorghe",
+  "Horia",
+  "Ionu\u021B",
+  "Iulian",
+  "Lauren\u021Biu",
+  "Lucian",
+  "Marius",
+  "Nicolae",
+  "Ovidiu",
+  "Paul",
+  "Radu",
+  "Robert",
+  "Sebastian",
+  "Tudor",
+  "Valentin",
+  "Victor",
+  "Vlad",
+  "Alex",
+  "Anton",
+  "Beniamin",
+  "Ciprian",
+  "Claudiu",
+  "Constantin",
+  "Cornel",
+  "Cosmin",
+  "Dorin",
+  "Drago\u0219",
+  "Dumitru",
+  "Eduard",
+  "Eugen",
+  "Flavius",
+  "Gelu",
+  "Hora\u021Biu",
+  "Ilie",
+  "Ionel",
+  "Iosif",
+  "Iustin",
+  "Ladislau",
+  "Liviu",
+  "Luca",
+  "Marcel",
+  "Marian",
+  "Marin",
+  "Mircea",
+  "Octavian",
+  "Petru",
+  "Rare\u0219",
+  "R\u0103zvan",
+  "Romeo",
+  "Sabin",
+  "Sorin",
+  "Teodor",
+  "Traian",
+  "Valeriu",
+  "Vasile",
+  "Viorel",
+  "Vladimir",
+  "Zoltan",
+  "Adi",
+  "Albert",
+  "Alexe",
+  "Alin",
+  "Amariei",
+  "Aurel",
+  "B\u0103nel",
+  "Barbu",
+  "Cezar",
+  "Codru\u021B",
+  "Corneliu",
+  "Costel",
+  "Cristi",
+  "Dan",
+  "D\u0103nu\u021B",
+  "Dinu",
+  "Dorel",
+  "Doru",
+  "Drago",
+  "Elvis",
+  "Emanoil",
+  "Emanuel",
+  "Eric",
+  "Eusebiu",
+  "F\u0103nel",
+  "Felix",
+  "Florentin",
+  "Francisc",
+  "Gabi",
+  "Gheorghi\u021B\u0103",
+  "Grigore",
+  "Haralamb",
+  "Iancu",
+  "Ieronim",
+  "Igor",
+  "Ioan",
+  "Ionu\u021B",
+  "Irimia",
+  "Iuliu",
+  "Jean",
+  "Lauren\u021Biu",
+  "Laz\u0103r",
+  "Leonard",
+  "Lic\u0103",
+  "Lorin",
+  "M\u0103d\u0103lin",
+  "Manole",
+  "Mihail",
+  "Miron",
+  "Mitic\u0103",
+  "Mitic\u0103",
+  "Mugur",
+  "Nae",
+  "Nelu",
+  "Nicu",
+  "Nicu\u0219or",
+  "Octav",
+  "Pavel",
+  "Petre",
+  "Petric\u0103",
+  "Radu",
+  "Rare\u0219",
+  "Raul",
+  "Remus",
+  "Romeo",
+  "Sandu",
+  "Sergiu",
+  "Silviu",
+  "Simion",
+  "Stelian",
+  "Tiberiu",
+  "Titu",
+  "Toma",
+  "Valer",
+  "Vasile",
+  "Vasilica",
+  "Victor",
+  "Viorel",
+  "Virgil",
+  "Vlad",
+  "Vladu",
+  "Zaharia",
+  "Zamfir",
+  "Zeno"
+];
+var ROMANIAN_MALE_LASTNAMES = [
+  "Popescu",
+  "Pop",
+  "Ionescu",
+  "Dumitrescu",
+  "Georgescu",
+  "Stan",
+  "Constantinescu",
+  "Stoica",
+  "Nicolae",
+  "Mihai",
+  "Cristea",
+  "Marin",
+  "Toma",
+  "Munteanu",
+  "Dinu",
+  "Dobre",
+  "Preda",
+  "Radu",
+  "Florea",
+  "Vasilescu",
+  "B\u0103lan",
+  "Barbu",
+  "C\xEErstea",
+  "Diaconu",
+  "Enache",
+  "Florescu",
+  "Gheorghe",
+  "Hanganu",
+  "Ilie",
+  "Iordache",
+  "Jianu",
+  "Lungu",
+  "Manea",
+  "Neagu",
+  "Oprea",
+  "P\u0103un",
+  "Petrescu",
+  "Rusu",
+  "Sava",
+  "Tudor",
+  "Ursu",
+  "Voicu",
+  "Zaharia",
+  "Alexandrescu",
+  "Andreescu",
+  "Antonescu",
+  "Ardelean",
+  "Badea",
+  "B\u0103descu",
+  "B\u0103nic\u0103",
+  "Bercea",
+  "B\xEErl\u0103deanu",
+  "Blaga",
+  "Boboc",
+  "Bogdan",
+  "Botezatu",
+  "Br\u0103nescu",
+  "Bratu",
+  "Bucur",
+  "Bunea",
+  "Cazacu",
+  "Cercel",
+  "Chiriac",
+  "Ciobanu",
+  "Cojocaru",
+  "Coman",
+  "Constantin",
+  "Cornea",
+  "Costache",
+  "Costea",
+  "Cre\u021Bu",
+  "Cristescu",
+  "Danciu",
+  "Dasc\u0103lu",
+  "David",
+  "Dinu",
+  "Dobre",
+  "Dobrescu",
+  "Dr\u0103gan",
+  "Dr\u0103ghici",
+  "Dumitru",
+  "Ene",
+  "Faur",
+  "Filip",
+  "Ganea",
+  "Gheorghiu",
+  "Grigorescu",
+  "Grigore",
+  "Groza",
+  "Hristea",
+  "Iancu",
+  "Iftimie",
+  "Ion",
+  "Ionescu",
+  "Ioni\u021B\u0103",
+  "Iordache",
+  "Iorga",
+  "Istrate",
+  "Ivan",
+  "Laz\u0103r",
+  "Luca",
+  "Lupu",
+  "M\u0103nescu",
+  "Manole",
+  "Marcu",
+  "Matei",
+  "Mih\u0103ilescu",
+  "Mih\u0103il\u0103",
+  "Miron",
+  "Mocanu",
+  "Moldovan",
+  "Moraru",
+  "Muntean",
+  "Mu\u0219at",
+  "Neac\u0219u",
+  "Necula",
+  "Negoescu",
+  "Nistor",
+  "Olteanu",
+  "Onea",
+  "Panaite",
+  "Pascu",
+  "P\u0103tra\u0219cu",
+  "Pavel",
+  "Petre",
+  "Petrov",
+  "Pintilie",
+  "Popa",
+  "Popovici",
+  "Predoiu",
+  "Prodan",
+  "Puiu",
+  "R\u0103ducanu",
+  "Roman",
+  "Rotaru",
+  "Sabin",
+  "S\xE2rbu",
+  "Sava",
+  "Simionescu",
+  "S\xEErbu",
+  "\u0218erban",
+  "\u0218tefan",
+  "\u0218tef\u0103nescu",
+  "T\u0103nase",
+  "T\u0103n\u0103sescu",
+  "Toma",
+  "Tudose",
+  "Ungureanu",
+  "V\u0103duva",
+  "Varga",
+  "Vasile",
+  "Vasiliu",
+  "Vintil\u0103",
+  "Vlad",
+  "Voinea",
+  "Z\u0103bav\u0103",
+  "Zamfir",
+  "Z\u0103rnescu",
+  "Zavala",
+  "Zlate"
+];
+
+// resources/static_db/names/baltic_data.ts
+var BALTIC_MALE_FIRSTNAMES = [
+  "Markas",
+  "Benas",
+  "Jonas",
+  "Motiejus",
+  "Matas",
+  "Nojus",
+  "Lukas",
+  "Jok\u016Bbas",
+  "Leonas",
+  "Adomas",
+  "Herkus",
+  "Dominykas",
+  "Augustas",
+  "Dovydas",
+  "Kajus",
+  "Mantas",
+  "Vytautas",
+  "Algirdas",
+  "Gediminas",
+  "Mindaugas",
+  "Tomas",
+  "Paulius",
+  "Andrius",
+  "Marius",
+  "Ar\u016Bnas",
+  "Darius",
+  "Gintaras",
+  "K\u0119stutis",
+  "Rimas",
+  "Saulius",
+  "Tauras",
+  "Vilius",
+  "\u017Dygimantas",
+  "Aivaras",
+  "Antanas",
+  "Art\u016Bras",
+  "Edvinas",
+  "Eimantas",
+  "Ignas",
+  "Justinas",
+  "Karolis",
+  "Linas",
+  "Naglis",
+  "Oskaras",
+  "Povilas",
+  "Raimundas",
+  "Rolandas",
+  "Simonas",
+  "Tadas",
+  "Vaidas",
+  "Vaidotas",
+  "Valdas",
+  "Vygantas",
+  "\u017Dilvinas",
+  "\u0104\u017Euolas",
+  "Rytis",
+  "Vytis",
+  "Girius",
+  "Rokas",
+  "Deividas",
+  "Olivers",
+  "Roberts",
+  "Marks",
+  "Gustavs",
+  "Em\u012Bls",
+  "Daniels",
+  "Markuss",
+  "Adri\u0101ns",
+  "K\u0101rlis",
+  "Aleksandrs",
+  "J\u0113kabs",
+  "Ernests",
+  "Ralfs",
+  "Dominiks",
+  "Tomass",
+  "Art\u016Brs",
+  "Ri\u010Dards",
+  "Maksims",
+  "Toms",
+  "Teodors",
+  "J\u0101nis",
+  "Reinis",
+  "Kristers",
+  "L\u016Bkass",
+  "Edgars",
+  "M\u0101ris",
+  "Aivars",
+  "Andris",
+  "Juris",
+  "Artjoms",
+  "Nikolajs",
+  "Oskars",
+  "Pauls",
+  "Rihards",
+  "Valters",
+  "Viktors",
+  "Zigurds",
+  "Dainis",
+  "Gatis",
+  "Ivars",
+  "Kaspars",
+  "M\u0101rti\u0146\u0161",
+  "P\u0113teris",
+  "Raitis",
+  "Sandis",
+  "Uldis",
+  "Viesturs",
+  "Ziedonis",
+  "Edijs",
+  "\u0122irts",
+  "Ingus",
+  "Kri\u0161j\u0101nis",
+  "Lauris",
+  "Mihails",
+  "Niks",
+  "R\u016Bdolfs",
+  "T\u0101lis",
+  "Agnis",
+  "Aigars",
+  "Ain\u0101rs",
+  "Aivis",
+  "Alberts",
+  "Andrejs",
+  "Georgs",
+  "Mark",
+  "Hugo",
+  "Robin",
+  "Miron",
+  "Lucas",
+  "Karl",
+  "Aron",
+  "Mattias",
+  "Sebastian",
+  "Oskar",
+  "Artur",
+  "Leon",
+  "Oliver",
+  "Rasmus",
+  "Kristofer",
+  "Henri",
+  "Nikita",
+  "Jakob",
+  "Martin",
+  "Aleksandr",
+  "Sergei",
+  "Vladimir",
+  "Andrei",
+  "Andres",
+  "Toomas",
+  "Margus",
+  "Indrek",
+  "Peeter",
+  "Priit",
+  "Marko",
+  "Jaan",
+  "J\xFCri",
+  "Mihkel",
+  "Mati",
+  "Ivo",
+  "Ott",
+  "Otto",
+  "Hendrik",
+  "Erik",
+  "Felix",
+  "Gregor",
+  "Johannes",
+  "Kaspar",
+  "Timur",
+  "Romet",
+  "Jasper",
+  "Joosep",
+  "Konrad",
+  "Mikk",
+  "Kristjan",
+  "Taavi",
+  "Siim",
+  "Rauno",
+  "Mart",
+  "Tanel",
+  "Kevin",
+  "Maksim",
+  "Dmitri",
+  "Igor",
+  "Anton",
+  "Deniss",
+  "Bruno",
+  "Feliks",
+  "Osvald",
+  "Aivar",
+  "Ain",
+  "Aleksei",
+  "Vlad",
+  "Yegor",
+  "Antero",
+  "Kaarel",
+  "Silvar",
+  "Ken",
+  "Paul",
+  "Jakob",
+  "Matilde"
+];
+var BALTIC_MALE_LASTNAMES = [
+  "Jankauskas",
+  "Kazlauskas",
+  "Petrauskas",
+  "Stankevi\u010Dius",
+  "Vasiliauskas",
+  "Butkus",
+  "Urbonas",
+  "Kavaliauskas",
+  "\u017Dukauskas",
+  "Bal\u010Di\u016Bnas",
+  "\u010Cerniauskas",
+  "Grigali\u016Bnas",
+  "Kairys",
+  "Paulauskas",
+  "Ramanauskas",
+  "Sakalauskas",
+  "Vaitkus",
+  "Zinkevi\u010Dius",
+  "Adomaitis",
+  "Baranauskas",
+  "Daug\u0117la",
+  "Gedvilas",
+  "Ivanauskas",
+  "Jonaitis",
+  "Klimas",
+  "Laurinavi\u010Dius",
+  "Ma\u017Eeika",
+  "Navickas",
+  "Petkevi\u010Dius",
+  "Rimkus",
+  "Simutis",
+  "Tamulevi\u010Dius",
+  "Valaitis",
+  "Venckus",
+  "\u017Demaitis",
+  "B\u0113rzi\u0146\u0161",
+  "Kalni\u0146\u0161",
+  "Ozoli\u0146\u0161",
+  "Jansons",
+  "Ozols",
+  "Liepi\u0146\u0161",
+  "Kr\u016Bmi\u0146\u0161",
+  "Balodis",
+  "Egl\u012Btis",
+  "Sili\u0146\u0161",
+  "Skuja",
+  "Strazdi\u0146\u0161",
+  "Rieksti\u0146\u0161",
+  "Saul\u012Btis",
+  "Priede",
+  "Vanags",
+  "Vilci\u0146\u0161",
+  "Za\u0137is",
+  "Puri\u0146\u0161",
+  "K\u013Cavi\u0146\u0161",
+  "\u0100boli\u0146\u0161",
+  "Kalni\u0146\u0161",
+  "Berzins",
+  "Ivanovs",
+  "Kalnins",
+  "Tamm",
+  "Saar",
+  "Sepp",
+  "Kask",
+  "M\xE4gi",
+  "Kukk",
+  "Rebane",
+  "Koppel",
+  "Karu",
+  "Ilves",
+  "Lepik",
+  "P\xE4rn",
+  "Kivi",
+  "Kuusk",
+  "J\xE4rv",
+  "P\xF5der",
+  "Lepp",
+  "Laas",
+  "Oja",
+  "Kangur",
+  "Raid",
+  "Roots",
+  "Sild",
+  "Toom",
+  "Vare",
+  "Aasm\xE4e",
+  "Allik",
+  "Eesti",
+  "Haas",
+  "J\xF5gi",
+  "Kallas",
+  "K\xF5iv",
+  "Lille",
+  "Mets",
+  "N\xF5mm",
+  "Puu",
+  "Raud",
+  "Soo",
+  "Tammik",
+  "Vesi",
+  "Aleksejev",
+  "Ivanov",
+  "Petrov",
+  "Smirnov",
+  "Popov",
+  "Sokolov",
+  "Morozov",
+  "Volkov",
+  "Lebedev",
+  "Kuznetsov",
+  "Novikov",
+  "Mihhailov",
+  "Fedorov",
+  "Stepanov",
+  "Nikolaev",
+  "Andreev",
+  "Petrenko",
+  "Kovalenko",
+  "Bondarenko",
+  "Tkachenko",
+  "Shevchenko",
+  "Kovalchuk",
+  "Melnyk",
+  "Kravchenko",
+  "Savchenko",
+  "Boyko",
+  "Marchenko",
+  "Lysenko",
+  "Koval",
+  "Pavlenko",
+  "Litvin",
+  "Zaitsev",
+  "Orlov",
+  "Kozlov",
+  "Novak",
+  "Kovalyov",
+  "Moroz",
+  "Pavlov",
+  "Semenov",
+  "Ermakov",
+  "Dmitriev",
+  "Antonov",
+  "Gusev",
+  "Tikhonov",
+  "Frolov",
+  "Sergeev",
+  "Romanov",
+  "Zaharov",
+  "Borisov",
+  "Maksimov",
+  "Sidorov",
+  "Osipov",
+  "Belov",
+  "Vorobyov",
+  "Solovyov",
+  "Kolesnikov",
+  "Karpov",
+  "Afanasiev",
+  "Vlasov",
+  "Maslov",
+  "Isakov",
+  "Tarasov",
+  "Martynov",
+  "Sviridov",
+  "Yakovlev",
+  "Polyakov",
+  "Ponomarev",
+  "Gorbunov",
+  "Kudryavtsev",
+  "Krylov",
+  "Belyaev",
+  "Bogdanov",
+  "Voronin",
+  "Vinogradov",
+  "Medvedev",
+  "Abramov",
+  "Krasnov",
+  "Sobolev",
+  "Titov",
+  "Makarov",
+  "Gavrilov",
+  "Antipov",
+  "Filippov",
+  "Grigoriev",
+  "Kuzmin",
+  "Davydov",
+  "Melnikov",
+  "Denisov",
+  "Gromov",
+  "Fomin",
+  "Klimov",
+  "Petukhov",
+  "Kochetkov",
+  "Gorbachev",
+  "Kryukov",
+  "Belyakov",
+  "Alekseev",
+  "Savin",
+  "Rybakov",
+  "Suvorov"
+];
+
+// resources/static_db/names/benelux_data.ts
+var BENELUX_MALE_FIRSTNAMES = [
+  "Lucas",
+  "Liam",
+  "Noah",
+  "Finn",
+  "Milan",
+  "Daan",
+  "Levi",
+  "Sem",
+  "Bram",
+  "Jesse",
+  "Thomas",
+  "Thijs",
+  "Jayden",
+  "Tim",
+  "Max",
+  "Ruben",
+  "Stijn",
+  "Seppe",
+  "Lars",
+  "Jasper",
+  "Mathias",
+  "Arthur",
+  "Vince",
+  "Quinten",
+  "Wout",
+  "Louis",
+  "Victor",
+  "Alexander",
+  "Elias",
+  "Hugo",
+  "Jack",
+  "James",
+  "Oliver",
+  "Benjamin",
+  "Henry",
+  "William",
+  "Samuel",
+  "Daniel",
+  "Matthew",
+  "Joseph",
+  "David",
+  "Michael",
+  "Andrew",
+  "Charles",
+  "Edward",
+  "George",
+  "Robert",
+  "John",
+  "Peter",
+  "Paul",
+  "Mark",
+  "Simon",
+  "Adam",
+  "Nathan",
+  "Ryan",
+  "Jake",
+  "Luke",
+  "Ethan",
+  "Oscar",
+  "Theo",
+  "Felix",
+  "Gabriel",
+  "Julian",
+  "Leo",
+  "Mason",
+  "Logan",
+  "Aiden",
+  "Jackson",
+  "Mateo",
+  "Luca",
+  "Jules",
+  "Louis",
+  "Victor",
+  "Emile",
+  "Gustave",
+  "Henri",
+  "Antoine",
+  "Nicolas",
+  "Pierre",
+  "Jean",
+  "Fran\xE7ois",
+  "Philippe",
+  "Laurent",
+  "Mathieu",
+  "Alexandre",
+  "S\xE9bastien",
+  "Baptiste",
+  "Cl\xE9ment",
+  "Th\xE9o",
+  "Rapha\xEBl",
+  "Hugo",
+  "L\xE9on",
+  "Marius",
+  "\xC9tienne",
+  "Charles",
+  "Auguste",
+  "Marcel",
+  "Ren\xE9",
+  "Georges",
+  "Albert",
+  "Maurice",
+  "\xC9mile",
+  "Jules",
+  "Alfred",
+  "Gaston",
+  "Fernand",
+  "Lucien",
+  "Raymond",
+  "Andr\xE9",
+  "Roger",
+  "Bernard",
+  "Michel",
+  "Jacques",
+  "Daniel",
+  "Patrick",
+  "Christian",
+  "Didier",
+  "Olivier",
+  "Christophe",
+  "Laurent",
+  "St\xE9phane",
+  "Philippe",
+  "Nicolas",
+  "Julien",
+  "S\xE9bastien",
+  "Fr\xE9d\xE9ric",
+  "Thomas",
+  "Antoine",
+  "Guillaume",
+  "Vincent",
+  "Benjamin",
+  "Samuel",
+  "Alexis",
+  "Mathis",
+  "Evan",
+  "Lukas",
+  "Robin",
+  "Jonas",
+  "Senne",
+  "Brent",
+  "Jelle",
+  "Kobe",
+  "Niels",
+  "Jens",
+  "Maarten",
+  "Pieter",
+  "Sander",
+  "Bas",
+  "Joost",
+  "Dirk",
+  "Henk",
+  "Jan",
+  "Kees",
+  "Gert",
+  "Hans",
+  "Peter",
+  "Rob",
+  "Tom",
+  "Willem",
+  "Bart",
+  "Dennis",
+  "Erik",
+  "Frank",
+  "Gerard",
+  "Herman",
+  "Johan",
+  "Klaas",
+  "Marcel",
+  "Martijn",
+  "Nico",
+  "Oscar",
+  "Paul",
+  "Quinten",
+  "Rein",
+  "Stefan",
+  "Theo",
+  "Uwe",
+  "Victor",
+  "Wim",
+  "Yves",
+  "Zeger",
+  "Arjen",
+  "Boudewijn",
+  "Cas",
+  "Diederik",
+  "Ewout",
+  "Floris",
+  "Gijs",
+  "Hidde",
+  "Ivo",
+  "Joris",
+  "Koen",
+  "Lennart",
+  "Mees",
+  "Noud",
+  "Olaf",
+  "Pepijn",
+  "Quinten",
+  "Rutger",
+  "Siem",
+  "Teun",
+  "Ulysse",
+  "Viktor",
+  "Wouter",
+  "Xander",
+  "Yannick",
+  "Zion"
+];
+var BENELUX_MALE_LASTNAMES = [
+  "Janssens",
+  "Peeters",
+  "Maes",
+  "Jacobs",
+  "Mertens",
+  "Willems",
+  "Claes",
+  "Goossens",
+  "Vermeulen",
+  "De Smet",
+  "Smets",
+  "Vandermeulen",
+  "De Clercq",
+  "Desmet",
+  "Vermeersch",
+  "Michiels",
+  "Vandenberghe",
+  "De Vos",
+  "Declercq",
+  "Wouters",
+  "Coppens",
+  "Verstraeten",
+  "Vanhove",
+  "Verhelst",
+  "Lemmens",
+  "Stevens",
+  "Pauwels",
+  "Segers",
+  "Hermans",
+  "Martens",
+  "De Bruyn",
+  "De Jong",
+  "Janssen",
+  "de Vries",
+  "Bakker",
+  "Jansen",
+  "Visser",
+  "Smit",
+  "Meijer",
+  "de Boer",
+  "Mulder",
+  "de Groot",
+  "Bos",
+  "Vos",
+  "Peters",
+  "Hendriks",
+  "van Dijk",
+  "Dekker",
+  "van Leeuwen",
+  "Brouwer",
+  "de Wit",
+  "Dijkstra",
+  "Smits",
+  "de Graaf",
+  "van der Meer",
+  "van den Berg",
+  "van der Linden",
+  "van der Heijden",
+  "van der Veen",
+  "van den Heuvel",
+  "van der Velden",
+  "van den Broek",
+  "van der Hoek",
+  "van der Laan",
+  "van der Wal",
+  "van der Molen",
+  "van der Horst",
+  "van der Meulen",
+  "van der Sluis",
+  "van der Woude",
+  "van der Zee",
+  "van der Poel",
+  "van der Voort",
+  "van der Werf",
+  "van der Zwaan",
+  "van der Aa",
+  "van der Baan",
+  "van der Burg",
+  "van der Does",
+  "van der Eijk",
+  "van der Gouw",
+  "van der Hoeven",
+  "van der Kamp",
+  "van der Kooij",
+  "van der Kroon",
+  "van der Leek",
+  "van der Linden",
+  "van der Lugt",
+  "van der Maat",
+  "van der Meij",
+  "van der Ploeg",
+  "van der Putten",
+  "van der Sande",
+  "van der Schoot",
+  "van der Steen",
+  "van der Veer",
+  "van der Vliet",
+  "van der Voort",
+  "van der Walle",
+  "van der Weide",
+  "van der Wiel",
+  "van der Wijk",
+  "van der Wilt",
+  "van der Wolf",
+  "van der Zanden",
+  "van Dijk",
+  "van Doorn",
+  "van Egmond",
+  "van Gelder",
+  "van Gent",
+  "van Gogh",
+  "van Houten",
+  "van Kessel",
+  "van Loon",
+  "van Nistelrooy",
+  "van Oosterom",
+  "van Rijn",
+  "van Rooij",
+  "van Rossum",
+  "van Schaik",
+  "van Schijndel",
+  "van Veen",
+  "van Vliet",
+  "van Wijk",
+  "van Wingerden",
+  "van Zanten",
+  "Verbeek",
+  "Verhoeven",
+  "Vermeer",
+  "Verschoor",
+  "Vink",
+  "Visser",
+  "Vliet",
+  "Vos",
+  "Willems",
+  "Wouters",
+  "Zuidema",
+  "Zwart",
+  "Aerts",
+  "Baert",
+  "Bogaert",
+  "Bonte",
+  "Bossuyt",
+  "Bourgeois",
+  "Braeckman",
+  "Bracke",
+  "Callens",
+  "Callewaert",
+  "Christiaens",
+  "Coene",
+  "Cools",
+  "Cornelis",
+  "Daems",
+  "Dauwe",
+  "De Backer",
+  "De Baets",
+  "De Block",
+  "De Boeck",
+  "De Bondt",
+  "De Bruyne",
+  "De Coninck",
+  "De Corte",
+  "De Decker",
+  "De Groote",
+  "De Haes",
+  "De Herdt",
+  "De Keyser",
+  "De Maeyer",
+  "De Meyer",
+  "De Moor",
+  "De Neve",
+  "De Pauw",
+  "De Ridder",
+  "De Roeck",
+  "De Sutter",
+  "De Vriendt",
+  "De Wilde",
+  "Decoster",
+  "Delaere",
+  "Demey",
+  "Deprez",
+  "Dierickx",
+  "Dirkx",
+  "Dumont",
+  "Dupont",
+  "Eeckhout",
+  "Geerts",
+  "Gielen",
+  "Govaerts",
+  "Heylen",
+  "Hoste",
+  "Huybrechts",
+  "Joris",
+  "Lauwers",
+  "Lef\xE8vre",
+  "Lemaire",
+  "Luyten",
+  "Maertens",
+  "Matthys",
+  "Meeus",
+  "Meyers",
+  "Moens",
+  "Moreau",
+  "Naessens",
+  "Nijs",
+  "Nuyts",
+  "Opsomer",
+  "Pauwels",
+  "Peeters",
+  "Penninckx",
+  "Pieters",
+  "Piron",
+  "Rijckaert",
+  "Roels",
+  "Rombouts",
+  "Saeys",
+  "Schoenmakers",
+  "Smet",
+  "Smolders",
+  "Steen",
+  "Steyaert",
+  "Stroobants",
+  "Swinnen",
+  "Thijs",
+  "Timmermans",
+  "Van Acker",
+  "Van Balen",
+  "Van Camp",
+  "Van Damme",
+  "Van de Velde",
+  "Van den Bossche",
+  "Van den Broeck",
+  "Van den Eynde",
+  "Van der Auwera",
+  "Van Hecke",
+  "Van Hoof",
+  "Van Hove",
+  "Van Impe",
+  "Van Looy",
+  "Van Meir",
+  "Van Neste",
+  "Van Nieuwenhuyse",
+  "Van Nuffel",
+  "Van Rompaey",
+  "Van Roy",
+  "Van Steen",
+  "Van Waes",
+  "Van Wijnsberghe",
+  "Vanden Abeele",
+  "Vandenbroucke",
+  "Vanderlinden",
+  "Vanhoutte",
+  "Verbruggen",
+  "Vercauteren",
+  "Verhaegen",
+  "Verhaeghe",
+  "Verheyden",
+  "Vermeiren",
+  "Verschueren",
+  "Vervoort",
+  "Veys",
+  "Vrancken",
+  "Wauters",
+  "Willems",
+  "Wuyts",
+  "Zaman"
+];
+
+// resources/static_db/names/hungarian_data.ts
+var HUNGARIAN_MALE_FIRSTNAMES = [
+  "Bence",
+  "M\xE1t\xE9",
+  "Levente",
+  "D\xE1vid",
+  "\xC1d\xE1m",
+  "Bal\xE1zs",
+  "Krist\xF3f",
+  "Tam\xE1s",
+  "Gerg\u0151",
+  "Attila",
+  "Zolt\xE1n",
+  "P\xE9ter",
+  "L\xE1szl\xF3",
+  "Istv\xE1n",
+  "J\xE1nos",
+  "G\xE1bor",
+  "Andr\xE1s",
+  "Ferenc",
+  "S\xE1ndor",
+  "J\xF3zsef",
+  "Mih\xE1ly",
+  "Kriszti\xE1n",
+  "Csaba",
+  "Zsolt",
+  "Imre",
+  "Gy\xF6rgy",
+  "Viktor",
+  "M\xE1rk",
+  "\xC1ron",
+  "Benedek",
+  "Botond",
+  "D\xE1niel",
+  "Dominik",
+  "Endre",
+  "Erik",
+  "Gell\xE9rt",
+  "Henrik",
+  "Hubert",
+  "Ign\xE1c",
+  "Jen\u0151",
+  "K\xE1lm\xE1n",
+  "L\xF3r\xE1nt",
+  "Mikl\xF3s",
+  "N\xE1ndor",
+  "Oliv\xE9r",
+  "Patrik",
+  "Rich\xE1rd",
+  "R\xF3bert",
+  "Roland",
+  "Rudolf",
+  "Soma",
+  "Szabolcs",
+  "Szil\xE1rd",
+  "Tibor",
+  "Vencel",
+  "Vilmos",
+  "Zsombor",
+  "\xC1bel",
+  "\xC1kos",
+  "\xC1rmin",
+  "Barnab\xE1s",
+  "Bertalan",
+  "Boldizs\xE1r",
+  "D\xE9nes",
+  "Dezs\u0151",
+  "Elek",
+  "Elem\xE9r",
+  "Emil",
+  "Ern\u0151",
+  "Farkas",
+  "F\xFCl\xF6p",
+  "Guszt\xE1v",
+  "Gyula",
+  "Hug\xF3",
+  "Iv\xE1n",
+  "J\xE1cint",
+  "K\xE1roly",
+  "Korn\xE9l",
+  "Lajos",
+  "Lip\xF3t",
+  "M\xE1ty\xE1s",
+  "Mih\xE1ly",
+  "M\xF3zes",
+  "No\xE9",
+  "\xD6d\xF6n",
+  "P\xE1l",
+  "Pongr\xE1c",
+  "Rafael",
+  "Rezs\u0151",
+  "Sebesty\xE9n",
+  "Simon",
+  "Szilveszter",
+  "Tivadar",
+  "Vendel",
+  "Vince",
+  "Z\xE9n\xF3",
+  "Zsigmond",
+  "\xC1goston",
+  "Alad\xE1r",
+  "Alfr\xE9d",
+  "Antal",
+  "\xC1rp\xE1d",
+  "B\xE9la",
+  "Bertold",
+  "B\xE9res",
+  "Csongor",
+  "Don\xE1t",
+  "Ede",
+  "Edv\xE1rd",
+  "Egon",
+  "Elek",
+  "Ervin",
+  "F\xE1bi\xE1n",
+  "F\xE9lix",
+  "Frigyes",
+  "G\xE9za",
+  "Gy\u0151z\u0151",
+  "Hajnalka",
+  "Hektor",
+  "Hug\xF3",
+  "Idrisz",
+  "Ill\xE9s",
+  "Imre",
+  "Istv\xE1n",
+  "Jakab",
+  "J\xE1nos",
+  "J\xF3zsef",
+  "Judit",
+  "Kelemen",
+  "Kende",
+  "Kereszt\xE9ly",
+  "Korn\xE9l",
+  "L\xE1szl\xF3",
+  "L\xE9n\xE1rd",
+  "L\xF3r\xE1nt",
+  "M\xE1rton",
+  "M\xE1t\xE9",
+  "Menyh\xE9rt",
+  "Mih\xE1ly",
+  "Mikl\xF3s",
+  "M\xF3ric",
+  "N\xE1ndor",
+  "Norbert",
+  "\xD6rs",
+  "P\xE1l",
+  "P\xE9ter",
+  "R\xF3bert",
+  "S\xE1muel",
+  "Seb\u0151",
+  "Sebesty\xE9n",
+  "Simon",
+  "Szabolcs",
+  "Szent",
+  "Tam\xE1s",
+  "Tibor",
+  "Tiham\xE9r",
+  "Vajk",
+  "Val\xE9r",
+  "Vencel",
+  "Vidor",
+  "Viktor",
+  "Vilmos",
+  "Vince",
+  "Zolt\xE1n",
+  "Zsombor",
+  "Zsolt"
+];
+var HUNGARIAN_MALE_LASTNAMES = [
+  "Nagy",
+  "Kov\xE1cs",
+  "T\xF3th",
+  "Szab\xF3",
+  "Horv\xE1th",
+  "Varga",
+  "Kiss",
+  "Moln\xE1r",
+  "N\xE9meth",
+  "Farkas",
+  "Papp",
+  "Tak\xE1cs",
+  "Juh\xE1sz",
+  "Lakatos",
+  "M\xE9sz\xE1ros",
+  "Simon",
+  "R\xE1cz",
+  "Balogh",
+  "S\xE1ndor",
+  "Fekete",
+  "Kis",
+  "Szil\xE1gyi",
+  "Pint\xE9r",
+  "Katona",
+  "G\xE1l",
+  "B\xEDr\xF3",
+  "Kir\xE1ly",
+  "L\xE1szl\xF3",
+  "Jakab",
+  "Bal\xE1zs",
+  "Fodor",
+  "V\xE1radi",
+  "Antal",
+  "Borb\xE9ly",
+  "Somogyi",
+  "Heged\u0171s",
+  "Ill\xE9s",
+  "Guly\xE1s",
+  "Kocsis",
+  "Veres",
+  "Barta",
+  "Boros",
+  "Csonka",
+  "De\xE1k",
+  "Dud\xE1s",
+  "Farag\xF3",
+  "Feh\xE9r",
+  "G\xE1sp\xE1r",
+  "Hal\xE1sz",
+  "Heged\xFCs",
+  "Herczeg",
+  "Husz\xE1r",
+  "K\xE1lm\xE1n",
+  "Kelemen",
+  "Kerekes",
+  "Kert\xE9sz",
+  "Kocsis",
+  "Kov\xE1cs",
+  "Lengyel",
+  "Luk\xE1cs",
+  "Magyar",
+  "M\xE1rton",
+  "M\xE1t\xE9",
+  "Mih\xE1ly",
+  "Mikl\xF3s",
+  "Nagy",
+  "N\xE9meth",
+  "Nov\xE1k",
+  "Ol\xE1h",
+  "Orb\xE1n",
+  "Orosz",
+  "P\xE1l",
+  "P\xE1sztor",
+  "Pataki",
+  "P\xE9ter",
+  "Pint\xE9r",
+  "Popovics",
+  "R\xE1cz",
+  "R\xE1kosi",
+  "S\xE1rk\xF6zi",
+  "Sipos",
+  "So\xF3s",
+  "S\xF6r\xF6s",
+  "Szab\xF3",
+  "Szalai",
+  "Szekeres",
+  "Szil\xE1gyi",
+  "Sz\u0171cs",
+  "Tam\xE1s",
+  "T\xF3th",
+  "T\xF6r\xF6k",
+  "Varga",
+  "V\xE1radi",
+  "Vass",
+  "V\xE9gh",
+  "Vincze",
+  "Vir\xE1g",
+  "Zal\xE1n",
+  "Z\xE1mbori",
+  "Zolt\xE1n",
+  "\xC1cs",
+  "\xC1d\xE1m",
+  "\xC1goston",
+  "Bajnok",
+  "Bakos",
+  "B\xE1lint",
+  "B\xE1n",
+  "Barna",
+  "Barta",
+  "Bart\xF3k",
+  "Beke",
+  "Bencsik",
+  "Bende",
+  "Berecz",
+  "Bodn\xE1r",
+  "Bogn\xE1r",
+  "Borb\xE1s",
+  "Boros",
+  "Budai",
+  "Buz\xE1s",
+  "Cseh",
+  "Csik\xF3s",
+  "Csizmadia",
+  "Csord\xE1s",
+  "Dank\xF3",
+  "D\xE1vid",
+  "D\xE9nes",
+  "Dobos",
+  "Domonkos",
+  "Dud\xE1s",
+  "Egresi",
+  "Egyed",
+  "F\xE1bi\xE1n",
+  "Fazekas",
+  "Fekete",
+  "Fodor",
+  "F\xF6ldi",
+  "G\xE1bor",
+  "G\xE1l",
+  "G\xE1sp\xE1r",
+  "Gergely",
+  "Guly\xE1s",
+  "Gy\u0151ri",
+  "Hajdu",
+  "Hal\xE1sz",
+  "Heged\u0171s",
+  "Herczeg",
+  "Holl\xF3",
+  "Horv\xE1th",
+  "Ill\xE9s",
+  "Imre",
+  "Jakab",
+  "Juh\xE1sz",
+  "K\xE1d\xE1r",
+  "K\xE1lm\xE1n",
+  "Kelemen",
+  "Kerekes",
+  "Kir\xE1ly",
+  "Kiss",
+  "Kocsis",
+  "Kov\xE1cs",
+  "Kozma",
+  "Kuti",
+  "Lakatos",
+  "L\xE1szl\xF3",
+  "Lengyel",
+  "Lipt\xE1k",
+  "Luk\xE1cs",
+  "Magyar",
+  "M\xE1rkus",
+  "M\xE1t\xE9",
+  "M\xE9sz\xE1ros",
+  "Moln\xE1r",
+  "Nagy",
+  "N\xE9meth",
+  "Nov\xE1k",
+  "Ol\xE1h",
+  "Orb\xE1n",
+  "Orosz",
+  "P\xE1l",
+  "Papp",
+  "Pataki",
+  "Pint\xE9r",
+  "R\xE1cz",
+  "R\xE1k\xF3czi",
+  "S\xE1ndor",
+  "Simon",
+  "Somogyi",
+  "So\xF3s",
+  "Szab\xF3",
+  "Szalai",
+  "Szekeres",
+  "Szil\xE1gyi",
+  "Sz\u0171cs",
+  "Tak\xE1cs",
+  "Tam\xE1s",
+  "T\xF3th",
+  "T\xF6r\xF6k",
+  "Varga",
+  "Vass",
+  "Veres",
+  "Vincze",
+  "Vir\xE1g",
+  "Zolt\xE1n",
+  "Zsigmond"
+];
+
+// resources/static_db/names/maltese_data.ts
+var MALTESE_MALE_FIRSTNAMES = [
+  "Joseph",
+  "John",
+  "Mark",
+  "Mario",
+  "David",
+  "Paul",
+  "Michael",
+  "Anthony",
+  "Luke",
+  "Luca",
+  "Matthew",
+  "Jacob",
+  "Zachary",
+  "Nathan",
+  "Andrew",
+  "Andreas",
+  "Andre",
+  "Andy",
+  "Samuel",
+  "Adam",
+  "Noah",
+  "Liam",
+  "Oliver",
+  "Benjamin",
+  "Daniel",
+  "Gabriel",
+  "Isaac",
+  "Julian",
+  "Thomas",
+  "Jake",
+  "Anton",
+  "An\u0121lu",
+  "Alessandru",
+  "Alfred",
+  "Alwi\u0121i",
+  "Andrija",
+  "Antnin",
+  "Arturo",
+  "Baldassar",
+  "Bernard",
+  "Bertu",
+  "\u010Aensu",
+  "\u010Aikku",
+  "\u010Aharlu",
+  "Dumniku",
+  "Dwardu",
+  "Duminku",
+  "Fran\u0121isk",
+  "\u0120akbu",
+  "\u0120akobb",
+  "\u0120anni",
+  "\u0120or\u0121",
+  "\u0120u\u017Ceppi",
+  "\u0120u\u017C\xE8",
+  "\u0120wann",
+  "\u0120wanni",
+  "Girgor",
+  "Indri",
+  "Karmenu",
+  "Lawrenz",
+  "Leli",
+  "Manwel",
+  "Mikiel",
+  "Ninu",
+  "Pawlu",
+  "Pinu",
+  "Publiju",
+  "Roccu",
+  "Salvu",
+  "Saverju",
+  "Spiru",
+  "Stiefnu",
+  "Tumas",
+  "Wenzu",
+  "Wistin",
+  "Xandru",
+  "Xmun",
+  "\u017Baren",
+  "Aaron",
+  "Aiden",
+  "Alex",
+  "Angelo",
+  "Carmel",
+  "Charles",
+  "Christopher",
+  "Dominic",
+  "Edward",
+  "Emanuel",
+  "Emmanuel",
+  "Francis",
+  "George",
+  "Henry",
+  "James",
+  "Lawrence",
+  "Louis",
+  "Nicholas",
+  "Patrick",
+  "Philip",
+  "Raymond",
+  "Robert",
+  "Stephen",
+  "Victor",
+  "Vincent",
+  "William"
+];
+var MALTESE_MALE_LASTNAMES = [
+  "Borg",
+  "Vella",
+  "Camilleri",
+  "Farrugia",
+  "Zammit",
+  "Galea",
+  "Micallef",
+  "Grech",
+  "Attard",
+  "Spiteri",
+  "Azzopardi",
+  "Cassar",
+  "Agius",
+  "Caruana",
+  "Mifsud",
+  "Pace",
+  "Galea",
+  "Xuereb",
+  "Buttigieg",
+  "Calleja",
+  "Gatt",
+  "Mallia",
+  "Mizzi",
+  "Busuttil",
+  "Falzon",
+  "Cumbo",
+  "Brincat",
+  "Cauchi",
+  "Zahra",
+  "Ellul",
+  "Xerri",
+  "Teuma",
+  "Stivala",
+  "Ciappara",
+  "Fiteni",
+  "Cini",
+  "Galdes",
+  "Gristi",
+  "Parnis",
+  "Xiriha",
+  "Abdilla",
+  "Abela",
+  "Azzopardi",
+  "Bajada",
+  "Baldacchino",
+  "Bonello",
+  "Bondin",
+  "Bonici",
+  "Borg",
+  "Briffa",
+  "Busietta",
+  "Cachia",
+  "Calafato",
+  "Carabott",
+  "Cardona",
+  "Cassar",
+  "Caucci",
+  "Chetcuti",
+  "Chircop",
+  "Cini",
+  "Cortis",
+  "Cuschieri",
+  "Cutajar",
+  "Dalli",
+  "Debono",
+  "Degiorgio",
+  "Delia",
+  "Dimech",
+  "Dingli",
+  "Doublet",
+  "Ellul",
+  "Farrugia",
+  "Fenech",
+  "Ferriggi",
+  "Formosa",
+  "Frendo",
+  "Galea",
+  "Gatt",
+  "Grech",
+  "Grima",
+  "Gauci",
+  "Haber",
+  "Hili",
+  "Lanzon",
+  "Lia",
+  "Magri",
+  "Mallia",
+  "Mamo",
+  "Mangion",
+  "Mercieca",
+  "Micallef",
+  "Mifsud",
+  "Mizzi",
+  "Muscat",
+  "Pace",
+  "Pisani",
+  "Portelli",
+  "Psaila",
+  "Pullicino",
+  "Rapa",
+  "Rizzo",
+  "Saliba",
+  "Sammut",
+  "Sant",
+  "Sciberras",
+  "Scicluna",
+  "Serracino",
+  "Sultana",
+  "Tabone",
+  "Tanti",
+  "Tonna",
+  "Vassallo",
+  "Vella",
+  "Xuereb",
+  "Zahra",
+  "Zammit",
+  "Zarb"
+];
+
+// resources/static_db/names/israeli_data.ts
+var ISRAELI_MALE_FIRSTNAMES = [
+  "David",
+  "Yosef",
+  "Moshe",
+  "Avraham",
+  "Yitzhak",
+  "Yaakov",
+  "Aharon",
+  "Yehuda",
+  "Shimon",
+  "Levi",
+  "Yehoshua",
+  "Yonatan",
+  "Daniel",
+  "Eitan",
+  "Noam",
+  "Ariel",
+  "Omer",
+  "Itay",
+  "Uri",
+  "Nadav",
+  "Eyal",
+  "Gilad",
+  "Amir",
+  "Barak",
+  "Ido",
+  "Liran",
+  "Shahar",
+  "Tal",
+  "Ron",
+  "Matan",
+  "Shai",
+  "Nimrod",
+  "Ziv",
+  "Ori",
+  "Alon",
+  "Dvir",
+  "Ofir",
+  "Roi",
+  "Guy",
+  "Ben",
+  "Yair",
+  "Asaf",
+  "Tomer",
+  "Yoav",
+  "Yuval",
+  "Erez",
+  "Hillel",
+  "Boaz",
+  "Elad",
+  "Gal",
+  "Itamar",
+  "Lior",
+  "Nir",
+  "Ran",
+  "Shaked",
+  "Shlomi",
+  "Sagi",
+  "Yogev",
+  "Yotam",
+  "Ze'ev",
+  "Adam",
+  "Aviv",
+  "Bar",
+  "Doron",
+  "Eli",
+  "Gideon",
+  "Hadar",
+  "Ilan",
+  "Kfir",
+  "Lev",
+  "Maor",
+  "Natan",
+  "Omri",
+  "Peleg",
+  "Raz",
+  "Shmuel",
+  "Tzur",
+  "Udi",
+  "Vered",
+  "Yarden",
+  "Zohar",
+  "Amit",
+  "Benny",
+  "Carmel",
+  "Dani",
+  "Eden",
+  "Elisha",
+  "Eran",
+  "Gadi",
+  "Haim",
+  "Imri",
+  "Jared",
+  "Kobi",
+  "Lavi",
+  "Meir",
+  "Naor",
+  "Oded",
+  "Paz",
+  "Rafi",
+  "Sagiv",
+  "Shimon",
+  "Tali",
+  "Uriel",
+  "Yehiel",
+  "Zack",
+  "Aaron",
+  "Abraham",
+  "Adi",
+  "Akiva",
+  "Amos",
+  "Avi",
+  "Aviel",
+  "Aviad",
+  "Avishai",
+  "Avner",
+  "Ayal",
+  "Baruch",
+  "Ben Zion",
+  "Binyamin",
+  "Chaim",
+  "Dovid",
+  "Dov",
+  "Efraim",
+  "Ehud",
+  "Elazar",
+  "Eliav",
+  "Eliyahu",
+  "Ephraim",
+  "Ezra",
+  "Gershon",
+  "Hagai",
+  "Hanan",
+  "Harel",
+  "Hashim",
+  "Hershel",
+  "Hillel",
+  "Isaac",
+  "Ishai",
+  "Israel",
+  "Itzik",
+  "Jacob",
+  "Jonathan",
+  "Judah",
+  "Kahana",
+  "Koby",
+  "Leib",
+  "Menashe",
+  "Menachem",
+  "Mordechai",
+  "Moti",
+  "Nachman",
+  "Naftali",
+  "Netanel",
+  "Nissim",
+  "Noach",
+  "Noy",
+  "Oren",
+  "Pinchas",
+  "Rafael",
+  "Reuven",
+  "Ronni",
+  "Rotem",
+  "Saul",
+  "Shalom",
+  "Shaul",
+  "Shlomo",
+  "Shmuel",
+  "Shneur",
+  "Shraga",
+  "Shuki",
+  "Simcha",
+  "Solomon",
+  "Tanhum",
+  "Tuvia",
+  "Tzvi",
+  "Uzi",
+  "Yaacov",
+  "Yanky",
+  "Yaron",
+  "Yehoshua",
+  "Yehuda",
+  "Yishai",
+  "Yisrael",
+  "Yitzchak",
+  "Yochanan",
+  "Yoni",
+  "Yossi",
+  "Zalman",
+  "Zev",
+  "Zvi",
+  "Arik",
+  "Asher",
+  "Avihu",
+  "Avraham",
+  "Benaya",
+  "Binyamin",
+  "Chanan",
+  "Daniyel",
+  "Eitan",
+  "Elchanan",
+  "Eli",
+  "Elyakim",
+  "Emanuel",
+  "Erez",
+  "Gavriel",
+  "Gershon",
+  "Haim",
+  "Hanan",
+  "Hod",
+  "Idan",
+  "Ilay",
+  "Inbar",
+  "Itay",
+  "Keren",
+  "Liel",
+  "Matityahu",
+  "Meidad",
+  "Menachem",
+  "Michal",
+  "Mordechai",
+  "Moshe",
+  "Nadav",
+  "Naftali",
+  "Netanel",
+  "Nir",
+  "Noam",
+  "Ofer",
+  "Ophir",
+  "Ori",
+  "Orr",
+  "Oshri",
+  "Otniel",
+  "Oz",
+  "Pinchas",
+  "Rami",
+  "Ronen",
+  "Rotem",
+  "Roy",
+  "Shai",
+  "Shalom",
+  "Shaul",
+  "Shay",
+  "Shimon",
+  "Shlomi",
+  "Shmuel",
+  "Shoham",
+  "Shuki",
+  "Tal",
+  "Tamir",
+  "Tomer",
+  "Tzion",
+  "Uriel",
+  "Yair",
+  "Yaki",
+  "Yaron",
+  "Yehiel",
+  "Yehonatan",
+  "Yehoshua",
+  "Yehuda",
+  "Yishai",
+  "Yitzhak",
+  "Yoav",
+  "Yonatan",
+  "Yosef",
+  "Yossi",
+  "Yuval",
+  "Ziv"
+];
+var ISRAELI_MALE_LASTNAMES = [
+  "Cohen",
+  "Levy",
+  "Mizrachi",
+  "Peretz",
+  "Bitton",
+  "Azoulay",
+  "David",
+  "Mor",
+  "Klein",
+  "Friedman",
+  "Goldberg",
+  "Levin",
+  "Shapiro",
+  "Rosenberg",
+  "Weiss",
+  "Roth",
+  "Kaplan",
+  "Abramov",
+  "Katz",
+  "Ben David",
+  "Ben Ezra",
+  "Ben Zion",
+  "Ben Yosef",
+  "Ben Ari",
+  "Ben Moshe",
+  "Ben Shimon",
+  "Ben Gurion",
+  "Dayan",
+  "Elias",
+  "Farkash",
+  "Golan",
+  "Halevy",
+  "Harari",
+  "Hasson",
+  "Hayun",
+  "Herman",
+  "Hoffman",
+  "Israeli",
+  "Kadosh",
+  "Kahlon",
+  "Kedem",
+  "Keren",
+  "Lahav",
+  "Landau",
+  "Lavi",
+  "Lazar",
+  "Levi",
+  "Maman",
+  "Maoz",
+  "Marom",
+  "Mashiach",
+  "Mizrahi",
+  "Morag",
+  "Moshe",
+  "Nagar",
+  "Nahum",
+  "Navon",
+  "Neeman",
+  "Nissan",
+  "Ohana",
+  "Oren",
+  "Ovadia",
+  "Paz",
+  "Peled",
+  "Perez",
+  "Porat",
+  "Rabin",
+  "Rabinovich",
+  "Rahamim",
+  "Ram",
+  "Rapaport",
+  "Ravid",
+  "Raz",
+  "Regev",
+  "Reuven",
+  "Romano",
+  "Rosen",
+  "Rotem",
+  "Saada",
+  "Sabag",
+  "Saban",
+  "Sagi",
+  "Salomon",
+  "Sasson",
+  "Schwartz",
+  "Shalom",
+  "Shamir",
+  "Shapira",
+  "Sharon",
+  "Shemesh",
+  "Shilo",
+  "Shimon",
+  "Shoham",
+  "Shulman",
+  "Silver",
+  "Sinai",
+  "Stern",
+  "Suissa",
+  "Tadmor",
+  "Tal",
+  "Tamir",
+  "Tevet",
+  "Toledano",
+  "Tzur",
+  "Vaknin",
+  "Wasser",
+  "Weinstein",
+  "Yadin",
+  "Yahav",
+  "Yarkoni",
+  "Yitzhaki",
+  "Yosef",
+  "Zadok",
+  "Zamir",
+  "Zohar",
+  "Zuckerman",
+  "Abadi",
+  "Abecassis",
+  "Abergel",
+  "Abulafia",
+  "Adler",
+  "Aharoni",
+  "Almog",
+  "Amar",
+  "Amram",
+  "Arad",
+  "Arbel",
+  "Ashkenazi",
+  "Avidan",
+  "Avital",
+  "Ayalon",
+  "Azaria",
+  "Barak",
+  "Bar Ilan",
+  "Bar Lev",
+  "Barak",
+  "Bass",
+  "Ben Artzi",
+  "Ben Haim",
+  "Ben Harush",
+  "Ben Ishay",
+  "Ben Natan",
+  "Ben Porat",
+  "Ben Shalom",
+  "Ben Yair",
+  "Ben Yishai",
+  "Berkowitz",
+  "Bloch",
+  "Blum",
+  "Bouskila",
+  "Braverman",
+  "Chaim",
+  "Cohen",
+  "Dahan",
+  "Dankner",
+  "Dar",
+  "Doron",
+  "Eden",
+  "Efrati",
+  "Eisenberg",
+  "Elbaz",
+  "Eliezer",
+  "Elkayam",
+  "Elmaliach",
+  "Elyashiv",
+  "Eshkol",
+  "Farkas",
+  "Fogel",
+  "Frankel",
+  "Freund",
+  "Gabai",
+  "Gabay",
+  "Gafni",
+  "Gal",
+  "Ganon",
+  "Gavrieli",
+  "Gefen",
+  "Gershon",
+  "Gil",
+  "Golan",
+  "Gold",
+  "Goldman",
+  "Gottlieb",
+  "Greenberg",
+  "Gross",
+  "Gur",
+  "Hadar",
+  "Haim",
+  "Halperin",
+  "Harel",
+  "Hasson",
+  "Haziza",
+  "Hershkovitz",
+  "Hirsch",
+  "Hofman",
+  "Horowitz",
+  "Idan",
+  "Ilan",
+  "Israeli",
+  "Kadosh",
+  "Kahan",
+  "Kahana",
+  "Kahn",
+  "Kaminer",
+  "Kantor",
+  "Katz",
+  "Kedar",
+  "Kenan",
+  "Keren",
+  "Kessler",
+  "Kfir",
+  "Kishon",
+  "Klausner",
+  "Koch",
+  "Kohn",
+  "Kopel",
+  "Koren",
+  "Kramer",
+  "Kushnir",
+  "Lahav",
+  "Landau",
+  "Lapid",
+  "Laufer",
+  "Lavi",
+  "Leibowitz",
+  "Leibson",
+  "Leitner",
+  "Lerner",
+  "Levi",
+  "Levin",
+  "Levy",
+  "Lieberman",
+  "Lifshitz",
+  "Lior",
+  "Lipschitz",
+  "Lobel",
+  "Lustig",
+  "Magen",
+  "Maimon",
+  "Malchi",
+  "Malka",
+  "Malkin",
+  "Manor",
+  "Maoz",
+  "Marom",
+  "Mass",
+  "Matz",
+  "Mayer",
+  "Medina",
+  "Meir",
+  "Melamed",
+  "Mendel",
+  "Meshulam",
+  "Mizrahi",
+  "Mor",
+  "Mordechai",
+  "Moshe",
+  "Nagar",
+  "Nahmani",
+  "Naim",
+  "Namir",
+  "Natan",
+  "Navon",
+  "Neeman",
+  "Negev",
+  "Nir",
+  "Nissan",
+  "Noam",
+  "Noy",
+  "Ohana",
+  "Ophir",
+  "Oren",
+  "Orlev",
+  "Ovadia",
+  "Paz",
+  "Peled",
+  "Peres",
+  "Peretz",
+  "Perez",
+  "Porat",
+  "Rabin",
+  "Rabinowitz",
+  "Rahamim",
+  "Ram",
+  "Ravid",
+  "Raz",
+  "Regev",
+  "Reich",
+  "Reuveni",
+  "Rimon",
+  "Ronen",
+  "Rosen",
+  "Rosenberg",
+  "Rosenblum",
+  "Roth",
+  "Rubin",
+  "Sabag",
+  "Sadan",
+  "Sagi",
+  "Salem",
+  "Salomon",
+  "Samocha",
+  "Sasson",
+  "Schwartz",
+  "Segal",
+  "Shachar",
+  "Shaked",
+  "Shalom",
+  "Shamir",
+  "Shapira",
+  "Sharon",
+  "Shechter",
+  "Shemesh",
+  "Shenhav",
+  "Shilo",
+  "Shimon",
+  "Shmuel",
+  "Shoham",
+  "Shpigel",
+  "Shtark",
+  "Sidi",
+  "Silver",
+  "Siman Tov",
+  "Sinai",
+  "Sofer",
+  "Sokol",
+  "Stern",
+  "Suissa",
+  "Swisa",
+  "Tadmor",
+  "Tal",
+  "Tamir",
+  "Tayar",
+  "Tevet",
+  "Toledano",
+  "Tzafir",
+  "Tzur",
+  "Vaknin",
+  "Vardi",
+  "Wagner",
+  "Weiss",
+  "Wolf",
+  "Yadin",
+  "Yahav",
+  "Yarkoni",
+  "Yechezkel",
+  "Yehoshua",
+  "Yehuda",
+  "Yishai",
+  "Yitzhaki",
+  "Yosef",
+  "Zadok",
+  "Zamir",
+  "Zohar",
+  "Zuckerman"
+];
+
+// resources/static_db/names/greek_data.ts
+var GREEK_MALE_FIRSTNAMES = [
+  "Giorgos",
+  "Dimitris",
+  "Nikos",
+  "Christos",
+  "Panagiotis",
+  "Ioannis",
+  "Konstantinos",
+  "Alexandros",
+  "Michalis",
+  "Antonis",
+  "Stavros",
+  "Vassilis",
+  "Thanasis",
+  "Petros",
+  "Sotiris",
+  "Kostas",
+  "Spyros",
+  "Manolis",
+  "Lefteris",
+  "Yiannis",
+  "Andreas",
+  "Theodoros",
+  "Pavlos",
+  "Marios",
+  "Savvas",
+  "Kyriakos",
+  "Charalambos",
+  "Evangelos",
+  "Filippos",
+  "Stefanos",
+  "Loukas",
+  "Elias",
+  "Achilleas",
+  "Aristides",
+  "Athanasios",
+  "Dionysios",
+  "Eleftherios",
+  "Epaminondas",
+  "Eustathios",
+  "Georgios",
+  "Ilias",
+  "Konstantinos",
+  "Lambros",
+  "Leonidas",
+  "Makarios",
+  "Marinos",
+  "Menelaos",
+  "Neophytos",
+  "Odysseas",
+  "Orestis",
+  "Pambos",
+  "Panayiotis",
+  "Paraskevas",
+  "Phivos",
+  "Photios",
+  "Prokopis",
+  "Rafail",
+  "Sokratis",
+  "Spyridon",
+  "Stelios",
+  "Stylianos",
+  "Symeon",
+  "Tassos",
+  "Themistoklis",
+  "Theofanis",
+  "Thomas",
+  "Timotheos",
+  "Titos",
+  "Vasileios",
+  "Xenophon",
+  "Zinon",
+  "Adonis",
+  "Agapios",
+  "Akis",
+  "Alexis",
+  "Alkis",
+  "Anastasios",
+  "Andreas",
+  "Angelos",
+  "Antonis",
+  "Apostolos",
+  "Aris",
+  "Aristarchos",
+  "Aristodemos",
+  "Aristofanis",
+  "Aristos",
+  "Athos",
+  "Avgoustinos",
+  "Avraam",
+  "Charis",
+  "Chariton",
+  "Christakis",
+  "Christodoulos",
+  "Christoforos",
+  "Chrysanthos",
+  "Chrysostomos",
+  "Damianos",
+  "Demetrios",
+  "Dimos",
+  "Dionisis",
+  "Doros",
+  "Efthymios",
+  "Elpidoforos",
+  "Emmanouil",
+  "Ermis",
+  "Ermogenis",
+  "Eugenios",
+  "Eustathios",
+  "Evripidis",
+  "Filippos",
+  "Fivos",
+  "Fotios",
+  "Fragkiskos",
+  "Gavriel",
+  "Gregoris",
+  "Haralambos",
+  "Haris",
+  "Heraklis",
+  "Iakovos",
+  "Iason",
+  "Ippokratis",
+  "Isidoros",
+  "Kleanthis",
+  "Kostas",
+  "Kyprianos",
+  "Kyriakos",
+  "Lambis",
+  "Lambros",
+  "Lazaros",
+  "Lefkos",
+  "Leon",
+  "Leontios",
+  "Loucas",
+  "Louizos",
+  "Loukis",
+  "Makis",
+  "Manos",
+  "Manthos",
+  "Markos",
+  "Martinos",
+  "Matthaios",
+  "Melis",
+  "Michail",
+  "Mihalis",
+  "Miltos",
+  "Minas",
+  "Nearchos",
+  "Neoklis",
+  "Nestor",
+  "Nicos",
+  "Odysseas",
+  "Orestis",
+  "Pambos",
+  "Panos",
+  "Pantelis",
+  "Paris",
+  "Parmenion",
+  "Paschalis",
+  "Petros",
+  "Philippos",
+  "Phivos",
+  "Pieris",
+  "Polycarpos",
+  "Prodromos",
+  "Rafail",
+  "Renos",
+  "Sakis",
+  "Savvas",
+  "Semos",
+  "Sokratis",
+  "Sotiris",
+  "Spyridon",
+  "Stavros",
+  "Stefanos",
+  "Stelios",
+  "Stylianos",
+  "Symeon",
+  "Takis",
+  "Tassos",
+  "Thanasis",
+  "Themistoklis",
+  "Theodoros",
+  "Theofanis",
+  "Thomas",
+  "Titos",
+  "Tomas",
+  "Vangelis",
+  "Vasilis",
+  "Vassilis",
+  "Viktor",
+  "Vlassis",
+  "Xanthos",
+  "Xenios",
+  "Xenophon",
+  "Yiannakis",
+  "Yiannis",
+  "Zinon",
+  "Adam",
+  "Alekos",
+  "Alex",
+  "Alexandros",
+  "Alkis",
+  "Anastasios",
+  "Andreas",
+  "Angelos",
+  "Antonis",
+  "Apostolos",
+  "Aris",
+  "Aristides",
+  "Aristodemos",
+  "Athanasios",
+  "Charalampos",
+  "Charis",
+  "Christodoulos",
+  "Christoforos",
+  "Chrysanthos",
+  "Demetrios",
+  "Dionysios",
+  "Doros",
+  "Efthymios",
+  "Eleftherios",
+  "Emmanouil",
+  "Ermis",
+  "Eugenios",
+  "Evangelos",
+  "Filippos",
+  "Fotios",
+  "Georgios",
+  "Giorgos",
+  "Gregoris",
+  "Haralambos",
+  "Haris",
+  "Heraklis",
+  "Ilias",
+  "Ioannis",
+  "Ippokratis",
+  "Kleanthis",
+  "Konstantinos",
+  "Kostas",
+  "Kyriakos",
+  "Lambros",
+  "Leonidas",
+  "Loukas",
+  "Makarios",
+  "Manolis",
+  "Marinos",
+  "Matthaios",
+  "Michalis",
+  "Miltos",
+  "Neophytos",
+  "Nikolaos",
+  "Odysseas",
+  "Orestis",
+  "Panagiotis",
+  "Pantelis",
+  "Paraskevas",
+  "Petros",
+  "Philippos",
+  "Rafail",
+  "Sokratis",
+  "Sotiris",
+  "Spyridon",
+  "Stavros",
+  "Stefanos",
+  "Stelios",
+  "Stylianos",
+  "Symeon",
+  "Theodoros",
+  "Thomas",
+  "Timotheos",
+  "Vassilis",
+  "Xenophon",
+  "Yiannis",
+  "Zinon",
+  "Achilleas",
+  "Adonis",
+  "Agapios",
+  "Alexis",
+  "Alkis",
+  "Anastasios",
+  "Andreas",
+  "Angelos",
+  "Antonis",
+  "Apostolos",
+  "Aris",
+  "Aristides",
+  "Athanasios",
+  "Charalampos",
+  "Christodoulos",
+  "Christos",
+  "Demetrios",
+  "Dionysios",
+  "Eleftherios",
+  "Emmanouil",
+  "Evangelos",
+  "Filippos",
+  "Fotios",
+  "Georgios",
+  "Giorgos",
+  "Ilias",
+  "Ioannis",
+  "Konstantinos",
+  "Kostas",
+  "Kyriakos",
+  "Lambros",
+  "Leonidas",
+  "Loukas",
+  "Manolis",
+  "Michalis",
+  "Nikolaos",
+  "Panagiotis",
+  "Pantelis",
+  "Petros",
+  "Sotiris",
+  "Spyridon",
+  "Stavros",
+  "Stelios",
+  "Theodoros",
+  "Thomas",
+  "Vassilis",
+  "Yiannis",
+  "Zinon"
+];
+var GREEK_MALE_LASTNAMES = [
+  "Papadopoulos",
+  "Papadopoulou",
+  "Georgiou",
+  "Papageorgiou",
+  "Nikolaou",
+  "Ioannou",
+  "Christodoulou",
+  "Konstantinou",
+  "Michailidis",
+  "Panagiotou",
+  "Dimitriou",
+  "Alexandrou",
+  "Vasilopoulos",
+  "Kostas",
+  "Spyropoulos",
+  "Antoniou",
+  "Stavropoulos",
+  "Theodorou",
+  "Pavlou",
+  "Sotiriou",
+  "Kyriakou",
+  "Charalambous",
+  "Evangelou",
+  "Filippos",
+  "Manolopoulos",
+  "Lefteris",
+  "Yiannis",
+  "Andreas",
+  "Theodoridis",
+  "Panagiotidis",
+  "Savvas",
+  "Kyriakos",
+  "Marios",
+  "Stelios",
+  "Lambrou",
+  "Petridis",
+  "Athanasiou",
+  "Eleftheriou",
+  "Panayiotou",
+  "Christou",
+  "Vasilou",
+  "Markou",
+  "Evangelou",
+  "Paraskevas",
+  "Stylianou",
+  "Neophytou",
+  "Kostas",
+  "Louca",
+  "Mavrou",
+  "Hadjigeorgiou",
+  "Hadjichristodoulou",
+  "Hadjipavlou",
+  "Hadjimichael",
+  "Hadjinicolaou",
+  "Hadjipetrou",
+  "Hadjisavvas",
+  "Hadjikostis",
+  "Hadjimichael",
+  "Hadjistyllis",
+  "Hadjipetrou",
+  "Andreou",
+  "Antoniou",
+  "Charalambous",
+  "Christodoulou",
+  "Constantinou",
+  "Demetriou",
+  "Eleftheriou",
+  "Evangelou",
+  "Georgiou",
+  "Ioannou",
+  "Kleanthous",
+  "Kyriacou",
+  "Lambrou",
+  "Louca",
+  "Markou",
+  "Michael",
+  "Nicolaou",
+  "Panagiotou",
+  "Papadopoulos",
+  "Pavlou",
+  "Petrides",
+  "Savva",
+  "Socratous",
+  "Spyrou",
+  "Stavrou",
+  "Stylianou",
+  "Theodorou",
+  "Vasilou",
+  "Zachariou",
+  "Zenonos",
+  "Agathangelou",
+  "Alexandrou",
+  "Anastasiou",
+  "Aristidou",
+  "Avraam",
+  "Bakirtzis",
+  "Charalambides",
+  "Charitou",
+  "Christofides",
+  "Chrysanthou",
+  "Chrysostomou",
+  "Constantinides",
+  "Demetriades",
+  "Dimitriou",
+  "Efthymiou",
+  "Eliades",
+  "Ellinas",
+  "Erotokritou",
+  "Fotiou",
+  "Frangou",
+  "Georgiadis",
+  "Georgiades",
+  "Gregoriou",
+  "Hadjidemetriou",
+  "Hadjinicolaou",
+  "Hadjipavlou",
+  "Hadjisavvas",
+  "Hadjitheodorou",
+  "Hadjikyriakou",
+  "Iacovou",
+  "Ioannides",
+  "Kakoullis",
+  "Kallis",
+  "Kalogirou",
+  "Karageorgiou",
+  "Karamallis",
+  "Katsaros",
+  "Kleanthous",
+  "Konstantinou",
+  "Koumi",
+  "Kourou",
+  "Kyriakides",
+  "Kyriakou",
+  "Lambrou",
+  "Leontiou",
+  "Loizou",
+  "Loucaides",
+  "Makedonas",
+  "Mallis",
+  "Manoli",
+  "Markides",
+  "Matsas",
+  "Mavrommatis",
+  "Michaelides",
+  "Mina",
+  "Mitsis",
+  "Moullos",
+  "Neophytou",
+  "Nikolaides",
+  "Nikolaou",
+  "Papageorgiou",
+  "Papantoniou",
+  "Paphitis",
+  "Paraskevas",
+  "Patsalides",
+  "Pericleous",
+  "Petrakis",
+  "Philippou",
+  "Pierides",
+  "Pitsillides",
+  "Polyviou",
+  "Prodromou",
+  "Psaltis",
+  "Raptis",
+  "Savidis",
+  "Savvides",
+  "Sideris",
+  "Sofocleous",
+  "Soteriou",
+  "Stavrides",
+  "Stylianides",
+  "Symeou",
+  "Symeonides",
+  "Themistocleous",
+  "Theocharous",
+  "Theodorides",
+  "Theofanous",
+  "Tofarides",
+  "Toma",
+  "Tsiakkiros",
+  "Tsikkos",
+  "Tsolakis",
+  "Varnava",
+  "Vasileiou",
+  "Vassiliou",
+  "Xenophontos",
+  "Yiallouris",
+  "Zachariades",
+  "Zembylas",
+  "Zenios",
+  "Zervos",
+  "Adamopoulos",
+  "Alexopoulos",
+  "Anagnostou",
+  "Anastasiadis",
+  "Andreopoulos",
+  "Angelopoulos",
+  "Antoniadis",
+  "Argyropoulos",
+  "Athanasopoulos",
+  "Christopoulos",
+  "Diamantis",
+  "Dimitriadis",
+  "Economou",
+  "Efthymiadis",
+  "Fotiadis",
+  "Georgiadis",
+  "Giannakopoulos",
+  "Giannopoulos",
+  "Grigoriadis",
+  "Hadjipavlou",
+  "Ioannidis",
+  "Kalogeropoulos",
+  "Karagiannis",
+  "Karamanlis",
+  "Karamouzis",
+  "Katsouris",
+  "Kefalas",
+  "Konstantinidis",
+  "Kostopoulos",
+  "Koulouris",
+  "Kouris",
+  "Kyriakidis",
+  "Lazaridis",
+  "Leontidis",
+  "Makridis",
+  "Manolakis",
+  "Markopoulos",
+  "Mavridis",
+  "Michailidis",
+  "Nikolaidis",
+  "Panagiotidis",
+  "Papadakis",
+  "Papadimitriou",
+  "Papakonstantinou",
+  "Papathanasiou",
+  "Pappas",
+  "Paraskevopoulos",
+  "Pavlidis",
+  "Petridis",
+  "Raptis",
+  "Samaras",
+  "Sideris",
+  "Sotiropoulos",
+  "Stavridis",
+  "Stefanidis",
+  "Stylianou",
+  "Theodoridis",
+  "Tsakiris",
+  "Tsoukalas",
+  "Vasilakis",
+  "Vasilopoulos",
+  "Vlachos",
+  "Voulgaris",
+  "Zafeiriou",
+  "Zisis",
+  "Zografos"
+];
+
+// resources/static_db/names/azerbaijani_data.ts
+var AZERBAIJANI_MALE_FIRSTNAMES = [
+  "Elchin",
+  "Ramin",
+  "Farid",
+  "Ilgar",
+  "Anar",
+  "Rashad",
+  "Eldar",
+  "Tural",
+  "Orkhan",
+  "Fuad",
+  "Vugar",
+  "Emil",
+  "Kamran",
+  "Elman",
+  "Rovshan",
+  "Nizami",
+  "Murad",
+  "Eldaniz",
+  "Aydin",
+  "Samir",
+  "Ilkin",
+  "Rufat",
+  "Zaur",
+  "Elvin",
+  "Nadir",
+  "Sabir",
+  "Vidadi",
+  "Yusif",
+  "Bakhtiyar",
+  "Parviz",
+  "Gurban",
+  "Islam",
+  "Rahman",
+  "Seymur",
+  "Tofig",
+  "Vahid",
+  "Zakir",
+  "Arif",
+  "Asif",
+  "Bayram",
+  "Chingiz",
+  "Davud",
+  "Emin",
+  "Fikret",
+  "Gafar",
+  "Hikmet",
+  "Isa",
+  "Javid",
+  "Kamal",
+  "Latif",
+  "Mahir",
+  "Nabi",
+  "Nijat",
+  "Osman",
+  "Rasim",
+  "Sahil",
+  "Tahir",
+  "Ulvi",
+  "Vasif",
+  "Yasar",
+  "Zeynal",
+  "Abbas",
+  "Adil",
+  "Aghasi",
+  "Akif",
+  "Alakbar",
+  "Alim",
+  "Alish",
+  "Allahverdi",
+  "Amir",
+  "Anvar",
+  "Arastun",
+  "Araz",
+  "Arslan",
+  "Ashraf",
+  "Aydan",
+  "Azer",
+  "Babek",
+  "Bahram",
+  "Balagardash",
+  "Barat",
+  "Bahruz",
+  "Bala",
+  "Bilal",
+  "Bunyad",
+  "Ceyhun",
+  "Dadash",
+  "Dayanat",
+  "Elbrus",
+  "Elchin",
+  "Eldar",
+  "Elmir",
+  "Elshan",
+  "Elvin",
+  "Emil",
+  "Emin",
+  "Elnur",
+  "Elshan",
+  "Elvin",
+  "Emin",
+  "Farhad",
+  "Farman",
+  "Fazil",
+  "Fikret",
+  "Firudin",
+  "Fuad",
+  "Gabil",
+  "Gahraman",
+  "Ganjali",
+  "Garib",
+  "Gazanfar",
+  "Gulali",
+  "Gulhuseyn",
+  "Gurban",
+  "Habil",
+  "Hafiz",
+  "Hajibala",
+  "Hajimurad",
+  "Hakim",
+  "Hamid",
+  "Hasan",
+  "Heydar",
+  "Hidayat",
+  "Hikmat",
+  "Huseyn",
+  "Ibrahim",
+  "Ilgar",
+  "Ilham",
+  "Ilkin",
+  "Ilqar",
+  "Imran",
+  "Isa",
+  "Isfandiyar",
+  "Islam",
+  "Ismayil",
+  "Jabir",
+  "Jahangir",
+  "Jalal",
+  "Jamil",
+  "Javad",
+  "Kamal",
+  "Kamran",
+  "Karim",
+  "Khalid",
+  "Khalil",
+  "Khudayar",
+  "Latif",
+  "Mahammad",
+  "Mahir",
+  "Mammad",
+  "Mansur",
+  "Mehdi",
+  "Meyxan",
+  "Mikayil",
+  "Mirza",
+  "Mubariz",
+  "Muhammed",
+  "Musa",
+  "Mustafa",
+  "Nadir",
+  "Nail",
+  "Nariman",
+  "Nazim",
+  "Nijat",
+  "Nizami",
+  "Nurlan",
+  "Nuraddin",
+  "Nusret",
+  "Ogtay",
+  "Orkhan",
+  "Osman",
+  "Parviz",
+  "Ramil",
+  "Rashad",
+  "Rauf",
+  "Rovshan",
+  "Rufat",
+  "Ruslan",
+  "Sabir",
+  "Sahib",
+  "Sahil",
+  "Said",
+  "Salim",
+  "Samir",
+  "Sanan",
+  "Sarkhan",
+  "Sattar",
+  "Sevindik",
+  "Shahbaz",
+  "Shahriyar",
+  "Shamil",
+  "Shirin",
+  "Shukur",
+  "Tahir",
+  "Talib",
+  "Tofiq",
+  "Tural",
+  "Ulvi",
+  "Umid",
+  "Vagif",
+  "Vahid",
+  "Vakil",
+  "Vali",
+  "Vasif",
+  "Vidadi",
+  "Vugar",
+  "Yadigar",
+  "Yashar",
+  "Yusif",
+  "Zahid",
+  "Zaur",
+  "Zeynal",
+  "Ziya",
+  "Zohrab"
+];
+var AZERBAIJANI_MALE_LASTNAMES = [
+  "Aliyev",
+  "Huseynov",
+  "Mammadov",
+  "Hasanov",
+  "Guliyev",
+  "Ibrahimov",
+  "Abbasov",
+  "Rzayev",
+  "Safarov",
+  "Ahmadov",
+  "Ismayilov",
+  "Jafarov",
+  "Rahimov",
+  "Quliyev",
+  "Hajiyev",
+  "Musayev",
+  "Seyidov",
+  "Mirzayev",
+  "Abdullayev",
+  "Bayramov",
+  "Nabiyev",
+  "Aslanov",
+  "Mammadli",
+  "Qasimov",
+  "Huseynli",
+  "Orujov",
+  "Salimov",
+  "Karimov",
+  "Farhadov",
+  "Rustamov",
+  "Aghayev",
+  "Alasgarov",
+  "Allahverdiyev",
+  "Alizade",
+  "Amirov",
+  "Amiraslanov",
+  "Arifov",
+  "Asadov",
+  "Asgarov",
+  "Azerov",
+  "Babayev",
+  "Badalov",
+  "Baghirov",
+  "Bakhtiyarov",
+  "Balayev",
+  "Bayramli",
+  "Bunyadov",
+  "Dadashov",
+  "Dayanov",
+  "Eldarov",
+  "Elchinov",
+  "Emilov",
+  "Farajov",
+  "Fazli",
+  "Gafarov",
+  "Gahramanov",
+  "Ganjaliyev",
+  "Garayev",
+  "Gasimov",
+  "Guliyev",
+  "Hajiyev",
+  "Hakimzade",
+  "Hamidov",
+  "Hasanov",
+  "Heydarov",
+  "Hidayatzade",
+  "Huseynov",
+  "Ibrahimov",
+  "Ilhamov",
+  "Ilkinov",
+  "Isayev",
+  "Isfandiyarov",
+  "Ismayilov",
+  "Jabbarov",
+  "Jafarov",
+  "Jalilov",
+  "Jamilov",
+  "Javadov",
+  "Kamalov",
+  "Karimov",
+  "Khalilov",
+  "Khanlarov",
+  "Khudaverdiyev",
+  "Latifov",
+  "Maharramov",
+  "Mahmudov",
+  "Mammadov",
+  "Mansurov",
+  "Mehraliyev",
+  "Mehdiyev",
+  "Mikayilov",
+  "Mirzayev",
+  "Mubarizov",
+  "Muhammedov",
+  "Muradov",
+  "Mustafayev",
+  "Nabiyev",
+  "Nadirli",
+  "Naghiyev",
+  "Narimanov",
+  "Nasibov",
+  "Nazimov",
+  "Nematov",
+  "Niyazov",
+  "Novruzov",
+  "Nuriyev",
+  "Nurlanov",
+  "Orujov",
+  "Osmanov",
+  "Pashayev",
+  "Qadirov",
+  "Qahramanov",
+  "Qarayev",
+  "Qasimov",
+  "Quliyev",
+  "Rahimov",
+  "Rasulov",
+  "Rzayev",
+  "Safarov",
+  "Salimov",
+  "Samadov",
+  "Samedov",
+  "Seyidov",
+  "Shahbazov",
+  "Shahverdiyev",
+  "Shamilov",
+  "Sharifov",
+  "Shirinov",
+  "Soltanov",
+  "Suleymanov",
+  "Taghiyev",
+  "Tahirov",
+  "Tahirli",
+  "Talibov",
+  "Turalov",
+  "Usubov",
+  "Vahabov",
+  "Vahidov",
+  "Vakilov",
+  "Valiyev",
+  "Vasifov",
+  "Vidadiyev",
+  "Vugarov",
+  "Yadigarov",
+  "Yagubov",
+  "Yusifov",
+  "Zahidov",
+  "Zamanov",
+  "Zeynalov",
+  "Ziyadov",
+  "Zohrabov",
+  "Abbasli",
+  "Abdullazade",
+  "Aghalarov",
+  "Ahmadli",
+  "Akhundov",
+  "Alakbarov",
+  "Aliyev",
+  "Allahverdiyev",
+  "Almazov",
+  "Amiraslanov",
+  "Arzumanov",
+  "Asgarov",
+  "Aydinli",
+  "Azimov",
+  "Babazade",
+  "Bagirov",
+  "Bakhtiyarli",
+  "Balayev",
+  "Bayramov",
+  "Dadashli",
+  "Eldarov",
+  "Elmanov",
+  "Farajov",
+  "Fikretov",
+  "Gahramanli",
+  "Garibov",
+  "Guliyev",
+  "Hajiyev",
+  "Hasanli",
+  "Huseynli",
+  "Ibrahimli",
+  "Ilgarli",
+  "Ismayilzade",
+  "Jabbarli",
+  "Jafarli",
+  "Kamilov",
+  "Karimli",
+  "Khalilli",
+  "Khanov",
+  "Khalafov",
+  "Latifli",
+  "Mahammadli",
+  "Mammadli",
+  "Mansimli",
+  "Mehdiyev",
+  "Mirzazade",
+  "Mushfigov",
+  "Mustafazade",
+  "Nabiyev",
+  "Nadirli",
+  "Narimanli",
+  "Nasirli",
+  "Nazirli",
+  "Novruzli",
+  "Nurullayev",
+  "Orujzade",
+  "Pashazade",
+  "Rahimli",
+  "Rasulzade",
+  "Rzayev",
+  "Sabirzade",
+  "Safarli",
+  "Salimli",
+  "Samadli",
+  "Seyidli",
+  "Shahbazli",
+  "Shukurlu",
+  "Soltanli",
+  "Suleymanli",
+  "Taghizade",
+  "Tahirli",
+  "Talibli",
+  "Turalov",
+  "Usubov",
+  "Vagifov",
+  "Vahabov",
+  "Vahidli",
+  "Valiyev",
+  "Vasifli",
+  "Vidadiyev",
+  "Vugarli",
+  "Yusifli",
+  "Zahidov",
+  "Zeynalov"
+];
+
+// resources/static_db/names/kazakh_data.ts
+var KAZAKH_MALE_FIRSTNAMES = [
+  "Aidar",
+  "Aidos",
+  "Aisultan",
+  "Alikhan",
+  "Alim",
+  "Almas",
+  "Almat",
+  "Aman",
+  "Amanat",
+  "Amir",
+  "Anuar",
+  "Arlan",
+  "Arman",
+  "Arsen",
+  "Arystan",
+  "Asan",
+  "Asat",
+  "Askar",
+  "Aslan",
+  "Asset",
+  "Ayan",
+  "Azamat",
+  "Azat",
+  "Bakhyt",
+  "Bakir",
+  "Bakyt",
+  "Bauyrzhan",
+  "Bek",
+  "Bekzat",
+  "Berik",
+  "Bolat",
+  "Daniyar",
+  "Daulet",
+  "Dauren",
+  "Dauyr",
+  "Dias",
+  "Dilmukhamed",
+  "Dmitriy",
+  "Dosym",
+  "Edil",
+  "Eldar",
+  "Eldos",
+  "Erbol",
+  "Erbolat",
+  "Erden",
+  "Erdos",
+  "Erlan",
+  "Ermek",
+  "Ermurat",
+  "Ernar",
+  "Ernur",
+  "Ersultan",
+  "Galym",
+  "Galymzhan",
+  "Gani",
+  "Gulmurat",
+  "Ilyas",
+  "Islam",
+  "Ismail",
+  "Iskander",
+  "Kairat",
+  "Kaisar",
+  "Kaldybek",
+  "Kanat",
+  "Karamat",
+  "Kasym",
+  "Kenes",
+  "Kenzhebek",
+  "Kuanysh",
+  "Kuat",
+  "Madi",
+  "Madiyar",
+  "Maksat",
+  "Mansur",
+  "Marat",
+  "Margulan",
+  "Miras",
+  "Mirlan",
+  "Murat",
+  "Musa",
+  "Nartay",
+  "Nazar",
+  "Nurlan",
+  "Nursultan",
+  "Nurtas",
+  "Nurzhan",
+  "Olzhas",
+  "Omar",
+  "Rakhat",
+  "Ramazan",
+  "Rasul",
+  "Rauan",
+  "Rinat",
+  "Rishat",
+  "Rustam",
+  "Sadyk",
+  "Sagynysh",
+  "Saken",
+  "Sanzhar",
+  "Sapar",
+  "Sardar",
+  "Sarsen",
+  "Sartay",
+  "Serik",
+  "Serikbay",
+  "Serikzhan",
+  "Shakhzod",
+  "Shamil",
+  "Shyngys",
+  "Sultan",
+  "Syrgak",
+  "Tair",
+  "Talgar",
+  "Talip",
+  "Tamerlan",
+  "Taras",
+  "Temir",
+  "Temirlan",
+  "Tengiz",
+  "Timur",
+  "Tolegen",
+  "Toleu",
+  "Tomas",
+  "Tursyn",
+  "Ulan",
+  "Umar",
+  "Yerbol",
+  "Yerkebulan",
+  "Yermek",
+  "Yermurat",
+  "Yernar",
+  "Yernur",
+  "Yersultan",
+  "Yerzhan",
+  "Yessen",
+  "Yusup",
+  "Zhanat",
+  "Zhandos",
+  "Zhanibek",
+  "Zhanuzak",
+  "Zhaslan",
+  "Zhasulan",
+  "Zhasur",
+  "Zhassulan",
+  "Zhasyr",
+  "Zhetpis",
+  "Zhomart",
+  "Zhumas",
+  "Zhyrgal",
+  "Ziyad",
+  "Abay",
+  "Abzal",
+  "Adil",
+  "Adilet",
+  "Adilzhan",
+  "Aidos",
+  "Akhmet",
+  "Akmaral",
+  "Aktan",
+  "Alen",
+  "Ali",
+  "Alibek",
+  "Alik",
+  "Alisher",
+  "Almas",
+  "Altyn",
+  "Amangeldy",
+  "Amirzhan",
+  "Anuarbek",
+  "Ardak",
+  "Arman",
+  "Arsen",
+  "Artyom",
+  "Asanali",
+  "Asel",
+  "Askhat",
+  "Aslanbek",
+  "Aybek",
+  "Aydar",
+  "Ayman",
+  "Aysultan",
+  "Azamat",
+  "Azat",
+  "Bakhytzhan",
+  "Bakir",
+  "Baktybek",
+  "Bauyrzhan",
+  "Bekbolat",
+  "Beknur",
+  "Bekzat",
+  "Berik",
+  "Bolatbek",
+  "Daniil",
+  "Daniyar",
+  "Darkhan",
+  "Dauletbek",
+  "Dauren",
+  "Dauyrzhan",
+  "Dias",
+  "Dilmurat",
+  "Dmitry",
+  "Dos",
+  "Duman",
+  "Edige",
+  "Eldar",
+  "Elkhan",
+  "Elman",
+  "Elnur",
+  "Eraly",
+  "Erbolat",
+  "Erdaulet",
+  "Erden",
+  "Erdos",
+  "Erlan",
+  "Ermek",
+  "Ermurat",
+  "Ernar",
+  "Ernur",
+  "Ersain",
+  "Ersultan",
+  "Erzhan",
+  "Galym",
+  "Gani",
+  "Ibragim",
+  "Ilias",
+  "Ilyas",
+  "Islam",
+  "Ismail",
+  "Kairat",
+  "Kaisar",
+  "Kanat",
+  "Karamat",
+  "Kasym",
+  "Kenes",
+  "Kenzhe",
+  "Kuanysh",
+  "Kuat",
+  "Madi",
+  "Madiyar",
+  "Maksat",
+  "Marat",
+  "Margulan",
+  "Miras",
+  "Mirlan",
+  "Murat",
+  "Musa",
+  "Nartay",
+  "Nazar",
+  "Nurlan",
+  "Nursultan",
+  "Nurtas",
+  "Nurzhan",
+  "Olzhas",
+  "Omar",
+  "Rakhat",
+  "Ramazan",
+  "Rasul",
+  "Rauan",
+  "Rinat",
+  "Rishat",
+  "Rustam",
+  "Sagynysh",
+  "Saken",
+  "Sanzhar",
+  "Sapar",
+  "Sardar",
+  "Serik",
+  "Serikzhan",
+  "Shakhzod",
+  "Shamil",
+  "Shyngys",
+  "Sultan",
+  "Syrgak",
+  "Tair",
+  "Talgar",
+  "Talip",
+  "Tamerlan",
+  "Temir",
+  "Temirlan",
+  "Tengiz",
+  "Timur",
+  "Tolegen",
+  "Tursyn",
+  "Ulan",
+  "Umar",
+  "Yerbol",
+  "Yerkebulan",
+  "Yermek",
+  "Yermurat",
+  "Yernar",
+  "Yernur",
+  "Yersultan",
+  "Yerzhan",
+  "Yessen",
+  "Yusup",
+  "Zhanat",
+  "Zhandos",
+  "Zhanibek",
+  "Zhaslan",
+  "Zhasulan",
+  "Zhasur",
+  "Zhassulan",
+  "Zhyrgal",
+  "Ziyad"
+];
+var KAZAKH_MALE_LASTNAMES = [
+  "Abdrakhmanov",
+  "Abilov",
+  "Akhmetov",
+  "Akhmetzhanov",
+  "Aliev",
+  "Alimbekov",
+  "Alimzhanov",
+  "Altynbekov",
+  "Amanov",
+  "Amanzholov",
+  "Amirbekov",
+  "Amirkhanov",
+  "Artykbayev",
+  "Asanov",
+  "Askarov",
+  "Aslanov",
+  "Aubakirov",
+  "Auezov",
+  "Auyezov",
+  "Baimbetov",
+  "Baimenov",
+  "Baitursynov",
+  "Baktybayev",
+  "Balapanov",
+  "Balgimbayev",
+  "Balmagambetov",
+  "Balmukhanov",
+  "Baltabayev",
+  "Batyrov",
+  "Bauyrzhanov",
+  "Bekbolatov",
+  "Bekmuratov",
+  "Bekov",
+  "Bekzhanov",
+  "Berdibekov",
+  "Berdikulov",
+  "Berdybekov",
+  "Biyashev",
+  "Bolatov",
+  "Boranbayev",
+  "Bozhbanov",
+  "Burkitbayev",
+  "Daulenov",
+  "Dauletov",
+  "Dauletbayev",
+  "Dauletbekov",
+  "Dauletov",
+  "Doszhanov",
+  "Duisenov",
+  "Dusenov",
+  "Elemesov",
+  "Ermekov",
+  "Ermolov",
+  "Erzhanov",
+  "Esengeldiyev",
+  "Esenov",
+  "Esirkepov",
+  "Gabdullin",
+  "Galiyev",
+  "Gulimov",
+  "Ibraev",
+  "Ibragimov",
+  "Ibrayev",
+  "Ilyasov",
+  "Imashev",
+  "Isayev",
+  "Iskakov",
+  "Iskanderov",
+  "Ismagulov",
+  "Ismailov",
+  "Jabayev",
+  "Jaksybekov",
+  "Jandarbekov",
+  "Jangeldin",
+  "Japarov",
+  "Jumabaev",
+  "Kabylbekov",
+  "Kairatov",
+  "Kairbekov",
+  "Kaliev",
+  "Kalmakhanov",
+  "Kalmuratov",
+  "Kamalov",
+  "Kambarov",
+  "Kambarov",
+  "Kanagatov",
+  "Kanatov",
+  "Karashev",
+  "Karimov",
+  "Kasymov",
+  "Kassymov",
+  "Kenzhebayev",
+  "Kenzhebekov",
+  "Kenzhegulov",
+  "Khamitov",
+  "Khairullin",
+  "Khasenov",
+  "Khasenuly",
+  "Khatimov",
+  "Khozhamzharov",
+  "Kozhakhmetov",
+  "Kozhamkulov",
+  "Kudaibergenov",
+  "Kudaibergenuly",
+  "Kulanov",
+  "Kulmanov",
+  "Kurmangaliyev",
+  "Kusainov",
+  "Kussainov",
+  "Kydyrmanov",
+  "Madenov",
+  "Madiyev",
+  "Maksutov",
+  "Mamytov",
+  "Maratov",
+  "Mashrapov",
+  "Mataev",
+  "Matayev",
+  "Mukhtarov",
+  "Mukushev",
+  "Muratov",
+  "Mussin",
+  "Mussinov",
+  "Myrzabayev",
+  "Myrzakhmetov",
+  "Nabiyev",
+  "Nurgaliyev",
+  "Nurgazin",
+  "Nurkasymov",
+  "Nurkenov",
+  "Nurlanov",
+  "Nurlybayev",
+  "Nurmoldin",
+  "Nurmukhamedov",
+  "Nurpeisov",
+  "Nursultanov",
+  "Nurymov",
+  "Nusupov",
+  "Omarov",
+  "Orazbayev",
+  "Orazov",
+  "Orynbayev",
+  "Orynbekov",
+  "Ospanov",
+  "Ospanuly",
+  "Otegenov",
+  "Otepbergenov",
+  "Oteuliyev",
+  "Otkeldiyev",
+  "Otynshiyev",
+  "Pavlov",
+  "Rakhimov",
+  "Rakhmanov",
+  "Rakhmetov",
+  "Ramazanov",
+  "Ryskulov",
+  "Sabirov",
+  "Sadykov",
+  "Sagimbayev",
+  "Sagindykov",
+  "Sakenov",
+  "Salgaraev",
+  "Salmaganbetov",
+  "Salykov",
+  "Samatov",
+  "Saparov",
+  "Sarbayev",
+  "Sarsenbayev",
+  "Sarsenov",
+  "Sarybayev",
+  "Satpayev",
+  "Sautov",
+  "Serikbayev",
+  "Serikov",
+  "Shaikenov",
+  "Shaimardanov",
+  "Shakenov",
+  "Shalabayev",
+  "Shamshiyev",
+  "Sharipov",
+  "Shayakhmetov",
+  "Shaydullin",
+  "Shaymerdenov",
+  "Shegenov",
+  "Shukurov",
+  "Smailov",
+  "Smagulov",
+  "Smanov",
+  "Smaylov",
+  "Sultanov",
+  "Sydykov",
+  "Taimasov",
+  "Tazhibayev",
+  "Tazhiyev",
+  "Temirbekov",
+  "Temirgaliev",
+  "Tleubayev",
+  "Tleugabylov",
+  "Tleulessov",
+  "Tolegenov",
+  "Toleuov",
+  "Toleubayev",
+  "Tulegenov",
+  "Tulepov",
+  "Tuleubayev",
+  "Tursunov",
+  "Ualiyev",
+  "Ulanov",
+  "Umarov",
+  "Urazbayev",
+  "Urazov",
+  "Utegenov",
+  "Uteuliyev",
+  "Uzbekov",
+  "Yakubov",
+  "Yerzhanov",
+  "Yessimov",
+  "Yessengeldiyev",
+  "Yessimov",
+  "Yusupov",
+  "Zhanabayev",
+  "Zhanatov",
+  "Zhandarbekov",
+  "Zhanibekov",
+  "Zhanuzakov",
+  "Zhasuzakov",
+  "Zhaylauov",
+  "Zholdasov",
+  "Zholdybayev",
+  "Zhumashev",
+  "Zhussupov",
+  "Zhunisov",
+  "Zhunusov",
+  "Ziyabekov",
+  "Zhumagaliyev",
+  "Zhumabayev",
+  "Zhumagulov",
+  "Zhumaliev",
+  "Zhumartov",
+  "Zhumatov"
+];
+
+// resources/static_db/names/southamerican_data.ts
+var SOUTH_AMERICAN_MALE_FIRSTNAMES = [
+  "Mateo",
+  "Santiago",
+  "Lucas",
+  "Liam",
+  "Thiago",
+  "Benjam\xEDn",
+  "Gaspar",
+  "Facundo",
+  "Vicente",
+  "Gael",
+  "Mat\xEDas",
+  "Sebasti\xE1n",
+  "Alejandro",
+  "Nicol\xE1s",
+  "Mart\xEDn",
+  "Emiliano",
+  "Joaqu\xEDn",
+  "Diego",
+  "Gabriel",
+  "Juan",
+  "Jos\xE9",
+  "Carlos",
+  "Luis",
+  "Jorge",
+  "Miguel",
+  "Roberto",
+  "Pedro",
+  "Francisco",
+  "Antonio",
+  "Andr\xE9s",
+  "Pablo",
+  "Fernando",
+  "Ricardo",
+  "Leonardo",
+  "Gonzalo",
+  "Hern\xE1n",
+  "Ignacio",
+  "Eduardo",
+  "Marcelo",
+  "Ra\xFAl",
+  "Hugo",
+  "Oscar",
+  "Daniel",
+  "Adri\xE1n",
+  "Gustavo",
+  "Sergio",
+  "Ram\xF3n",
+  "Esteban",
+  "Mariano",
+  "Claudio",
+  "V\xEDctor",
+  "Enrique",
+  "Alberto",
+  "Mauricio",
+  "Rub\xE9n",
+  "Patricio",
+  "Cristian",
+  "David",
+  "Maximiliano",
+  "Valent\xEDn",
+  "Lautaro",
+  "Franco",
+  "Bruno",
+  "Santino",
+  "Felipe",
+  "Matteo",
+  "Noah",
+  "Dante",
+  "Jer\xF3nimo",
+  "Tob\xEDas",
+  "Ramiro",
+  "Ezequiel",
+  "Leandro",
+  "Nahuel",
+  "Alexis",
+  "Brian",
+  "C\xE9sar",
+  "Dami\xE1n",
+  "El\xEDas",
+  "Fabio",
+  "Gast\xF3n",
+  "H\xE9ctor",
+  "Iv\xE1n",
+  "Julio",
+  "Kevin",
+  "Luciano",
+  "Octavio",
+  "Quint\xEDn",
+  "Rodrigo",
+  "Ulises",
+  "Walter",
+  "Xavier",
+  "Yago",
+  "Zacar\xEDas",
+  "Abel",
+  "Adolfo",
+  "\xC1lvaro",
+  "Amado",
+  "An\xEDbal",
+  "Armando",
+  "Arturo",
+  "Atilio",
+  "Augusto",
+  "Bartolom\xE9",
+  "Bernardo",
+  "Blas",
+  "Braulio",
+  "Camilo",
+  "C\xE1ndido",
+  "Crist\xF3bal",
+  "Dar\xEDo",
+  "Domingo",
+  "Donato",
+  "Edgardo",
+  "Elio",
+  "Emilio",
+  "Ernesto",
+  "Eugenio",
+  "Fabian",
+  "Fausto",
+  "Ferm\xEDn",
+  "Fidel",
+  "Gerardo",
+  "Germ\xE1n",
+  "Gilberto",
+  "Gregorio",
+  "Guillermo",
+  "Horacio",
+  "Humberto",
+  "Ismael",
+  "Jacinto",
+  "Jaime",
+  "Jes\xFAs",
+  "Justo",
+  "Leopoldo",
+  "Lino",
+  "Lorenzo",
+  "Manuel",
+  "Marco",
+  "Marcos",
+  "Mario",
+  "M\xE1ximo",
+  "Milton",
+  "Mois\xE9s",
+  "N\xE9stor",
+  "Norberto",
+  "Omar",
+  "Rafael",
+  "Ren\xE9",
+  "Rom\xE1n",
+  "Rufino",
+  "Salvador",
+  "Sim\xF3n",
+  "Teodoro",
+  "Tom\xE1s",
+  "Uriel",
+  "Vicente",
+  "Abelardo",
+  "Adalberto",
+  "Ad\xE1n",
+  "Agust\xEDn",
+  "Albano",
+  "Alfonso",
+  "Alfredo",
+  "Alonso",
+  "Amancio",
+  "Anselmo",
+  "Ariel",
+  "Aurelio",
+  "Baltasar",
+  "Basilio",
+  "Benito",
+  "Bonifacio",
+  "C\xE1ssio",
+  "Celso",
+  "C\xEDcero",
+  "Constantino",
+  "Crist\xF3v\xE3o",
+  "Dami\xE3o",
+  "D\xE9cio",
+  "Dem\xE9trio",
+  "Denis",
+  "Dorival",
+  "Du\xEDlio",
+  "Durval",
+  "Edilson",
+  "Edmar",
+  "Edmilson",
+  "El\xE1dio",
+  "El\xEDsio",
+  "En\xE9as",
+  "Evaristo",
+  "Everaldo",
+  "Expedito",
+  "Feliciano",
+  "F\xE9lix",
+  "Firmino",
+  "Flor\xEAncio",
+  "Fortunato",
+  "Franco",
+  "Geraldo",
+  "Get\xFAlio",
+  "Gide\xE3o",
+  "Glauber",
+  "Glauco",
+  "Gon\xE7alo",
+  "Hamilton",
+  "Haroldo",
+  "Hermes",
+  "Hil\xE1rio",
+  "Ibrahim",
+  "Idal\xEDcio",
+  "In\xE1cio",
+  "Irineu",
+  "Isa\xEDas",
+  "Israel",
+  "Ivo",
+  "Jackson",
+  "Jair",
+  "Jairo",
+  "James",
+  "J\xE2nio",
+  "Jardel",
+  "Jarbas",
+  "Jeferson",
+  "Jer\xF4nimo",
+  "Jesu\xEDno",
+  "Jonas",
+  "Josu\xE9",
+  "Joviano",
+  "Juarez",
+  "J\xFAlio",
+  "Juraci",
+  "Justiniano",
+  "Juvenal",
+  "Kl\xE9ber",
+  "Laerte",
+  "Lauro",
+  "Le\xF4ncio",
+  "L\xEDdio",
+  "Maciel",
+  "Manoel",
+  "Martinho",
+  "Melqu\xEDades",
+  "Micael",
+  "Moacir",
+  "Nabor",
+  "Nataniel",
+  "N\xE9lio",
+  "Newton",
+  "Nicolau",
+  "Nilo",
+  "Nilton",
+  "Nivaldo",
+  "Olavo",
+  "Ol\xEDmpio",
+  "Onofre",
+  "Oriovaldo",
+  "Osman",
+  "Osmar",
+  "Osvaldo",
+  "Otac\xEDlio",
+  "Otoniel",
+  "Ovaldo",
+  "Ozeias",
+  "Pascoal",
+  "Patr\xEDcio",
+  "Pel\xE9",
+  "Percival",
+  "P\xE9ricles",
+  "Pierre",
+  "Pl\xEDnio",
+  "Policarpo",
+  "Prudente",
+  "Quintino",
+  "Raimundo",
+  "Ramiro",
+  "Reginaldo",
+  "Reinaldo",
+  "Richard",
+  "Robson",
+  "Rodolfo",
+  "Rog\xE9rio",
+  "Rom\xE1rio",
+  "R\xF4mulo",
+  "Ronald",
+  "Ronaldo",
+  "Roque",
+  "Rui",
+  "Ruy",
+  "S\xE1lvio",
+  "Sandoval",
+  "Saulo",
+  "Severino",
+  "Sidney",
+  "Silas",
+  "Silvestre",
+  "Sime\xE3o",
+  "S\xEDlvio",
+  "Sotero",
+  "Stanislau",
+  "Tadeu",
+  "Tarc\xEDsio",
+  "Tasso",
+  "Te\xF3filo",
+  "Ter\xEAncio",
+  "Thales",
+  "Th\xE9o",
+  "Thomas",
+  "Thomaz",
+  "Tib\xE9rio",
+  "Tim\xF3teo",
+  "Tobias",
+  "Trist\xE3o",
+  "Ubirajara",
+  "Ubiratan",
+  "Ulisses",
+  "Urbano",
+  "Valdemar",
+  "Valdir",
+  "Valter",
+  "Vanderlei",
+  "Vasco",
+  "Ven\xE2ncio",
+  "Venceslau",
+  "Vidal",
+  "Vin\xEDcius",
+  "Virg\xEDlio",
+  "V\xEDtor",
+  "Wagner",
+  "Waldemar",
+  "Waldir",
+  "Washington",
+  "Wellington",
+  "Wesley",
+  "William",
+  "Wilson",
+  "Zeno",
+  "Z\xE9",
+  "Zeca",
+  "Josue",
+  "Edison",
+  "Darwin",
+  "Jairo",
+  "Henry",
+  "Edwin",
+  "Jonathan",
+  "Gary",
+  "Michael",
+  "Cristopher",
+  "Erick",
+  "Bryam",
+  "Jefferson",
+  "Byron",
+  "Geovanny",
+  "Andre",
+  "Fabio",
+  "Eduar",
+  "Juan Manuel",
+  "Alfredo",
+  "Sebastian",
+  "Ernesto",
+  "Victor",
+  "Pedro",
+  "Walter",
+  "Nemine",
+  "Sonny",
+  "Fernando",
+  "Louis",
+  "Charlie",
+  "Jhonny",
+  "Reginald",
+  "Adonis",
+  "Franklin",
+  "Mario",
+  "John",
+  "Roy",
+  "Kleber",
+  "Will",
+  "Angel",
+  "Nicolas",
+  "Robert",
+  "Emilio",
+  "Keysi",
+  "Yandri",
+  "Steven",
+  "Pablo",
+  "Jordy",
+  "Adriel",
+  "Isaac",
+  "Eithan",
+  "Enzo",
+  "Luciano",
+  "Mathias",
+  "Marcelo",
+  "Cristian",
+  "Julian",
+  "Simon",
+  "Ian",
+  "Amaro",
+  "Leon",
+  "Alonso",
+  "Jose",
+  "Cristobal",
+  "Diego",
+  "Juan",
+  "Nicolas",
+  "Sebastian",
+  "Felipe",
+  "Tomas"
+];
+var SOUTH_AMERICAN_MALE_LASTNAMES = [
+  "Rodr\xEDguez",
+  "G\xF3mez",
+  "Gonz\xE1lez",
+  "Mart\xEDnez",
+  "Garc\xEDa",
+  "L\xF3pez",
+  "Hern\xE1ndez",
+  "S\xE1nchez",
+  "P\xE9rez",
+  "Ram\xEDrez",
+  "Torres",
+  "Flores",
+  "Morales",
+  "Rojas",
+  "Ortiz",
+  "Silva",
+  "Navarro",
+  "Vargas",
+  "Castro",
+  "Mendoza",
+  "Ruiz",
+  "Jim\xE9nez",
+  "Moreno",
+  "\xC1lvarez",
+  "Romero",
+  "Fern\xE1ndez",
+  "D\xEDaz",
+  "Acosta",
+  "Molina",
+  "Su\xE1rez",
+  "Delgado",
+  "V\xE1zquez",
+  "Cruz",
+  "Castillo",
+  "Sosa",
+  "Vega",
+  "Pereyra",
+  "R\xEDos",
+  "Luna",
+  "Mu\xF1oz",
+  "Blanco",
+  "Soto",
+  "Campos",
+  "Ibarra",
+  "Peralta",
+  "Ben\xEDtez",
+  "M\xE9ndez",
+  "Ferrari",
+  "Paz",
+  "Godoy",
+  "Carrizo",
+  "Quiroga",
+  "Rivera",
+  "Cort\xE9s",
+  "Cabrera",
+  "Vera",
+  "C\xE1ceres",
+  "Figueroa",
+  "Dom\xEDnguez",
+  "Reyes",
+  "Guerrero",
+  "Montes",
+  "Santana",
+  "Maldonado",
+  "Correa",
+  "Valdez",
+  "Espinoza",
+  "M\xE1rquez",
+  "Santos",
+  "Ponce",
+  "Villalba",
+  "Arias",
+  "Ojeda",
+  "Salazar",
+  "Miranda",
+  "Leiva",
+  "Barrios",
+  "Galv\xE1n",
+  "Aguilera",
+  "P\xE1ez",
+  "Escobar",
+  "Montero",
+  "Alonso",
+  "Contreras",
+  "Barreto",
+  "Duarte",
+  "Palacios",
+  "Serrano",
+  "Pe\xF1a",
+  "Carrasco",
+  "Gallardo",
+  "Rueda",
+  "Vidal",
+  "Arce",
+  "Guzm\xE1n",
+  "Fuentes",
+  "Salas",
+  "Vallejos",
+  "Coronel",
+  "Bustos",
+  "Ledesma",
+  "Franco",
+  "Cardozo",
+  "Lucero",
+  "Nieto",
+  "Rold\xE1n",
+  "Villanueva",
+  "Sandoval",
+  "Z\xE1rate",
+  "Bianchi",
+  "Morel",
+  "Lombardi",
+  "Russo",
+  "Romano",
+  "Marino",
+  "Conte",
+  "Bruno",
+  "Rossi",
+  "Moretti",
+  "Esp\xF3sito",
+  "De Luca",
+  "Rizzo",
+  "Barbieri",
+  "Colombo",
+  "Gallo",
+  "Gentile",
+  "Greco",
+  "Marchetti",
+  "Martini",
+  "Mazza",
+  "Monti",
+  "Neri",
+  "Orlando",
+  "Pellegrini",
+  "Ricci",
+  "Rinaldi",
+  "Santoro",
+  "Serra",
+  "Sorrentino",
+  "Valentini",
+  "Vitale",
+  "Abad",
+  "Aguilar",
+  "Andrade",
+  "Arrieta",
+  "B\xE1ez",
+  "Battaglia",
+  "Beltr\xE1n",
+  "Berm\xFAdez",
+  "Bogado",
+  "Bonifacio",
+  "Bord\xF3n",
+  "Brizuela",
+  "Calder\xF3n",
+  "C\xE1mera",
+  "Cantero",
+  "Casco",
+  "Cejas",
+  "Centuri\xF3n",
+  "Ch\xE1vez",
+  "Corval\xE1n",
+  "Crespo",
+  "De la Cruz",
+  "Encina",
+  "Esp\xEDnola",
+  "Falc\xF3n",
+  "Far\xEDas",
+  "Ferreira",
+  "Galarza",
+  "Gim\xE9nez",
+  "Guerra",
+  "Heredia",
+  "Insfr\xE1n",
+  "Jara",
+  "Lencina",
+  "Lozano",
+  "Lugo",
+  "Mar\xEDn",
+  "Merlo",
+  "Montiel",
+  "N\xFA\xF1ez",
+  "Oliva",
+  "Oviedo",
+  "Paredes",
+  "Portillo",
+  "Qui\xF1ones",
+  "Rivero",
+  "Tapia",
+  "Zelaya",
+  "Quispe",
+  "Mamani",
+  "Araya",
+  "Vergara",
+  "Z\xFA\xF1iga",
+  "Jaramillo",
+  "Restrepo",
+  "Montoya",
+  "Valencia",
+  "Giraldo",
+  "Pab\xF3n",
+  "Ramos",
+  "Le\xF3n",
+  "Soto",
+  "Cruz",
+  "Torres",
+  "Ortiz",
+  "Medina",
+  "Herrera",
+  "Gutierrez",
+  "Ch\xE1vez",
+  "Reyes",
+  "Morales",
+  "Vargas",
+  "Castro",
+  "Flores",
+  "Rojas",
+  "Acosta",
+  "Molina",
+  "Su\xE1rez",
+  "Delgado",
+  "V\xE1zquez",
+  "Castillo",
+  "Sosa",
+  "Vega",
+  "Pereyra",
+  "R\xEDos",
+  "Luna",
+  "Mu\xF1oz",
+  "Blanco",
+  "Campos",
+  "Ibarra",
+  "Peralta",
+  "Ben\xEDtez",
+  "M\xE9ndez",
+  "Paz",
+  "Godoy",
+  "Quiroga",
+  "Rivera",
+  "Cort\xE9s",
+  "Cabrera",
+  "Vera",
+  "Figueroa",
+  "Dom\xEDnguez",
+  "Reyes",
+  "Guerrero",
+  "Santana",
+  "Maldonado",
+  "Correa",
+  "Valdez",
+  "Espinoza",
+  "M\xE1rquez",
+  "Ponce",
+  "Arias",
+  "Ojeda",
+  "Salazar",
+  "Miranda",
+  "Leiva",
+  "Barrios",
+  "Galv\xE1n",
+  "Escobar",
+  "Montero",
+  "Contreras",
+  "Duarte",
+  "Palacios",
+  "Serrano",
+  "Pe\xF1a",
+  "Carrasco",
+  "Gallardo",
+  "Vidal",
+  "Guzm\xE1n",
+  "Fuentes",
+  "Salas",
+  "Bustos",
+  "Ledesma",
+  "Franco",
+  "Lucero",
+  "Nieto",
+  "Rold\xE1n",
+  "Sandoval",
+  "Z\xE1rate",
+  "Abad",
+  "Aguilar",
+  "Andrade",
+  "B\xE1ez",
+  "Beltr\xE1n",
+  "Calder\xF3n",
+  "Ch\xE1vez",
+  "Crespo",
+  "Far\xEDas",
+  "Gim\xE9nez",
+  "Heredia",
+  "Jara",
+  "Lozano",
+  "Mar\xEDn",
+  "Montiel",
+  "N\xFA\xF1ez",
+  "Oliva",
+  "Paredes",
+  "Tapia",
+  "Zelaya",
+  "Quispe",
+  "Mamani",
+  "Araya",
+  "Vergara",
+  "Jaramillo",
+  "Restrepo",
+  "Montoya",
+  "Valencia",
+  "Giraldo",
+  "Pab\xF3n",
+  "Le\xF3n",
+  "Medina",
+  "Herrera",
+  "Gutierrez",
+  "Ramos",
+  "Cruz",
+  "Torres",
+  "Ortiz",
+  "Vargas",
+  "Flores",
+  "Rojas",
+  "Acosta",
+  "Molina",
+  "Su\xE1rez",
+  "Delgado",
+  "V\xE1zquez",
+  "Castillo",
+  "Sosa",
+  "Vega",
+  "Pereyra",
+  "R\xEDos",
+  "Luna",
+  "Mu\xF1oz",
+  "Blanco",
+  "Campos",
+  "Ibarra",
+  "Peralta",
+  "Ben\xEDtez",
+  "M\xE9ndez",
+  "Paz",
+  "Godoy",
+  "Quiroga",
+  "Rivera",
+  "Cort\xE9s",
+  "Cabrera",
+  "Vera",
+  "Figueroa",
+  "Dom\xEDnguez",
+  "Reyes",
+  "Guerrero",
+  "Santana",
+  "Maldonado",
+  "Correa",
+  "Valdez",
+  "Espinoza",
+  "M\xE1rquez",
+  "Ponce",
+  "Arias",
+  "Ojeda",
+  "Salazar",
+  "Miranda",
+  "Leiva",
+  "Barrios",
+  "Galv\xE1n",
+  "Escobar",
+  "Montero",
+  "Contreras",
+  "Duarte",
+  "Palacios",
+  "Serrano",
+  "Pe\xF1a",
+  "Carrasco",
+  "Gallardo",
+  "Vidal",
+  "Guzm\xE1n",
+  "Fuentes",
+  "Salas",
+  "Bustos",
+  "Ledesma",
+  "Franco",
+  "Lucero",
+  "Nieto",
+  "Rold\xE1n",
+  "Sandoval",
+  "Z\xE1rate"
+];
+
+// resources/static_db/names/mexican_data.ts
+var MEXICAN_MALE_FIRSTNAMES = [
+  "Santiago",
+  "Mateo",
+  "Sebasti\xE1n",
+  "Leonardo",
+  "Emiliano",
+  "Mat\xEDas",
+  "Diego",
+  "Daniel",
+  "Alejandro",
+  "Miguel",
+  "Liam",
+  "Thiago",
+  "Gael",
+  "Noah",
+  "Alexander",
+  "Jes\xFAs",
+  "\xC1ngel",
+  "David",
+  "Emmanuel",
+  "Luis",
+  "Rodrigo",
+  "Fernando",
+  "Maximiliano",
+  "Jos\xE9",
+  "Gabriel",
+  "Eduardo",
+  "Juan",
+  "Rafael",
+  "Isaac",
+  "Samuel",
+  "Axel",
+  "Nicol\xE1s",
+  "Emilio",
+  "Dami\xE1n",
+  "Leonel",
+  "El\xEDas",
+  "Ricardo",
+  "Adri\xE1n",
+  "Mauricio",
+  "Antonio",
+  "Alan",
+  "Jonathan",
+  "Francisco",
+  "Carlos",
+  "Juan Pablo",
+  "Miguel \xC1ngel",
+  "Jos\xE9 \xC1ngel",
+  "Jos\xE9 Luis",
+  "Luis \xC1ngel",
+  "Valent\xEDn",
+  "Lucas",
+  "Benjam\xEDn",
+  "Joaqu\xEDn",
+  "Andr\xE9s",
+  "Pablo",
+  "Hugo",
+  "Alonso",
+  "Jorge",
+  "Manuel",
+  "Pedro",
+  "Enrique",
+  "Felipe",
+  "Arturo",
+  "Oscar",
+  "Erick",
+  "Fabian",
+  "Gustavo",
+  "Salvador",
+  "Gerardo",
+  "Ram\xF3n",
+  "Armando",
+  "H\xE9ctor",
+  "Roberto",
+  "V\xEDctor",
+  "Alberto",
+  "Mario",
+  "Iker",
+  "Bruno",
+  "Juli\xE1n",
+  "Andr\xE9s",
+  "Rafael",
+  "Axel",
+  "Iv\xE1n",
+  "Mauricio",
+  "Dante",
+  "Camilo",
+  "Fabi\xE1n",
+  "Rodrigo",
+  "Samuel",
+  "Emilio",
+  "Alejandro",
+  "Fernando",
+  "Mart\xEDn",
+  "Lorenzo",
+  "Tom\xE1s",
+  "Agust\xEDn",
+  "Ignacio",
+  "\xC1lvaro",
+  "Cristian",
+  "Esteban",
+  "Francisco Javier",
+  "Guillermo",
+  "H\xE9ctor",
+  "Ismael",
+  "Javier",
+  "Kevin",
+  "Luis Fernando",
+  "Marco",
+  "Nicol\xE1s",
+  "Orlando",
+  "Patricio",
+  "Quint\xEDn",
+  "Ra\xFAl",
+  "Sergio",
+  "Tom\xE1s",
+  "Ulises",
+  "Vicente",
+  "Xavier",
+  "Yair",
+  "Zacar\xEDas",
+  "Ad\xE1n",
+  "Braulio",
+  "C\xE9sar",
+  "Domingo",
+  "Ernesto",
+  "Fidel",
+  "Gonzalo",
+  "Hugo",
+  "Israel",
+  "Jaime",
+  "Kelvin",
+  "L\xE1zaro",
+  "Marcelo",
+  "Norberto",
+  "Octavio",
+  "Pascual",
+  "Quintiliano",
+  "Renato",
+  "Sim\xF3n",
+  "Teodoro",
+  "Uriel",
+  "Valerio",
+  "Wilfredo",
+  "Ximeno",
+  "Yeray",
+  "Zacarias"
+];
+var MEXICAN_MALE_LASTNAMES = [
+  "Hern\xE1ndez",
+  "Garc\xEDa",
+  "Mart\xEDnez",
+  "Gonz\xE1lez",
+  "L\xF3pez",
+  "Rodr\xEDguez",
+  "P\xE9rez",
+  "S\xE1nchez",
+  "Ram\xEDrez",
+  "Flores",
+  "Cruz",
+  "G\xF3mez",
+  "D\xEDaz",
+  "Morales",
+  "Ortiz",
+  "Torres",
+  "Reyes",
+  "Jim\xE9nez",
+  "Ruiz",
+  "V\xE1zquez",
+  "Castillo",
+  "Mendoza",
+  "Guerrero",
+  "\xC1lvarez",
+  "Romero",
+  "Herrera",
+  "Medina",
+  "Aguilar",
+  "Castro",
+  "Vargas",
+  "Rivera",
+  "Silva",
+  "Ramos",
+  "Navarro",
+  "Molina",
+  "Delgado",
+  "Campos",
+  "Rojas",
+  "Vel\xE1zquez",
+  "Soto",
+  "Cabrera",
+  "Pe\xF1a",
+  "Sol\xEDs",
+  "Santos",
+  "Mora",
+  "Contreras",
+  "Estrada",
+  "N\xFA\xF1ez",
+  "Figueroa",
+  "M\xE9ndez",
+  "Ch\xE1vez",
+  "Vega",
+  "Guadarrama",
+  "Ibarra",
+  "Ju\xE1rez",
+  "Salazar",
+  "Trevi\xF1o",
+  "Zamora",
+  "Cort\xE9s",
+  "Lara",
+  "Pacheco",
+  "Dom\xEDnguez",
+  "Carrillo",
+  "\xC1vila",
+  "Fuentes",
+  "Espinoza",
+  "R\xEDos",
+  "Valdez",
+  "Aguirre",
+  "Salinas",
+  "Acosta",
+  "Gallegos",
+  "Barrera",
+  "Padilla",
+  "Rosales",
+  "Escobar",
+  "Miranda",
+  "Serrano",
+  "Villarreal",
+  "Rangel",
+  "Guti\xE9rrez",
+  "Alvarado",
+  "Olivares",
+  "Sandoval",
+  "Pineda",
+  "Mej\xEDa",
+  "Arellano",
+  "Cervantes",
+  "Le\xF3n",
+  "Galv\xE1n",
+  "Tapia",
+  "Sosa",
+  "Blanco",
+  "Valencia",
+  "Z\xFA\xF1iga",
+  "Cano",
+  "Rico",
+  "Quiroz",
+  "Palacios",
+  "Arroyo",
+  "Calder\xF3n",
+  "Bautista",
+  "Ochoa",
+  "Luna",
+  "Montoya",
+  "Orozco",
+  "Santana",
+  "Valladares",
+  "Su\xE1rez",
+  "Armenta",
+  "Berm\xFAdez",
+  "C\xE1rdenas",
+  "Corona",
+  "Duarte",
+  "Escalante",
+  "Fajardo",
+  "Guzm\xE1n",
+  "Huerta",
+  "Islas",
+  "Lozano",
+  "Mar\xEDn",
+  "Nava",
+  "Ponce",
+  "Quintana",
+  "Robles",
+  "Salgado",
+  "Toledo",
+  "Uribe",
+  "Vera",
+  "Zavala",
+  "Aranda",
+  "Beltr\xE1n",
+  "Cordero",
+  "D\xE1vila",
+  "Espinosa",
+  "Fierro",
+  "G\xE1lvez",
+  "Hidalgo",
+  "I\xF1iguez",
+  "Jaramillo",
+  "Landeros",
+  "Mac\xEDas",
+  "Nieto",
+  "Olvera",
+  "Peralta",
+  "Quezada",
+  "Rivas",
+  "Saucedo",
+  "T\xE9llez",
+  "Urrutia",
+  "Villanueva",
+  "Xochitl",
+  "Y\xE1\xF1ez",
+  "Zepeda"
+];
+
+// resources/static_db/names/oceanian_data.ts
+var OCEANIAN_MALE_FIRSTNAMES = [
+  "Oliver",
+  "Noah",
+  "Jack",
+  "William",
+  "Leo",
+  "Lucas",
+  "Henry",
+  "Charlie",
+  "Thomas",
+  "James",
+  "Liam",
+  "Alexander",
+  "Harrison",
+  "Ethan",
+  "Mason",
+  "Lachlan",
+  "Hunter",
+  "Arlo",
+  "Hugo",
+  "Cooper",
+  "Oscar",
+  "Elijah",
+  "Hudson",
+  "Archie",
+  "Levi",
+  "Luca",
+  "Theodore",
+  "Benjamin",
+  "Samuel",
+  "Daniel",
+  "Matthew",
+  "Michael",
+  "David",
+  "Joseph",
+  "John",
+  "Robert",
+  "George",
+  "Arthur",
+  "Ryan",
+  "Jacob",
+  "Joshua",
+  "Luke",
+  "Isaac",
+  "Sebastian",
+  "Xavier",
+  "Kai",
+  "Malakai",
+  "Koa",
+  "Manaia",
+  "Ariki",
+  "Te Ariki",
+  "Sione",
+  "Tevita",
+  "Viliami",
+  "Paula",
+  "Etuate",
+  "Keanu",
+  "Tai",
+  "Kainoa",
+  "Lani",
+  "Moana",
+  "Tane",
+  "Wiremu",
+  "Anaru",
+  "Nikau",
+  "Aroha",
+  "Mana",
+  "Rangi",
+  "Tama",
+  "Atamai",
+  "Kelekolio",
+  "Malachi",
+  "Jone",
+  "Mohammed",
+  "John",
+  "Peter",
+  "Thomas",
+  "James",
+  "Michael",
+  "David",
+  "Joseph",
+  "Matthew",
+  "Andrew",
+  "Mark",
+  "Luke",
+  "Paul",
+  "Steven",
+  "Daniel",
+  "Christopher",
+  "Joshua",
+  "Ryan",
+  "Ethan",
+  "Jacob",
+  "Samuel",
+  "Benjamin",
+  "William",
+  "Henry",
+  "Jack",
+  "Oliver",
+  "Noah",
+  "Leo",
+  "Lucas",
+  "Charlie",
+  "Thomas",
+  "James",
+  "Liam",
+  "Alexander",
+  "Harrison",
+  "Mason",
+  "Lachlan",
+  "Hunter",
+  "Arlo",
+  "Hugo",
+  "Cooper",
+  "Oscar",
+  "Elijah",
+  "Hudson",
+  "Archie",
+  "Levi",
+  "Luca",
+  "Theodore",
+  "Benjamin",
+  "Samuel",
+  "Daniel",
+  "Matthew",
+  "Michael",
+  "David",
+  "Joseph",
+  "John",
+  "Robert",
+  "George",
+  "Arthur",
+  "Ryan",
+  "Jacob",
+  "Joshua",
+  "Luke",
+  "Isaac",
+  "Sebastian",
+  "Xavier",
+  "Kai",
+  "Malakai",
+  "Koa",
+  "Manaia",
+  "Ariki",
+  "Te Ariki",
+  "Sione",
+  "Tevita",
+  "Viliami",
+  "Paula",
+  "Etuate",
+  "Keanu",
+  "Tai",
+  "Kainoa",
+  "Lani",
+  "Tane",
+  "Wiremu",
+  "Anaru",
+  "Nikau",
+  "Rangi",
+  "Tama",
+  "Atamai",
+  "Kelekolio",
+  "Jone",
+  "Peter",
+  "Thomas",
+  "James",
+  "Michael",
+  "David",
+  "Joseph",
+  "Matthew",
+  "Andrew",
+  "Mark",
+  "Luke",
+  "Paul",
+  "Steven",
+  "Daniel",
+  "Christopher",
+  "Joshua",
+  "Ryan",
+  "Ethan",
+  "Jacob",
+  "Samuel",
+  "Benjamin",
+  "William",
+  "Henry",
+  "Jack",
+  "Oliver",
+  "Noah",
+  "Leo",
+  "Lucas",
+  "Charlie",
+  "Thomas",
+  "James",
+  "Liam",
+  "Alexander",
+  "Harrison",
+  "Mason",
+  "Lachlan",
+  "Hunter",
+  "Arlo",
+  "Hugo",
+  "Cooper",
+  "Oscar",
+  "Elijah",
+  "Hudson",
+  "Archie",
+  "Levi",
+  "Luca",
+  "Theodore",
+  "Benjamin",
+  "Samuel",
+  "Daniel",
+  "Matthew",
+  "Michael",
+  "David",
+  "Joseph",
+  "John",
+  "Robert",
+  "George",
+  "Arthur",
+  "Ryan",
+  "Jacob",
+  "Joshua",
+  "Luke",
+  "Isaac",
+  "Sebastian",
+  "Xavier",
+  "Kai",
+  "Malakai",
+  "Koa",
+  "Manaia",
+  "Ariki",
+  "Te Ariki",
+  "Sione",
+  "Tevita",
+  "Viliami",
+  "Paula",
+  "Etuate",
+  "Keanu",
+  "Tai",
+  "Kainoa",
+  "Tane",
+  "Wiremu",
+  "Anaru",
+  "Nikau",
+  "Rangi",
+  "Tama",
+  "Atamai",
+  "Kelekolio",
+  "Mana",
+  "Moana",
+  "Aroha",
+  "Ranginui",
+  "Kiwa",
+  "Kawe",
+  "Te Koha",
+  "Taniora",
+  "Manuka",
+  "Ahi",
+  "Ari",
+  "Matiu",
+  "Wiremu",
+  "Hemi",
+  "Tama",
+  "Kahu",
+  "Rua",
+  "Tahu",
+  "Teina",
+  "Whaka",
+  "Mikaere",
+  "Rawiri",
+  "Hirini",
+  "Hohepa",
+  "Rewi",
+  "Tawhiri",
+  "Kereama",
+  "Maui",
+  "Kupe",
+  "Tonga",
+  "Samoa",
+  "Fiji",
+  "Vanuatu",
+  "Solomon",
+  "Brandon",
+  "Caleb",
+  "Eddie",
+  "Rex",
+  "Clinton",
+  "Ryan",
+  "Daniel",
+  "Michael",
+  "David",
+  "John",
+  "Shaun",
+  "Bobby",
+  "Fabian",
+  "Arnold",
+  "Nelson",
+  "Jesse",
+  "Danny",
+  "Spencer",
+  "Damien",
+  "Jackson",
+  "Mike",
+  "Patrick",
+  "Samson",
+  "Elvis",
+  "Perry",
+  "Nigel",
+  "Marc",
+  "Ben",
+  "Greydon",
+  "Nollen",
+  "Iven",
+  "Oko",
+  "Silkarni",
+  "Paka"
+];
+var OCEANIAN_MALE_LASTNAMES = [
+  "Smith",
+  "Jones",
+  "Williams",
+  "Brown",
+  "Wilson",
+  "Taylor",
+  "Johnson",
+  "White",
+  "Martin",
+  "Anderson",
+  "Thompson",
+  "Jackson",
+  "Harris",
+  "Thomas",
+  "Clark",
+  "Lewis",
+  "Robinson",
+  "Walker",
+  "Young",
+  "Allen",
+  "King",
+  "Wright",
+  "Scott",
+  "Green",
+  "Baker",
+  "Adams",
+  "Nelson",
+  "Hill",
+  "Campbell",
+  "Mitchell",
+  "Roberts",
+  "Carter",
+  "Phillips",
+  "Evans",
+  "Turner",
+  "Collins",
+  "Edwards",
+  "Stewart",
+  "Morris",
+  "Murphy",
+  "Cook",
+  "Rogers",
+  "Morgan",
+  "Peterson",
+  "Cooper",
+  "Reed",
+  "Bailey",
+  "Bell",
+  "Kelly",
+  "Howard",
+  "Ward",
+  "Cox",
+  "Richardson",
+  "Watson",
+  "Brooks",
+  "Wood",
+  "James",
+  "Bennett",
+  "Gray",
+  "Hughes",
+  "Price",
+  "Foster",
+  "Sanders",
+  "Ross",
+  "Powell",
+  "Long",
+  "Perry",
+  "Russell",
+  "Henderson",
+  "Coleman",
+  "Jenkins",
+  "Perry",
+  "Powell",
+  "Long",
+  "Patterson",
+  "Hughes",
+  "Flores",
+  "Washington",
+  "Butler",
+  "Simmons",
+  "Foster",
+  "Gonzalez",
+  "Bryant",
+  "Alexander",
+  "Russell",
+  "Griffin",
+  "Diaz",
+  "Hayes",
+  "Myers",
+  "Ford",
+  "Hamilton",
+  "Graham",
+  "Sullivan",
+  "Wallace",
+  "Woods",
+  "Cole",
+  "West",
+  "Jordan",
+  "Owens",
+  "Reynolds",
+  "Fisher",
+  "Ellis",
+  "Harrison",
+  "Gibson",
+  "Mcdonald",
+  "Cruz",
+  "Marshall",
+  "Ortiz",
+  "Gomez",
+  "Murray",
+  "Freeman",
+  "Wells",
+  "Webb",
+  "Simpson",
+  "Stevens",
+  "Tucker",
+  "Porter",
+  "Hunter",
+  "Hicks",
+  "Crawford",
+  "Henry",
+  "Boyd",
+  "Mason",
+  "Morales",
+  "Kennedy",
+  "Warren",
+  "Dixon",
+  "Ramos",
+  "Reyes",
+  "Burns",
+  "Gordon",
+  "Shaw",
+  "Holmes",
+  "Rice",
+  "Robertson",
+  "Hunt",
+  "Black",
+  "Daniels",
+  "Palmer",
+  "Mills",
+  "Nichols",
+  "Grant",
+  "Knight",
+  "Ferguson",
+  "Rose",
+  "Stone",
+  "Hawkins",
+  "Dunn",
+  "Perkins",
+  "Hudson",
+  "Spencer",
+  "Gardner",
+  "Stephens",
+  "Payne",
+  "Pierce",
+  "Berry",
+  "Matthews",
+  "Arnold",
+  "Wagner",
+  "Willis",
+  "Ray",
+  "Watkins",
+  "Olson",
+  "Carroll",
+  "Duncan",
+  "Snyder",
+  "Hart",
+  "Cunningham",
+  "Bradley",
+  "Lane",
+  "Andrews",
+  "Ruiz",
+  "Harper",
+  "Fox",
+  "Riley",
+  "Armstrong",
+  "Carpenter",
+  "Weaver",
+  "Greene",
+  "Lawrence",
+  "Elliott",
+  "Chavez",
+  "Sims",
+  "Austin",
+  "Peters",
+  "Kelley",
+  "Franklin",
+  "Lawson",
+  "Fields",
+  "Gutierrez",
+  "Ryan",
+  "Schmidt",
+  "Carr",
+  "Vasquez",
+  "Castillo",
+  "Wheeler",
+  "Chapman",
+  "Oliver",
+  "Montgomery",
+  "Richards",
+  "Williamson",
+  "Johnston",
+  "Banks",
+  "Meyer",
+  "Bishop",
+  "Mccoy",
+  "Howell",
+  "Alvarez",
+  "Morrison",
+  "Hansen",
+  "Fernandez",
+  "Garza",
+  "Harvey",
+  "Little",
+  "Burton",
+  "Stanley",
+  "Nguyen",
+  "George",
+  "Jacobs",
+  "Reid",
+  "Kim",
+  "Fuller",
+  "Lynch",
+  "Dean",
+  "Gilbert",
+  "Garrett",
+  "Romero",
+  "Welch",
+  "Larson",
+  "Frazier",
+  "Burke",
+  "Hanson",
+  "Day",
+  "Mendoza",
+  "Moreno",
+  "Bowman",
+  "Medina",
+  "Fowler",
+  "Brewer",
+  "Hoffman",
+  "Carlson",
+  "Silva",
+  "Pearson",
+  "Holland",
+  "Douglas",
+  "Fleming",
+  "Jensen",
+  "Vargas",
+  "Byrd",
+  "Davidson",
+  "Hopkins",
+  "May",
+  "Terrell",
+  "Terry",
+  "Herrera",
+  "Wade",
+  "Soto",
+  "Walters",
+  "Curtis",
+  "Neal",
+  "Caldwell",
+  "Lowe",
+  "Jennings",
+  "Barnett",
+  "Graves",
+  "Jimenez",
+  "Horton",
+  "Shelton",
+  "Barrett",
+  "Obrien",
+  "Castro",
+  "Sutton",
+  "Gregory",
+  "Mckinney",
+  "Lucas",
+  "Miles",
+  "Craig",
+  "Rodriquez",
+  "Chambers",
+  "Holt",
+  "Lambert",
+  "Fletcher",
+  "Watts",
+  "Bates",
+  "Hale",
+  "Rhodes",
+  "Pena",
+  "Beck",
+  "Newman",
+  "Haynes",
+  "McDaniel",
+  "Mendez",
+  "Bush",
+  "Vaughn",
+  "Parks",
+  "Dawson",
+  "Santiago",
+  "Norris",
+  "Hardy",
+  "Love",
+  "Steele",
+  "Curry",
+  "Powers",
+  "Schultz",
+  "Barker",
+  "Guzman",
+  "Page",
+  "Munoz",
+  "Ball",
+  "Keller",
+  "Chandler",
+  "Weber",
+  "Leonard",
+  "Walsh",
+  "Lyons",
+  "Ramsey",
+  "Wolfe",
+  "Schneider",
+  "Mullins",
+  "Benson",
+  "Sharp",
+  "Bowen",
+  "Daniel",
+  "Barber",
+  "Cummings",
+  "Hines",
+  "Baldwin",
+  "Griffith",
+  "Valdez",
+  "Hubbard",
+  "Salazar",
+  "Reeves",
+  "Warner",
+  "Stevenson",
+  "Burgess",
+  "Santos",
+  "Tate",
+  "Cross",
+  "Garner",
+  "Mann",
+  "Mack",
+  "Moss",
+  "Thornton",
+  "Dennis",
+  "Mcgee",
+  "Farmer",
+  "Delacruz",
+  "Little",
+  "Walton",
+  "Bates",
+  "John",
+  "Peter",
+  "Thomas",
+  "James",
+  "Paul",
+  "Mark",
+  "Luke",
+  "Matthew",
+  "Andrew",
+  "Joseph",
+  "David",
+  "Michael",
+  "Steven",
+  "Christopher",
+  "Daniel",
+  "Joshua",
+  "Ryan",
+  "Jacob",
+  "Nicholas",
+  "Tyler",
+  "Brandon",
+  "Austin",
+  "Benjamin",
+  "Samuel",
+  "Nathan",
+  "Logan",
+  "Christian",
+  "Jonathan",
+  "Caleb",
+  "Dylan",
+  "Isaac",
+  "Gavin",
+  "Jackson",
+  "Eli",
+  "Jordan",
+  "Hunter",
+  "Luke",
+  "Angel",
+  "Kevin",
+  "Jack",
+  "Cody",
+  "Asher",
+  "Cameron",
+  "Chase",
+  "Cooper",
+  "Xavier",
+  "Parker",
+  "Jace",
+  "Miles",
+  "Blake",
+  "Aiden",
+  "Leo",
+  "Theo",
+  "Kai",
+  "Malakai",
+  "Koa",
+  "Manaia",
+  "Ariki",
+  "Te Ariki",
+  "Sione",
+  "Tevita",
+  "Viliami",
+  "Paula",
+  "Etuate",
+  "Keanu",
+  "Tai",
+  "Kainoa",
+  "Tane",
+  "Wiremu",
+  "Anaru",
+  "Nikau",
+  "Rangi",
+  "Tama",
+  "Atamai",
+  "Kelekolio",
+  "Aiono",
+  "Faamausili",
+  "Fatialofa",
+  "Fepuleai",
+  "Fuamatu",
+  "Laulala",
+  "Lealamanua",
+  "Nuuausala",
+  "Palamo",
+  "Palepoi",
+  "Salavea",
+  "Savea",
+  "Vaai",
+  "Tuilaepa",
+  "Ah Mu",
+  "Alofaituli",
+  "Faleafa",
+  "Gatoloai",
+  "Singh",
+  "Kaur",
+  "Patel",
+  "Kumar",
+  "Sharma",
+  "Wong",
+  "Lee",
+  "Chen",
+  "Zhang",
+  "Liu",
+  "Li",
+  "Wang",
+  "Yang",
+  "Maori",
+  "Tawhiri",
+  "Te Hira",
+  "Mabo",
+  "Fatnowna",
+  "Lui",
+  "Mose",
+  "Solomon",
+  "Tonga",
+  "Saukuru",
+  "Quakawoot",
+  "Mussing",
+  "Minniecon",
+  "Budby"
+];
+
+// resources/static_db/names/northamerican_data.ts
+var NORTH_AMERICAN_MALE_FIRSTNAMES = [
+  "James",
+  "John",
+  "Robert",
+  "Michael",
+  "William",
+  "David",
+  "Richard",
+  "Joseph",
+  "Thomas",
+  "Charles",
+  "Christopher",
+  "Daniel",
+  "Matthew",
+  "Anthony",
+  "Mark",
+  "Paul",
+  "Steven",
+  "Andrew",
+  "Kenneth",
+  "Joshua",
+  "Kevin",
+  "Brian",
+  "George",
+  "Edward",
+  "Ronald",
+  "Timothy",
+  "Jason",
+  "Jeffrey",
+  "Ryan",
+  "Jacob",
+  "Gary",
+  "Nicholas",
+  "Eric",
+  "Jonathan",
+  "Stephen",
+  "Larry",
+  "Justin",
+  "Scott",
+  "Brandon",
+  "Benjamin",
+  "Samuel",
+  "Gregory",
+  "Alexander",
+  "Frank",
+  "Patrick",
+  "Raymond",
+  "Jack",
+  "Dennis",
+  "Jerry",
+  "Tyler",
+  "Aaron",
+  "Jose",
+  "Adam",
+  "Nathan",
+  "Henry",
+  "Zachary",
+  "Douglas",
+  "Peter",
+  "Kyle",
+  "Noah",
+  "Ethan",
+  "Jeremy",
+  "Christian",
+  "Walter",
+  "Keith",
+  "Roger",
+  "Terry",
+  "Austin",
+  "Sean",
+  "Gerald",
+  "Carl",
+  "Dylan",
+  "Harold",
+  "Jordan",
+  "Jesse",
+  "Bryan",
+  "Lawrence",
+  "Arthur",
+  "Gabriel",
+  "Bruce",
+  "Logan",
+  "Caleb",
+  "Mason",
+  "Elijah",
+  "Oliver",
+  "Lucas",
+  "Liam",
+  "Alexander",
+  "Jackson",
+  "Aiden",
+  "Logan",
+  "Jacob",
+  "Michael",
+  "Matthew",
+  "Ethan",
+  "Andrew",
+  "Daniel",
+  "William",
+  "Joseph",
+  "David",
+  "Noah",
+  "Anthony",
+  "Ryan",
+  "Christopher",
+  "Tyler",
+  "Joshua",
+  "Benjamin",
+  "Samuel",
+  "Henry",
+  "Jack",
+  "Owen",
+  "Luke",
+  "Gabriel",
+  "Isaac",
+  "Levi",
+  "Nathan",
+  "Eli",
+  "Caleb",
+  "Isaiah",
+  "Christian",
+  "Jonathan",
+  "Aaron",
+  "Thomas",
+  "Hunter",
+  "Cameron",
+  "Connor",
+  "Wyatt",
+  "Carter",
+  "Jayden",
+  "Brayden",
+  "Grayson",
+  "Leo",
+  "Jaxon",
+  "Lincoln",
+  "Asher",
+  "Ezra",
+  "Hudson",
+  "Miles",
+  "Theo",
+  "Miles",
+  "Theo",
+  "Kai",
+  "Roman",
+  "Axel",
+  "Sawyer",
+  "Ryder",
+  "Micah",
+  "Colton",
+  "Cooper",
+  "Easton",
+  "Carson",
+  "Chase",
+  "Beau",
+  "Maverick",
+  "Kingston",
+  "Weston",
+  "Everett",
+  "Bennett",
+  "Emmett",
+  "Parker",
+  "Kaiden",
+  "Rowan",
+  "Declan",
+  "Waylon",
+  "Eli",
+  "Colt",
+  "River",
+  "Finn",
+  "Tucker",
+  "Zane",
+  "Dawson",
+  "Karter",
+  "Nash",
+  "Beckett",
+  "Knox",
+  "Hayden",
+  "Jace",
+  "Emerson",
+  "Atlas",
+  "Emery",
+  "Amari",
+  "Zion",
+  "Malachi",
+  "Ali",
+  "Jamal",
+  "Malik",
+  "Darius",
+  "Jaylen",
+  "Isaiah",
+  "Xavier",
+  "Jalen",
+  "Khalil",
+  "Tristan",
+  "Devin",
+  "Bryson",
+  "Trevor",
+  "Derek",
+  "Blake",
+  "Corey",
+  "Shane",
+  "Cody",
+  "Dakota",
+  "Tanner",
+  "Collin",
+  "Brady",
+  "Jake",
+  "Seth",
+  "Gavin",
+  "Caden",
+  "Riley",
+  "Cole",
+  "Brody",
+  "Max",
+  "Luke",
+  "Owen",
+  "Aidan",
+  "Evan",
+  "Nathaniel",
+  "Dominic",
+  "Hayes",
+  "Holden",
+  "Ryker",
+  "Grady",
+  "Phoenix",
+  "Cash",
+  "Reid",
+  "Zander",
+  "Chance",
+  "Tyson",
+  "Bodhi",
+  "Gunner",
+  "Cohen",
+  "Crew",
+  "Apollo",
+  "Romeo",
+  "Zayn",
+  "Jett",
+  "Judah",
+  "Soren",
+  "Orion",
+  "Aziel",
+  "Koa",
+  "Kyson",
+  "Ronan",
+  "Wilder",
+  "Archer",
+  "Remington",
+  "Prince",
+  "Santana",
+  "Legend",
+  "Dante",
+  "Kane",
+  "Brock",
+  "Drake",
+  "Zackary",
+  "Quentin",
+  "Reed",
+  "Porter",
+  "Sullivan",
+  "Trent",
+  "Keegan",
+  "Finley",
+  "Benson",
+  "Callan",
+  "Daxton",
+  "Enzo",
+  "Jonas",
+  "Kieran",
+  "Lucian",
+  "Nolan"
+];
+var NORTH_AMERICAN_MALE_LASTNAMES = [
+  "Smith",
+  "Johnson",
+  "Williams",
+  "Brown",
+  "Jones",
+  "Garcia",
+  "Miller",
+  "Davis",
+  "Rodriguez",
+  "Martinez",
+  "Hernandez",
+  "Lopez",
+  "Gonzalez",
+  "Wilson",
+  "Anderson",
+  "Thomas",
+  "Taylor",
+  "Moore",
+  "Jackson",
+  "Martin",
+  "Lee",
+  "Perez",
+  "Thompson",
+  "White",
+  "Harris",
+  "Sanchez",
+  "Clark",
+  "Ramirez",
+  "Lewis",
+  "Robinson",
+  "Walker",
+  "Young",
+  "Allen",
+  "King",
+  "Wright",
+  "Scott",
+  "Torres",
+  "Nguyen",
+  "Hill",
+  "Flores",
+  "Green",
+  "Adams",
+  "Nelson",
+  "Baker",
+  "Hall",
+  "Rivera",
+  "Campbell",
+  "Mitchell",
+  "Carter",
+  "Roberts",
+  "Gomez",
+  "Phillips",
+  "Evans",
+  "Turner",
+  "Diaz",
+  "Parker",
+  "Cruz",
+  "Edwards",
+  "Collins",
+  "Reyes",
+  "Stewart",
+  "Morris",
+  "Morales",
+  "Murphy",
+  "Cook",
+  "Rogers",
+  "Gutierrez",
+  "Ortiz",
+  "Morgan",
+  "Cooper",
+  "Peterson",
+  "Bailey",
+  "Reed",
+  "Kelly",
+  "Howard",
+  "Ramos",
+  "Kim",
+  "Cox",
+  "Ward",
+  "Richardson",
+  "Watson",
+  "Brooks",
+  "Chavez",
+  "Wood",
+  "James",
+  "Bennett",
+  "Gray",
+  "Mendoza",
+  "Ruiz",
+  "Hughes",
+  "Price",
+  "Alvarez",
+  "Castillo",
+  "Sanders",
+  "Patel",
+  "Myers",
+  "Long",
+  "Ross",
+  "Foster",
+  "Jimenez",
+  "Powell",
+  "Jenkins",
+  "Perry",
+  "Russell",
+  "Sullivan",
+  "Bell",
+  "Coleman",
+  "Butler",
+  "Henderson",
+  "Barnes",
+  "Gonzales",
+  "Fisher",
+  "Vasquez",
+  "Simmons",
+  "Romero",
+  "Jordan",
+  "Patterson",
+  "Alexander",
+  "Hamilton",
+  "Graham",
+  "Reynolds",
+  "Griffin",
+  "Wallace",
+  "Moreno",
+  "West",
+  "Cole",
+  "Hayes",
+  "Bryant",
+  "Herrera",
+  "Gibson",
+  "Ellis",
+  "Tran",
+  "Medina",
+  "Aguilar",
+  "Stevens",
+  "Murray",
+  "Ford",
+  "Castro",
+  "Marshall",
+  "Owens",
+  "Mcdonald",
+  "Harrison",
+  "Ruiz",
+  "Kennedy",
+  "Wells",
+  "Alvarez",
+  "Woods",
+  "Washington",
+  "Barnes",
+  "Freeman",
+  "Webb",
+  "Simpson",
+  "Stevens",
+  "Tucker",
+  "Porter",
+  "Hunter",
+  "Hicks",
+  "Crawford",
+  "Henry",
+  "Boyd",
+  "Mason",
+  "Morales",
+  "Kennedy",
+  "Warren",
+  "Dixon",
+  "Ramos",
+  "Reyes",
+  "Burns",
+  "Gordon",
+  "Shaw",
+  "Holmes",
+  "Rice",
+  "Robertson",
+  "Hunt",
+  "Black",
+  "Daniels",
+  "Palmer",
+  "Mills",
+  "Nichols",
+  "Grant",
+  "Knight",
+  "Ferguson",
+  "Rose",
+  "Stone",
+  "Hawkins",
+  "Dunn",
+  "Perkins",
+  "Hudson",
+  "Spencer",
+  "Gardner",
+  "Stephens",
+  "Payne",
+  "Pierce",
+  "Berry",
+  "Matthews",
+  "Arnold",
+  "Wagner",
+  "Willis",
+  "Ray",
+  "Watkins",
+  "Olson",
+  "Carroll",
+  "Duncan",
+  "Snyder",
+  "Hart",
+  "Cunningham",
+  "Bradley",
+  "Lane",
+  "Andrews",
+  "Ruiz",
+  "Harper",
+  "Fox",
+  "Riley",
+  "Armstrong",
+  "Carpenter",
+  "Weaver",
+  "Greene",
+  "Lawrence",
+  "Elliott",
+  "Chavez",
+  "Sims",
+  "Austin",
+  "Peters",
+  "Kelley",
+  "Franklin",
+  "Lawson",
+  "Fields",
+  "Gutierrez",
+  "Ryan",
+  "Schmidt",
+  "Carr",
+  "Vasquez",
+  "Castillo",
+  "Wheeler",
+  "Chapman",
+  "Oliver",
+  "Montgomery",
+  "Richards",
+  "Williamson",
+  "Johnston",
+  "Banks",
+  "Meyer",
+  "Bishop",
+  "Mccoy",
+  "Howell",
+  "Alvarez",
+  "Morrison",
+  "Hansen",
+  "Fernandez",
+  "Garza",
+  "Harvey",
+  "Little",
+  "Burton",
+  "Stanley",
+  "Nguyen",
+  "George",
+  "Jacobs",
+  "Reid",
+  "Kim",
+  "Fuller",
+  "Lynch",
+  "Dean",
+  "Gilbert",
+  "Garrett",
+  "Romero",
+  "Welch",
+  "Larson",
+  "Frazier",
+  "Burke",
+  "Hanson",
+  "Day",
+  "Mendoza",
+  "Moreno",
+  "Bowman",
+  "Medina",
+  "Fowler",
+  "Brewer",
+  "Hoffman",
+  "Carlson",
+  "Silva",
+  "Pearson",
+  "Holland",
+  "Douglas",
+  "Fleming",
+  "Jensen",
+  "Vargas",
+  "Byrd",
+  "Davidson",
+  "Hopkins",
+  "May",
+  "Terrell",
+  "Terry",
+  "Herrera",
+  "Wade",
+  "Soto",
+  "Walters",
+  "Curtis",
+  "Neal",
+  "Caldwell",
+  "Lowe",
+  "Jennings",
+  "Barnett",
+  "Graves",
+  "Jimenez",
+  "Horton",
+  "Shelton",
+  "Barrett",
+  "Obrien",
+  "Castro",
+  "Sutton",
+  "Gregory",
+  "Mckinney",
+  "Lucas",
+  "Miles",
+  "Craig",
+  "Rodriquez",
+  "Chambers",
+  "Holt",
+  "Lambert",
+  "Fletcher",
+  "Watts",
+  "Bates",
+  "Hale",
+  "Rhodes",
+  "Pena",
+  "Beck",
+  "Newman",
+  "Haynes",
+  "McDaniel",
+  "Mendez",
+  "Bush",
+  "Vaughn",
+  "Parks",
+  "Dawson",
+  "Santiago",
+  "Norris",
+  "Hardy",
+  "Love",
+  "Steele",
+  "Curry",
+  "Powers",
+  "Schultz",
+  "Barker",
+  "Guzman",
+  "Page",
+  "Munoz",
+  "Ball",
+  "Keller",
+  "Chandler",
+  "Weber",
+  "Leonard",
+  "Walsh",
+  "Lyons",
+  "Ramsey",
+  "Wolfe",
+  "Schneider",
+  "Mullins",
+  "Benson",
+  "Sharp",
+  "Bowen",
+  "Daniel",
+  "Barber",
+  "Cummings",
+  "Hines",
+  "Baldwin",
+  "Griffith",
+  "Valdez",
+  "Hubbard",
+  "Salazar",
+  "Reeves",
+  "Warner",
+  "Stevenson",
+  "Burgess",
+  "Santos",
+  "Tate",
+  "Cross",
+  "Garner",
+  "Mann",
+  "Mack",
+  "Moss",
+  "Thornton",
+  "Dennis",
+  "Mcgee",
+  "Farmer",
+  "Delacruz",
+  "Walton",
+  "Bates",
+  "John",
+  "Peter",
+  "Thomas",
+  "James",
+  "Paul",
+  "Mark",
+  "Luke",
+  "Matthew",
+  "Andrew",
+  "Joseph",
+  "David",
+  "Michael",
+  "Steven",
+  "Christopher",
+  "Daniel",
+  "Joshua",
+  "Ryan",
+  "Jacob",
+  "Nicholas",
+  "Tyler",
+  "Brandon",
+  "Austin",
+  "Benjamin",
+  "Samuel",
+  "Nathan",
+  "Logan",
+  "Christian",
+  "Jonathan",
+  "Caleb",
+  "Dylan",
+  "Isaac",
+  "Gavin",
+  "Jackson",
+  "Eli",
+  "Jordan",
+  "Hunter",
+  "Luke",
+  "Angel",
+  "Kevin",
+  "Jack",
+  "Cody",
+  "Asher",
+  "Cameron",
+  "Chase",
+  "Cooper",
+  "Xavier",
+  "Parker",
+  "Jace",
+  "Miles",
+  "Blake",
+  "Aiden",
+  "Leo",
+  "Theo"
+];
+
+// services/NameGeneratorService.ts
+var getRandomElement = (arr) => {
+  return arr[Math.floor(Math.random() * arr.length)];
+};
+var NameGeneratorService = {
+  getRandomName(region) {
+    switch (region) {
+      case "POLAND" /* POLAND */:
+        return {
+          firstName: getRandomElement(PL_MALE_FIRSTNAMES),
+          lastName: getRandomElement(PL_MALE_LASTNAMES)
+        };
+      case "BALKANS" /* BALKANS */:
+        return {
+          firstName: getRandomElement(BALKAN_MALE_FIRSTNAMES),
+          lastName: getRandomElement(BALKAN_MALE_LASTNAMES)
+        };
+      case "CZ_SK" /* CZ_SK */:
+        return {
+          firstName: getRandomElement(CZSK_MALE_FIRSTNAMES),
+          lastName: getRandomElement(CZSK_MALE_LASTNAMES)
+        };
+      case "SSA" /* SSA */:
+        return {
+          firstName: getRandomElement(SSA_MALE_FIRSTNAMES),
+          lastName: getRandomElement(SSA_MALE_LASTNAMES)
+        };
+      case "IBERIA" /* IBERIA */:
+        return {
+          firstName: getRandomElement(IBERIA_MALE_FIRSTNAMES),
+          lastName: getRandomElement(IBERIA_MALE_LASTNAMES)
+        };
+      case "NORTH_AMERICA" /* NORTH_AMERICA */:
+        return {
+          firstName: getRandomElement(NORTH_AMERICAN_MALE_FIRSTNAMES),
+          lastName: getRandomElement(NORTH_AMERICAN_MALE_LASTNAMES)
+        };
+      case "MEXICO" /* MEXICO */:
+        return {
+          firstName: getRandomElement(MEXICAN_MALE_FIRSTNAMES),
+          lastName: getRandomElement(MEXICAN_MALE_LASTNAMES)
+        };
+      case "OCEANIA" /* OCEANIA */:
+        return {
+          firstName: getRandomElement(OCEANIAN_MALE_FIRSTNAMES),
+          lastName: getRandomElement(OCEANIAN_MALE_LASTNAMES)
+        };
+      case "SWEDEN" /* SWEDEN */:
+        return {
+          firstName: getRandomElement(SWEDISH_MALE_FIRSTNAMES),
+          lastName: getRandomElement(SWEDISH_MALE_LASTNAMES)
+        };
+      case "SCANDINAVIA" /* SCANDINAVIA */:
+        return {
+          firstName: getRandomElement(SCANDINAVIA_MALE_FIRSTNAMES),
+          lastName: getRandomElement(SCANDINAVIA_MALE_LASTNAMES)
+        };
+      case "EX_USSR" /* EX_USSR */:
+        return {
+          firstName: getRandomElement(EXUSSR_MALE_FIRSTNAMES),
+          lastName: getRandomElement(EXUSSR_MALE_LASTNAMES)
+        };
+      case "SPAIN" /* SPAIN */:
+        return { firstName: getRandomElement(ES_MALE_FIRSTNAMES), lastName: getRandomElement(ES_MALE_LASTNAMES) };
+      case "ENGLAND" /* ENGLAND */:
+        return { firstName: getRandomElement(EN_MALE_FIRSTNAMES), lastName: getRandomElement(EN_MALE_LASTNAMES) };
+      case "GERMANY" /* GERMANY */:
+        return { firstName: getRandomElement(DE_MALE_FIRSTNAMES), lastName: getRandomElement(DE_MALE_LASTNAMES) };
+      case "ITALY" /* ITALY */:
+        return { firstName: getRandomElement(IT_MALE_FIRSTNAMES), lastName: getRandomElement(IT_MALE_LASTNAMES) };
+      case "FRANCE" /* FRANCE */:
+        return { firstName: getRandomElement(FR_MALE_FIRSTNAMES), lastName: getRandomElement(FR_MALE_LASTNAMES) };
+      case "JAPAN" /* JAPAN */:
+        return { firstName: getRandomElement(JAPANESE_MALE_FIRSTNAMES), lastName: getRandomElement(JAPANESE_MALE_SURNAMES) };
+      case "KOREA" /* KOREA */:
+        return { firstName: getRandomElement(KOREAN_MALE_FIRSTNAMES), lastName: getRandomElement(KOREAN_MALE_SURNAMES) };
+      case "ARGENTINA" /* ARGENTINA */:
+        return { firstName: getRandomElement(ARGENTINIAN_MALE_FIRSTNAMES), lastName: getRandomElement(ARGENTINIAN_MALE_LASTNAMES) };
+      case "BRAZIL" /* BRAZIL */:
+        return { firstName: getRandomElement(BRAZILIAN_MALE_FIRSTNAMES), lastName: getRandomElement(BRAZILIAN_MALE_LASTNAMES) };
+      case "TURKEY" /* TURKEY */:
+        return { firstName: getRandomElement(TURKISH_MALE_FIRSTNAMES), lastName: getRandomElement(TURKISH_MALE_LASTNAMES) };
+      case "ARABIA" /* ARABIA */:
+        return { firstName: getRandomElement(ARABIC_MALE_FIRSTNAMES), lastName: getRandomElement(ARABIC_MALE_LASTNAMES) };
+      case "FINLAND" /* FINLAND */:
+        return { firstName: getRandomElement(FINNISH_MALE_FIRSTNAMES), lastName: getRandomElement(FINNISH_MALE_LASTNAMES) };
+      case "GEORGIA" /* GEORGIA */:
+        return { firstName: getRandomElement(GEORGIAN_MALE_FIRSTNAMES), lastName: getRandomElement(GEORGIAN_MALE_LASTNAMES) };
+      case "ARMENIA" /* ARMENIA */:
+        return { firstName: getRandomElement(ARMENIAN_MALE_FIRSTNAMES), lastName: getRandomElement(ARMENIAN_MALE_LASTNAMES) };
+      case "ALBANIA" /* ALBANIA */:
+        return { firstName: getRandomElement(ALBANIAN_MALE_FIRSTNAMES), lastName: getRandomElement(ALBANIAN_MALE_LASTNAMES) };
+      case "ROMANIA" /* ROMANIA */:
+        return { firstName: getRandomElement(ROMANIAN_MALE_FIRSTNAMES), lastName: getRandomElement(ROMANIAN_MALE_LASTNAMES) };
+      case "BALTIC" /* BALTIC */:
+        return { firstName: getRandomElement(BALTIC_MALE_FIRSTNAMES), lastName: getRandomElement(BALTIC_MALE_LASTNAMES) };
+      case "BENELUX" /* BENELUX */:
+        return { firstName: getRandomElement(BENELUX_MALE_FIRSTNAMES), lastName: getRandomElement(BENELUX_MALE_LASTNAMES) };
+      case "HUNGARIAN" /* HUNGARIAN */:
+        return { firstName: getRandomElement(HUNGARIAN_MALE_FIRSTNAMES), lastName: getRandomElement(HUNGARIAN_MALE_LASTNAMES) };
+      case "MALTESE" /* MALTESE */:
+        return { firstName: getRandomElement(MALTESE_MALE_FIRSTNAMES), lastName: getRandomElement(MALTESE_MALE_LASTNAMES) };
+      case "ISRAELI" /* ISRAELI */:
+        return { firstName: getRandomElement(ISRAELI_MALE_FIRSTNAMES), lastName: getRandomElement(ISRAELI_MALE_LASTNAMES) };
+      case "GREEK" /* GREEK */:
+        return { firstName: getRandomElement(GREEK_MALE_FIRSTNAMES), lastName: getRandomElement(GREEK_MALE_LASTNAMES) };
+      case "AZERBAIJANI" /* AZERBAIJANI */:
+        return { firstName: getRandomElement(AZERBAIJANI_MALE_FIRSTNAMES), lastName: getRandomElement(AZERBAIJANI_MALE_LASTNAMES) };
+      case "KAZAKH" /* KAZAKH */:
+        return { firstName: getRandomElement(KAZAKH_MALE_FIRSTNAMES), lastName: getRandomElement(KAZAKH_MALE_LASTNAMES) };
+      case "SOUTH_AMERICAN" /* SOUTH_AMERICAN */:
+        return { firstName: getRandomElement(SOUTH_AMERICAN_MALE_FIRSTNAMES), lastName: getRandomElement(SOUTH_AMERICAN_MALE_LASTNAMES) };
+      default:
+        return {
+          firstName: getRandomElement(PL_MALE_FIRSTNAMES),
+          lastName: getRandomElement(PL_MALE_LASTNAMES)
+        };
+    }
+  },
+  getRandomForeignRegion() {
+    const foreignRegions = [
+      "BALKANS" /* BALKANS */,
+      "CZ_SK" /* CZ_SK */,
+      "SSA" /* SSA */,
+      "IBERIA" /* IBERIA */,
+      "SCANDINAVIA" /* SCANDINAVIA */,
+      "EX_USSR" /* EX_USSR */,
+      "SPAIN" /* SPAIN */,
+      "ENGLAND" /* ENGLAND */,
+      "GERMANY" /* GERMANY */,
+      "ITALY" /* ITALY */,
+      "FRANCE" /* FRANCE */,
+      "JAPAN" /* JAPAN */,
+      "KOREA" /* KOREA */,
+      "ARGENTINA" /* ARGENTINA */,
+      "BRAZIL" /* BRAZIL */,
+      "TURKEY" /* TURKEY */,
+      "ARABIA" /* ARABIA */,
+      "FINLAND" /* FINLAND */,
+      "GEORGIA" /* GEORGIA */,
+      "ARMENIA" /* ARMENIA */,
+      "ALBANIA" /* ALBANIA */,
+      "ROMANIA" /* ROMANIA */,
+      "BALTIC" /* BALTIC */,
+      "BENELUX" /* BENELUX */,
+      "HUNGARIAN" /* HUNGARIAN */,
+      "MALTESE" /* MALTESE */,
+      "ISRAELI" /* ISRAELI */,
+      "GREEK" /* GREEK */,
+      "AZERBAIJANI" /* AZERBAIJANI */,
+      "KAZAKH" /* KAZAKH */
+    ];
+    return foreignRegions[Math.floor(Math.random() * foreignRegions.length)];
+  }
+};
+
+// services/RefereeService.ts
+var clampRating = (value) => Math.max(1, Math.min(10, Math.round(value * 10) / 10));
+var stableNoise = (seed, refereeId) => {
+  const idHash = refereeId.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const raw = Math.sin((seed + idHash) * 12.9898) * 43758.5453;
+  return raw - Math.floor(raw);
+};
+var RefereeService = {
+  pool: [],
+  /**
+   * Generates a fixed pool of referees:
+   * - 150 Polish (domestic)
+   * - ~300 European (UEFA countries, excl. Poland)
+   * - ~400 International (non-European)
+   */
+  initializePool: () => {
+    if (RefereeService.pool.length > 0) return;
+    for (let i = 0; i < 150; i++) {
+      const names = NameGeneratorService.getRandomName("POLAND" /* POLAND */);
+      RefereeService.pool.push({
+        id: `REF_${i}`,
+        firstName: names.firstName,
+        lastName: names.lastName,
+        age: 30 + Math.floor(Math.random() * 25),
+        nationality: "POLAND" /* POLAND */,
+        strictness: 20 + Math.floor(Math.random() * 70),
+        consistency: 30 + Math.floor(Math.random() * 60),
+        advantageTendency: 10 + Math.floor(Math.random() * 80),
+        experience: 30 + Math.floor(Math.random() * 70),
+        matchRatings: [],
+        totalYellowCardsShown: 0,
+        totalRedCardsShown: 0,
+        isInternational: false
+      });
+    }
+    const polishRefs = RefereeService.pool.filter((r) => r.nationality === "POLAND" /* POLAND */);
+    const top25Polish = [...polishRefs].sort((a, b) => b.consistency * 0.6 + b.experience * 0.4 - (a.consistency * 0.6 + a.experience * 0.4)).slice(0, 25).map((r) => r.id);
+    top25Polish.forEach((id) => {
+      const ref = RefereeService.pool.find((r) => r.id === id);
+      if (ref) ref.isInternational = true;
+    });
+    const EUR_REGIONS = [
+      "BALKANS" /* BALKANS */,
+      "CZ_SK" /* CZ_SK */,
+      "IBERIA" /* IBERIA */,
+      "SWEDEN" /* SWEDEN */,
+      "SCANDINAVIA" /* SCANDINAVIA */,
+      "EX_USSR" /* EX_USSR */,
+      "SPAIN" /* SPAIN */,
+      "ENGLAND" /* ENGLAND */,
+      "GERMANY" /* GERMANY */,
+      "ITALY" /* ITALY */,
+      "FRANCE" /* FRANCE */,
+      "TURKEY" /* TURKEY */,
+      "FINLAND" /* FINLAND */,
+      "GEORGIA" /* GEORGIA */,
+      "ARMENIA" /* ARMENIA */,
+      "ALBANIA" /* ALBANIA */,
+      "ROMANIA" /* ROMANIA */,
+      "BALTIC" /* BALTIC */,
+      "BENELUX" /* BENELUX */,
+      "HUNGARIAN" /* HUNGARIAN */,
+      "MALTESE" /* MALTESE */,
+      "ISRAELI" /* ISRAELI */,
+      "GREEK" /* GREEK */,
+      "AZERBAIJANI" /* AZERBAIJANI */,
+      "KAZAKH" /* KAZAKH */
+    ];
+    let eurIdx = 0;
+    EUR_REGIONS.forEach((region) => {
+      for (let j = 0; j < 12; j++) {
+        const names = NameGeneratorService.getRandomName(region);
+        RefereeService.pool.push({
+          id: `REF_EUR_${eurIdx++}`,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          age: 28 + Math.floor(Math.random() * 27),
+          nationality: region,
+          strictness: 20 + Math.floor(Math.random() * 70),
+          consistency: 30 + Math.floor(Math.random() * 60),
+          advantageTendency: 10 + Math.floor(Math.random() * 80),
+          experience: 25 + Math.floor(Math.random() * 75),
+          matchRatings: [],
+          totalYellowCardsShown: 0,
+          totalRedCardsShown: 0,
+          isInternational: true
+          // Arbiter UEFA
+        });
+      }
+    });
+    const INTL_REGIONS = [
+      "SSA" /* SSA */,
+      "MEXICO" /* MEXICO */,
+      "JAPAN" /* JAPAN */,
+      "KOREA" /* KOREA */,
+      "ARGENTINA" /* ARGENTINA */,
+      "BRAZIL" /* BRAZIL */,
+      "ARABIA" /* ARABIA */,
+      "SOUTH_AMERICAN" /* SOUTH_AMERICAN */
+    ];
+    let intlIdx = 0;
+    INTL_REGIONS.forEach((region) => {
+      for (let j = 0; j < 50; j++) {
+        const names = NameGeneratorService.getRandomName(region);
+        RefereeService.pool.push({
+          id: `REF_INTL_${intlIdx++}`,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          age: 28 + Math.floor(Math.random() * 27),
+          nationality: region,
+          strictness: 20 + Math.floor(Math.random() * 70),
+          consistency: 30 + Math.floor(Math.random() * 60),
+          advantageTendency: 10 + Math.floor(Math.random() * 80),
+          experience: 20 + Math.floor(Math.random() * 80),
+          matchRatings: [],
+          totalYellowCardsShown: 0,
+          totalRedCardsShown: 0,
+          isInternational: true
+          // Arbiter FIFA
+        });
+      }
+    });
+  },
+  /**
+   * Assigns an INTERNATIONAL referee (FIFA/UEFA) for a CL/EL/CONF match.
+   * Referee must be from a different country than both competing teams.
+   */
+  assignInternationalReferee: (seedStr, homeCountry, awayCountry, usedRefereeIds = /* @__PURE__ */ new Set()) => {
+    RefereeService.initializePool();
+    const COUNTRY_REGION = {
+      "POL": "POLAND" /* POLAND */,
+      "ENG": "ENGLAND" /* ENGLAND */,
+      "GBR": "ENGLAND" /* ENGLAND */,
+      "ESP": "SPAIN" /* SPAIN */,
+      "GER": "GERMANY" /* GERMANY */,
+      "DEU": "GERMANY" /* GERMANY */,
+      "ITA": "ITALY" /* ITALY */,
+      "FRA": "FRANCE" /* FRANCE */,
+      "TUR": "TURKEY" /* TURKEY */,
+      "SWE": "SWEDEN" /* SWEDEN */,
+      "NOR": "SCANDINAVIA" /* SCANDINAVIA */,
+      "DNK": "SCANDINAVIA" /* SCANDINAVIA */,
+      "ISL": "SCANDINAVIA" /* SCANDINAVIA */,
+      "RUS": "EX_USSR" /* EX_USSR */,
+      "UKR": "EX_USSR" /* EX_USSR */,
+      "BLR": "EX_USSR" /* EX_USSR */,
+      "SRB": "BALKANS" /* BALKANS */,
+      "HRV": "BALKANS" /* BALKANS */,
+      "BIH": "BALKANS" /* BALKANS */,
+      "SVN": "BALKANS" /* BALKANS */,
+      "MNE": "BALKANS" /* BALKANS */,
+      "MKD": "BALKANS" /* BALKANS */,
+      "CZE": "CZ_SK" /* CZ_SK */,
+      "SVK": "CZ_SK" /* CZ_SK */,
+      "POR": "IBERIA" /* IBERIA */,
+      "PRT": "IBERIA" /* IBERIA */,
+      "FIN": "FINLAND" /* FINLAND */,
+      "GEO": "GEORGIA" /* GEORGIA */,
+      "ARM": "ARMENIA" /* ARMENIA */,
+      "ALB": "ALBANIA" /* ALBANIA */,
+      "ROU": "ROMANIA" /* ROMANIA */,
+      "LTU": "BALTIC" /* BALTIC */,
+      "LVA": "BALTIC" /* BALTIC */,
+      "EST": "BALTIC" /* BALTIC */,
+      "BEL": "BENELUX" /* BENELUX */,
+      "NLD": "BENELUX" /* BENELUX */,
+      "LUX": "BENELUX" /* BENELUX */,
+      "HUN": "HUNGARIAN" /* HUNGARIAN */,
+      "MLT": "MALTESE" /* MALTESE */,
+      "ISR": "ISRAELI" /* ISRAELI */,
+      "GRC": "GREEK" /* GREEK */,
+      "AZE": "AZERBAIJANI" /* AZERBAIJANI */,
+      "KAZ": "KAZAKH" /* KAZAKH */,
+      "JPN": "JAPAN" /* JAPAN */,
+      "KOR": "KOREA" /* KOREA */,
+      "ARG": "ARGENTINA" /* ARGENTINA */,
+      "BRA": "BRAZIL" /* BRAZIL */,
+      "MEX": "MEXICO" /* MEXICO */,
+      "SAU": "ARABIA" /* ARABIA */,
+      "UAE": "ARABIA" /* ARABIA */,
+      "QAT": "ARABIA" /* ARABIA */,
+      "EGY": "ARABIA" /* ARABIA */,
+      "NGA": "SSA" /* SSA */,
+      "GHA": "SSA" /* SSA */,
+      "CMR": "SSA" /* SSA */,
+      "SEN": "SSA" /* SSA */,
+      "COL": "SOUTH_AMERICAN" /* SOUTH_AMERICAN */,
+      "CHL": "SOUTH_AMERICAN" /* SOUTH_AMERICAN */,
+      "URU": "SOUTH_AMERICAN" /* SOUTH_AMERICAN */,
+      "PER": "SOUTH_AMERICAN" /* SOUTH_AMERICAN */
+    };
+    const homeRegion = COUNTRY_REGION[homeCountry?.toUpperCase()];
+    const awayRegion = COUNTRY_REGION[awayCountry?.toUpperCase()];
+    let hash2 = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash2 = (hash2 << 5) - hash2 + seedStr.charCodeAt(i);
+      hash2 |= 0;
+    }
+    const notConflict = (r) => (!homeRegion || r.nationality !== homeRegion) && (!awayRegion || r.nationality !== awayRegion);
+    const EUR_ONLY = [
+      "POLAND" /* POLAND */,
+      "BALKANS" /* BALKANS */,
+      "CZ_SK" /* CZ_SK */,
+      "IBERIA" /* IBERIA */,
+      "SWEDEN" /* SWEDEN */,
+      "SCANDINAVIA" /* SCANDINAVIA */,
+      "EX_USSR" /* EX_USSR */,
+      "SPAIN" /* SPAIN */,
+      "ENGLAND" /* ENGLAND */,
+      "GERMANY" /* GERMANY */,
+      "ITALY" /* ITALY */,
+      "FRANCE" /* FRANCE */,
+      "TURKEY" /* TURKEY */,
+      "FINLAND" /* FINLAND */,
+      "GEORGIA" /* GEORGIA */,
+      "ARMENIA" /* ARMENIA */,
+      "ALBANIA" /* ALBANIA */,
+      "ROMANIA" /* ROMANIA */,
+      "BALTIC" /* BALTIC */,
+      "BENELUX" /* BENELUX */,
+      "HUNGARIAN" /* HUNGARIAN */,
+      "MALTESE" /* MALTESE */,
+      "ISRAELI" /* ISRAELI */,
+      "GREEK" /* GREEK */,
+      "AZERBAIJANI" /* AZERBAIJANI */,
+      "KAZAKH" /* KAZAKH */
+    ];
+    const isEuropean = (r) => EUR_ONLY.includes(r.nationality);
+    const eligible = RefereeService.pool.filter(
+      (r) => r.isInternational && isEuropean(r) && r.consistency > 55 && notConflict(r) && !usedRefereeIds.has(r.id)
+    );
+    if (eligible.length > 0) {
+      return eligible[Math.abs(hash2) % eligible.length];
+    }
+    const eligibleAnyQuality = RefereeService.pool.filter(
+      (r) => r.isInternational && isEuropean(r) && notConflict(r) && !usedRefereeIds.has(r.id)
+    );
+    if (eligibleAnyQuality.length > 0) {
+      return eligibleAnyQuality[Math.abs(hash2) % eligibleAnyQuality.length];
+    }
+    const polishFallback = RefereeService.pool.filter(
+      (r) => r.isInternational && r.nationality === "POLAND" /* POLAND */ && !usedRefereeIds.has(r.id)
+    );
+    if (polishFallback.length > 0) {
+      return polishFallback[Math.abs(hash2) % polishFallback.length];
+    }
+    const anyAvailable = RefereeService.pool.filter((r) => r.isInternational && isEuropean(r));
+    const lastResort = anyAvailable.length > 0 ? anyAvailable : RefereeService.pool;
+    return lastResort[Math.abs(hash2) % lastResort.length];
+  },
+  /**
+   * Assigns a European referee for a national team match.
+   * Referee must be European, from a different region than both teams, and not already used in this matchday.
+   */
+  assignEuropeanRefereeByRegion: (seedStr, homeRegion, awayRegion, usedRefereeIds = /* @__PURE__ */ new Set()) => {
+    RefereeService.initializePool();
+    let hash2 = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash2 = (hash2 << 5) - hash2 + seedStr.charCodeAt(i);
+      hash2 |= 0;
+    }
+    const EUR_ONLY = [
+      "POLAND" /* POLAND */,
+      "BALKANS" /* BALKANS */,
+      "CZ_SK" /* CZ_SK */,
+      "IBERIA" /* IBERIA */,
+      "SWEDEN" /* SWEDEN */,
+      "SCANDINAVIA" /* SCANDINAVIA */,
+      "EX_USSR" /* EX_USSR */,
+      "SPAIN" /* SPAIN */,
+      "ENGLAND" /* ENGLAND */,
+      "GERMANY" /* GERMANY */,
+      "ITALY" /* ITALY */,
+      "FRANCE" /* FRANCE */,
+      "TURKEY" /* TURKEY */,
+      "FINLAND" /* FINLAND */,
+      "GEORGIA" /* GEORGIA */,
+      "ARMENIA" /* ARMENIA */,
+      "ALBANIA" /* ALBANIA */,
+      "ROMANIA" /* ROMANIA */,
+      "BALTIC" /* BALTIC */,
+      "BENELUX" /* BENELUX */,
+      "HUNGARIAN" /* HUNGARIAN */,
+      "MALTESE" /* MALTESE */,
+      "ISRAELI" /* ISRAELI */,
+      "GREEK" /* GREEK */,
+      "AZERBAIJANI" /* AZERBAIJANI */,
+      "KAZAKH" /* KAZAKH */
+    ];
+    const isEuropean = (r) => EUR_ONLY.includes(r.nationality);
+    const notConflict = (r) => r.nationality !== homeRegion && r.nationality !== awayRegion;
+    const eligible = RefereeService.pool.filter(
+      (r) => r.isInternational && isEuropean(r) && r.consistency > 55 && notConflict(r) && !usedRefereeIds.has(r.id)
+    );
+    if (eligible.length > 0) return eligible[Math.abs(hash2) % eligible.length];
+    const eligible2 = RefereeService.pool.filter(
+      (r) => r.isInternational && isEuropean(r) && notConflict(r) && !usedRefereeIds.has(r.id)
+    );
+    if (eligible2.length > 0) return eligible2[Math.abs(hash2) % eligible2.length];
+    const eligible3 = RefereeService.pool.filter((r) => isEuropean(r) && !usedRefereeIds.has(r.id));
+    if (eligible3.length > 0) return eligible3[Math.abs(hash2) % eligible3.length];
+    const anyEur = RefereeService.pool.filter((r) => isEuropean(r));
+    const lastResort = anyEur.length > 0 ? anyEur : RefereeService.pool;
+    return lastResort[Math.abs(hash2) % lastResort.length];
+  },
+  /**
+   * Assigns a Polish referee for domestic league and cup matches.
+   */
+  assignPolishReferee: (seedStr, importance) => {
+    RefereeService.initializePool();
+    let hash2 = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash2 = (hash2 << 5) - hash2 + seedStr.charCodeAt(i);
+      hash2 |= 0;
+    }
+    const polishRefs = RefereeService.pool.filter((r) => r.nationality === "POLAND" /* POLAND */);
+    const eligibleRefs = polishRefs.filter((r) => {
+      if (importance >= 4) return r.consistency > 70;
+      if (importance >= 3) return r.consistency > 50;
+      return true;
+    });
+    const finalPool = eligibleRefs.length > 0 ? eligibleRefs : polishRefs;
+    const index = Math.abs(hash2) % finalPool.length;
+    return finalPool[index];
+  },
+  /**
+   * Deterministically assigns a referee based on match criteria.
+   */
+  assignReferee: (seedStr, importance) => {
+    RefereeService.initializePool();
+    let hash2 = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash2 = (hash2 << 5) - hash2 + seedStr.charCodeAt(i);
+      hash2 |= 0;
+    }
+    const eligibleRefs = RefereeService.pool.filter((r) => {
+      if (importance >= 4) return r.consistency > 70;
+      if (importance >= 3) return r.consistency > 50;
+      return true;
+    });
+    const finalPool = eligibleRefs.length > 0 ? eligibleRefs : RefereeService.pool;
+    const index = Math.abs(hash2) % finalPool.length;
+    return finalPool[index];
+  },
+  /**
+   * Losuje ocenę 1-10. Wyższy consistency = szansa na wyższą ocenę.
+   */
+  generateMatchRating: (referee) => {
+    const maxRating = Math.min(10, 4 + Math.floor(referee.consistency / 15));
+    return Math.floor(1 + Math.random() * maxRating);
+  },
+  generateLiveMatchRating: (input) => {
+    const { referee, homeScore, awayScore, homeStats, awayStats, timeline = [], seed = 0 } = input;
+    const totalFouls = homeStats.fouls + awayStats.fouls;
+    const totalYellows = homeStats.yellowCards + awayStats.yellowCards;
+    const totalReds = homeStats.redCards + awayStats.redCards;
+    const scoreDiff = Math.abs(homeScore - awayScore);
+    const isCloseMatch = scoreDiff <= 1;
+    const varDisallowedGoals = timeline.filter(
+      (event) => event.varDisallowed === true && (event.type === "GOAL" || event.type === "PENALTY_SCORED")
+    ).length;
+    const varPenaltyNoCalls = timeline.filter(
+      (event) => typeof event.text === "string" && event.text.includes("VAR: Nie ma karnego")
+    ).length;
+    let rating = 6.6 + (referee.consistency - 50) * 0.018 + (referee.experience - 50) * 0.012;
+    const matchDifficulty = Math.min(0.35, totalFouls * 6e-3 + totalReds * 0.06 + (isCloseMatch ? 0.08 : 0));
+    rating += matchDifficulty;
+    if (totalFouls >= 18 && totalYellows <= 1) rating -= 0.45;
+    if (totalFouls >= 24 && totalYellows <= 2) rating -= 0.35;
+    if (totalFouls <= 10 && totalYellows >= 5) rating -= 0.45;
+    if (totalYellows > totalFouls * 0.55 + 2) rating -= 0.25;
+    rating -= totalReds * (isCloseMatch ? 0.22 : 0.12);
+    rating -= varDisallowedGoals * (isCloseMatch ? 0.55 : 0.25);
+    rating -= varPenaltyNoCalls * (isCloseMatch ? 0.65 : 0.3);
+    if (varDisallowedGoals === 0 && varPenaltyNoCalls === 0 && totalReds === 0 && totalFouls >= 12) {
+      rating += 0.18;
+    }
+    rating += (stableNoise(seed, referee.id) - 0.5) * 0.25;
+    return clampRating(rating);
+  },
+  recordMatchStats: (refereeId, rating, yellowCards, redCards) => {
+    const ref = RefereeService.pool.find((r) => r.id === refereeId);
+    if (!ref) return;
+    ref.matchRatings.push(rating);
+    ref.totalYellowCardsShown += yellowCards;
+    ref.totalRedCardsShown += redCards;
+  },
+  getAverageRating: (referee) => {
+    if (referee.matchRatings.length === 0) return null;
+    const sum = referee.matchRatings.reduce((a, b) => a + b, 0);
+    return Math.round(sum / referee.matchRatings.length * 10) / 10;
+  },
+  applyEndOfSeasonAdjustments: () => {
+    RefereeService.pool.forEach((ref) => {
+      if (ref.matchRatings.length <= 5) return;
+      const avg = RefereeService.getAverageRating(ref);
+      const attrs = ["strictness", "consistency", "advantageTendency"];
+      if (avg < 6) {
+        const penalty = Math.floor(Math.random() * 3) + 1;
+        attrs.forEach((attr2) => {
+          ref[attr2] = Math.max(5, ref[attr2] - penalty);
+        });
+      } else if (avg > 6.5) {
+        const bonus = Math.floor(Math.random() * 3) + 1;
+        attrs.forEach((attr2) => {
+          ref[attr2] = Math.min(99, ref[attr2] + bonus);
+        });
+      }
+    });
+  },
+  resetSeasonStats: () => {
+    RefereeService.pool.forEach((ref) => {
+      ref.matchRatings = [];
+      ref.totalYellowCardsShown = 0;
+      ref.totalRedCardsShown = 0;
+    });
+  }
+};
+
+// services/match/engines/cupV2/CupMatchTypes.ts
+var DEFAULT_CUP_ENGINE_CONFIG = {
+  tickSeconds: 5,
+  normalTimeSeconds: 90 * 60,
+  extraTimeSeconds: 30 * 60,
+  maxSubstitutions: 5,
+  enableExtraTime: true,
+  enablePenaltyShootout: true,
+  calibrationMode: false
+};
+
+// services/match/engines/cupV2/CupMath.ts
+var clamp3 = (value, min, max) => Math.max(min, Math.min(max, value));
+var average = (values, fallback = 50) => values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
+var normalizeAttribute = (value) => clamp3(value, 1, 100) / 100;
+var fatigueMultiplier = (fatigue) => clamp3(0.62 + normalizeAttribute(fatigue) * 0.45, 0.62, 1.07);
+var moraleMultiplier = (morale) => clamp3(0.88 + normalizeAttribute(morale) * 0.24, 0.88, 1.12);
+var weightedScore = (values, weights, fallback = 50) => {
+  let weighted = 0;
+  let weightSum = 0;
+  Object.entries(weights).forEach(([key, rawWeight]) => {
+    const weight = typeof rawWeight === "number" ? rawWeight : 0;
+    const value = values[key];
+    if (typeof value !== "number" || weight <= 0) return;
+    weighted += value * weight;
+    weightSum += weight;
+  });
+  return weightSum > 0 ? weighted / weightSum : fallback;
+};
+var sigmoidProbability = (scoreDiff, scale = 14) => 1 / (1 + Math.exp(-scoreDiff / scale));
+var contestProbability = (attackScore, defenseScore, base = 0.5, scale = 18) => clamp3(base + (sigmoidProbability(attackScore - defenseScore, scale) - 0.5), 0.03, 0.97);
+var stableHash = (seed) => {
+  let hash2 = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash2 ^= seed.charCodeAt(i);
+    hash2 = Math.imul(hash2, 16777619);
+  }
+  return hash2 >>> 0;
+};
+var seededRandom = (seed, second, salt) => {
+  let value = stableHash(`${seed}:${second}:${salt}`) + 1831565813;
+  value = Math.imul(value ^ value >>> 15, value | 1);
+  value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+  return ((value ^ value >>> 14) >>> 0) / 4294967296;
+};
+var pickWeighted = (options, roll) => {
+  const total = options.reduce((sum, option) => sum + Math.max(0, option.weight), 0);
+  if (total <= 0) return options[0].item;
+  let cursor = roll * total;
+  for (const option of options) {
+    cursor -= Math.max(0, option.weight);
+    if (cursor <= 0) return option.item;
+  }
+  return options[options.length - 1].item;
+};
+
+// services/match/engines/cupV2/CupTeamProfileService.ts
+var activePlayers = (team) => {
+  const ids = new Set(team.lineup.startingXI.filter((id) => Boolean(id)));
+  return team.players.filter((player) => ids.has(player.id));
+};
+var byPosition = (players, position) => players.filter((player) => player.position === position);
+var injuryMultiplier = (player, injuries) => {
+  const severity = injuries[player.id];
+  if (!severity) return 1;
+  if (severity === "SEVERE") {
+    return player.position === "GK" /* GK */ ? 0.46 : 0.38;
+  }
+  return player.position === "GK" /* GK */ ? 0.74 : 0.68;
+};
+var attr = (players, fatigue, injuries, weights, fallback = 50) => average(players.map(
+  (player) => weightedScore(player.attributes, weights, fallback) * fatigueMultiplier(fatigue[player.id] ?? player.condition) * injuryMultiplier(player, injuries)
+), fallback);
+var shapeFromTactic = (team) => {
+  const slots = team.tactic.slots;
+  const avgX = average(slots.map((slot) => slot.x), 50);
+  const avgY = average(slots.map((slot) => slot.y), 50);
+  const width = average(slots.map((slot) => Math.abs(slot.x - avgX)), 20);
+  return {
+    tacticalWidth: clamp3(35 + width * 1.2, 25, 85),
+    lineHeight: clamp3(avgY, 25, 85)
+  };
+};
+var CupTeamProfileService = {
+  /**
+   * Profil drużyny jest warstwą agregującą atrybuty zawodników, taktykę,
+   * kondycję i morale. Silnik nie powinien w kolejnych fazach liczyć
+   * "surowej sumy" zawodników, bo to tworzy sztuczne przewagi formacji.
+   * Zamiast tego każda faza dostaje jakość danej funkcji zespołu.
+   */
+  buildProfile: (team, fatigue, redCards, injuries = {}) => {
+    const active = activePlayers(team).filter((player) => !redCards[player.id]);
+    const naturalGoalkeeper = active.find((player) => player.position === "GK" /* GK */);
+    const emergencyGoalkeeper = naturalGoalkeeper ? void 0 : [...active].sort(
+      (left, right) => weightedScore(right.attributes, { goalkeeping: 0.55, positioning: 0.2, mentality: 0.15, strength: 0.1 }) - weightedScore(left.attributes, { goalkeeping: 0.55, positioning: 0.2, mentality: 0.15, strength: 0.1 })
+    )[0];
+    const goalkeeper = naturalGoalkeeper ?? emergencyGoalkeeper;
+    const outfield = active.filter((player) => player.id !== goalkeeper?.id);
+    const defenders = byPosition(outfield, "DEF" /* DEF */);
+    const midfielders = byPosition(outfield, "MID" /* MID */);
+    const forwards = byPosition(outfield, "FWD" /* FWD */);
+    const moraleMod = moraleMultiplier(team.morale * 0.52 + team.preMatchMotivation * 0.32 + team.stadiumSupport * 0.16);
+    const shape = shapeFromTactic(team);
+    const injuredActiveCount = active.filter((player) => injuries[player.id]).length;
+    const severeActiveCount = active.filter((player) => injuries[player.id] === "SEVERE").length;
+    const unfitShapePenalty = clamp3(1 - injuredActiveCount * 0.018 - severeActiveCount * 0.045, 0.72, 1);
+    const buildUp = attr([...defenders, ...midfielders, goalkeeper].filter(Boolean), fatigue, injuries, {
+      passing: 0.28,
+      technique: 0.18,
+      vision: 0.16,
+      positioning: 0.12,
+      mentality: 0.14,
+      workRate: 0.12
+    }) * moraleMod;
+    const midfieldControl = attr(midfielders.length > 0 ? midfielders : outfield, fatigue, injuries, {
+      passing: 0.22,
+      technique: 0.2,
+      vision: 0.18,
+      positioning: 0.12,
+      stamina: 0.1,
+      workRate: 0.12,
+      mentality: 0.06
+    }) * moraleMod;
+    const progression = attr(outfield, fatigue, injuries, {
+      pace: 0.13,
+      passing: 0.17,
+      technique: 0.18,
+      dribbling: 0.16,
+      vision: 0.13,
+      workRate: 0.11,
+      mentality: 0.07,
+      strength: 0.05
+    }) * moraleMod;
+    const chanceCreation = attr([...midfielders, ...forwards], fatigue, injuries, {
+      vision: 0.22,
+      passing: 0.18,
+      technique: 0.16,
+      attacking: 0.14,
+      crossing: 0.12,
+      dribbling: 0.1,
+      mentality: 0.08
+    }) * moraleMod;
+    const finishing = attr(forwards.length > 0 ? forwards : outfield, fatigue, injuries, {
+      finishing: 0.28,
+      attacking: 0.17,
+      technique: 0.15,
+      positioning: 0.13,
+      mentality: 0.12,
+      strength: 0.06,
+      pace: 0.05,
+      heading: 0.04
+    }) * moraleMod;
+    const defensiveShape = attr([...defenders, ...midfielders], fatigue, injuries, {
+      defending: 0.28,
+      positioning: 0.22,
+      strength: 0.12,
+      pace: 0.1,
+      heading: 0.08,
+      workRate: 0.1,
+      mentality: 0.1
+    }) * moraleMod;
+    const pressing = attr(outfield, fatigue, injuries, {
+      workRate: 0.23,
+      stamina: 0.18,
+      aggression: 0.16,
+      pace: 0.14,
+      defending: 0.11,
+      positioning: 0.09,
+      mentality: 0.09
+    }) * (team.instructions.pressing === "PRESSING" ? 1.1 : 0.96);
+    const tacticAttackMod = clamp3(1 + (team.tactic.attackBias - 50) * 35e-4, 0.86, 1.16);
+    const tacticDefenseMod = clamp3(1 + (team.tactic.defenseBias - 50) * 38e-4, 0.84, 1.18);
+    const tacticPressMod = clamp3(1 + (team.tactic.pressingIntensity - 50) * 34e-4, 0.88, 1.16);
+    const tempoBuildMod = team.instructions.tempo === "FAST" ? 1.035 : team.instructions.tempo === "SLOW" ? 0.972 : 1;
+    const mindsetAttackMod = team.instructions.mindset === "OFFENSIVE" ? 1.055 : team.instructions.mindset === "DEFENSIVE" ? 0.952 : 1;
+    const mindsetDefenseMod = team.instructions.mindset === "DEFENSIVE" ? 1.062 : team.instructions.mindset === "OFFENSIVE" ? 0.952 : 1;
+    const intensityPressMod = team.instructions.intensity === "AGGRESSIVE" ? 1.085 : team.instructions.intensity === "CAUTIOUS" ? 0.928 : 1;
+    const markingDefenseMod = team.instructions.marking === "MAN" ? 1.035 : team.instructions.marking === "NONE" ? 0.925 : 1;
+    const markingDisciplineMod = team.instructions.marking === "MAN" ? 1.1 : team.instructions.marking === "NONE" ? 0.88 : 1;
+    const passingProgressionMod = team.instructions.passing === "SHORT" ? 1.025 : team.instructions.passing === "LONG" ? 0.985 : 1;
+    return {
+      side: team.side,
+      activePlayers: active,
+      goalkeeper,
+      outfieldPlayers: outfield,
+      defenders,
+      midfielders,
+      forwards,
+      buildUp: buildUp * tempoBuildMod * passingProgressionMod,
+      midfieldControl: midfieldControl * (team.instructions.passing === "SHORT" ? 1.018 : 1),
+      progression: progression * tacticAttackMod * tempoBuildMod * passingProgressionMod,
+      chanceCreation: chanceCreation * tacticAttackMod * mindsetAttackMod,
+      finishing,
+      crossing: attr(outfield, fatigue, injuries, { crossing: 0.34, technique: 0.18, passing: 0.16, vision: 0.12, pace: 0.1, mentality: 0.1 }) * tacticAttackMod,
+      aerialThreat: attr(outfield, fatigue, injuries, { heading: 0.32, strength: 0.22, positioning: 0.18, attacking: 0.12, mentality: 0.08, pace: 0.08 }),
+      defensiveShape: defensiveShape * tacticDefenseMod * mindsetDefenseMod * markingDefenseMod * unfitShapePenalty,
+      pressing: pressing * tacticPressMod * intensityPressMod,
+      counterThreat: attr([...midfielders, ...forwards], fatigue, injuries, { pace: 0.2, passing: 0.18, vision: 0.17, dribbling: 0.15, technique: 0.12, attacking: 0.11, mentality: 0.07 }),
+      setPieces: attr(active, fatigue, injuries, { freeKicks: 0.26, corners: 0.22, crossing: 0.18, heading: 0.14, technique: 0.1, mentality: 0.1 }),
+      goalkeeperQuality: goalkeeper ? weightedScore(goalkeeper.attributes, { goalkeeping: 0.38, positioning: 0.2, mentality: 0.14, strength: 0.08, pace: 0.06, passing: 0.06, technique: 0.04, leadership: 0.04 }) * fatigueMultiplier(fatigue[goalkeeper.id] ?? goalkeeper.condition) * injuryMultiplier(goalkeeper, injuries) : 35,
+      disciplineRisk: attr(outfield, fatigue, injuries, { aggression: 0.32, mentality: -0.12, positioning: -0.1, defending: 0.08, workRate: 0.12 }, 50) * intensityPressMod * markingDisciplineMod,
+      staminaReserve: attr(active, fatigue, injuries, { stamina: 0.5, workRate: 0.25, mentality: 0.15, strength: 0.1 }),
+      leadership: attr(active, fatigue, injuries, { leadership: 0.55, mentality: 0.25, workRate: 0.12, stamina: 0.08 }, 50),
+      mentality: attr(active, fatigue, injuries, { mentality: 0.44, leadership: 0.18, workRate: 0.16, aggression: 0.07, stamina: 0.08, positioning: 0.07 }),
+      tacticalWidth: shape.tacticalWidth,
+      lineHeight: shape.lineHeight
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupMomentumService.ts
+var CupMomentumService = {
+  /**
+   * Momentum jest efektem gry, a nie generatorem goli. Zmienia jakość decyzji,
+   * odwagę i presję, ale bramka nadal wymaga akcji, sytuacji i strzału.
+   */
+  updateMomentum: (state, homeProfile, awayProfile, eventDelta) => {
+    const homeScorePressure = state.homeScore < state.awayScore ? 4 : state.homeScore > state.awayScore ? -2 : 0;
+    const awayScorePressure = state.awayScore < state.homeScore ? 4 : state.awayScore > state.homeScore ? -2 : 0;
+    const midfieldTilt = (homeProfile.midfieldControl - awayProfile.midfieldControl) * 0.018;
+    const leadershipDamping = ((homeProfile.leadership + awayProfile.leadership) / 2 - 50) * 4e-3;
+    const pressureTilt = homeScorePressure - awayScorePressure;
+    const naturalDecay = state.momentum * (0.018 + Math.max(0, leadershipDamping));
+    return clamp3(state.momentum + midfieldTilt + pressureTilt * 0.03 + eventDelta - naturalDecay, -100, 100);
+  },
+  pressureForSide: (state, sideScore, opponentScore, profile) => {
+    const losingPressure = sideScore < opponentScore ? clamp3((opponentScore - sideScore) * 9, 0, 30) : 0;
+    const latePressure = state.second > 75 * 60 && sideScore <= opponentScore ? 10 : 0;
+    const mentalityShield = (profile.mentality - 50) * 0.18 + (profile.leadership - 50) * 0.12;
+    return clamp3(35 + losingPressure + latePressure - mentalityShield, 0, 100);
+  }
+};
+
+// services/match/engines/cupV2/CupChanceCreationService.ts
+var bestShooterPool = (profile) => {
+  const attackers = [...profile.forwards, ...profile.midfielders, ...profile.outfieldPlayers];
+  return attackers.length > 0 ? attackers : profile.activePlayers;
+};
+var shotWeight = (player) => {
+  const positionalBonus = player.position === "FWD" /* FWD */ ? 18 : player.position === "MID" /* MID */ ? 8 : player.position === "DEF" /* DEF */ ? -6 : -30;
+  return Math.max(1, weightedScore(player.attributes, {
+    finishing: 0.24,
+    attacking: 0.18,
+    positioning: 0.16,
+    technique: 0.13,
+    pace: 0.08,
+    heading: 0.08,
+    mentality: 0.08,
+    strength: 0.05
+  }) + positionalBonus);
+};
+var creatorWeight = (player) => Math.max(1, weightedScore(player.attributes, {
+  passing: 0.24,
+  vision: 0.22,
+  technique: 0.18,
+  crossing: 0.13,
+  dribbling: 0.1,
+  mentality: 0.08,
+  workRate: 0.05
+}));
+var CupChanceCreationService = {
+  /**
+   * Ta warstwa zamienia udaną progresję w konkretną sytuację. Nie każda akcja
+   * w ostatniej tercji kończy się strzałem: obrona może zamknąć kąt, złapać
+   * spalonego, wymusić dośrodkowanie z trudnej pozycji albo zablokować podanie.
+   */
+  createChance: ({
+    side,
+    intent,
+    attacking,
+    defending,
+    zone,
+    pressure,
+    scoreDiff,
+    roll
+  }) => {
+    const creationScore = attacking.chanceCreation * 0.34 + attacking.progression * 0.2 + attacking.finishing * 0.12 + attacking.crossing * intent.widthUse * 0.1 + attacking.aerialThreat * intent.verticality * 0.08 + attacking.mentality * 0.08 + attacking.counterThreat * (intent.pattern === "COUNTER" ? 0.12 : 0.04);
+    const preventionScore = defending.defensiveShape * 0.42 + defending.pressing * 0.18 + defending.goalkeeperQuality * 0.1 + defending.mentality * 0.12 + defending.staminaReserve * 0.08;
+    const zoneBonus = zone === "BOX" ? 0.16 : zone === "FINAL_THIRD" ? 0.06 : -0.08;
+    const pressurePenalty = pressure * 25e-4;
+    const leadingChanceDampener = scoreDiff >= 5 ? 0.54 : scoreDiff >= 4 ? 0.62 : scoreDiff >= 3 ? 0.72 : scoreDiff >= 2 ? 0.86 : scoreDiff >= 1 ? 0.95 : 1;
+    const trailingUrgency = scoreDiff < 0 ? clamp3(1 + Math.min(3, Math.abs(scoreDiff)) * 0.025, 1, 1.075) : 1;
+    const chanceProbability = clamp3(
+      (contestProbability(creationScore, preventionScore, 0.205, 24) + zoneBonus - pressurePenalty) * leadingChanceDampener * trailingUrgency,
+      0.012,
+      0.52
+    );
+    if (roll(31) > chanceProbability) return null;
+    const shooter = pickWeighted(bestShooterPool(attacking).map((player) => ({ item: player, weight: shotWeight(player) })), roll(32));
+    const creatorCandidates = attacking.outfieldPlayers.filter((player) => player.id !== shooter.id);
+    const creator = creatorCandidates.length > 0 ? pickWeighted(creatorCandidates.map((player) => ({ item: player, weight: creatorWeight(player) })), roll(33)) : void 0;
+    const marker = defending.defenders.length > 0 ? pickWeighted(defending.defenders.map((player) => ({ item: player, weight: Math.max(1, player.attributes.defending + player.attributes.positioning) })), roll(34)) : void 0;
+    const rawXg = 0.044 + (creationScore - preventionScore) * 18e-4 + (zone === "BOX" ? 0.112 : zone === "FINAL_THIRD" ? 0.044 : 0.018) + (intent.pattern === "COUNTER" ? 0.03 : 0) + (intent.pattern === "SET_PIECE" ? 0.018 : 0) - pressure * 9e-4;
+    const leadingXgDampener = scoreDiff >= 5 ? 0.76 : scoreDiff >= 4 ? 0.82 : scoreDiff >= 3 ? 0.88 : scoreDiff >= 2 ? 0.94 : 1;
+    const xG = clamp3(clamp3(rawXg, 0.015, 0.42) * leadingXgDampener, 0.012, 0.42);
+    const kind = xG >= 0.3 ? "ONE_ON_ONE" : xG >= 0.21 ? "BIG_CHANCE" : xG >= 0.11 ? "GOOD_CHANCE" : xG >= 0.06 ? "HALF_CHANCE" : "DISTANCE";
+    return {
+      side,
+      kind,
+      zone,
+      pattern: intent.pattern,
+      shooter,
+      creator,
+      marker,
+      xG,
+      pressure,
+      angle: clamp3(0.25 + roll(35) * 0.65 + (zone === "BOX" ? 0.1 : 0), 0, 1),
+      distance: zone === "BOX" ? 7 + roll(36) * 10 : 16 + roll(36) * 14
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupMatchClockService.ts
+var pad = (value) => String(Math.max(0, Math.floor(value))).padStart(2, "0");
+var regulationHalfSeconds = (config) => Math.floor(config.normalTimeSeconds / 2);
+var CupMatchClockService = {
+  /**
+   * The engine clock never moves backwards and includes every stoppage-time
+   * second. Football presentation time does not: the second half starts at
+   * 45:00 and extra time at 90:00. Keeping the conversion in one service
+   * prevents UI clocks, commentary and reports from disagreeing.
+   */
+  getBoundaries: (state, config) => {
+    const firstHalfRegulationEnd = regulationHalfSeconds(config);
+    const firstHalfEnd = firstHalfRegulationEnd + state.firstHalfAddedTimeSeconds;
+    const secondHalfRegulationEnd = firstHalfEnd + (config.normalTimeSeconds - firstHalfRegulationEnd);
+    const normalTimeEnd = secondHalfRegulationEnd + state.secondHalfAddedTimeSeconds;
+    return {
+      firstHalfRegulationEnd,
+      firstHalfEnd,
+      secondHalfRegulationEnd,
+      normalTimeEnd
+    };
+  },
+  /** Converts the monotonic simulation clock to normal football match time. */
+  toFootballSecond: (state, config) => {
+    const boundaries = CupMatchClockService.getBoundaries(state, config);
+    if (state.phase === "FIRST_HALF") return state.second;
+    if (state.phase === "SECOND_HALF") {
+      return Math.max(0, state.second - state.firstHalfAddedTimeSeconds);
+    }
+    if (state.phase === "EXTRA_TIME_1" || state.phase === "EXTRA_TIME_2" || state.phase === "PENALTY_SHOOTOUT" || state.second > boundaries.normalTimeEnd) {
+      return Math.max(0, state.second - state.addedTimeSeconds);
+    }
+    return Math.max(0, state.second - state.firstHalfAddedTimeSeconds);
+  },
+  /** Minute stored on events and consumed by commentary/statistics views. */
+  eventMinute: (state, config) => Math.floor(CupMatchClockService.toFootballSecond(state, config) / 60) + 1,
+  /** Presentation-ready clock for the future SVG match view. */
+  displayClock: (state, config) => {
+    const footballSecond = CupMatchClockService.toFootballSecond(state, config);
+    const minute = Math.floor(footballSecond / 60);
+    const secondInMinute = footballSecond % 60;
+    const phase = state.phase;
+    const boundaries = CupMatchClockService.getBoundaries(state, config);
+    const finishedAfterExtraTime = phase === "FINISHED" && state.second > boundaries.normalTimeEnd;
+    const baseMinute = phase === "FIRST_HALF" ? 45 : phase === "SECOND_HALF" || phase === "FINISHED" && !finishedAfterExtraTime ? 90 : 120;
+    const isStoppage = phase === "FIRST_HALF" && footballSecond >= 45 * 60 || (phase === "SECOND_HALF" || phase === "FINISHED" && !finishedAfterExtraTime) && footballSecond >= 90 * 60;
+    const stoppageMinute = isStoppage ? Math.max(1, Math.ceil((footballSecond - baseMinute * 60 + 1) / 60)) : void 0;
+    const label = stoppageMinute ? `${baseMinute}+${stoppageMinute}` : `${pad(minute)}:${pad(secondInMinute)}`;
+    return { minute, secondInMinute, stoppageMinute, label };
+  }
+};
+
+// services/match/engines/cupV2/CupDisciplineResolver.ts
+var selectFouler = (profile, roll) => {
+  const pool = profile.activePlayers.length > 0 ? profile.activePlayers : profile.outfieldPlayers;
+  if (pool.length === 0) return void 0;
+  return pickWeighted(pool.map((player) => ({
+    item: player,
+    weight: weightedScore(player.attributes, {
+      aggression: 0.24,
+      defending: 0.2,
+      workRate: 0.16,
+      strength: 0.13,
+      pace: 0.09,
+      positioning: 0.08,
+      mentality: 0.06,
+      stamina: 0.04
+    }) + (player.position === "DEF" ? 12 : player.position === "MID" ? 7 : player.position === "FWD" ? 3 : -12)
+  })), roll);
+};
+var selectFouledPlayer = (profile, roll) => {
+  const pool = profile.outfieldPlayers.length > 0 ? profile.outfieldPlayers : profile.activePlayers;
+  if (pool.length === 0) return void 0;
+  return pickWeighted(pool.map((player) => ({
+    item: player,
+    weight: weightedScore(player.attributes, {
+      dribbling: 0.22,
+      pace: 0.18,
+      technique: 0.16,
+      attacking: 0.14,
+      vision: 0.1,
+      strength: 0.08,
+      mentality: 0.07,
+      workRate: 0.05
+    }) + (player.position === "FWD" ? 12 : player.position === "MID" ? 8 : player.position === "DEF" ? 2 : -18)
+  })), roll);
+};
+var CupDisciplineResolver = {
+  /**
+   * Faule i kartki wynikają z kontaktu w konkretnej fazie: pressingu,
+   * kontrataku, pojedynku skrzydłowego albo ratowania sytuacji. Sędzia nie
+   * generuje fauli sam z siebie, tylko interpretuje kontakt według własnych cech.
+   */
+  resolveContact: ({
+    ctx,
+    defending,
+    attacking,
+    danger,
+    salt
+  }) => {
+    const referee = ctx.input.environment.referee;
+    const strictness = referee.strictness / 100;
+    const advantage = referee.advantageTendency / 100;
+    const consistencyNoise = (1 - referee.consistency / 100) * (ctx.random(salt + 1) - 0.5) * 0.08;
+    const foulChance = clamp3(
+      (0.026 + defending.disciplineRisk * 7e-4 + defending.pressing * 32e-5 + danger * 0.045 + strictness * 0.018 - consistencyNoise) * ctx.state.coachEffects[defending.side].foulMultiplier,
+      4e-3,
+      0.16
+    );
+    if (ctx.random(salt + 2) > foulChance) return null;
+    const yellowChance = clamp3(0.11 + strictness * 0.22 + danger * 0.25 + defending.disciplineRisk * 9e-4, 0.06, 0.62);
+    const redChance = clamp3(4e-3 + strictness * 0.018 + Math.max(0, danger - 0.75) * 0.07, 2e-3, 0.12);
+    const initialType = ctx.random(salt + 3) < redChance ? "RED_CARD" /* RED_CARD */ : ctx.random(salt + 4) < yellowChance ? "YELLOW_CARD" /* YELLOW_CARD */ : "FOUL" /* FOUL */;
+    const fouler = selectFouler(defending, ctx.random(salt + 5));
+    const fouled = selectFouledPlayer(attacking, ctx.random(salt + 6));
+    const advantageChance = clamp3(advantage * 0.55 + danger * 0.18 - strictness * 0.1, 0.03, 0.68);
+    const advantagePlayed = initialType === "FOUL" /* FOUL */ && ctx.random(salt + 7) < advantageChance;
+    const secondYellow = initialType === "YELLOW_CARD" /* YELLOW_CARD */ && Boolean(fouler && (ctx.state.yellowCards[fouler.id] ?? 0) >= 1);
+    const type = advantagePlayed ? "ADVANTAGE_PLAYED" /* ADVANTAGE_PLAYED */ : secondYellow ? "RED_CARD" /* RED_CARD */ : initialType;
+    const defendingTeamName = defending.side === "HOME" ? ctx.input.home.name : ctx.input.away.name;
+    const foulerName = fouler ? fouler.lastName : defendingTeamName;
+    const fouledName = fouled ? fouled.lastName : "rywala";
+    return {
+      id: `cupv2_contact_${ctx.state.second}_${salt}`,
+      second: ctx.state.second,
+      minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+      side: defending.side,
+      type,
+      playerId: fouler?.id,
+      secondaryPlayerId: fouled?.id,
+      text: advantagePlayed ? `${foulerName} fauluje ${fouledName}, ale s\u0119dzia stosuje przywilej korzy\u015Bci.` : `${foulerName} przerywa akcj\u0119 faulem na ${fouledName}.`,
+      detail: {
+        danger,
+        refereeStrictness: referee.strictness,
+        refereeConsistency: referee.consistency,
+        attackingSide: attacking.side,
+        foulerId: fouler?.id,
+        fouledPlayerId: fouled?.id,
+        secondYellow,
+        advantagePlayed
+      }
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupInjuryResolver.ts
+var CupInjuryResolver = {
+  /**
+   * Kontuzje powinny wynikać z obciążenia meczu: zmęczenia, pressingu,
+   * intensywności pojedynków, pogody i jakości murawy. Nie losujemy ich
+   * równomiernie co minutę, bo wtedy nie reagują na styl gry.
+   */
+  maybeCreateInjury: ({
+    ctx,
+    profile,
+    contactIntensity,
+    salt
+  }) => {
+    const pitchRisk = (100 - ctx.input.environment.pitchQuality) * 12e-5;
+    const weatherRisk = (ctx.input.environment.weather?.weatherIntensity ?? 0) * 6e-3;
+    const fatigueRisk = Math.max(0, 62 - profile.staminaReserve) * 55e-5;
+    const injuryChance = clamp3(
+      (15e-4 + pitchRisk + weatherRisk + fatigueRisk + contactIntensity * 0.01) * ctx.state.coachEffects[profile.side].injuryMultiplier,
+      5e-4,
+      0.035
+    );
+    const eligiblePlayers = profile.activePlayers.filter((player) => !ctx.state.injuries[player.id]);
+    if (ctx.random(salt) > injuryChance || eligiblePlayers.length === 0) return null;
+    const injured = pickWeighted(eligiblePlayers.map((player) => ({
+      item: player,
+      weight: Math.max(1, 105 - (ctx.state.fatigue[player.id] ?? player.condition) + contactIntensity * 20)
+    })), ctx.random(salt + 1));
+    const severe = ctx.random(salt + 2) < clamp3(0.08 + contactIntensity * 0.16 + Math.max(0, 45 - injured.attributes.strength) * 2e-3, 0.04, 0.35);
+    return {
+      id: `cupv2_injury_${ctx.state.second}_${injured.id}`,
+      second: ctx.state.second,
+      minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+      side: profile.side,
+      type: severe ? "INJURY_SEVERE" /* INJURY_SEVERE */ : "INJURY_LIGHT" /* INJURY_LIGHT */,
+      playerId: injured.id,
+      text: `${injured.lastName} potrzebuje pomocy medycznej po intensywnym starciu.`,
+      detail: {
+        contactIntensity,
+        pitchQuality: ctx.input.environment.pitchQuality,
+        weatherIntensity: ctx.input.environment.weather?.weatherIntensity ?? 0
+      }
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupOwnGoalResolver.ts
+var CupOwnGoalResolver = {
+  /**
+   * Samobój nie powinien być osobnym "losowym golem". Może powstać tylko przy
+   * realnym zagrożeniu: mocnym dośrodkowaniu, chaosie po stałym fragmencie,
+   * odbiciu strzału albo desperackiej interwencji obrońcy.
+   */
+  maybeOwnGoal: ({
+    chance,
+    defending,
+    roll
+  }) => {
+    const chaos = chance.pattern === "WING_PLAY" ? 0.012 : chance.pattern === "SET_PIECE" ? 0.018 : chance.kind === "BIG_CHANCE" || chance.kind === "ONE_ON_ONE" ? 0.01 : 4e-3;
+    const pressureMod = chance.pressure * 18e-5;
+    const ownGoalChance = clamp3(chaos + pressureMod + Math.max(0, 52 - defending.defensiveShape) * 18e-5, 2e-3, 0.045);
+    if (roll(701) > ownGoalChance || defending.defenders.length === 0) return null;
+    const defender = pickWeighted(defending.defenders.map((player) => ({
+      item: player,
+      weight: Math.max(1, 100 - weightedScore(player.attributes, {
+        defending: 0.3,
+        positioning: 0.25,
+        mentality: 0.15,
+        heading: 0.1,
+        strength: 0.1,
+        technique: 0.05,
+        workRate: 0.05
+      }))
+    })), roll(702));
+    return {
+      eventType: "GOAL" /* GOAL */,
+      goal: true,
+      onTarget: true,
+      corner: false,
+      save: false,
+      xG: chance.xG,
+      momentumDelta: 16,
+      assistEligible: false,
+      isOwnGoal: true,
+      ownGoalPlayerId: defender.id,
+      text: `${defender.lastName} niefortunnie kieruje pi\u0142k\u0119 do w\u0142asnej bramki.`
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupActionSequenceService.ts
+var baseEvent = (ctx, sequenceId, suffix) => ({
+  id: `${sequenceId}_${suffix}`,
+  second: ctx.state.second,
+  minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+  detail: { sequenceId }
+});
+var isWideZone = (zone) => zone === "WIDE_LEFT" || zone === "WIDE_RIGHT";
+var CupActionSequenceService = {
+  /**
+   * Builds the visible, player-attributed chain for successful progression.
+   * These events describe an outcome already resolved by the calibrated team
+   * model. They must never make a second hidden success roll or alter balance.
+   */
+  createProgressionEvents: ({
+    ctx,
+    attacking,
+    intent,
+    decision,
+    sequenceId,
+    fromZone,
+    toZone
+  }) => {
+    const passer = decision.passer;
+    const receiver = decision.receiver;
+    if (!passer || !receiver) return [];
+    if (decision.action === "DRIBBLE") {
+      const dribbleBase = baseEvent(ctx, sequenceId, "carry");
+      return [{
+        ...dribbleBase,
+        side: attacking.side,
+        type: "DRIBBLING" /* DRIBBLING */,
+        zone: toZone,
+        pattern: intent.pattern,
+        playerId: passer.id,
+        secondaryPlayerId: decision.presser?.id,
+        text: `${passer.lastName} rusza z pi\u0142k\u0105 i prowadzi akcj\u0119 do przodu.`,
+        detail: {
+          ...dribbleBase.detail,
+          fromZone,
+          toZone,
+          succeeded: true,
+          dribblingQuality: passer.attributes.dribbling,
+          actionDecision: decision.action
+        }
+      }];
+    }
+    const eventBase = baseEvent(ctx, sequenceId, "delivery");
+    const crossingDecision = decision.action === "CROSS" || isWideZone(fromZone) && (toZone === "BOX" || toZone === "FINAL_THIRD");
+    const delivery = crossingDecision ? {
+      ...eventBase,
+      side: attacking.side,
+      type: ctx.random(281) < 0.58 ? "CROSS_NEAR_POST" /* CROSS_NEAR_POST */ : "CROSS_FAR_POST" /* CROSS_FAR_POST */,
+      zone: toZone,
+      pattern: intent.pattern,
+      playerId: passer.id,
+      secondaryPlayerId: receiver.id,
+      text: `${passer.lastName} do\u015Brodkowuje do ${receiver.lastName}.`,
+      detail: {
+        ...eventBase.detail,
+        fromZone,
+        toZone,
+        completed: true,
+        passerQuality: passer.attributes.crossing,
+        receiverMovement: receiver.attributes.positioning,
+        actionDecision: decision.action
+      }
+    } : {
+      ...eventBase,
+      side: attacking.side,
+      type: "PASS_COMPLETED" /* PASS_COMPLETED */,
+      zone: toZone,
+      pattern: intent.pattern,
+      playerId: passer.id,
+      secondaryPlayerId: receiver.id,
+      text: decision.action === "DIRECT_PASS" ? `${passer.lastName} zagrywa odwa\u017Cnie do przodu do ${receiver.lastName}.` : `${passer.lastName} podaje do ${receiver.lastName}.`,
+      detail: {
+        ...eventBase.detail,
+        fromZone,
+        toZone,
+        passerQuality: passer.attributes.passing,
+        receiverMovement: receiver.attributes.positioning,
+        actionDecision: decision.action
+      }
+    };
+    const controlBase = baseEvent(ctx, sequenceId, "control");
+    const events = [delivery, {
+      ...controlBase,
+      side: attacking.side,
+      type: "BALL_CONTROL" /* BALL_CONTROL */,
+      zone: toZone,
+      pattern: intent.pattern,
+      playerId: receiver.id,
+      secondaryPlayerId: passer.id,
+      text: `${receiver.lastName} opanowuje pi\u0142k\u0119 i podtrzymuje akcj\u0119.`,
+      detail: {
+        ...controlBase.detail,
+        controlQuality: receiver.attributes.technique,
+        underPressureFromId: decision.presser?.id
+      }
+    }];
+    const dribbleChance = clamp3(
+      0.06 + receiver.attributes.dribbling * 12e-4 + (intent.pattern === "COUNTER" ? 0.08 : 0),
+      0.07,
+      0.25
+    );
+    if (toZone !== "GK" && toZone !== "DEFENSE" && ctx.random(282) < dribbleChance) {
+      const dribbleBase = baseEvent(ctx, sequenceId, "dribble");
+      events.push({
+        ...dribbleBase,
+        side: attacking.side,
+        type: "DRIBBLING" /* DRIBBLING */,
+        zone: toZone,
+        pattern: intent.pattern,
+        playerId: receiver.id,
+        secondaryPlayerId: decision.presser?.id,
+        text: `${receiver.lastName} mija rywala z pi\u0142k\u0105 przy nodze.`,
+        detail: {
+          ...dribbleBase.detail,
+          succeeded: true,
+          dribblingQuality: receiver.attributes.dribbling
+        }
+      });
+    }
+    return events;
+  },
+  /** A turnover can be an interception or an actual tackle; both share one result. */
+  createTurnoverEvent: ({
+    ctx,
+    attacking,
+    defending,
+    intent,
+    decision,
+    sequenceId
+  }) => {
+    const tackler = decision.presser;
+    const loser = decision.passer;
+    const tackleChance = clamp3(0.3 + defending.pressing * 22e-4, 0.34, 0.56);
+    const tackle = Boolean(tackler && loser && ctx.random(283) < tackleChance);
+    const eventBase = baseEvent(ctx, sequenceId, tackle ? "tackle" : "interception");
+    return {
+      ...eventBase,
+      side: defending.side,
+      type: tackle ? "TACKLE_WON" /* TACKLE_WON */ : "MISPLACED_PASS" /* MISPLACED_PASS */,
+      zone: ctx.state.ballZone,
+      pattern: intent.pattern,
+      playerId: tackler?.id,
+      secondaryPlayerId: loser?.id,
+      text: tackler && loser ? tackle ? `${tackler.lastName} wygrywa pojedynek z zawodnikiem ${loser.lastName}.` : `${tackler.lastName} przechwytuje niedok\u0142adne podanie zawodnika ${loser.lastName}.` : `${defending.side === "HOME" ? ctx.input.home.name : ctx.input.away.name} odbiera pi\u0142k\u0119.`,
+      detail: {
+        ...eventBase.detail,
+        possessionWinnerId: tackler?.id,
+        possessionLoserId: loser?.id,
+        tackle
+      }
+    };
+  },
+  /**
+   * A shot is preceded by the concrete final delivery and first touch. This is
+   * what lets SVG replay one coherent goal rather than three unrelated cues.
+   */
+  createChanceBuildup: ({
+    ctx,
+    attacking,
+    intent,
+    sequenceId,
+    chance
+  }) => {
+    const creator = chance.creator;
+    const shooter = chance.shooter;
+    const events = [];
+    if (creator && creator.id !== shooter.id) {
+      const deliveryBase = baseEvent(ctx, sequenceId, "chance_delivery");
+      const cross = intent.pattern === "WING_PLAY" || isWideZone(ctx.state.ballZone);
+      events.push({
+        ...deliveryBase,
+        side: attacking.side,
+        type: cross ? ctx.random(284) < 0.58 ? "CROSS_NEAR_POST" /* CROSS_NEAR_POST */ : "CROSS_FAR_POST" /* CROSS_FAR_POST */ : "PASS_COMPLETED" /* PASS_COMPLETED */,
+        zone: chance.zone,
+        pattern: chance.pattern,
+        playerId: creator.id,
+        secondaryPlayerId: shooter.id,
+        text: cross ? `${creator.lastName} posy\u0142a do\u015Brodkowanie do ${shooter.lastName}.` : `${creator.lastName} otwiera drog\u0119 do bramki podaniem do ${shooter.lastName}.`,
+        detail: {
+          ...deliveryBase.detail,
+          fromZone: ctx.state.ballZone,
+          toZone: chance.zone,
+          completed: true,
+          chanceCreatingDelivery: true,
+          passerQuality: cross ? creator.attributes.crossing : creator.attributes.passing,
+          receiverMovement: shooter.attributes.positioning
+        }
+      });
+    }
+    const controlBase = baseEvent(ctx, sequenceId, "chance_control");
+    events.push({
+      ...controlBase,
+      side: attacking.side,
+      type: "BALL_CONTROL" /* BALL_CONTROL */,
+      zone: chance.zone,
+      pattern: chance.pattern,
+      playerId: shooter.id,
+      secondaryPlayerId: creator?.id,
+      text: `${shooter.lastName} przygotowuje sobie pozycj\u0119 do strza\u0142u.`,
+      detail: {
+        ...controlBase.detail,
+        controlQuality: shooter.attributes.technique,
+        shotPreparation: true
+      }
+    });
+    if (chance.kind === "ONE_ON_ONE" || intent.pattern === "COUNTER") {
+      const dribbleBase = baseEvent(ctx, sequenceId, "chance_dribble");
+      events.push({
+        ...dribbleBase,
+        side: attacking.side,
+        type: "DRIBBLING" /* DRIBBLING */,
+        zone: chance.zone,
+        pattern: chance.pattern,
+        playerId: shooter.id,
+        secondaryPlayerId: chance.marker?.id,
+        text: `${shooter.lastName} prowadzi pi\u0142k\u0119 w kierunku bramki.`,
+        detail: { ...dribbleBase.detail, succeeded: true }
+      });
+    }
+    return events;
+  }
+};
+
+// services/match/engines/cupV2/CupPlayerDecisionService.ts
+var passerRoleWeight = (player, zone) => {
+  if (zone === "GK") {
+    return player.position === "GK" /* GK */ ? 1.8 : player.position === "DEF" /* DEF */ ? 1.2 : 0.25;
+  }
+  if (zone === "DEFENSE") {
+    return player.position === "DEF" /* DEF */ ? 1.5 : player.position === "MID" /* MID */ ? 1 : player.position === "GK" /* GK */ ? 0.65 : 0.25;
+  }
+  if (zone === "MIDFIELD") {
+    return player.position === "MID" /* MID */ ? 1.55 : player.position === "DEF" /* DEF */ ? 0.75 : player.position === "FWD" /* FWD */ ? 0.65 : 0.1;
+  }
+  return player.position === "MID" /* MID */ ? 1.35 : player.position === "FWD" /* FWD */ ? 1.1 : player.position === "DEF" /* DEF */ ? 0.4 : 0.05;
+};
+var receiverRoleWeight = (player, zone, pattern) => {
+  const directBonus = pattern === "DIRECT" || pattern === "COUNTER" ? 0.35 : 0;
+  if (zone === "GK" || zone === "DEFENSE") {
+    return player.position === "DEF" /* DEF */ ? 1.2 : player.position === "MID" /* MID */ ? 1.15 : player.position === "FWD" /* FWD */ ? 0.35 + directBonus : 0.1;
+  }
+  if (zone === "MIDFIELD") {
+    return player.position === "MID" /* MID */ ? 1.35 : player.position === "FWD" /* FWD */ ? 0.9 + directBonus : player.position === "DEF" /* DEF */ ? 0.55 : 0.05;
+  }
+  return player.position === "FWD" /* FWD */ ? 1.55 : player.position === "MID" /* MID */ ? 1.1 : player.position === "DEF" /* DEF */ ? 0.25 : 0.03;
+};
+var receiverConnectionWeight = (passer, receiver, zone, pattern) => {
+  if (!passer) return 1;
+  const advancedZone = zone === "FINAL_THIRD" || zone === "BOX" || zone === "WIDE_LEFT" || zone === "WIDE_RIGHT";
+  const direct = pattern === "DIRECT" || pattern === "COUNTER";
+  if (passer.position === "FWD" /* FWD */) {
+    if (receiver.position === "FWD" /* FWD */) return 1.28;
+    if (receiver.position === "MID" /* MID */) return 1.18;
+    return advancedZone ? 0.015 : direct ? 0.1 : 0.28;
+  }
+  if (passer.position === "MID" /* MID */) {
+    if (receiver.position === "MID" /* MID */) return 1.3;
+    if (receiver.position === "FWD" /* FWD */) return direct ? 1.32 : 1.08;
+    return advancedZone ? 0.24 : 0.72;
+  }
+  if (passer.position === "DEF" /* DEF */) {
+    if (receiver.position === "MID" /* MID */) return 1.38;
+    if (receiver.position === "DEF" /* DEF */) return 1.14;
+    return direct ? 1.02 : 0.58;
+  }
+  return receiver.position === "DEF" /* DEF */ ? 1.45 : receiver.position === "MID" /* MID */ ? 1.12 : 0.3;
+};
+var fitnessFactor = (player, fatigue) => clamp3((fatigue[player.id] ?? player.condition) / 100, 0.35, 1);
+var selectWeighted = (players, score, roll) => {
+  if (players.length === 0) return void 0;
+  return pickWeighted(players.map((player) => ({
+    item: player,
+    weight: Math.max(0.1, score(player))
+  })), roll);
+};
+var selectAction = (player, zone, pattern, instructions, roll) => {
+  if (!player) return "PASS";
+  const wideZone = zone === "WIDE_LEFT" || zone === "WIDE_RIGHT";
+  const advancedZone = zone === "FINAL_THIRD" || zone === "BOX" || wideZone;
+  const shortPassing = instructions.passing === "SHORT";
+  const longPassing = instructions.passing === "LONG";
+  const fastTempo = instructions.tempo === "FAST";
+  const offensive = instructions.mindset === "OFFENSIVE";
+  const passQuality = weightedScore(player.attributes, {
+    passing: 0.34,
+    vision: 0.24,
+    mentality: 0.18,
+    technique: 0.14,
+    positioning: 0.1
+  });
+  const dribbleQuality = weightedScore(player.attributes, {
+    dribbling: 0.34,
+    technique: 0.24,
+    pace: 0.18,
+    mentality: 0.14,
+    strength: 0.1
+  });
+  const crossQuality = weightedScore(player.attributes, {
+    crossing: 0.42,
+    technique: 0.2,
+    vision: 0.16,
+    passing: 0.12,
+    mentality: 0.1
+  });
+  const directQuality = weightedScore(player.attributes, {
+    passing: 0.3,
+    vision: 0.28,
+    mentality: 0.18,
+    technique: 0.14,
+    attacking: 0.1
+  });
+  return pickWeighted([
+    {
+      item: "PASS",
+      weight: passQuality * (shortPassing ? 1.48 : 1) * (pattern === "BUILD_UP" ? 1.22 : 1)
+    },
+    {
+      item: "DIRECT_PASS",
+      weight: directQuality * (longPassing ? 1.55 : 0.72) * (pattern === "DIRECT" || pattern === "COUNTER" ? 1.42 : 1)
+    },
+    {
+      item: "DRIBBLE",
+      weight: dribbleQuality * (advancedZone ? 1.18 : 0.76) * (fastTempo ? 1.17 : 1) * (pattern === "COUNTER" ? 1.3 : 1)
+    },
+    {
+      item: "CROSS",
+      weight: crossQuality * (wideZone ? 2.25 : pattern === "WING_PLAY" && advancedZone ? 1.45 : 0.08) * (offensive ? 1.12 : 1)
+    }
+  ], roll);
+};
+var CupPlayerDecisionService = {
+  /**
+   * Selects the footballers involved in one possession action. Selection uses
+   * role suitability, technical/mental attributes and current fatigue. It does
+   * not decide whether the team succeeds; the calibrated team duel still owns
+   * that probability, avoiding a balance change during this attribution stage.
+   */
+  selectPossessionDecision: ({
+    attacking,
+    defending,
+    zone,
+    pattern,
+    fatigue,
+    currentCarrierId,
+    instructions,
+    roll
+  }) => {
+    const currentCarrier = attacking.activePlayers.find((player) => player.id === currentCarrierId);
+    const passer = currentCarrier ?? selectWeighted(attacking.activePlayers, (player) => weightedScore(player.attributes, {
+      passing: 0.34,
+      vision: 0.22,
+      technique: 0.18,
+      mentality: 0.12,
+      positioning: 0.08,
+      workRate: 0.06
+    }) * passerRoleWeight(player, zone) * fitnessFactor(player, fatigue), roll(271));
+    const allReceivers = attacking.outfieldPlayers.filter((player) => player.id !== passer?.id);
+    const advancedForwardOptions = passer?.position === "FWD" /* FWD */ && (zone === "FINAL_THIRD" || zone === "BOX" || zone === "WIDE_LEFT" || zone === "WIDE_RIGHT") ? allReceivers.filter((player) => player.position === "FWD" /* FWD */ || player.position === "MID" /* MID */) : allReceivers;
+    const receivers = advancedForwardOptions.length >= 2 ? advancedForwardOptions : allReceivers;
+    const receiver = selectWeighted(receivers, (player) => weightedScore(player.attributes, {
+      positioning: 0.25,
+      pace: 0.18,
+      technique: 0.16,
+      attacking: 0.15,
+      vision: 0.1,
+      workRate: 0.09,
+      strength: 0.07
+    }) * receiverRoleWeight(player, zone, pattern) * receiverConnectionWeight(passer, player, zone, pattern) * fitnessFactor(player, fatigue), roll(272));
+    const presser = selectWeighted(defending.outfieldPlayers, (player) => weightedScore(player.attributes, {
+      defending: 0.25,
+      positioning: 0.2,
+      workRate: 0.17,
+      pace: 0.13,
+      strength: 0.12,
+      mentality: 0.13
+    }) * fitnessFactor(player, fatigue), roll(273));
+    const action = selectAction(passer, zone, pattern, instructions, roll(274));
+    return { passer, receiver, presser, action };
+  },
+  /**
+   * Resolves who reaches a genuinely loose ball after a save, post or block.
+   * The defending side receives a contextual advantage, while anticipation,
+   * positioning, pace, strength and fatigue still select the actual player.
+   */
+  selectReboundWinner: ({
+    attacking,
+    defending,
+    fatigue,
+    sourceEventType,
+    roll
+  }) => {
+    const attackingPool = [...attacking.forwards, ...attacking.midfielders];
+    const defendingPool = [...defending.defenders, ...defending.midfielders, ...defending.goalkeeper ? [defending.goalkeeper] : []];
+    const defenderAdvantage = sourceEventType === "SAVE" /* SAVE */ || sourceEventType === "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */ ? 1.52 : sourceEventType === "SHOT_BLOCKED" /* SHOT_BLOCKED */ ? 1.32 : 1.16;
+    const candidates = [
+      ...attackingPool.map((player) => ({ player, side: attacking.side, multiplier: 1 })),
+      ...defendingPool.map((player) => ({ player, side: defending.side, multiplier: defenderAdvantage }))
+    ];
+    if (candidates.length === 0) return void 0;
+    const selected = pickWeighted(candidates.map((candidate) => ({
+      item: candidate,
+      weight: Math.max(0.1, weightedScore(candidate.player.attributes, {
+        positioning: 0.28,
+        mentality: 0.18,
+        pace: 0.15,
+        strength: 0.14,
+        workRate: 0.13,
+        aggression: 0.12
+      }) * fitnessFactor(candidate.player, fatigue) * candidate.multiplier)
+    })), roll);
+    return { player: selected.player, side: selected.side };
+  }
+};
+
+// services/match/engines/cupV2/CupSetPieceResolver.ts
+var CupSetPieceResolver = {
+  /**
+   * Stałe fragmenty powinny powstawać z wcześniejszego zdarzenia: faulu,
+   * wybicia na róg, ręki, zablokowanego dośrodkowania albo ostrego pressingu.
+   * Ten moduł nie powinien sam zwiększać tempa meczu; ma tylko rozstrzygać
+   * jakość już przyznanego stałego fragmentu.
+   */
+  createSetPieceChance: ({
+    ctx,
+    attacking,
+    defending,
+    kind
+  }) => {
+    const takers = attacking.activePlayers;
+    const targets = attacking.outfieldPlayers;
+    if (takers.length === 0 || targets.length === 0) return null;
+    const taker = pickWeighted(takers.map((player) => ({
+      item: player,
+      weight: weightedScore(player.attributes, {
+        freeKicks: kind === "FREE_KICK_DIRECT" ? 0.34 : 0.16,
+        corners: kind === "CORNER" ? 0.32 : 0.1,
+        crossing: 0.18,
+        technique: 0.16,
+        vision: 0.12,
+        mentality: 0.1
+      })
+    })), ctx.random(501));
+    const selectedTarget = pickWeighted(targets.map((player) => ({
+      item: player,
+      weight: weightedScore(player.attributes, {
+        heading: kind === "CORNER" || kind === "FREE_KICK_WIDE" ? 0.28 : 0.08,
+        positioning: 0.18,
+        attacking: 0.16,
+        finishing: 0.14,
+        strength: 0.12,
+        technique: 0.07,
+        mentality: 0.05
+      })
+    })), ctx.random(502));
+    const shooter = kind === "PENALTY" ? taker : selectedTarget;
+    const delivery = weightedScore(taker.attributes, {
+      freeKicks: 0.22,
+      corners: kind === "CORNER" ? 0.24 : 0.08,
+      crossing: 0.22,
+      technique: 0.16,
+      vision: 0.1,
+      mentality: 0.06
+    }) + attacking.setPieces * 0.25 - defending.defensiveShape * 0.16 - defending.goalkeeperQuality * 0.08;
+    const chanceProbability = clamp3(0.08 + delivery * 22e-4, 0.025, 0.34);
+    if (ctx.random(503) > chanceProbability) return null;
+    const baseXg = kind === "PENALTY" ? 0.76 : kind === "FREE_KICK_DIRECT" ? 0.075 : kind === "CORNER" ? 0.055 : 0.065;
+    return {
+      side: attacking.side,
+      kind: "SET_PIECE",
+      zone: kind === "PENALTY" ? "BOX" : "FINAL_THIRD",
+      pattern: "SET_PIECE",
+      shooter,
+      creator: taker.id === shooter.id ? void 0 : taker,
+      marker: defending.defenders[0],
+      xG: clamp3(baseXg + (delivery - 50) * 18e-4, 0.025, kind === "PENALTY" ? 0.82 : 0.22),
+      pressure: ctx.state.pressure[attacking.side],
+      angle: kind === "FREE_KICK_DIRECT" ? 0.44 : 0.62,
+      distance: kind === "PENALTY" ? 11 : kind === "FREE_KICK_DIRECT" ? 22 : 9
+    };
+  },
+  eventForAward: (ctx, side, kind) => ({
+    id: `cupv2_setpiece_award_${ctx.state.second}_${kind}`,
+    second: ctx.state.second,
+    minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+    side,
+    type: kind === "CORNER" ? "CORNER" /* CORNER */ : kind === "PENALTY" ? "PENALTY_AWARDED" /* PENALTY_AWARDED */ : kind === "FREE_KICK_DIRECT" ? "FREE_KICK_DANGEROUS" /* FREE_KICK_DANGEROUS */ : "FREE_KICK" /* FREE_KICK */,
+    zone: kind === "CORNER" ? "WIDE_LEFT" : "FINAL_THIRD",
+    pattern: "SET_PIECE",
+    text: `${side === "HOME" ? ctx.input.home.name : ctx.input.away.name} otrzymuje sta\u0142y fragment gry.`
+  })
+};
+
+// services/match/engines/cupV2/CupShotResolver.ts
+var CupShotResolver = {
+  /**
+   * Bramka nie jest losowana bezpośrednio. Najpierw istnieje CupChance z xG,
+   * potem jakość strzału, potem reakcja bramkarza i dopiero ich różnica
+   * rozstrzyga: gol, obrona, niecelny, blok, słupek, poprzeczka albo róg.
+   */
+  resolveShot: ({
+    chance,
+    attacking,
+    defending,
+    shooterFatigue,
+    keeperFatigue,
+    weatherPenalty,
+    scoreDiff,
+    roll
+  }) => {
+    const shooter = chance.shooter;
+    const keeper = defending.goalkeeper;
+    const marker = chance.marker;
+    const shooterExecution = weightedScore(shooter.attributes, {
+      finishing: 0.28,
+      technique: 0.18,
+      mentality: 0.14,
+      attacking: 0.12,
+      positioning: 0.1,
+      strength: 0.07,
+      heading: chance.pattern === "WING_PLAY" || chance.pattern === "SET_PIECE" ? 0.08 : 0.03,
+      pace: chance.kind === "ONE_ON_ONE" ? 0.08 : 0.03
+    }) * clamp3(0.72 + shooterFatigue / 285, 0.72, 1.07) - chance.pressure * 0.1 - weatherPenalty;
+    const markerPressure = marker ? weightedScore(marker.attributes, {
+      defending: 0.28,
+      positioning: 0.24,
+      strength: 0.14,
+      pace: 0.12,
+      heading: 0.08,
+      aggression: 0.07,
+      mentality: 0.07
+    }) : defending.defensiveShape;
+    const keeperScore = keeper ? weightedScore(keeper.attributes, {
+      goalkeeping: 0.38,
+      positioning: 0.2,
+      mentality: 0.12,
+      strength: 0.08,
+      pace: 0.08,
+      leadership: 0.05,
+      technique: 0.04,
+      passing: 0.05
+    }) * clamp3(0.72 + keeperFatigue / 285, 0.72, 1.07) : defending.goalkeeperQuality;
+    const shotQuality = clamp3(
+      chance.xG + (shooterExecution - 50) * 22e-4 - (markerPressure - 50) * 12e-4 + (chance.angle - 0.5) * 0.035 - Math.max(0, chance.distance - 13) * 3e-3,
+      5e-3,
+      0.55
+    );
+    const finishingEdge = attacking.finishing - defending.defensiveShape;
+    const executionEdge = shooterExecution - keeperScore;
+    const mismatchSoftener = clamp3(1 - Math.max(0, finishingEdge - 12) * 6e-3, 0.82, 1);
+    const leadDampener = scoreDiff >= 5 ? 0.42 : scoreDiff >= 4 ? 0.54 : scoreDiff >= 3 ? 0.68 : scoreDiff >= 2 ? 0.82 : 1;
+    const goalChanceCap = chance.pattern === "SET_PIECE" && chance.xG >= 0.6 ? 0.84 : scoreDiff >= 5 ? 0.16 : scoreDiff >= 4 ? 0.2 : scoreDiff >= 3 ? 0.25 : 0.34;
+    const goalChance = clamp3(
+      (chance.xG * 1.04 * mismatchSoftener + clamp3(executionEdge * 14e-4, -0.045, 0.055) + clamp3(finishingEdge * 35e-5, -0.025, 0.03)) * leadDampener - weatherPenalty * 1e-3,
+      4e-3,
+      goalChanceCap
+    );
+    const scored = roll(40) < goalChance;
+    const isPenalty = chance.pattern === "SET_PIECE" && chance.xG >= 0.6;
+    const shotTempoDampener = clamp3(1 - Math.max(0, scoreDiff - 2) * 0.055, 0.78, 1);
+    const onTargetChance = clamp3((0.24 + shotQuality * 1.25 + executionEdge * 12e-4) * shotTempoDampener, 0.14, 0.72);
+    const isOnTarget = scored || roll(41) < onTargetChance;
+    const postChance = clamp3(0.012 + shotQuality * 0.055, 0.01, 0.045);
+    const barChance = clamp3(0.01 + shotQuality * 0.045, 8e-3, 0.04);
+    const saveChance = isOnTarget ? clamp3(0.72 - shotQuality * 1.55 + (keeperScore - shooterExecution) * 4e-3, 0.18, 0.88) : 0;
+    if (scored) {
+      return {
+        eventType: isPenalty ? "PENALTY_SCORED" /* PENALTY_SCORED */ : chance.kind === "ONE_ON_ONE" ? "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */ : "GOAL" /* GOAL */,
+        goal: true,
+        onTarget: true,
+        corner: false,
+        save: false,
+        xG: chance.xG,
+        momentumDelta: 18,
+        text: `${shooter.lastName} ko\u0144czy akcj\u0119 strza\u0142em do siatki.`
+      };
+    }
+    if (isPenalty) {
+      const saved = isOnTarget && roll(45) < saveChance;
+      return {
+        eventType: "PENALTY_MISSED" /* PENALTY_MISSED */,
+        goal: false,
+        onTarget: isOnTarget,
+        corner: false,
+        save: saved,
+        xG: chance.xG,
+        momentumDelta: -4,
+        text: saved ? `${keeper?.lastName ?? "Bramkarz"} broni rzut karny zawodnika ${shooter.lastName}.` : `${shooter.lastName} nie wykorzystuje rzutu karnego.`
+      };
+    }
+    if (roll(43) < postChance) {
+      return {
+        eventType: "SHOT_POST" /* SHOT_POST */,
+        goal: false,
+        onTarget: false,
+        corner: false,
+        save: false,
+        xG: chance.xG,
+        momentumDelta: 5,
+        text: `${shooter.lastName} trafia w s\u0142upek.`
+      };
+    }
+    if (roll(44) < barChance) {
+      return {
+        eventType: "SHOT_BAR" /* SHOT_BAR */,
+        goal: false,
+        onTarget: false,
+        corner: false,
+        save: false,
+        xG: chance.xG,
+        momentumDelta: 5,
+        text: `${shooter.lastName} uderza w poprzeczk\u0119.`
+      };
+    }
+    if (isOnTarget && roll(45) < saveChance) {
+      const corner = roll(46) < 0.18 + shotQuality * 0.25;
+      return {
+        eventType: chance.kind === "ONE_ON_ONE" ? "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */ : "SAVE" /* SAVE */,
+        goal: false,
+        onTarget: true,
+        corner,
+        save: true,
+        xG: chance.xG,
+        momentumDelta: corner ? 3 : 1,
+        text: `${keeper?.lastName ?? "Bramkarz"} broni strza\u0142 zawodnika ${shooter.lastName}.`
+      };
+    }
+    const blockChance = marker ? clamp3(0.08 + markerPressure * 17e-4 + chance.pressure * 11e-4, 0.1, 0.34) : 0;
+    if (!isOnTarget && marker && roll(48) < blockChance) {
+      const corner = roll(47) < 0.08 + attacking.crossing * 7e-4;
+      return {
+        eventType: "SHOT_BLOCKED" /* SHOT_BLOCKED */,
+        goal: false,
+        onTarget: false,
+        corner,
+        save: false,
+        xG: chance.xG,
+        momentumDelta: corner ? 3 : 1,
+        text: `${marker.lastName} blokuje strza\u0142 zawodnika ${shooter.lastName}.`
+      };
+    }
+    return {
+      eventType: isOnTarget ? "SHOT_ON_TARGET" /* SHOT_ON_TARGET */ : "SHOT" /* SHOT */,
+      goal: false,
+      onTarget: isOnTarget,
+      corner: !isOnTarget && roll(47) < 0.08 + attacking.crossing * 7e-4,
+      save: false,
+      xG: chance.xG,
+      momentumDelta: isOnTarget ? 2 : 0.5,
+      text: `${shooter.lastName} oddaje strza\u0142, ale akcja nie ko\u0144czy si\u0119 golem.`
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupActionBuilder.ts
+var opponentSide = (side) => side === "HOME" ? "AWAY" : "HOME";
+var profileForSide = (ctx, side) => side === "HOME" ? ctx.homeProfile : ctx.awayProfile;
+var weatherShotPenalty = (ctx) => Math.max(0, (ctx.input.environment.weather?.weatherIntensity ?? 0) * 15.5);
+var registerShotStats = (ctx, attacking, defending, shot) => {
+  const stats = ctx.state.stats[attacking.side];
+  stats.shots += 1;
+  stats.xG += shot.xG;
+  if (shot.onTarget) stats.shotsOnTarget += 1;
+  if (shot.goal) stats.goals += 1;
+  if (shot.corner) stats.corners += 1;
+  if (shot.save) ctx.state.stats[defending.side].saves += 1;
+  if (shot.eventType === "SHOT_POST" /* SHOT_POST */) stats.posts += 1;
+  if (shot.eventType === "SHOT_BAR" /* SHOT_BAR */) stats.bars += 1;
+};
+var resolveSetPieceDelivery = ({
+  ctx,
+  attacking,
+  defending,
+  intent,
+  sequenceId,
+  kind,
+  sourceContactId
+}) => {
+  const events = [];
+  const chance = CupSetPieceResolver.createSetPieceChance({ ctx, attacking, defending, kind });
+  if (!chance) {
+    const clearedByDefender = kind === "CORNER" && ctx.random(504) < 0.3;
+    return {
+      nextPossession: clearedByDefender ? defending.side : attacking.side,
+      nextZone: clearedByDefender ? "MIDFIELD" : kind === "PENALTY" ? "BOX" : "FINAL_THIRD",
+      momentumDelta: clearedByDefender ? attacking.side === "HOME" ? -1.4 : 1.4 : attacking.side === "HOME" ? 1.4 : -1.4,
+      events
+    };
+  }
+  events.push(...CupActionSequenceService.createChanceBuildup({
+    ctx,
+    attacking,
+    intent: { ...intent, pattern: "SET_PIECE" },
+    sequenceId,
+    chance
+  }));
+  const shot = CupShotResolver.resolveShot({
+    chance,
+    attacking,
+    defending,
+    shooterFatigue: ctx.state.fatigue[chance.shooter.id] ?? chance.shooter.condition,
+    keeperFatigue: defending.goalkeeper ? ctx.state.fatigue[defending.goalkeeper.id] ?? defending.goalkeeper.condition : 80,
+    weatherPenalty: weatherShotPenalty(ctx),
+    scoreDiff: attacking.side === "HOME" ? ctx.state.homeScore - ctx.state.awayScore : ctx.state.awayScore - ctx.state.homeScore,
+    roll: (salt) => ctx.random(500 + salt)
+  });
+  registerShotStats(ctx, attacking, defending, shot);
+  const setPieceShotId = `${sequenceId}_set_piece_shot`;
+  events.push({
+    id: setPieceShotId,
+    second: ctx.state.second,
+    minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+    side: attacking.side,
+    type: shot.eventType,
+    zone: chance.zone,
+    pattern: "SET_PIECE",
+    playerId: chance.shooter.id,
+    secondaryPlayerId: kind === "PENALTY" || shot.assistEligible === false ? void 0 : chance.creator?.id,
+    text: shot.text,
+    xG: shot.xG,
+    detail: {
+      sequenceId,
+      sourceContactId,
+      setPieceKind: kind,
+      chanceKind: chance.kind,
+      pressure: chance.pressure,
+      distance: chance.distance,
+      angle: chance.angle,
+      assistEligible: kind === "PENALTY" ? false : Boolean(chance.creator),
+      attackingShooterId: chance.shooter.id,
+      goalkeeperId: defending.goalkeeper?.id,
+      markerId: chance.marker?.id,
+      saved: shot.save
+    }
+  });
+  if (shot.corner) {
+    const cornerAward = CupSetPieceResolver.eventForAward(ctx, attacking.side, "CORNER");
+    cornerAward.id = `${cornerAward.id}_after_set_piece`;
+    cornerAward.detail = { sequenceId, sourceShotId: setPieceShotId };
+    events.push(cornerAward);
+  }
+  return {
+    nextPossession: shot.goal ? defending.side : shot.corner ? attacking.side : defending.side,
+    nextZone: shot.goal ? "MIDFIELD" : shot.corner ? "WIDE_LEFT" : "DEFENSE",
+    nextPossessionReason: shot.goal ? "GOAL_RESTART" : shot.corner ? "CORNER" : shot.save ? "SAVE" : "GOAL_KICK",
+    restartSourceEventId: shot.corner ? events.at(-1)?.id : setPieceShotId,
+    momentumDelta: attacking.side === "HOME" ? shot.momentumDelta : -shot.momentumDelta,
+    events
+  };
+};
+var resolveFoulRestart = ({
+  ctx,
+  attacking,
+  defending,
+  intent,
+  sequenceId,
+  sourceContactId
+}) => {
+  const kind = ctx.state.ballZone === "BOX" ? "PENALTY" : ctx.state.ballZone === "WIDE_LEFT" || ctx.state.ballZone === "WIDE_RIGHT" ? "FREE_KICK_WIDE" : ctx.state.ballZone === "FINAL_THIRD" && ctx.random(295) < 0.46 ? "FREE_KICK_DIRECT" : "FREE_KICK_WIDE";
+  const award = CupSetPieceResolver.eventForAward(ctx, attacking.side, kind);
+  award.detail = { ...award.detail ?? {}, sequenceId, sourceContactId, setPieceKind: kind };
+  const delivery = resolveSetPieceDelivery({ ctx, attacking, defending, intent, sequenceId, kind, sourceContactId });
+  return { ...delivery, events: [award, ...delivery.events] };
+};
+var nextZoneAfterProgression = (zone, roll, widthUse) => {
+  if (zone === "GK") return "DEFENSE";
+  if (zone === "DEFENSE") return "MIDFIELD";
+  if (zone === "MIDFIELD") return widthUse > 0.58 && roll < 0.45 ? roll < 0.225 ? "WIDE_LEFT" : "WIDE_RIGHT" : "FINAL_THIRD";
+  if (zone === "WIDE_LEFT" || zone === "WIDE_RIGHT") return roll < 0.55 ? "BOX" : "FINAL_THIRD";
+  if (zone === "FINAL_THIRD") return roll < 0.42 ? "BOX" : "FINAL_THIRD";
+  return "BOX";
+};
+var buildIntent = (ctx, attacking) => {
+  const team = attacking.side === "HOME" ? ctx.input.home : ctx.input.away;
+  const instructions = team.instructions;
+  const patternWeights = [
+    { item: "BUILD_UP", weight: instructions.passing === "SHORT" ? 38 : 24 },
+    { item: "DIRECT", weight: instructions.passing === "LONG" ? 32 : 12 },
+    { item: "COUNTER", weight: instructions.counterAttack === "COUNTER" ? 28 : 8 },
+    { item: "WING_PLAY", weight: attacking.tacticalWidth > 58 ? 22 : 12 },
+    { item: "SECOND_BALL", weight: instructions.passing === "LONG" ? 14 : 7 }
+  ];
+  const tempo = instructions.tempo === "FAST" ? 0.72 : instructions.tempo === "SLOW" ? 0.34 : 0.52;
+  const risk = instructions.mindset === "OFFENSIVE" ? 0.68 : instructions.mindset === "DEFENSIVE" ? 0.3 : 0.48;
+  const verticality = instructions.passing === "LONG" ? 0.72 : instructions.passing === "SHORT" ? 0.32 : 0.52;
+  const widthUse = clamp3(attacking.tacticalWidth / 100 + (instructions.passing === "LONG" ? 0.05 : 0), 0.25, 0.85);
+  const intensityTempo = instructions.intensity === "AGGRESSIVE" ? 0.04 : instructions.intensity === "CAUTIOUS" ? -0.04 : 0;
+  const intensityRisk = instructions.intensity === "AGGRESSIVE" ? 0.05 : instructions.intensity === "CAUTIOUS" ? -0.05 : 0;
+  return {
+    side: attacking.side,
+    pattern: pickWeighted(patternWeights, ctx.random(12)),
+    risk: clamp3(risk + intensityRisk, 0.18, 0.78),
+    tempo: clamp3(tempo + intensityTempo, 0.24, 0.78),
+    verticality,
+    widthUse
+  };
+};
+var selectOffsideRunner = (attacking, roll) => {
+  const pool = attacking.forwards.length > 0 ? [...attacking.forwards, ...attacking.forwards, ...attacking.midfielders] : attacking.outfieldPlayers;
+  if (pool.length === 0) return void 0;
+  return pickWeighted(pool.map((player) => ({
+    item: player,
+    weight: weightedScore(player.attributes, {
+      pace: 0.22,
+      attacking: 0.2,
+      positioning: 0.18,
+      finishing: 0.13,
+      mentality: 0.1,
+      workRate: 0.08,
+      dribbling: 0.05,
+      strength: 0.04
+    }) + (player.position === "FWD" ? 14 : player.position === "MID" ? 6 : -8)
+  })), roll);
+};
+var selectOffsidePasser = (attacking, runnerId, roll) => {
+  const pool = attacking.outfieldPlayers.filter((player) => player.id !== runnerId);
+  if (pool.length === 0) return void 0;
+  return pickWeighted(pool.map((player) => ({
+    item: player,
+    weight: weightedScore(player.attributes, {
+      passing: 0.24,
+      vision: 0.22,
+      technique: 0.17,
+      crossing: 0.11,
+      mentality: 0.1,
+      attacking: 0.08,
+      workRate: 0.08
+    }) + (player.position === "MID" ? 12 : player.position === "FWD" ? 5 : player.position === "DEF" ? 2 : -12)
+  })), roll);
+};
+var CupActionBuilder = {
+  /**
+   * Jeden tick symulacji. Ten blok nie zna wyniku końcowego meczu. Widzi tylko
+   * aktualny stan piłki i rozstrzyga najbliższe kilka sekund: utrzymanie,
+   * pressing, progresję, kontakt, sytuację i ewentualny strzał.
+   */
+  simulateTick: (ctx) => {
+    const attacking = profileForSide(ctx, ctx.state.possession);
+    const defending = profileForSide(ctx, opponentSide(ctx.state.possession));
+    const intent = buildIntent(ctx, attacking);
+    const events = [];
+    const possessionStats = ctx.state.stats[attacking.side];
+    possessionStats.possessionTicks += 1;
+    if (ctx.state.possessionReason === "CORNER_DELIVERY") {
+      const sequenceId2 = `cupv2_corner_delivery_${ctx.state.second}_${ctx.state.possession}`;
+      return resolveSetPieceDelivery({ ctx, attacking, defending, intent, sequenceId: sequenceId2, kind: "CORNER" });
+    }
+    const scoreDiff = attacking.side === "HOME" ? ctx.state.homeScore - ctx.state.awayScore : ctx.state.awayScore - ctx.state.homeScore;
+    const footballMinute = CupMatchClockService.eventMinute(ctx.state, ctx.config) - 1;
+    const halfTimeResponseDecay = ctx.state.phase === "SECOND_HALF" ? clamp3(1 - Math.max(0, footballMinute - 45) / 52, 0.12, 1) : 0;
+    const halfTimeResponse = ctx.state.halfTimeResponse[attacking.side] * halfTimeResponseDecay;
+    const attackingCoach = ctx.state.coachEffects[attacking.side];
+    const defendingCoach = ctx.state.coachEffects[defending.side];
+    const leadingGameControlDampener = scoreDiff >= 5 ? 0.46 : scoreDiff >= 4 ? 0.55 : scoreDiff >= 3 ? 0.66 : scoreDiff >= 2 ? 0.8 : scoreDiff >= 1 ? 0.93 : 1;
+    const trailingUrgency = scoreDiff < 0 ? clamp3(1 + Math.min(3, Math.abs(scoreDiff)) * 0.035, 1, 1.105) : 1;
+    const actionCadence = clamp3(
+      (0.19 + intent.tempo * 0.08 + intent.risk * 0.05 + Math.abs(ctx.state.momentum) * 45e-5 + attackingCoach.initiativeModifier * 0.55) * leadingGameControlDampener * trailingUrgency,
+      0.08,
+      0.34
+    );
+    if (ctx.random(20) > actionCadence) {
+      return {
+        nextZone: ctx.state.ballZone,
+        momentumDelta: 0,
+        events
+      };
+    }
+    const decision = CupPlayerDecisionService.selectPossessionDecision({
+      attacking,
+      defending,
+      zone: ctx.state.ballZone,
+      pattern: intent.pattern,
+      fatigue: ctx.state.fatigue,
+      currentCarrierId: ctx.state.ballCarrierId,
+      instructions: attacking.side === "HOME" ? ctx.input.home.instructions : ctx.input.away.instructions,
+      roll: ctx.random
+    });
+    const sequenceId = `cupv2_sequence_${ctx.state.second}_${attacking.side}`;
+    const pressure = ctx.state.pressure[attacking.side];
+    const attackingOrganization = ctx.state.organization[attacking.side];
+    const defendingOrganization = ctx.state.organization[defending.side];
+    const pressingScore = defending.pressing * (defending.lineHeight > 55 ? 1.05 : 0.96);
+    const buildScore = attacking.buildUp * 0.32 + attacking.midfieldControl * 0.23 + attacking.progression * 0.2 + attacking.mentality * 0.12 + attacking.staminaReserve * 0.08 + attackingOrganization * 0.04 - pressure * 0.1 + halfTimeResponse * 0.38;
+    const turnoverProbability = clamp3(
+      contestProbability(pressingScore, buildScore, 0.1, 28) + intent.risk * 0.045 + intent.tempo * 0.03 + attackingCoach.turnoverRiskModifier * 0.32,
+      0.018,
+      0.22
+    );
+    if (ctx.random(21) < turnoverProbability) {
+      const contact = CupDisciplineResolver.resolveContact({ ctx, defending, attacking, danger: intent.risk, salt: 200 });
+      if (contact) events.push(contact);
+      const injury = CupInjuryResolver.maybeCreateInjury({ ctx, profile: attacking, contactIntensity: intent.risk, salt: 215 });
+      if (injury) {
+        events.push(injury, {
+          id: `${injury.id}_medical_treatment`,
+          second: ctx.state.second,
+          minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+          side: injury.side,
+          type: "MEDICAL_TREATMENT" /* MEDICAL_TREATMENT */,
+          zone: ctx.state.ballZone,
+          playerId: injury.playerId,
+          text: `S\u0142u\u017Cby medyczne udzielaj\u0105 pomocy poszkodowanemu zawodnikowi.`,
+          detail: {
+            sourceInjuryId: injury.id,
+            severity: injury.type === "INJURY_SEVERE" /* INJURY_SEVERE */ ? "SEVERE" : "LIGHT"
+          }
+        });
+      }
+      if (contact?.type === "ADVANTAGE_PLAYED" /* ADVANTAGE_PLAYED */) {
+        return {
+          nextPossession: attacking.side,
+          nextZone: ctx.state.ballZone,
+          nextPossessionReason: "OPEN_PLAY",
+          momentumDelta: attacking.side === "HOME" ? 0.8 : -0.8,
+          events
+        };
+      }
+      if (contact) {
+        const restart = resolveFoulRestart({
+          ctx,
+          attacking,
+          defending,
+          intent,
+          sequenceId,
+          sourceContactId: contact.id
+        });
+        return {
+          ...restart,
+          events: [...events, ...restart.events]
+        };
+      }
+      events.push(CupActionSequenceService.createTurnoverEvent({
+        ctx,
+        attacking,
+        defending,
+        intent,
+        decision,
+        sequenceId
+      }));
+      return {
+        nextPossession: defending.side,
+        nextZone: ctx.state.ballZone === "BOX" || ctx.state.ballZone === "FINAL_THIRD" ? "DEFENSE" : "MIDFIELD",
+        momentumDelta: defending.side === "HOME" ? 1.8 : -1.8,
+        events
+      };
+    }
+    const progressionScore = attacking.progression * 0.34 + attacking.midfieldControl * 0.18 + attacking.chanceCreation * 0.15 + (intent.pattern === "COUNTER" ? attacking.counterThreat * 0.2 : 0) + intent.verticality * 12 + intent.tempo * 8 + halfTimeResponse * 0.82;
+    const defensiveScore = defending.defensiveShape * 0.38 + defending.midfieldControl * 0.18 + defending.pressing * 0.14 + defending.mentality * 0.12 + defendingOrganization * 0.05;
+    const progressProbability = clamp3(
+      (contestProbability(progressionScore, defensiveScore, 0.38, 24) + intent.risk * 0.04 + attackingCoach.initiativeModifier * 0.45 + attackingCoach.ownShotModifier * 1.25 + defendingCoach.opponentShotModifier * 1.1) * leadingGameControlDampener * trailingUrgency,
+      0.05,
+      0.72
+    );
+    const progressed = ctx.random(22) < progressProbability;
+    const nextZone = progressed ? nextZoneAfterProgression(ctx.state.ballZone, ctx.random(23), intent.widthUse) : ctx.state.ballZone;
+    if (!progressed) {
+      const eventType = ctx.random(24) < 0.1 ? "THROW_IN" /* THROW_IN */ : "MIDFIELD_CONTROL" /* MIDFIELD_CONTROL */;
+      return {
+        nextZone,
+        momentumDelta: attacking.side === "HOME" ? 0.2 : -0.2,
+        events: [{
+          id: `cupv2_stalled_${ctx.state.second}`,
+          second: ctx.state.second,
+          minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+          side: attacking.side,
+          type: eventType,
+          zone: ctx.state.ballZone,
+          pattern: intent.pattern,
+          playerId: decision.passer?.id,
+          secondaryPlayerId: decision.receiver?.id,
+          text: eventType === "THROW_IN" /* THROW_IN */ ? `${decision.passer?.lastName ?? (attacking.side === "HOME" ? ctx.input.home.name : ctx.input.away.name)} wznawia gr\u0119 z autu.` : `${attacking.side === "HOME" ? ctx.input.home.name : ctx.input.away.name} utrzymuje pi\u0142k\u0119, ale akcja zwalnia.`,
+          detail: eventType === "THROW_IN" /* THROW_IN */ ? { sequenceId, restartReason: "THROW_IN" } : { sequenceId }
+        }]
+      };
+    }
+    if (nextZone !== "FINAL_THIRD" && nextZone !== "BOX" && nextZone !== "WIDE_LEFT" && nextZone !== "WIDE_RIGHT") {
+      events.push(...CupActionSequenceService.createProgressionEvents({
+        ctx,
+        attacking,
+        defending,
+        intent,
+        decision,
+        sequenceId,
+        fromZone: ctx.state.ballZone,
+        toZone: nextZone
+      }));
+      return { nextZone, momentumDelta: attacking.side === "HOME" ? 0.5 : -0.5, events };
+    }
+    const offsideChance = clamp3(
+      0.01 + intent.verticality * 0.02 + Math.max(0, defending.lineHeight - 58) * 5e-4 - attacking.mentality * 8e-5,
+      2e-3,
+      0.055
+    );
+    if (ctx.random(25) < offsideChance) {
+      const offsideRunner = selectOffsideRunner(attacking, ctx.random(251));
+      const offsidePasser = selectOffsidePasser(attacking, offsideRunner?.id, ctx.random(252));
+      ctx.state.stats[attacking.side].offsides += 1;
+      return {
+        nextPossession: defending.side,
+        nextZone: "DEFENSE",
+        momentumDelta: attacking.side === "HOME" ? -0.8 : 0.8,
+        events: [{
+          id: `cupv2_offside_${ctx.state.second}`,
+          second: ctx.state.second,
+          minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+          side: attacking.side,
+          type: "OFFSIDE" /* OFFSIDE */,
+          zone: nextZone,
+          pattern: intent.pattern,
+          playerId: offsideRunner?.id,
+          secondaryPlayerId: offsidePasser?.id,
+          text: `${offsideRunner?.lastName ?? (attacking.side === "HOME" ? ctx.input.home.name : ctx.input.away.name)} \u0142apie si\u0119 na spalonym po pr\xF3bie zagrania za lini\u0119 obrony.`,
+          detail: {
+            runnerId: offsideRunner?.id,
+            passerId: offsidePasser?.id,
+            defensiveLineHeight: defending.lineHeight,
+            verticality: intent.verticality
+          }
+        }]
+      };
+    }
+    const chance = CupChanceCreationService.createChance({
+      side: attacking.side,
+      intent,
+      attacking,
+      defending,
+      zone: nextZone,
+      pressure,
+      scoreDiff,
+      roll: ctx.random
+    });
+    if (!chance) {
+      const cornerChance = clamp3(0.026 + attacking.crossing * 42e-5 + intent.widthUse * 0.024, 0.018, 0.095);
+      if (ctx.random(26) < cornerChance) {
+        ctx.state.stats[attacking.side].corners += 1;
+        if (decision.passer && decision.presser && (ctx.state.ballZone === "WIDE_LEFT" || ctx.state.ballZone === "WIDE_RIGHT" || intent.pattern === "WING_PLAY")) {
+          events.push({
+            id: `${sequenceId}_cross_blocked`,
+            second: ctx.state.second,
+            minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+            side: defending.side,
+            type: "CROSS_BLOCKED" /* CROSS_BLOCKED */,
+            zone: nextZone,
+            pattern: intent.pattern,
+            playerId: decision.presser.id,
+            secondaryPlayerId: decision.passer.id,
+            text: `${decision.presser.lastName} blokuje do\u015Brodkowanie zawodnika ${decision.passer.lastName}.`,
+            detail: { sequenceId, completed: false }
+          });
+        }
+        events.push({
+          id: `cupv2_corner_${ctx.state.second}`,
+          second: ctx.state.second,
+          minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+          side: attacking.side,
+          type: "CORNER" /* CORNER */,
+          zone: nextZone,
+          pattern: intent.pattern,
+          playerId: decision.receiver?.id ?? decision.passer?.id,
+          secondaryPlayerId: decision.passer?.id,
+          text: `${attacking.side === "HOME" ? ctx.input.home.name : ctx.input.away.name} wywalcza rzut ro\u017Cny po zablokowanej akcji.`,
+          detail: {
+            sequenceId,
+            sourceEventId: events.at(-1)?.id
+          }
+        });
+      } else {
+        events.push(...CupActionSequenceService.createProgressionEvents({
+          ctx,
+          attacking,
+          defending,
+          intent,
+          decision,
+          sequenceId,
+          fromZone: ctx.state.ballZone,
+          toZone: nextZone
+        }));
+      }
+      const cornerEvent = events.find((event) => event.type === "CORNER" /* CORNER */);
+      return {
+        nextPossession: cornerEvent ? attacking.side : void 0,
+        nextZone,
+        nextPossessionReason: cornerEvent ? "CORNER" : void 0,
+        restartSourceEventId: cornerEvent?.id,
+        momentumDelta: attacking.side === "HOME" ? 0.7 : -0.7,
+        events
+      };
+    }
+    const ownGoal = CupOwnGoalResolver.maybeOwnGoal({
+      chance,
+      defending,
+      roll: ctx.random
+    });
+    const shot = ownGoal ?? CupShotResolver.resolveShot({
+      chance,
+      attacking,
+      defending,
+      shooterFatigue: ctx.state.fatigue[chance.shooter.id] ?? chance.shooter.condition,
+      keeperFatigue: defending.goalkeeper ? ctx.state.fatigue[defending.goalkeeper.id] ?? defending.goalkeeper.condition : 80,
+      weatherPenalty: weatherShotPenalty(ctx),
+      scoreDiff,
+      roll: ctx.random
+    });
+    events.push(...CupActionSequenceService.createChanceBuildup({
+      ctx,
+      attacking,
+      intent,
+      sequenceId,
+      chance
+    }));
+    registerShotStats(ctx, attacking, defending, shot);
+    const shotEventId = `cupv2_shot_${ctx.state.second}`;
+    events.push({
+      id: shotEventId,
+      second: ctx.state.second,
+      minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+      side: attacking.side,
+      type: shot.eventType,
+      zone: chance.zone,
+      pattern: chance.pattern,
+      playerId: shot.isOwnGoal ? shot.ownGoalPlayerId : chance.shooter.id,
+      secondaryPlayerId: shot.assistEligible === false || shot.isOwnGoal ? void 0 : chance.creator?.id,
+      text: shot.text,
+      xG: shot.xG,
+      detail: {
+        sequenceId,
+        chanceKind: chance.kind,
+        pressure: chance.pressure,
+        distance: chance.distance,
+        angle: chance.angle,
+        assistEligible: shot.assistEligible ?? Boolean(chance.creator),
+        isOwnGoal: shot.isOwnGoal ?? false,
+        ownGoalPlayerId: shot.ownGoalPlayerId,
+        attackingShooterId: chance.shooter.id,
+        goalkeeperId: defending.goalkeeper?.id,
+        markerId: chance.marker?.id
+      }
+    });
+    const producesLooseBall = shot.eventType === "SAVE" /* SAVE */ || shot.eventType === "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */ || shot.eventType === "SHOT_POST" /* SHOT_POST */ || shot.eventType === "SHOT_BAR" /* SHOT_BAR */ || shot.eventType === "SHOT_BLOCKED" /* SHOT_BLOCKED */;
+    const rebound = producesLooseBall && !shot.corner ? CupPlayerDecisionService.selectReboundWinner({
+      attacking,
+      defending,
+      fatigue: ctx.state.fatigue,
+      sourceEventType: shot.eventType,
+      roll: ctx.random(291)
+    }) : void 0;
+    if (rebound) {
+      events.push({
+        id: `${sequenceId}_rebound`,
+        second: ctx.state.second,
+        minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+        side: rebound.side,
+        type: "REBOUND_WON" /* REBOUND_WON */,
+        zone: chance.zone,
+        pattern: chance.pattern,
+        playerId: rebound.player.id,
+        secondaryPlayerId: chance.shooter.id,
+        text: `${rebound.player.lastName} jako pierwszy dopada do odbitej pi\u0142ki.`,
+        detail: {
+          sequenceId,
+          sourceEventType: shot.eventType,
+          attackingRebound: rebound.side === attacking.side
+        }
+      });
+    }
+    let finalShot = shot;
+    let finalShotEventId = shotEventId;
+    const followUpChance = rebound?.side === attacking.side && ctx.random(292) < 0.16;
+    if (rebound && followUpChance) {
+      const controlId = `${sequenceId}_rebound_control`;
+      events.push({
+        id: controlId,
+        second: ctx.state.second,
+        minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+        side: attacking.side,
+        type: "BALL_CONTROL" /* BALL_CONTROL */,
+        zone: "BOX",
+        pattern: "SECOND_BALL",
+        playerId: rebound.player.id,
+        secondaryPlayerId: chance.shooter.id,
+        text: `${rebound.player.lastName} opanowuje odbit\u0105 pi\u0142k\u0119 i natychmiast sk\u0142ada si\u0119 do dobicia.`,
+        detail: { sequenceId, reboundControl: true }
+      });
+      const reboundChance = {
+        side: attacking.side,
+        kind: "HALF_CHANCE",
+        zone: "BOX",
+        pattern: "SECOND_BALL",
+        shooter: rebound.player,
+        marker: chance.marker,
+        xG: clamp3(chance.xG * 0.42, 0.025, 0.14),
+        pressure: clamp3(chance.pressure + 14, 0, 100),
+        angle: clamp3(chance.angle - 0.08, 0.18, 0.92),
+        distance: clamp3(chance.distance * 0.72, 5, 15)
+      };
+      const reboundShot = CupShotResolver.resolveShot({
+        chance: reboundChance,
+        attacking,
+        defending,
+        shooterFatigue: ctx.state.fatigue[rebound.player.id] ?? rebound.player.condition,
+        keeperFatigue: defending.goalkeeper ? ctx.state.fatigue[defending.goalkeeper.id] ?? defending.goalkeeper.condition : 80,
+        weatherPenalty: weatherShotPenalty(ctx),
+        scoreDiff,
+        // A salt namespace independent from the first shot prevents a replay of
+        // the same keeper/finishing rolls within one action sequence.
+        roll: (salt) => ctx.random(400 + salt)
+      });
+      registerShotStats(ctx, attacking, defending, reboundShot);
+      finalShot = reboundShot;
+      finalShotEventId = `${sequenceId}_rebound_shot`;
+      events.push({
+        id: finalShotEventId,
+        second: ctx.state.second,
+        minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
+        side: attacking.side,
+        type: reboundShot.eventType,
+        zone: reboundChance.zone,
+        pattern: reboundChance.pattern,
+        playerId: rebound.player.id,
+        text: reboundShot.text,
+        xG: reboundShot.xG,
+        detail: {
+          sequenceId,
+          chanceKind: reboundChance.kind,
+          pressure: reboundChance.pressure,
+          distance: reboundChance.distance,
+          angle: reboundChance.angle,
+          assistEligible: false,
+          attackingShooterId: rebound.player.id,
+          goalkeeperId: defending.goalkeeper?.id,
+          markerId: reboundChance.marker?.id,
+          reboundShot: true
+        }
+      });
+    }
+    let restartSourceEventId = finalShotEventId;
+    if (finalShot.corner) {
+      const cornerAward = CupSetPieceResolver.eventForAward(ctx, attacking.side, "CORNER");
+      cornerAward.detail = {
+        ...cornerAward.detail ?? {},
+        sequenceId,
+        sourceShotId: finalShotEventId
+      };
+      events.push(cornerAward);
+      restartSourceEventId = cornerAward.id;
+    }
+    const combinedMomentumDelta = shot.momentumDelta + (finalShot === shot ? 0 : finalShot.momentumDelta * 0.65);
+    return {
+      nextPossession: finalShot.goal ? defending.side : finalShot.corner ? attacking.side : defending.side,
+      nextZone: finalShot.goal ? "MIDFIELD" : finalShot.corner ? "WIDE_LEFT" : "DEFENSE",
+      nextPossessionReason: finalShot.goal ? "GOAL_RESTART" : finalShot.corner ? "CORNER" : rebound ? void 0 : finalShot.save ? "SAVE" : finalShot.eventType === "SHOT_BLOCKED" /* SHOT_BLOCKED */ ? void 0 : "GOAL_KICK",
+      restartSourceEventId,
+      momentumDelta: attacking.side === "HOME" ? combinedMomentumDelta : -combinedMomentumDelta,
+      events
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupSubstitutionService.ts
+var CupSubstitutionService = {
+  /**
+   * Zmiany są planowane przez tę warstwę, ale wykonanie powinno później
+   * należeć do integracji z UI i aktualnym LineupService. W V2 najważniejsze
+   * jest, żeby potrzeba zmiany wynikała z meczu: zmęczenia, urazu, kartek,
+   * wyniku i dopasowania zawodnika z ławki.
+   */
+  proposeAiSubstitution: ({
+    team,
+    profile,
+    state,
+    maxSubstitutions
+  }) => {
+    if (state.substitutionsUsed[team.side] >= maxSubstitutions) return null;
+    const activeIds = new Set(team.lineup.startingXI.filter((id) => Boolean(id)));
+    const playersWhoAlreadyLeft = new Set(state.events.filter((event) => event.type === "SUBSTITUTION" /* SUBSTITUTION */ && event.side === team.side).map((event) => event.secondaryPlayerId).filter((id) => Boolean(id)));
+    const bench = team.players.filter(
+      (player) => team.lineup.bench.includes(player.id) && !playersWhoAlreadyLeft.has(player.id) && !state.redCards[player.id]
+    );
+    if (bench.length === 0) return null;
+    const tiredPlayers = profile.activePlayers.filter((player) => (state.fatigue[player.id] ?? player.condition) < 55);
+    const injuredPlayers = profile.activePlayers.filter((player) => state.injuries[player.id]);
+    const yellowRiskPlayers = profile.activePlayers.filter((player) => (state.yellowCards[player.id] ?? 0) > 0 && player.attributes.aggression > 65);
+    const candidatesOut = injuredPlayers.length > 0 ? injuredPlayers : tiredPlayers.length > 0 ? tiredPlayers : yellowRiskPlayers;
+    if (candidatesOut.length === 0) return null;
+    const playerOut = pickWeighted(candidatesOut.map((player) => ({
+      item: player,
+      weight: state.injuries[player.id] ? 100 : Math.max(1, 100 - (state.fatigue[player.id] ?? player.condition))
+    })), 0.42);
+    const replacements = bench.filter((player) => !activeIds.has(player.id) && player.position === playerOut.position);
+    const pool = replacements.length > 0 ? replacements : bench;
+    const playerIn = pickWeighted(pool.map((player) => ({
+      item: player,
+      weight: weightedScore(player.attributes, {
+        stamina: 0.22,
+        workRate: 0.16,
+        mentality: 0.14,
+        pace: 0.1,
+        technique: 0.1,
+        passing: 0.08,
+        defending: 0.08,
+        attacking: 0.08,
+        leadership: 0.04
+      }) + player.overallRating * 0.25
+    })), 0.58);
+    return {
+      side: team.side,
+      playerOutId: playerOut.id,
+      playerInId: playerIn.id,
+      reason: state.injuries[playerOut.id] ? "INJURY" : (state.yellowCards[playerOut.id] ?? 0) > 0 ? "CARD_RISK" : "FATIGUE"
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupExtraTimeService.ts
+var CupExtraTimeService = {
+  /**
+   * Reguły pucharowe powinny być osobną warstwą nad symulacją gry. Dzięki temu
+   * ta sama pętla ticków może obsługiwać pierwszą połowę, drugą połowę i
+   * dogrywkę, a decyzja o karnych nie miesza się z generowaniem akcji.
+   */
+  shouldPlayExtraTime: (state, config) => config.enableExtraTime && state.homeScore === state.awayScore,
+  shouldPlayPenaltyShootout: (state, config) => config.enablePenaltyShootout && state.homeScore === state.awayScore,
+  getAddedTimeSeconds: (state, window = {}) => {
+    const fromSecond = window.fromSecond ?? 0;
+    const toSecond = window.toSecond ?? state.second;
+    const periodEvents = state.events.filter((event) => event.second >= fromSecond && event.second < toSecond);
+    const count = (type) => periodEvents.filter((event) => event.type === type).length;
+    const goals = count("GOAL" /* GOAL */) + count("ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */) + count("PENALTY_SCORED" /* PENALTY_SCORED */);
+    const injuries = count("INJURY_LIGHT" /* INJURY_LIGHT */) + count("INJURY_SEVERE" /* INJURY_SEVERE */);
+    const eventsCost = goals * 35 + count("YELLOW_CARD" /* YELLOW_CARD */) * 18 + count("RED_CARD" /* RED_CARD */) * 45 + injuries * 55 + count("SUBSTITUTION" /* SUBSTITUTION */) * 25;
+    return Math.max(60, Math.min(420, eventsCost));
+  }
+};
+
+// services/match/engines/cupV2/CupPenaltyShootoutService.ts
+var playerName = (player) => `${player.firstName} ${player.lastName}`.trim();
+var takerWeight = (player, fatigue = player.condition, injury) => {
+  const injuryPenalty = injury === "SEVERE" ? 0.56 : injury === "LIGHT" ? 0.82 : 1;
+  return Math.max(1, weightedScore(player.attributes, {
+    penalties: 0.34,
+    finishing: 0.18,
+    technique: 0.16,
+    mentality: 0.18,
+    leadership: 0.06,
+    strength: 0.04,
+    talent: 0.04
+  }) * clamp3(0.72 + fatigue / 285, 0.72, 1.07) * injuryPenalty);
+};
+var goalkeeperWeight = (player, fatigue = player?.condition ?? 70, injury) => {
+  if (!player) return 42;
+  const injuryPenalty = injury === "SEVERE" ? 0.62 : injury === "LIGHT" ? 0.86 : 1;
+  return weightedScore(player.attributes, {
+    goalkeeping: 0.42,
+    positioning: 0.18,
+    mentality: 0.16,
+    pace: 0.08,
+    strength: 0.08,
+    leadership: 0.08
+  }) * clamp3(0.74 + fatigue / 310, 0.74, 1.06) * injuryPenalty;
+};
+var activePlayers2 = (team, redCards) => {
+  const byId = new Map(team.players.map((player) => [player.id, player]));
+  const active = team.lineup.startingXI.map((id) => id ? byId.get(id) : void 0).filter((player) => Boolean(player && !redCards[player.id]));
+  return active.length > 0 ? active : team.players.filter((player) => !redCards[player.id]);
+};
+var selectGoalkeeper = (players, redCards) => {
+  const eligible = players.filter((player) => !redCards[player.id]);
+  return eligible.find((player) => player.position === "GK") ?? eligible.map((player) => ({
+    player,
+    score: weightedScore(player.attributes, {
+      goalkeeping: 0.55,
+      positioning: 0.18,
+      mentality: 0.12,
+      strength: 0.08,
+      leadership: 0.07
+    })
+  })).sort((a, b) => b.score - a.score)[0]?.player;
+};
+var buildTakerOrder = (candidates, fatigue, injuries, seed, salt) => {
+  const remaining = [...candidates];
+  const ordered = [];
+  let pickIndex = 0;
+  while (remaining.length > 0) {
+    const picked = pickWeighted(
+      remaining.map((player) => ({
+        item: player,
+        weight: takerWeight(player, fatigue[player.id] ?? player.condition, injuries[player.id]) * (0.82 + seededRandom(seed, 91e3 + pickIndex, salt + pickIndex) * 0.36)
+      })),
+      seededRandom(seed, 92e3 + pickIndex, salt + 100)
+    );
+    ordered.push(picked);
+    remaining.splice(remaining.findIndex((player) => player.id === picked.id), 1);
+    pickIndex += 1;
+  }
+  return ordered;
+};
+var CupPenaltyShootoutService = {
+  /**
+   * Seria karnych jest osobną fazą po dogrywce. Nie dolicza bramek do wyniku
+   * meczu, ale generuje osobne zdarzenia wykonawców i bramkarzy dla raportu.
+   */
+  simulate: (input, fatigue, options = {}) => {
+    const redCards = options.redCards ?? {};
+    const injuries = options.injuries ?? {};
+    const startSecond = options.startSecond ?? 120 * 60;
+    const homeCandidates = activePlayers2(input.home, redCards);
+    const awayCandidates = activePlayers2(input.away, redCards);
+    const homeKeeper = selectGoalkeeper(homeCandidates, redCards);
+    const awayKeeper = selectGoalkeeper(awayCandidates, redCards);
+    const homeOrder = buildTakerOrder(homeCandidates, fatigue, injuries, input.seed, 31);
+    const awayOrder = buildTakerOrder(awayCandidates, fatigue, injuries, input.seed, 47);
+    let home = 0;
+    let away = 0;
+    let round = 0;
+    let order = 0;
+    const attempts = [];
+    const events = [];
+    const takePenalty = (side, taker, salt) => {
+      const keeper = side === "HOME" ? awayKeeper : homeKeeper;
+      const takerScore = takerWeight(taker, fatigue[taker.id] ?? taker.condition, injuries[taker.id]);
+      const keeperScore = goalkeeperWeight(keeper, keeper ? fatigue[keeper.id] ?? keeper.condition : 70, keeper ? injuries[keeper.id] : void 0);
+      const chance = clamp3(0.73 + (takerScore - keeperScore) * 3e-3, 0.55, 0.9);
+      const scored = seededRandom(input.seed, 1e5 + round, salt) < chance;
+      const saved = !scored && seededRandom(input.seed, 101e3 + round, salt) < clamp3(0.43 + (keeperScore - takerScore) * 4e-3, 0.18, 0.72);
+      return {
+        id: `cupv2_shootout_${order}_${side.toLowerCase()}_${taker.id}`,
+        round: round + 1,
+        order,
+        side,
+        takerId: taker.id,
+        goalkeeperId: keeper?.id,
+        scored,
+        saved,
+        xG: Number(chance.toFixed(2)),
+        takerScore: Number(takerScore.toFixed(2)),
+        keeperScore: Number(keeperScore.toFixed(2))
+      };
+    };
+    const pushAttempt = (attempt) => {
+      attempts.push(attempt);
+      if (attempt.side === "HOME" && attempt.scored) home += 1;
+      if (attempt.side === "AWAY" && attempt.scored) away += 1;
+      const team = attempt.side === "HOME" ? input.home : input.away;
+      const taker = team.players.find((player) => player.id === attempt.takerId);
+      const keeperTeam = attempt.side === "HOME" ? input.away : input.home;
+      const keeper = attempt.goalkeeperId ? keeperTeam.players.find((player) => player.id === attempt.goalkeeperId) : void 0;
+      const second = startSecond + attempt.order * 15;
+      const penaltyScoreText = `${home}:${away}`;
+      const resultText = attempt.scored ? `${taker ? playerName(taker) : "Zawodnik"} wykorzystuje rzut karny w serii.` : attempt.saved ? `${keeper ? playerName(keeper) : "Bramkarz"} broni rzut karny wykonywany przez ${taker ? playerName(taker) : "zawodnika"}.` : `${taker ? playerName(taker) : "Zawodnik"} nie trafia w serii rzut\xF3w karnych.`;
+      events.push({
+        id: attempt.id,
+        second,
+        minute: Math.floor(second / 60) + 1,
+        side: attempt.side,
+        type: attempt.scored ? "PENALTY_SCORED" /* PENALTY_SCORED */ : "PENALTY_MISSED" /* PENALTY_MISSED */,
+        playerId: attempt.takerId,
+        secondaryPlayerId: attempt.goalkeeperId,
+        text: resultText,
+        xG: attempt.xG,
+        detail: {
+          isShootout: true,
+          phase: "PENALTY_SHOOTOUT",
+          shootoutRound: attempt.round,
+          shootoutOrder: attempt.order,
+          goalkeeperId: attempt.goalkeeperId,
+          saved: attempt.saved,
+          penaltyScoreHome: home,
+          penaltyScoreAway: away,
+          penaltyScore: penaltyScoreText
+        }
+      });
+    };
+    while (round < 5 || home === away) {
+      const homeTaker = homeOrder[round % homeOrder.length];
+      const awayTaker = awayOrder[round % awayOrder.length];
+      pushAttempt(takePenalty("HOME", homeTaker, 11));
+      order += 1;
+      const remainingAfterHome = Math.max(0, 5 - round - 1);
+      if (round < 5 && Math.abs(home - away) > remainingAfterHome + 1) break;
+      pushAttempt(takePenalty("AWAY", awayTaker, 12));
+      order += 1;
+      round += 1;
+      const remaining = Math.max(0, 5 - round);
+      if (round >= 5 && home !== away) break;
+      if (round < 5 && Math.abs(home - away) > remaining) break;
+      if (round > 16 && home !== away) break;
+    }
+    return { winner: home >= away ? "HOME" : "AWAY", home, away, attempts, events };
+  }
+};
+
+// services/match/engines/cupV2/CupPlayerRatingService.ts
+var resultImpact = (sideScore, opponentScore) => {
+  if (sideScore > opponentScore) return 0.22;
+  if (sideScore === opponentScore) return 0.04;
+  return -0.16;
+};
+var minutesImpact = (minutesPlayed) => {
+  if (minutesPlayed <= 0) return -6;
+  if (minutesPlayed < 15) return -0.22;
+  if (minutesPlayed < 30) return -0.08;
+  if (minutesPlayed >= 90) return 0.04;
+  return 0;
+};
+var teamControlImpact = (teamStats2, opponentStats) => {
+  if (!teamStats2 || !opponentStats) return 0;
+  return clamp3(
+    (teamStats2.xG - opponentStats.xG) * 0.055 + (teamStats2.shotsOnTarget - opponentStats.shotsOnTarget) * 0.018 + (teamStats2.corners - opponentStats.corners) * 0.01 - teamStats2.redCards * 0.035,
+    -0.22,
+    0.22
+  );
+};
+var fatigueImpact = (minutesPlayed, finalFatigue) => {
+  if (finalFatigue === void 0 || minutesPlayed < 45) return 0;
+  if (finalFatigue < 25) return -0.14;
+  if (finalFatigue < 38) return -0.07;
+  if (finalFatigue > 72 && minutesPlayed >= 85) return 0.05;
+  return 0;
+};
+var goalWeight = (entry) => {
+  if (entry.position === "FWD" /* FWD */) return 0.92;
+  if (entry.position === "MID" /* MID */) return 1.05;
+  if (entry.position === "DEF" /* DEF */) return 1.2;
+  return 1.28;
+};
+var assistWeight = (entry) => {
+  if (entry.position === "MID" /* MID */) return 0.62;
+  if (entry.position === "FWD" /* FWD */) return 0.48;
+  if (entry.position === "DEF" /* DEF */) return 0.58;
+  return 0.45;
+};
+var attackingImpact = (entry) => {
+  const conversionImpact = clamp3((entry.goals - entry.xG) * 0.3, -0.45, 0.55);
+  const wastePenalty = entry.goals === 0 && entry.xG >= 0.7 ? clamp3((entry.xG - 0.55) * 0.22, 0, 0.22) : 0;
+  const shotSelectionPenalty = entry.shots >= 4 && entry.shotsOnTarget === 0 ? 0.12 : 0;
+  return entry.goals * goalWeight(entry) + entry.assists * assistWeight(entry) + entry.shotsOnTarget * 0.075 - entry.shotsOffTarget * 0.035 + Math.min(0.34, entry.xG * 0.14) + conversionImpact - wastePenalty - shotSelectionPenalty + entry.posts * 0.05 + entry.bars * 0.05;
+};
+var creationImpact = (entry) => entry.chancesCreated * (entry.position === "MID" /* MID */ ? 0.095 : 0.075) + entry.keyPasses * (entry.position === "MID" /* MID */ ? 0.075 : 0.055) + entry.foulsWon * 0.035 - entry.offsides * 0.055;
+var possessionImpact = (entry) => {
+  const accuracy = entry.passesAttempted > 0 ? entry.passesCompleted / entry.passesAttempted : 0.72;
+  const accuracyImpact = entry.passesAttempted >= 5 ? clamp3((accuracy - 0.72) * 0.32, -0.18, 0.12) : 0;
+  return accuracyImpact + Math.min(0.1, entry.passesCompleted * 2e-3) + entry.controls * 1e-3 + entry.dribblesCompleted * 0.02 - Math.max(0, entry.dribblesAttempted - entry.dribblesCompleted) * 0.018 + entry.crossesCompleted * 0.012 + entry.turnoversWon * 0.025 - entry.turnoversLost * 0.035;
+};
+var goalkeeperImpact = (entry, opponentScore) => {
+  if (entry.position !== "GK" /* GK */) return 0;
+  const shotsFaced = entry.saves + entry.goalsConceded;
+  const saveRate = shotsFaced > 0 ? entry.saves / shotsFaced : 1;
+  const cleanSheet = entry.minutesPlayed >= 60 && opponentScore === 0 ? 0.38 : 0;
+  return entry.saves * 0.17 + clamp3((saveRate - 0.68) * 0.55, -0.22, 0.28) + cleanSheet - entry.goalsConceded * 0.22 + entry.penaltiesSaved * 0.72;
+};
+var defensiveImpact = (entry, opponentScore) => {
+  if (entry.position === "GK" /* GK */) return 0;
+  const cleanSheet = opponentScore === 0 && entry.minutesPlayed >= 60 ? entry.position === "DEF" /* DEF */ ? 0.22 : entry.position === "MID" /* MID */ ? 0.08 : 0.02 : 0;
+  const concessionPenalty = opponentScore >= 4 && entry.minutesPlayed >= 60 ? entry.position === "DEF" /* DEF */ ? 0.16 : entry.position === "MID" /* MID */ ? 0.08 : 0.03 : 0;
+  return cleanSheet - concessionPenalty + entry.tacklesWon * 0.025 + entry.shotsBlocked * 0.045 + entry.reboundsWon * 8e-3;
+};
+var disciplineImpact = (entry) => -entry.foulsCommitted * 0.045 - entry.yellowCards * 0.32 - entry.redCards * 1.22 - entry.ownGoals * 0.95 - entry.penaltiesMissed * 0.52 + entry.penaltiesScored * 0.08;
+var healthImpact = (entry) => -entry.injuriesLight * 0.04 - entry.injuriesSevere * 0.12;
+var CupPlayerRatingService = {
+  /**
+   * Ocena zawodnika jest modelem raportowym, nie generatorem meczu. Korzysta z
+   * wyniku, roli, minut, statystyk indywidualnych, jakości okazji, bramkarza,
+   * dyscypliny i zmęczenia po meczu.
+   */
+  calculate: ({
+    entry,
+    sideScore,
+    opponentScore,
+    teamStats: teamStats2,
+    opponentStats,
+    finalFatigue
+  }) => {
+    if (entry.minutesPlayed <= 0) return 0;
+    const rating = 6 + resultImpact(sideScore, opponentScore) + minutesImpact(entry.minutesPlayed) + teamControlImpact(teamStats2, opponentStats) + fatigueImpact(entry.minutesPlayed, finalFatigue) + attackingImpact(entry) + creationImpact(entry) + possessionImpact(entry) + goalkeeperImpact(entry, opponentScore) + defensiveImpact(entry, opponentScore) + disciplineImpact(entry) + healthImpact(entry);
+    return Number(clamp3(rating, 1, 10).toFixed(1));
+  }
+};
+
+// services/match/engines/cupV2/CupPlayerStatsAggregator.ts
+var SHOT_TYPES = /* @__PURE__ */ new Set([
+  "SHOT" /* SHOT */,
+  "SHOT_BLOCKED" /* SHOT_BLOCKED */,
+  "SHOT_ON_TARGET" /* SHOT_ON_TARGET */,
+  "SAVE" /* SAVE */,
+  "SHOT_POST" /* SHOT_POST */,
+  "SHOT_BAR" /* SHOT_BAR */,
+  "GOAL" /* GOAL */,
+  "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */,
+  "ONE_ON_ONE_MISS" /* ONE_ON_ONE_MISS */,
+  "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */,
+  "PENALTY_SCORED" /* PENALTY_SCORED */,
+  "PENALTY_MISSED" /* PENALTY_MISSED */
+]);
+var ON_TARGET_TYPES = /* @__PURE__ */ new Set([
+  "SHOT_ON_TARGET" /* SHOT_ON_TARGET */,
+  "SAVE" /* SAVE */,
+  "GOAL" /* GOAL */,
+  "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */,
+  "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */,
+  "PENALTY_SCORED" /* PENALTY_SCORED */
+]);
+var GOAL_TYPES = /* @__PURE__ */ new Set([
+  "GOAL" /* GOAL */,
+  "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */,
+  "PENALTY_SCORED" /* PENALTY_SCORED */
+]);
+var SAVE_TYPES = /* @__PURE__ */ new Set([
+  "SAVE" /* SAVE */,
+  "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */
+]);
+var formatName = (player) => `${player.firstName} ${player.lastName}`.trim();
+var emptyTeamStats = () => ({});
+var playerById = (match) => {
+  const players = /* @__PURE__ */ new Map();
+  match.home.players.forEach((player) => players.set(player.id, { player, side: "HOME" }));
+  match.away.players.forEach((player) => players.set(player.id, { player, side: "AWAY" }));
+  return players;
+};
+var activeLineups = (match, initialLineups) => ({
+  HOME: initialLineups?.HOME ?? match.home.lineup.startingXI,
+  AWAY: initialLineups?.AWAY ?? match.away.lineup.startingXI
+});
+var createPlayerStats = (player, side, starter) => ({
+  playerId: player.id,
+  name: formatName(player),
+  side,
+  clubId: player.clubId,
+  position: player.position,
+  starter,
+  startedSecond: starter ? 0 : void 0,
+  endedSecond: void 0,
+  minutesPlayed: 0,
+  goals: 0,
+  ownGoals: 0,
+  assists: 0,
+  shots: 0,
+  shotsOnTarget: 0,
+  shotsOffTarget: 0,
+  posts: 0,
+  bars: 0,
+  xG: 0,
+  chancesCreated: 0,
+  keyPasses: 0,
+  passesAttempted: 0,
+  passesCompleted: 0,
+  controls: 0,
+  dribblesAttempted: 0,
+  dribblesCompleted: 0,
+  tacklesAttempted: 0,
+  tacklesWon: 0,
+  crossesAttempted: 0,
+  crossesCompleted: 0,
+  shotsBlocked: 0,
+  reboundsWon: 0,
+  turnoversWon: 0,
+  turnoversLost: 0,
+  foulsCommitted: 0,
+  foulsWon: 0,
+  offsides: 0,
+  yellowCards: 0,
+  redCards: 0,
+  injuriesLight: 0,
+  injuriesSevere: 0,
+  substitutionsOn: starter ? 0 : 0,
+  substitutionsOff: 0,
+  saves: 0,
+  goalsConceded: 0,
+  penaltiesTaken: 0,
+  penaltiesScored: 0,
+  penaltiesMissed: 0,
+  penaltiesSaved: 0,
+  rating: 6
+});
+var ensureStats = (stats, lookup, playerId, fallbackSide) => {
+  const found = lookup.get(playerId);
+  if (!found && !fallbackSide) return void 0;
+  const side = found?.side ?? fallbackSide;
+  const player = found?.player;
+  if (!player) return void 0;
+  if (!stats[side][playerId]) {
+    stats[side][playerId] = createPlayerStats(player, side, false);
+  }
+  return stats[side][playerId];
+};
+var opponentSide2 = (side) => side === "HOME" ? "AWAY" : "HOME";
+var goalkeeperIdForSide = (match, side, lineups) => {
+  const team = side === "HOME" ? match.home : match.away;
+  const byId = new Map(team.players.map((player) => [player.id, player]));
+  return lineups[side].map((id) => id ? byId.get(id) : void 0).find((player) => player?.position === "GK" /* GK */)?.id;
+};
+var activeGoalkeeperAtSecond = (match, events, side, lineups, second) => {
+  let keeperId = goalkeeperIdForSide(match, side, lineups);
+  const team = side === "HOME" ? match.home : match.away;
+  const players = new Map(team.players.map((player) => [player.id, player]));
+  events.filter((event) => event.type === "SUBSTITUTION" /* SUBSTITUTION */ && event.side === side && event.second <= second).sort((a, b) => a.second - b.second).forEach((event) => {
+    const playerIn = event.playerId ? players.get(event.playerId) : void 0;
+    if (event.secondaryPlayerId === keeperId && playerIn) {
+      keeperId = playerIn.id;
+    }
+  });
+  return keeperId;
+};
+var markMinutes = (stats, lookup, match, events, finalSecond, lineups) => {
+  ["HOME", "AWAY"].forEach((side) => {
+    lineups[side].forEach((id) => {
+      if (!id) return;
+      const entry = ensureStats(stats, lookup, id, side);
+      if (!entry) return;
+      entry.starter = true;
+      entry.startedSecond = 0;
+    });
+  });
+  events.filter((event) => event.type === "SUBSTITUTION" /* SUBSTITUTION */).sort((a, b) => a.second - b.second).forEach((event) => {
+    if (!event.side) return;
+    const playerIn = event.playerId ? ensureStats(stats, lookup, event.playerId, event.side) : void 0;
+    const playerOut = event.secondaryPlayerId ? ensureStats(stats, lookup, event.secondaryPlayerId, event.side) : void 0;
+    if (playerIn) {
+      playerIn.substitutionsOn += 1;
+      if (playerIn.startedSecond === void 0) playerIn.startedSecond = event.second;
+    }
+    if (playerOut) {
+      playerOut.substitutionsOff += 1;
+      playerOut.endedSecond = Math.min(playerOut.endedSecond ?? event.second, event.second);
+    }
+  });
+  Object.values(stats).forEach((teamStats2) => {
+    Object.values(teamStats2).forEach((entry) => {
+      if (entry.startedSecond === void 0) return;
+      const end = entry.endedSecond ?? finalSecond;
+      entry.minutesPlayed = Math.max(0, Math.ceil((end - entry.startedSecond) / 60));
+    });
+  });
+};
+var detailBool = (event, key) => event.detail?.[key] === true;
+var detailString = (event, key) => {
+  const value = event.detail?.[key];
+  return typeof value === "string" ? value : void 0;
+};
+var isOwnGoalEvent = (event) => detailBool(event, "isOwnGoal");
+var isShootoutPenalty = (event) => detailBool(event, "isShootout");
+var ownGoalPlayerId = (event) => detailString(event, "ownGoalPlayerId") ?? (isOwnGoalEvent(event) ? event.playerId : void 0);
+var shouldCountAssist = (event) => GOAL_TYPES.has(event.type) && !isOwnGoalEvent(event) && event.type !== "PENALTY_SCORED" /* PENALTY_SCORED */ && event.detail?.assistEligible !== false && Boolean(event.secondaryPlayerId) && event.secondaryPlayerId !== event.playerId;
+var CupPlayerStatsAggregator = {
+  /**
+   * Zamienia surowe zdarzenia V2 na statystyki indywidualne. Ten moduł nie
+   * generuje nowych akcji, tylko księguje to, co wydarzyło się w symulacji:
+   * strzały, gole, asysty, zmiany, urazy, kartki, pracę bramkarza i rating.
+   */
+  aggregate: ({
+    match,
+    events,
+    finalSecond,
+    homeScore,
+    awayScore,
+    initialLineups,
+    finalFatigue,
+    teamStats: teamStats2
+  }) => {
+    const stats = {
+      HOME: emptyTeamStats(),
+      AWAY: emptyTeamStats()
+    };
+    const lookup = playerById(match);
+    const lineups = activeLineups(match, initialLineups);
+    markMinutes(stats, lookup, match, events, finalSecond, lineups);
+    events.forEach((event) => {
+      const side = event.side;
+      if (event.type === "PASS_COMPLETED" /* PASS_COMPLETED */ && event.playerId) {
+        const passer = ensureStats(stats, lookup, event.playerId, side);
+        if (passer) {
+          passer.passesAttempted += 1;
+          passer.passesCompleted += 1;
+        }
+      }
+      if (event.type === "MISPLACED_PASS" /* MISPLACED_PASS */) {
+        const winner = event.playerId ? ensureStats(stats, lookup, event.playerId, side) : void 0;
+        const loser = event.secondaryPlayerId ? ensureStats(stats, lookup, event.secondaryPlayerId) : void 0;
+        if (winner) winner.turnoversWon += 1;
+        if (loser) {
+          loser.passesAttempted += 1;
+          loser.turnoversLost += 1;
+        }
+      }
+      if (event.type === "BALL_CONTROL" /* BALL_CONTROL */ && event.playerId) {
+        const receiver = ensureStats(stats, lookup, event.playerId, side);
+        if (receiver) receiver.controls += 1;
+      }
+      if (event.type === "DRIBBLING" /* DRIBBLING */ && event.playerId) {
+        const dribbler = ensureStats(stats, lookup, event.playerId, side);
+        if (dribbler) {
+          dribbler.dribblesAttempted += 1;
+          if (event.detail?.succeeded !== false) dribbler.dribblesCompleted += 1;
+        }
+      }
+      if (event.type === "TACKLE_WON" /* TACKLE_WON */) {
+        const tackler = event.playerId ? ensureStats(stats, lookup, event.playerId, side) : void 0;
+        const dispossessed = event.secondaryPlayerId ? ensureStats(stats, lookup, event.secondaryPlayerId) : void 0;
+        if (tackler) {
+          tackler.tacklesAttempted += 1;
+          tackler.tacklesWon += 1;
+          tackler.turnoversWon += 1;
+        }
+        if (dispossessed) dispossessed.turnoversLost += 1;
+      }
+      if (event.type === "CROSS_NEAR_POST" /* CROSS_NEAR_POST */ || event.type === "CROSS_FAR_POST" /* CROSS_FAR_POST */) {
+        const crosser = event.playerId ? ensureStats(stats, lookup, event.playerId, side) : void 0;
+        if (crosser) {
+          crosser.crossesAttempted += 1;
+          if (event.detail?.completed !== false) crosser.crossesCompleted += 1;
+        }
+      }
+      if (event.type === "CROSS_BLOCKED" /* CROSS_BLOCKED */ && event.secondaryPlayerId) {
+        const crosser = ensureStats(stats, lookup, event.secondaryPlayerId);
+        if (crosser) crosser.crossesAttempted += 1;
+      }
+      if (event.type === "SHOT_BLOCKED" /* SHOT_BLOCKED */) {
+        const markerId = detailString(event, "markerId");
+        const blocker = markerId ? ensureStats(stats, lookup, markerId) : void 0;
+        if (blocker) blocker.shotsBlocked += 1;
+      }
+      if (event.type === "REBOUND_WON" /* REBOUND_WON */ && event.playerId) {
+        const winner = ensureStats(stats, lookup, event.playerId, side);
+        if (winner) winner.reboundsWon += 1;
+      }
+      if (isShootoutPenalty(event)) {
+        if (event.playerId && (event.type === "PENALTY_SCORED" /* PENALTY_SCORED */ || event.type === "PENALTY_MISSED" /* PENALTY_MISSED */)) {
+          const taker = ensureStats(stats, lookup, event.playerId, side);
+          if (taker) {
+            taker.penaltiesTaken += 1;
+            if (event.type === "PENALTY_SCORED" /* PENALTY_SCORED */) taker.penaltiesScored += 1;
+            if (event.type === "PENALTY_MISSED" /* PENALTY_MISSED */) taker.penaltiesMissed += 1;
+          }
+        }
+        if (event.type === "PENALTY_MISSED" /* PENALTY_MISSED */ && detailBool(event, "saved")) {
+          const keeperId = detailString(event, "goalkeeperId") ?? event.secondaryPlayerId;
+          const keeper = keeperId ? ensureStats(stats, lookup, keeperId) : void 0;
+          if (keeper) keeper.penaltiesSaved += 1;
+        }
+        return;
+      }
+      if (SHOT_TYPES.has(event.type) && event.playerId) {
+        const ownGoal = isOwnGoalEvent(event);
+        const shooter = ownGoal ? void 0 : ensureStats(stats, lookup, event.playerId, side);
+        if (shooter) {
+          shooter.shots += 1;
+          shooter.xG += event.xG ?? 0;
+          if (ON_TARGET_TYPES.has(event.type) || event.type === "PENALTY_MISSED" /* PENALTY_MISSED */ && detailBool(event, "saved")) shooter.shotsOnTarget += 1;
+          else shooter.shotsOffTarget += 1;
+          if (event.type === "SHOT_POST" /* SHOT_POST */) shooter.posts += 1;
+          if (event.type === "SHOT_BAR" /* SHOT_BAR */) shooter.bars += 1;
+          if (event.type === "PENALTY_SCORED" /* PENALTY_SCORED */ || event.type === "PENALTY_MISSED" /* PENALTY_MISSED */) {
+            shooter.penaltiesTaken += 1;
+          }
+          if (event.type === "PENALTY_SCORED" /* PENALTY_SCORED */) shooter.penaltiesScored += 1;
+          if (event.type === "PENALTY_MISSED" /* PENALTY_MISSED */) shooter.penaltiesMissed += 1;
+        }
+        if (event.secondaryPlayerId && !ownGoal && event.secondaryPlayerId !== event.playerId) {
+          const creator = ensureStats(stats, lookup, event.secondaryPlayerId, side);
+          if (creator) {
+            creator.chancesCreated += 1;
+            if ((event.xG ?? 0) >= 0.08 || ON_TARGET_TYPES.has(event.type)) creator.keyPasses += 1;
+          }
+        }
+      }
+      if (GOAL_TYPES.has(event.type)) {
+        if (isOwnGoalEvent(event)) {
+          const ownPlayerId = ownGoalPlayerId(event);
+          const ownPlayer = ownPlayerId ? ensureStats(stats, lookup, ownPlayerId) : void 0;
+          if (ownPlayer) ownPlayer.ownGoals += 1;
+        } else if (event.playerId) {
+          const scorer = ensureStats(stats, lookup, event.playerId, side);
+          if (scorer) scorer.goals += 1;
+        }
+        if (shouldCountAssist(event) && event.secondaryPlayerId) {
+          const assistant = ensureStats(stats, lookup, event.secondaryPlayerId, side);
+          if (assistant) assistant.assists += 1;
+        }
+        if (side) {
+          const concedingSide = opponentSide2(side);
+          const keeperId = activeGoalkeeperAtSecond(match, events, concedingSide, lineups, event.second);
+          const keeper = keeperId ? ensureStats(stats, lookup, keeperId, concedingSide) : void 0;
+          if (keeper) keeper.goalsConceded += 1;
+        }
+      }
+      if (SAVE_TYPES.has(event.type) && side) {
+        const keeperSide = opponentSide2(side);
+        const keeperId = activeGoalkeeperAtSecond(match, events, keeperSide, lineups, event.second);
+        const keeper = keeperId ? ensureStats(stats, lookup, keeperId, keeperSide) : void 0;
+        if (keeper) keeper.saves += 1;
+      }
+      if (event.type === "PENALTY_MISSED" /* PENALTY_MISSED */ && side) {
+        const keeperSide = opponentSide2(side);
+        const keeperId = activeGoalkeeperAtSecond(match, events, keeperSide, lineups, event.second);
+        const keeper = keeperId ? ensureStats(stats, lookup, keeperId, keeperSide) : void 0;
+        if (keeper && detailBool(event, "saved")) keeper.penaltiesSaved += 1;
+      }
+      if (event.playerId) {
+        const entry = ensureStats(stats, lookup, event.playerId, side);
+        if (entry) {
+          if (event.type === "FOUL" /* FOUL */ || event.type === "ADVANTAGE_PLAYED" /* ADVANTAGE_PLAYED */ || event.type === "YELLOW_CARD" /* YELLOW_CARD */ || event.type === "RED_CARD" /* RED_CARD */) {
+            entry.foulsCommitted += 1;
+          }
+          if (event.type === "OFFSIDE" /* OFFSIDE */) entry.offsides += 1;
+          if (event.type === "YELLOW_CARD" /* YELLOW_CARD */) entry.yellowCards += 1;
+          if (event.type === "RED_CARD" /* RED_CARD */) {
+            entry.redCards += 1;
+            entry.endedSecond = Math.min(entry.endedSecond ?? event.second, event.second);
+          }
+          if (event.type === "INJURY_LIGHT" /* INJURY_LIGHT */) entry.injuriesLight += 1;
+          if (event.type === "INJURY_SEVERE" /* INJURY_SEVERE */) entry.injuriesSevere += 1;
+        }
+      }
+      if (event.secondaryPlayerId && (event.type === "FOUL" /* FOUL */ || event.type === "ADVANTAGE_PLAYED" /* ADVANTAGE_PLAYED */ || event.type === "YELLOW_CARD" /* YELLOW_CARD */ || event.type === "RED_CARD" /* RED_CARD */)) {
+        const fouled = ensureStats(stats, lookup, event.secondaryPlayerId);
+        if (fouled) fouled.foulsWon += 1;
+      }
+    });
+    Object.values(stats).forEach((teamStats3) => {
+      Object.values(teamStats3).forEach((entry) => {
+        if (entry.startedSecond !== void 0) {
+          const end = entry.endedSecond ?? finalSecond;
+          entry.minutesPlayed = Math.max(0, Math.ceil((end - entry.startedSecond) / 60));
+        }
+        entry.xG = Number(entry.xG.toFixed(2));
+        entry.shotsOffTarget = Math.max(0, entry.shots - entry.shotsOnTarget);
+        entry.rating = CupPlayerRatingService.calculate({
+          entry,
+          sideScore: entry.side === "HOME" ? homeScore : awayScore,
+          opponentScore: entry.side === "HOME" ? awayScore : homeScore,
+          teamStats: teamStats3?.[entry.side],
+          opponentStats: teamStats3?.[opponentSide2(entry.side)],
+          finalFatigue: finalFatigue?.[entry.playerId]
+        });
+      });
+    });
+    return stats;
+  }
+};
+
+// services/match/engines/cupV2/CupMatchLoop.ts
+var emptyStats = () => ({
+  possessionTicks: 0,
+  passesAttempted: 0,
+  passesCompleted: 0,
+  dribblesAttempted: 0,
+  dribblesCompleted: 0,
+  tacklesWon: 0,
+  crossesAttempted: 0,
+  crossesCompleted: 0,
+  blocks: 0,
+  reboundsWon: 0,
+  turnoversWon: 0,
+  turnoversLost: 0,
+  shots: 0,
+  shotsOnTarget: 0,
+  goals: 0,
+  xG: 0,
+  corners: 0,
+  fouls: 0,
+  offsides: 0,
+  yellowCards: 0,
+  redCards: 0,
+  injuries: 0,
+  freeKicks: 0,
+  penalties: 0,
+  posts: 0,
+  bars: 0,
+  saves: 0
+});
+var initialFatigue = (input) => {
+  const fatigue = {};
+  [...input.home.players, ...input.away.players].forEach((player) => {
+    fatigue[player.id] = player.condition;
+  });
+  return fatigue;
+};
+var neutralCoachEffects = () => ({
+  initiativeModifier: 0,
+  ownShotModifier: 0,
+  opponentShotModifier: 0,
+  turnoverRiskModifier: 0,
+  fatigueExtra: 0,
+  foulMultiplier: 1,
+  injuryMultiplier: 1
+});
+var RECEIVER_CARRIER_EVENTS = /* @__PURE__ */ new Set([
+  "PASS_COMPLETED" /* PASS_COMPLETED */,
+  "CROSS_NEAR_POST" /* CROSS_NEAR_POST */,
+  "CROSS_FAR_POST" /* CROSS_FAR_POST */
+]);
+var ACTOR_CARRIER_EVENTS = /* @__PURE__ */ new Set([
+  "BALL_CONTROL" /* BALL_CONTROL */,
+  "DRIBBLING" /* DRIBBLING */,
+  "TACKLE_WON" /* TACKLE_WON */,
+  "MISPLACED_PASS" /* MISPLACED_PASS */,
+  "REBOUND_WON" /* REBOUND_WON */,
+  "SAVE" /* SAVE */,
+  "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */,
+  "GK_LONG_THROW" /* GK_LONG_THROW */,
+  "GOAL_KICK" /* GOAL_KICK */,
+  "KICK_OFF" /* KICK_OFF */
+]);
+var createInitialCupRuntimeState = (input) => ({
+  second: 0,
+  phase: "FIRST_HALF",
+  possession: seededRandom(input.seed, 0, 1) < 0.5 ? "HOME" : "AWAY",
+  possessionReason: "KICK_OFF",
+  ballCarrierId: void 0,
+  ballZone: "MIDFIELD",
+  attackPattern: "BUILD_UP",
+  homeScore: 0,
+  awayScore: 0,
+  momentum: 0,
+  pressure: { HOME: 35, AWAY: 35 },
+  organization: { HOME: 72, AWAY: 72 },
+  halfTimeResponse: { HOME: 0, AWAY: 0 },
+  coachEffects: { HOME: neutralCoachEffects(), AWAY: neutralCoachEffects() },
+  fatigue: initialFatigue(input),
+  yellowCards: {},
+  redCards: {},
+  injuries: {},
+  substitutionsUsed: { HOME: 0, AWAY: 0 },
+  firstHalfKickOffSide: seededRandom(input.seed, 0, 1) < 0.5 ? "HOME" : "AWAY",
+  restartSourceEventId: void 0,
+  firstHalfAddedTimeSeconds: 0,
+  secondHalfAddedTimeSeconds: 0,
+  addedTimeSeconds: 0,
+  stats: { HOME: emptyStats(), AWAY: emptyStats() },
+  events: []
+});
+var selectRestartPlayer = (profile, reason) => {
+  if (reason === "SAVE" || reason === "GOAL_KICK") return profile.goalkeeper;
+  const preferred = reason === "CORNER" ? [...profile.midfielders, ...profile.forwards, ...profile.defenders] : [...profile.midfielders, ...profile.forwards, ...profile.defenders];
+  return preferred[0] ?? profile.outfieldPlayers[0] ?? profile.goalkeeper;
+};
+var appendPendingRestart = (input, state, config, homeProfile, awayProfile) => {
+  const reason = state.possessionReason;
+  if (reason === "OPEN_PLAY" || reason === "TURNOVER" || reason === "OUT_OF_PLAY") return;
+  const profile = state.possession === "HOME" ? homeProfile : awayProfile;
+  const team = state.possession === "HOME" ? input.home : input.away;
+  const player = selectRestartPlayer(profile, reason);
+  const type = reason === "CORNER" ? "CORNER_TAKEN" /* CORNER_TAKEN */ : reason === "GOAL_KICK" ? "GOAL_KICK" /* GOAL_KICK */ : reason === "SAVE" ? "GK_LONG_THROW" /* GK_LONG_THROW */ : "KICK_OFF" /* KICK_OFF */;
+  const text = reason === "CORNER" ? `${player?.lastName ?? team.name} wykonuje rzut ro\u017Cny.` : reason === "GOAL_KICK" ? `${player?.lastName ?? "Bramkarz"} wznawia gr\u0119 od bramki.` : reason === "SAVE" ? `${player?.lastName ?? "Bramkarz"} szybko wprowadza pi\u0142k\u0119 do gry.` : reason === "HALF_START" ? `${team.name} rozpoczyna drug\u0105 po\u0142ow\u0119.` : reason === "GOAL_RESTART" ? `${team.name} wznawia gr\u0119 po straconej bramce.` : `${team.name} rozpoczyna spotkanie.`;
+  const cornerSequenceId = `cupv2_corner_delivery_${state.second}_${state.possession}`;
+  state.events.push({
+    id: `cupv2_restart_${reason}_${state.second}_${state.possession}`,
+    second: state.second,
+    minute: CupMatchClockService.eventMinute(state, config),
+    side: state.possession,
+    type,
+    zone: reason === "CORNER" ? "WIDE_LEFT" : reason === "GOAL_KICK" || reason === "SAVE" ? "GK" : "MIDFIELD",
+    pattern: reason === "CORNER" ? "SET_PIECE" : "BUILD_UP",
+    playerId: player?.id,
+    text,
+    detail: {
+      restartReason: reason,
+      sourceEventId: state.restartSourceEventId,
+      sequenceId: reason === "CORNER" ? cornerSequenceId : void 0,
+      setPieceKind: reason === "CORNER" ? "CORNER" : void 0
+    }
+  });
+  state.ballCarrierId = player?.id;
+  state.possessionReason = reason === "CORNER" ? "CORNER_DELIVERY" : "OPEN_PLAY";
+  state.restartSourceEventId = void 0;
+};
+var updateFatigue = (state, input, config) => {
+  const possessionSide = state.possession;
+  const activeIds = [
+    ...input.home.lineup.startingXI.filter((id) => Boolean(id)),
+    ...input.away.lineup.startingXI.filter((id) => Boolean(id))
+  ].filter((id) => !state.redCards[id]);
+  activeIds.forEach((id) => {
+    const player = [...input.home.players, ...input.away.players].find((item) => item.id === id);
+    if (!player) return;
+    const team = input.home.players.some((item) => item.id === id) ? input.home : input.away;
+    const isPossessionTeam = team.side === possessionSide;
+    const instructionCost = team.instructions.tempo === "FAST" ? 0.01 : team.instructions.tempo === "SLOW" ? 4e-3 : 6e-3;
+    const pressingCost = team.instructions.pressing === "PRESSING" ? 6e-3 : 2e-3;
+    const coachCost = state.coachEffects[team.side].fatigueExtra * 0.24;
+    const injuryCost = state.injuries[id] === "SEVERE" ? 0.03 : state.injuries[id] === "LIGHT" ? 0.012 : 0;
+    const staminaShield = player.attributes.stamina * 65e-6 + player.attributes.workRate * 25e-6;
+    const costPerTick = (instructionCost + pressingCost + coachCost + injuryCost + (isPossessionTeam ? 1e-3 : 2e-3)) * (config.tickSeconds / 5);
+    state.fatigue[id] = clamp3((state.fatigue[id] ?? player.condition) - Math.max(1e-3, costPerTick - staminaShield), 15, 100);
+  });
+};
+var applyEventToState = (state, event) => {
+  const { type: eventType, side } = event;
+  if (!side) return;
+  const stats = state.stats[side];
+  const opponentStats = state.stats[side === "HOME" ? "AWAY" : "HOME"];
+  if (eventType === "GOAL" /* GOAL */ || eventType === "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */) {
+    if (side === "HOME") state.homeScore += 1;
+    else state.awayScore += 1;
+  }
+  if (eventType === "PENALTY_SCORED" /* PENALTY_SCORED */) {
+    if (side === "HOME") state.homeScore += 1;
+    else state.awayScore += 1;
+  }
+  if (eventType === "FREE_KICK" /* FREE_KICK */ || eventType === "FREE_KICK_DANGEROUS" /* FREE_KICK_DANGEROUS */) stats.freeKicks += 1;
+  if (eventType === "PENALTY_AWARDED" /* PENALTY_AWARDED */) stats.penalties += 1;
+  if (eventType === "FOUL" /* FOUL */) stats.fouls += 1;
+  if (eventType === "ADVANTAGE_PLAYED" /* ADVANTAGE_PLAYED */) stats.fouls += 1;
+  if (eventType === "YELLOW_CARD" /* YELLOW_CARD */) {
+    stats.fouls += 1;
+    stats.yellowCards += 1;
+  }
+  if (eventType === "RED_CARD" /* RED_CARD */) {
+    stats.fouls += 1;
+    stats.redCards += 1;
+  }
+  if (eventType === "INJURY_LIGHT" /* INJURY_LIGHT */ || eventType === "INJURY_SEVERE" /* INJURY_SEVERE */) {
+    stats.injuries += 1;
+  }
+  if (eventType === "PASS_COMPLETED" /* PASS_COMPLETED */) {
+    stats.passesAttempted += 1;
+    stats.passesCompleted += 1;
+  }
+  if (eventType === "MISPLACED_PASS" /* MISPLACED_PASS */) {
+    opponentStats.passesAttempted += 1;
+    stats.turnoversWon += 1;
+    opponentStats.turnoversLost += 1;
+  }
+  if (eventType === "DRIBBLING" /* DRIBBLING */) {
+    stats.dribblesAttempted += 1;
+    if (event.detail?.succeeded !== false) stats.dribblesCompleted += 1;
+  }
+  if (eventType === "TACKLE_WON" /* TACKLE_WON */) {
+    stats.tacklesWon += 1;
+    stats.turnoversWon += 1;
+    opponentStats.turnoversLost += 1;
+  }
+  if (eventType === "CROSS_NEAR_POST" /* CROSS_NEAR_POST */ || eventType === "CROSS_FAR_POST" /* CROSS_FAR_POST */) {
+    stats.crossesAttempted += 1;
+    if (event.detail?.completed !== false) stats.crossesCompleted += 1;
+  }
+  if (eventType === "CROSS_BLOCKED" /* CROSS_BLOCKED */) {
+    stats.blocks += 1;
+    opponentStats.crossesAttempted += 1;
+  }
+  if (eventType === "SHOT_BLOCKED" /* SHOT_BLOCKED */) opponentStats.blocks += 1;
+  if (eventType === "REBOUND_WON" /* REBOUND_WON */) stats.reboundsWon += 1;
+};
+var applyPlayerEventToState = (state, eventType, playerId) => {
+  if (!playerId) return;
+  if (eventType === "YELLOW_CARD" /* YELLOW_CARD */) {
+    state.yellowCards[playerId] = (state.yellowCards[playerId] ?? 0) + 1;
+  }
+  if (eventType === "RED_CARD" /* RED_CARD */) {
+    state.redCards[playerId] = true;
+  }
+  if (eventType === "INJURY_LIGHT" /* INJURY_LIGHT */) {
+    state.injuries[playerId] = "LIGHT";
+    state.fatigue[playerId] = Math.min(state.fatigue[playerId] ?? 58, 58);
+  }
+  if (eventType === "INJURY_SEVERE" /* INJURY_SEVERE */) {
+    state.injuries[playerId] = "SEVERE";
+    state.fatigue[playerId] = Math.min(state.fatigue[playerId] ?? 34, 34);
+  }
+};
+var applyBallCarrierEvent = (state, event) => {
+  if (RECEIVER_CARRIER_EVENTS.has(event.type) && event.secondaryPlayerId) {
+    state.ballCarrierId = event.secondaryPlayerId;
+    return;
+  }
+  if (ACTOR_CARRIER_EVENTS.has(event.type) && event.playerId) {
+    state.ballCarrierId = event.playerId;
+    return;
+  }
+  if (event.type === "GOAL" /* GOAL */ || event.type === "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */ || event.type === "PENALTY_SCORED" /* PENALTY_SCORED */ || event.type === "SHOT" /* SHOT */ || event.type === "SHOT_ON_TARGET" /* SHOT_ON_TARGET */ || event.type === "SHOT_POST" /* SHOT_POST */ || event.type === "SHOT_BAR" /* SHOT_BAR */) {
+    state.ballCarrierId = void 0;
+  }
+};
+var updateOrganization = (state, input, homeProfile, awayProfile) => {
+  const calculate = (side, profile) => {
+    const team = side === "HOME" ? input.home : input.away;
+    const markingMod = team.instructions.marking === "ZONE" ? 4 : team.instructions.marking === "MAN" ? 1 : -7;
+    const intensityMod = team.instructions.intensity === "AGGRESSIVE" ? -3 : team.instructions.intensity === "CAUTIOUS" ? 2 : 0;
+    return clamp3(
+      43 + profile.defensiveShape * 0.2 + profile.midfieldControl * 0.08 + profile.leadership * 0.1 + profile.mentality * 0.1 + profile.staminaReserve * 0.1 - state.pressure[side] * 0.08 + markingMod + intensityMod,
+      30,
+      92
+    );
+  };
+  state.organization.HOME = calculate("HOME", homeProfile);
+  state.organization.AWAY = calculate("AWAY", awayProfile);
+};
+var maybeExecuteSubstitution = (input, state, side, profile, config) => {
+  const footballSecond = CupMatchClockService.toFootballSecond(state, config);
+  const minute = Math.floor(footballSecond / 60);
+  const team = side === "HOME" ? input.home : input.away;
+  const hasInjuredStarter = team.lineup.startingXI.some((id) => Boolean(id && state.injuries[id]));
+  const hasSevereInjuredStarter = team.lineup.startingXI.some((id) => Boolean(id && state.injuries[id] === "SEVERE"));
+  if (!hasInjuredStarter && (minute < 55 || footballSecond % (5 * 60) !== 0)) return;
+  if (!hasInjuredStarter && seededRandom(input.seed, state.second, side === "HOME" ? 811 : 812) > 0.54) return;
+  if (hasInjuredStarter && !hasSevereInjuredStarter && seededRandom(input.seed, state.second, side === "HOME" ? 813 : 814) > 0.82) return;
+  const proposal = CupSubstitutionService.proposeAiSubstitution({
+    team,
+    profile,
+    state,
+    maxSubstitutions: config.maxSubstitutions
+  });
+  if (!proposal) return;
+  const slotIndex = team.lineup.startingXI.findIndex((id) => id === proposal.playerOutId);
+  if (slotIndex < 0) return;
+  team.lineup.startingXI[slotIndex] = proposal.playerInId;
+  team.lineup.bench = team.lineup.bench.filter((id) => id !== proposal.playerInId);
+  team.lineup.bench.push(proposal.playerOutId);
+  state.substitutionsUsed[side] += 1;
+  const playerOut = team.players.find((player) => player.id === proposal.playerOutId);
+  const playerIn = team.players.find((player) => player.id === proposal.playerInId);
+  state.events.push({
+    id: `cupv2_substitution_${state.second}_${proposal.playerOutId}`,
+    second: state.second,
+    minute: minute + 1,
+    side,
+    type: "SUBSTITUTION" /* SUBSTITUTION */,
+    playerId: proposal.playerInId,
+    secondaryPlayerId: proposal.playerOutId,
+    text: `${team.name} dokonuje zmiany: ${playerIn?.lastName ?? "rezerwowy"} za ${playerOut?.lastName ?? "zawodnika"}.`,
+    detail: {
+      reason: proposal.reason,
+      substitutionsUsed: state.substitutionsUsed[side]
+    }
+  });
+};
+var CupMatchLoop = {
+  /**
+   * Główna pętla V2. Każdy przebieg reprezentuje kilka sekund meczu.
+   * Warstwa nie generuje wyniku z góry: wynik jest skutkiem zdarzeń dodanych
+   * przez CupActionBuilder oraz późniejsze moduły dogrywki/karnych.
+   */
+  runPeriod: (input, state, periodEndSecond, config = { ...DEFAULT_CUP_ENGINE_CONFIG, ...input.config }) => {
+    while (state.second < periodEndSecond && state.phase !== "FINISHED" && state.phase !== "PENALTY_SHOOTOUT") {
+      const homeProfile = CupTeamProfileService.buildProfile(input.home, state.fatigue, state.redCards, state.injuries);
+      const awayProfile = CupTeamProfileService.buildProfile(input.away, state.fatigue, state.redCards, state.injuries);
+      const random = (salt) => seededRandom(input.seed, state.second, salt);
+      appendPendingRestart(input, state, config, homeProfile, awayProfile);
+      state.pressure.HOME = CupMomentumService.pressureForSide(state, state.homeScore, state.awayScore, homeProfile);
+      state.pressure.AWAY = CupMomentumService.pressureForSide(state, state.awayScore, state.homeScore, awayProfile);
+      updateOrganization(state, input, homeProfile, awayProfile);
+      const outcome = CupActionBuilder.simulateTick({
+        input,
+        config,
+        state,
+        homeProfile,
+        awayProfile,
+        random
+      });
+      outcome.events.forEach((event) => {
+        applyEventToState(state, event);
+        applyPlayerEventToState(state, event.type, event.playerId);
+        applyBallCarrierEvent(state, event);
+        state.events.push(event);
+      });
+      state.momentum = CupMomentumService.updateMomentum(state, homeProfile, awayProfile, outcome.momentumDelta);
+      if (outcome.nextPossession) {
+        const nextTeam = outcome.nextPossession === "HOME" ? input.home : input.away;
+        if (!nextTeam.players.some((player) => player.id === state.ballCarrierId)) {
+          state.ballCarrierId = void 0;
+        }
+        state.possession = outcome.nextPossession;
+      }
+      if (outcome.nextZone) state.ballZone = outcome.nextZone;
+      if (outcome.nextPossessionReason) {
+        state.possessionReason = outcome.nextPossessionReason;
+        state.restartSourceEventId = outcome.restartSourceEventId;
+      } else if (outcome.nextPossession) {
+        state.possessionReason = "TURNOVER";
+        state.restartSourceEventId = void 0;
+      }
+      updateFatigue(state, input, config);
+      maybeExecuteSubstitution(input, state, "HOME", homeProfile, config);
+      maybeExecuteSubstitution(input, state, "AWAY", awayProfile, config);
+      state.second += config.tickSeconds;
+    }
+    return state;
+  }
+};
+
+// services/match/engines/cupV2/CupMatchEngineV2.ts
+var alignedAddedTime = (state, config, fromSecond) => {
+  const rawSeconds = CupExtraTimeService.getAddedTimeSeconds(state, {
+    fromSecond,
+    toSecond: state.second
+  });
+  return Math.ceil(rawSeconds / config.tickSeconds) * config.tickSeconds;
+};
+var cloneTeam = (team) => ({
+  ...team,
+  lineup: {
+    ...team.lineup,
+    startingXI: [...team.lineup.startingXI],
+    bench: [...team.lineup.bench],
+    reserves: [...team.lineup.reserves]
+  },
+  instructions: { ...team.instructions }
+});
+var cloneInput = (input) => ({
+  ...input,
+  home: cloneTeam(input.home),
+  away: cloneTeam(input.away),
+  environment: { ...input.environment },
+  config: input.config ? { ...input.config } : void 0,
+  halfTimeTalks: input.halfTimeTalks ? { ...input.halfTimeTalks } : void 0
+});
+var cloneLineup = (lineup) => ({
+  ...lineup,
+  startingXI: [...lineup.startingXI],
+  bench: [...lineup.bench],
+  reserves: [...lineup.reserves]
+});
+var activePlayers3 = (team) => {
+  const byId = new Map(team.players.map((player) => [player.id, player]));
+  return team.lineup.startingXI.map((id) => id ? byId.get(id) : void 0).filter((player) => Boolean(player));
+};
+var teamMentalReceptivity = (team) => {
+  const players = activePlayers3(team);
+  if (players.length === 0) return 1;
+  const mentalAverage = players.reduce((sum, player) => sum + weightedScore(player.attributes, {
+    mentality: 0.42,
+    leadership: 0.24,
+    workRate: 0.16,
+    stamina: 0.1,
+    positioning: 0.08
+  }), 0) / players.length;
+  return clamp3(0.82 + (mentalAverage - 50) * 6e-3, 0.72, 1.18);
+};
+var talkBaseImpact = (talk, scoreDiff) => {
+  const intensity = clamp3(talk.intensity ?? 0.65, 0, 1);
+  const clarity = clamp3(talk.clarity ?? 0.6, 0, 1);
+  if (talk.style === "NONE") return { motivation: 0, organization: 0, fatigueRelief: 0, momentum: 0 };
+  if (talk.style === "CALM") return { motivation: 2.5 + clarity * 1.5, organization: 4 + clarity * 4, fatigueRelief: 0.8, momentum: 1.5 };
+  if (talk.style === "ENCOURAGE") return { motivation: 5 + intensity * 3, organization: 1.5 + clarity * 2, fatigueRelief: 0.6, momentum: 4 };
+  if (talk.style === "DEMAND_MORE") {
+    const trailingBonus = scoreDiff <= 0 ? 3 : 0;
+    return { motivation: 4 + intensity * 5 + trailingBonus, organization: -2 + clarity * 3, fatigueRelief: -0.6, momentum: 5 };
+  }
+  if (talk.style === "PRAISE") {
+    const leadingBonus = scoreDiff > 0 ? 3 : -1;
+    return { motivation: 3 + leadingBonus + intensity * 2, organization: 1 + clarity * 2, fatigueRelief: 0.4, momentum: 2.5 };
+  }
+  return { motivation: 3 + clarity * 4, organization: 5 + clarity * 5, fatigueRelief: 0.3, momentum: 2 };
+};
+var applyHalfTimeTalk = (input, state) => {
+  const talks = input.halfTimeTalks;
+  if (!talks) return;
+  ["HOME", "AWAY"].forEach((side) => {
+    const talk = talks[side];
+    if (!talk || talk.style === "NONE") return;
+    const team = side === "HOME" ? input.home : input.away;
+    const scoreDiff = side === "HOME" ? state.homeScore - state.awayScore : state.awayScore - state.homeScore;
+    const receptivity = teamMentalReceptivity(team);
+    const impact = talkBaseImpact(talk, scoreDiff);
+    const motivationDelta = impact.motivation * receptivity;
+    const organizationDelta = impact.organization * receptivity;
+    const momentumDelta = impact.momentum * receptivity;
+    team.preMatchMotivation = clamp3(team.preMatchMotivation + motivationDelta, 0, 100);
+    team.morale = clamp3(team.morale + motivationDelta * 0.38, 0, 100);
+    if (talk.style === "TACTICAL_RESET") {
+      team.instructions.tempoResponseFactor = clamp3(team.instructions.tempoResponseFactor + 0.08, 0.5, 1.4);
+      team.instructions.mindsetResponseFactor = clamp3(team.instructions.mindsetResponseFactor + 0.08, 0.5, 1.4);
+      team.instructions.pressingResponseFactor = clamp3(team.instructions.pressingResponseFactor + 0.05, 0.5, 1.4);
+      team.instructions.markingResponseFactor = clamp3((team.instructions.markingResponseFactor ?? 1) + 0.08, 0.5, 1.4);
+    }
+    activePlayers3(team).forEach((player) => {
+      state.fatigue[player.id] = clamp3((state.fatigue[player.id] ?? player.condition) + impact.fatigueRelief * receptivity, 15, 100);
+    });
+    state.organization[side] = clamp3(state.organization[side] + organizationDelta, 30, 95);
+    state.momentum = clamp3(state.momentum + (side === "HOME" ? momentumDelta : -momentumDelta), -100, 100);
+    state.halfTimeResponse[side] = clamp3(
+      motivationDelta * 0.78 + Math.max(0, organizationDelta) * 0.22,
+      0,
+      12
+    );
+  });
+};
+var buildResult = (input, state, initialLineup, shootout) => {
+  const playerStats = CupPlayerStatsAggregator.aggregate({
+    match: input,
+    events: state.events,
+    finalSecond: state.second,
+    homeScore: state.homeScore,
+    awayScore: state.awayScore,
+    initialLineups: {
+      HOME: initialLineup.HOME.startingXI,
+      AWAY: initialLineup.AWAY.startingXI
+    },
+    finalFatigue: state.fatigue,
+    teamStats: state.stats
+  });
+  const winner = shootout?.winner ?? (state.homeScore > state.awayScore ? "HOME" : state.awayScore > state.homeScore ? "AWAY" : void 0);
+  return {
+    homeScore: state.homeScore,
+    awayScore: state.awayScore,
+    winner,
+    decidedByPenalties: Boolean(shootout),
+    penaltyScore: shootout?.penaltyScore,
+    penaltyShootout: shootout?.attempts,
+    stats: state.stats,
+    playerStats,
+    events: state.events,
+    finalState: state
+  };
+};
+var cloneResult = (result) => ({
+  ...result,
+  penaltyScore: result.penaltyScore ? { ...result.penaltyScore } : void 0,
+  penaltyShootout: result.penaltyShootout?.map((attempt) => ({ ...attempt })),
+  stats: {
+    HOME: { ...result.stats.HOME },
+    AWAY: { ...result.stats.AWAY }
+  },
+  playerStats: {
+    HOME: Object.fromEntries(Object.entries(result.playerStats.HOME).map(([id, stats]) => [id, { ...stats }])),
+    AWAY: Object.fromEntries(Object.entries(result.playerStats.AWAY).map(([id, stats]) => [id, { ...stats }]))
+  },
+  events: result.events.map((event) => ({
+    ...event,
+    detail: event.detail ? { ...event.detail } : void 0
+  })),
+  finalState: {
+    ...result.finalState,
+    pressure: { ...result.finalState.pressure },
+    organization: { ...result.finalState.organization },
+    halfTimeResponse: { ...result.finalState.halfTimeResponse },
+    coachEffects: {
+      HOME: { ...result.finalState.coachEffects.HOME },
+      AWAY: { ...result.finalState.coachEffects.AWAY }
+    },
+    fatigue: { ...result.finalState.fatigue },
+    yellowCards: { ...result.finalState.yellowCards },
+    redCards: { ...result.finalState.redCards },
+    injuries: { ...result.finalState.injuries },
+    substitutionsUsed: { ...result.finalState.substitutionsUsed },
+    stats: {
+      HOME: { ...result.finalState.stats.HOME },
+      AWAY: { ...result.finalState.stats.AWAY }
+    },
+    events: result.finalState.events.map((event) => ({
+      ...event,
+      detail: event.detail ? { ...event.detail } : void 0
+    }))
+  }
+});
+var finishLiveMatch = (live) => {
+  if (live.finalResult) return live.finalResult;
+  live.state.phase = "FINISHED";
+  live.finalResult = buildResult(live.input, live.state, live.initialLineup);
+  return live.finalResult;
+};
+var finishLiveMatchWithPenalties = (live) => {
+  if (live.finalResult) return live.finalResult;
+  live.state.phase = "PENALTY_SHOOTOUT";
+  const penalties = CupPenaltyShootoutService.simulate(live.input, live.state.fatigue, {
+    redCards: live.state.redCards,
+    injuries: live.state.injuries,
+    startSecond: live.state.second
+  });
+  live.state.events.push(...penalties.events);
+  live.state.second = Math.max(live.state.second, ...penalties.events.map((event) => event.second));
+  live.state.phase = "FINISHED";
+  live.finalResult = buildResult(live.input, live.state, live.initialLineup, {
+    penaltyScore: { home: penalties.home, away: penalties.away },
+    attempts: penalties.attempts,
+    winner: penalties.winner
+  });
+  return live.finalResult;
+};
+var CupMatchEngineV2 = {
+  /**
+   * Creates an advance-only live simulation. No match tick is executed here,
+   * therefore the score, winner and future event list are unknown at kick-off.
+   */
+  createLiveMatch: (input) => {
+    const runtimeInput = cloneInput(input);
+    const config = { ...DEFAULT_CUP_ENGINE_CONFIG, ...runtimeInput.config };
+    return {
+      input: runtimeInput,
+      config,
+      state: createInitialCupRuntimeState(runtimeInput),
+      initialLineup: {
+        HOME: cloneLineup(runtimeInput.home.lineup),
+        AWAY: cloneLineup(runtimeInput.away.lineup)
+      },
+      halfTimeTalkApplied: false
+    };
+  },
+  /**
+   * Advances only toward `targetSecond`. Requests behind the current clock are
+   * ignored so a tactical change can never cause already played actions to be
+   * simulated again. A non-null return value means the match has finished.
+   */
+  advanceLiveMatch: (live, targetSecond) => {
+    if (live.finalResult) return live.finalResult;
+    const requestedSecond = Math.max(live.state.second, Math.floor(targetSecond));
+    const firstHalfRegulationEnd = Math.floor(live.config.normalTimeSeconds / 2);
+    if (live.state.second < firstHalfRegulationEnd) {
+      CupMatchLoop.runPeriod(live.input, live.state, Math.min(requestedSecond, firstHalfRegulationEnd), live.config);
+      if (requestedSecond <= firstHalfRegulationEnd) return null;
+    }
+    if (live.state.firstHalfAddedTimeSeconds === 0) {
+      live.state.firstHalfAddedTimeSeconds = alignedAddedTime(live.state, live.config, 0);
+      live.state.addedTimeSeconds = live.state.firstHalfAddedTimeSeconds;
+    }
+    const firstHalfEnd = firstHalfRegulationEnd + live.state.firstHalfAddedTimeSeconds;
+    if (live.state.second < firstHalfEnd) {
+      CupMatchLoop.runPeriod(live.input, live.state, Math.min(requestedSecond, firstHalfEnd), live.config);
+      if (requestedSecond < firstHalfEnd || live.state.second < firstHalfEnd) return null;
+    }
+    if (!live.halfTimeTalkApplied) {
+      applyHalfTimeTalk(live.input, live.state);
+      live.halfTimeTalkApplied = true;
+      live.state.phase = "SECOND_HALF";
+      live.state.possession = live.state.firstHalfKickOffSide === "HOME" ? "AWAY" : "HOME";
+      live.state.possessionReason = "HALF_START";
+      live.state.ballCarrierId = void 0;
+      live.state.ballZone = "MIDFIELD";
+    }
+    const secondHalfRegulationEnd = firstHalfEnd + (live.config.normalTimeSeconds - firstHalfRegulationEnd);
+    if (live.state.second < secondHalfRegulationEnd) {
+      CupMatchLoop.runPeriod(live.input, live.state, Math.min(requestedSecond, secondHalfRegulationEnd), live.config);
+      if (requestedSecond < secondHalfRegulationEnd || live.state.second < secondHalfRegulationEnd) return null;
+    }
+    if (live.state.secondHalfAddedTimeSeconds === 0) {
+      live.state.secondHalfAddedTimeSeconds = alignedAddedTime(live.state, live.config, firstHalfEnd);
+      live.state.addedTimeSeconds = live.state.firstHalfAddedTimeSeconds + live.state.secondHalfAddedTimeSeconds;
+    }
+    const normalTimeEnd = secondHalfRegulationEnd + live.state.secondHalfAddedTimeSeconds;
+    if (live.state.second < normalTimeEnd) {
+      CupMatchLoop.runPeriod(live.input, live.state, Math.min(requestedSecond, normalTimeEnd), live.config);
+      if (requestedSecond < normalTimeEnd || live.state.second < normalTimeEnd) return null;
+    }
+    if (live.state.homeScore !== live.state.awayScore || !live.config.enableExtraTime) {
+      return finishLiveMatch(live);
+    }
+    const extraTimeHalfEnd = normalTimeEnd + 15 * 60;
+    if (live.state.second < extraTimeHalfEnd) {
+      live.state.phase = "EXTRA_TIME_1";
+      CupMatchLoop.runPeriod(live.input, live.state, Math.min(requestedSecond, extraTimeHalfEnd), live.config);
+      if (requestedSecond < extraTimeHalfEnd || live.state.second < extraTimeHalfEnd) return null;
+    }
+    const extraTimeEnd = normalTimeEnd + live.config.extraTimeSeconds;
+    if (live.state.second < extraTimeEnd) {
+      live.state.phase = "EXTRA_TIME_2";
+      CupMatchLoop.runPeriod(live.input, live.state, Math.min(requestedSecond, extraTimeEnd), live.config);
+      if (requestedSecond < extraTimeEnd || live.state.second < extraTimeEnd) return null;
+    }
+    if (live.state.homeScore !== live.state.awayScore || !live.config.enablePenaltyShootout) {
+      return finishLiveMatch(live);
+    }
+    return finishLiveMatchWithPenalties(live);
+  },
+  /**
+   * Returns a detached report for the elapsed portion without advancing time.
+   * The clone is intentional: a React view may sort or annotate its copy, but
+   * it must never mutate the authoritative event history held by the engine.
+   */
+  snapshotLiveMatch: (live) => cloneResult(live.finalResult ?? buildResult(live.input, live.state, live.initialLineup)),
+  /** Returns the committed result only after the live state reached full time. */
+  finalizeLiveMatch: (live) => live.finalResult ?? null,
+  /**
+   * Applies a legal manual substitution in place. The event log is the source
+   * of truth for players who already left the pitch, preventing illegal returns.
+   */
+  applyManualSubstitution: (live, side, playerOutId, playerInId) => {
+    if (live.finalResult || playerOutId === playerInId) return false;
+    if (live.state.substitutionsUsed[side] >= live.config.maxSubstitutions) return false;
+    if (live.state.redCards[playerOutId] || live.state.redCards[playerInId]) return false;
+    const team = side === "HOME" ? live.input.home : live.input.away;
+    const slotIndex = team.lineup.startingXI.findIndex((id) => id === playerOutId);
+    if (slotIndex < 0 || !team.lineup.bench.includes(playerInId)) return false;
+    const alreadyLeftPitch = live.state.events.some(
+      (event) => event.type === "SUBSTITUTION" /* SUBSTITUTION */ && event.secondaryPlayerId === playerInId
+    );
+    if (alreadyLeftPitch) return false;
+    const playerOut = team.players.find((player) => player.id === playerOutId);
+    const playerIn = team.players.find((player) => player.id === playerInId);
+    if (!playerOut || !playerIn) return false;
+    team.lineup.startingXI[slotIndex] = playerInId;
+    team.lineup.bench = team.lineup.bench.filter((id) => id !== playerInId);
+    team.lineup.bench.push(playerOutId);
+    live.state.substitutionsUsed[side] += 1;
+    live.state.fatigue[playerInId] = Math.min(
+      playerIn.condition,
+      live.state.fatigue[playerInId] ?? playerIn.condition
+    );
+    live.state.events.push({
+      id: `cupv2_manual_substitution_${live.state.second}_${side}_${playerOutId}_${playerInId}`,
+      second: live.state.second,
+      minute: CupMatchClockService.eventMinute(live.state, live.config),
+      side,
+      type: "SUBSTITUTION" /* SUBSTITUTION */,
+      playerId: playerInId,
+      secondaryPlayerId: playerOutId,
+      text: `${team.name} dokonuje zmiany: ${playerIn.lastName} za ${playerOut.lastName}.`,
+      detail: {
+        reason: "MANUAL",
+        substitutionsUsed: live.state.substitutionsUsed[side]
+      }
+    });
+    return true;
+  },
+  /**
+   * Publiczne wejście silnika. Na tym etapie moduł jest przeznaczony do
+   * symulacji, testów balansu i późniejszego podłączenia do widoku Pucharu
+   * Polski. Nie modyfikuje istniejącego silnika live.
+   */
+  simulate: (input) => {
+    const runtimeInput = cloneInput(input);
+    const initialLineups = {
+      HOME: [...runtimeInput.home.lineup.startingXI],
+      AWAY: [...runtimeInput.away.lineup.startingXI]
+    };
+    const config = { ...DEFAULT_CUP_ENGINE_CONFIG, ...runtimeInput.config };
+    const state = createInitialCupRuntimeState(runtimeInput);
+    state.phase = "FIRST_HALF";
+    const firstHalfRegulationEnd = Math.floor(config.normalTimeSeconds / 2);
+    CupMatchLoop.runPeriod(runtimeInput, state, firstHalfRegulationEnd, config);
+    state.firstHalfAddedTimeSeconds = alignedAddedTime(state, config, 0);
+    state.addedTimeSeconds = state.firstHalfAddedTimeSeconds;
+    const firstHalfEnd = firstHalfRegulationEnd + state.firstHalfAddedTimeSeconds;
+    CupMatchLoop.runPeriod(runtimeInput, state, firstHalfEnd, config);
+    applyHalfTimeTalk(runtimeInput, state);
+    state.phase = "SECOND_HALF";
+    state.possession = state.firstHalfKickOffSide === "HOME" ? "AWAY" : "HOME";
+    state.possessionReason = "HALF_START";
+    state.ballCarrierId = void 0;
+    state.ballZone = "MIDFIELD";
+    const secondHalfRegulationEnd = firstHalfEnd + (config.normalTimeSeconds - firstHalfRegulationEnd);
+    CupMatchLoop.runPeriod(runtimeInput, state, secondHalfRegulationEnd, config);
+    state.secondHalfAddedTimeSeconds = alignedAddedTime(state, config, firstHalfEnd);
+    state.addedTimeSeconds = state.firstHalfAddedTimeSeconds + state.secondHalfAddedTimeSeconds;
+    const normalTimeEnd = secondHalfRegulationEnd + state.secondHalfAddedTimeSeconds;
+    CupMatchLoop.runPeriod(runtimeInput, state, normalTimeEnd, config);
+    if (state.homeScore === state.awayScore && config.enableExtraTime) {
+      state.phase = "EXTRA_TIME_1";
+      CupMatchLoop.runPeriod(runtimeInput, state, normalTimeEnd + 15 * 60, config);
+      state.phase = "EXTRA_TIME_2";
+      CupMatchLoop.runPeriod(runtimeInput, state, normalTimeEnd + config.extraTimeSeconds, config);
+    }
+    let decidedByPenalties = false;
+    let penaltyScore;
+    let penaltyShootout = void 0;
+    let winner = state.homeScore > state.awayScore ? "HOME" : state.awayScore > state.homeScore ? "AWAY" : void 0;
+    if (!winner && config.enablePenaltyShootout) {
+      state.phase = "PENALTY_SHOOTOUT";
+      const penalties = CupPenaltyShootoutService.simulate(runtimeInput, state.fatigue, {
+        redCards: state.redCards,
+        injuries: state.injuries,
+        startSecond: state.second
+      });
+      decidedByPenalties = true;
+      penaltyScore = { home: penalties.home, away: penalties.away };
+      penaltyShootout = penalties.attempts;
+      state.events.push(...penalties.events);
+      state.second = Math.max(state.second, ...penalties.events.map((event) => event.second));
+      winner = penalties.winner;
+    }
+    state.phase = "FINISHED";
+    const playerStats = CupPlayerStatsAggregator.aggregate({
+      match: runtimeInput,
+      events: state.events,
+      finalSecond: state.second,
+      homeScore: state.homeScore,
+      awayScore: state.awayScore,
+      initialLineups,
+      finalFatigue: state.fatigue,
+      teamStats: state.stats
+    });
+    return {
+      homeScore: state.homeScore,
+      awayScore: state.awayScore,
+      winner,
+      decidedByPenalties,
+      penaltyScore,
+      penaltyShootout,
+      stats: state.stats,
+      playerStats,
+      events: state.events,
+      finalState: state
+    };
+  }
+};
+
+// services/match/engines/cupV2/CupSampleMatchFactory.ts
+var positionBoosts = {
+  ["GK" /* GK */]: { goalkeeping: 14, positioning: 8, mentality: 5, passing: 2 },
+  ["DEF" /* DEF */]: { defending: 11, positioning: 8, heading: 6, strength: 5, aggression: 3 },
+  ["MID" /* MID */]: { passing: 9, vision: 7, technique: 7, stamina: 5, workRate: 5 },
+  ["FWD" /* FWD */]: { finishing: 11, attacking: 9, pace: 5, dribbling: 4, technique: 4 }
+};
+
+// services/match/adapters/cupV2/CupMatchInputAdapter.ts
+var DEFAULT_INSTRUCTIONS = {
+  tempo: "NORMAL",
+  mindset: "NEUTRAL",
+  intensity: "NORMAL",
+  passing: "MIXED",
+  pressing: "NORMAL",
+  counterAttack: "NORMAL",
+  marking: "ZONE",
+  lastChangeMinute: 0,
+  expiryMinute: -1,
+  tempoExpiry: -1,
+  mindsetExpiry: -1,
+  intensityExpiry: -1,
+  tempoCooldown: -1,
+  mindsetCooldown: -1,
+  intensityCooldown: -1,
+  passingCooldown: -1,
+  pressingCooldown: -1,
+  counterAttackCooldown: -1,
+  markingCooldown: -1,
+  tempoResponseFactor: 1,
+  mindsetResponseFactor: 1,
+  intensityResponseFactor: 1,
+  passingResponseFactor: 1,
+  pressingResponseFactor: 1,
+  counterAttackResponseFactor: 1,
+  markingResponseFactor: 1
+};
+var ATTRIBUTE_WEIGHTS = {
+  strength: 0.55,
+  stamina: 0.75,
+  pace: 0.72,
+  defending: 0.95,
+  passing: 1,
+  attacking: 0.95,
+  finishing: 0.84,
+  technique: 1,
+  vision: 0.88,
+  dribbling: 0.76,
+  heading: 0.46,
+  positioning: 0.88,
+  goalkeeping: 0.42,
+  freeKicks: 0.24,
+  talent: 0.22,
+  penalties: 0.18,
+  corners: 0.18,
+  aggression: 0.5,
+  crossing: 0.46,
+  leadership: 0.36,
+  mentality: 0.84,
+  workRate: 0.78
+};
+var stableHash2 = (value) => {
+  let hash2 = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash2 = (hash2 << 5) - hash2 + value.charCodeAt(index);
+    hash2 |= 0;
+  }
+  return Math.abs(hash2);
+};
+var mergeInstructions = (instructions) => ({
+  ...DEFAULT_INSTRUCTIONS,
+  ...instructions
+});
+var getStartingPlayers = (lineup, players) => {
+  const byId = new Map(players.map((player) => [player.id, player]));
+  return lineup.startingXI.map((playerId) => playerId ? byId.get(playerId) : void 0).filter((player) => Boolean(player));
+};
+var average2 = (values, fallback = 50) => values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
+var calculateWeightedQuality = (players) => {
+  if (players.length === 0) return 50;
+  const totalWeight = Object.values(ATTRIBUTE_WEIGHTS).reduce((sum, weight) => sum + weight, 0);
+  const score = players.reduce((teamSum, player) => {
+    const attrScore = Object.entries(ATTRIBUTE_WEIGHTS).reduce((sum, [key, weight]) => sum + (player.attributes[key] ?? 50) * weight, 0) / totalWeight;
+    const condition = clamp3(player.condition ?? 75, 35, 100);
+    const form = clamp3(player.form ?? 50, 20, 90);
+    const morale = clamp3(player.morale ?? 50, 15, 95);
+    return teamSum + attrScore * 0.82 + condition * 0.08 + form * 0.06 + morale * 0.04;
+  }, 0) / players.length;
+  return Math.round(score * 100) / 100;
+};
+var calculateMotivation = (side, homeClub, awayClub, override) => {
+  if (typeof override === "number") return clamp3(override, 0, 100);
+  const self = side === "HOME" ? homeClub : awayClub;
+  const opponent = side === "HOME" ? awayClub : homeClub;
+  const reputationGap = opponent.reputation - self.reputation;
+  const underdogLift = clamp3(reputationGap / 3, -6, 12);
+  const moraleLift = clamp3(((self.morale ?? 50) - 50) * 0.18, -5, 6);
+  return Math.round(clamp3(58 + underdogLift + moraleLift, 35, 85));
+};
+var calculateStadiumSupport = (side, neutralVenue, attendance, stadiumCapacity) => {
+  if (neutralVenue) return 50;
+  const occupancy = stadiumCapacity > 0 ? clamp3(attendance / stadiumCapacity, 0.25, 1) : 0.7;
+  const homeSupport = clamp3(52 + occupancy * 9, 54, 63);
+  return side === "HOME" ? Math.round(homeSupport) : Math.round(100 - homeSupport);
+};
+var estimatePitchQuality = (ctx, weather, neutralVenue) => {
+  const month = ctx.fixture.date.getMonth();
+  const stadiumBase = neutralVenue ? 92 : ctx.homeClub.stadiumCapacity >= 3e4 ? 82 : ctx.homeClub.stadiumCapacity >= 12e3 ? 76 : 70;
+  const winterPenalty = month === 11 || month <= 1 ? 5 : month === 2 ? 3 : 0;
+  const weatherPenalty = weather ? Math.round((weather.weatherIntensity ?? 0) * 12) : 0;
+  const hashNoise = stableHash2(`${ctx.fixture.id}_pitch`) % 7 - 3;
+  return Math.round(clamp3(stadiumBase - winterPenalty - weatherPenalty + hashNoise, 48, 96));
+};
+var buildTeamInput = ({
+  side,
+  club,
+  players,
+  lineup,
+  instructions,
+  morale,
+  preMatchMotivation,
+  stadiumSupport
+}) => ({
+  side,
+  clubId: club.id,
+  name: club.name,
+  players,
+  lineup,
+  tactic: TacticRepository.getById(lineup.tacticId),
+  instructions,
+  morale,
+  preMatchMotivation,
+  stadiumSupport
+});
+var diagnoseTeam = (team) => {
+  const starters = getStartingPlayers(team.lineup, team.players);
+  return {
+    side: team.side,
+    clubId: team.clubId,
+    name: team.name,
+    tacticId: team.lineup.tacticId,
+    foundStartingPlayers: starters.length,
+    missingStartingSlots: Math.max(0, 11 - starters.length),
+    hasGoalkeeper: starters.some((player) => player.position === "GK"),
+    averageOverall: Math.round(average2(starters.map((player) => player.overallRating)) * 100) / 100,
+    weightedQuality: calculateWeightedQuality(starters),
+    morale: team.morale,
+    preMatchMotivation: team.preMatchMotivation,
+    stadiumSupport: team.stadiumSupport
+  };
+};
+var CupMatchInputAdapter = {
+  fromMatchContext: (ctx, options) => {
+    const seed = `${ctx.fixture.id}_cup_v2_${options.seedSuffix ?? "shadow"}`;
+    const venue = PolishCupVenueService.getVenue(ctx.fixture, ctx.homeClub);
+    const neutralVenue = Boolean(ctx.fixture.neutralVenue ?? venue.isNeutral);
+    const weather = options.weather ?? PolandWeatherService.getWeather(ctx.fixture.date, seed);
+    const referee = options.referee ?? RefereeService.assignPolishReferee(seed, neutralVenue ? 5 : 4);
+    const stadiumCapacity = venue.capacity ?? ctx.homeClub.stadiumCapacity;
+    const attendance = Math.round(options.attendance ?? ctx.fixture.attendance ?? Math.max(1800, stadiumCapacity * (neutralVenue ? 0.82 : 0.68)));
+    const pitchQuality = Math.round(options.pitchQuality ?? estimatePitchQuality(ctx, weather, neutralVenue));
+    const homeInstructions = mergeInstructions(options.homeInstructions);
+    const awayInstructions = mergeInstructions(options.awayInstructions);
+    const homeMotivation = calculateMotivation(
+      "HOME",
+      ctx.homeClub,
+      ctx.awayClub,
+      options.userSide === "HOME" ? options.userPreMatchMotivation : options.aiPreMatchMotivation
+    );
+    const awayMotivation = calculateMotivation(
+      "AWAY",
+      ctx.homeClub,
+      ctx.awayClub,
+      options.userSide === "AWAY" ? options.userPreMatchMotivation : options.aiPreMatchMotivation
+    );
+    const home = buildTeamInput({
+      side: "HOME",
+      club: ctx.homeClub,
+      players: ctx.homePlayers,
+      lineup: options.homeLineup,
+      instructions: homeInstructions,
+      morale: clamp3(ctx.homeClub.morale ?? 50, 0, 100),
+      preMatchMotivation: homeMotivation,
+      stadiumSupport: calculateStadiumSupport("HOME", neutralVenue, attendance, stadiumCapacity)
+    });
+    const away = buildTeamInput({
+      side: "AWAY",
+      club: ctx.awayClub,
+      players: ctx.awayPlayers,
+      lineup: options.awayLineup,
+      instructions: awayInstructions,
+      morale: clamp3(ctx.awayClub.morale ?? 50, 0, 100),
+      preMatchMotivation: awayMotivation,
+      stadiumSupport: calculateStadiumSupport("AWAY", neutralVenue, attendance, stadiumCapacity)
+    });
+    const homeDiagnostics = diagnoseTeam(home);
+    const awayDiagnostics = diagnoseTeam(away);
+    const qualityGap = Math.round((homeDiagnostics.weightedQuality - awayDiagnostics.weightedQuality) * 100) / 100;
+    const expectedFavorite = Math.abs(qualityGap) < 1.25 ? void 0 : qualityGap > 0 ? "HOME" : "AWAY";
+    return {
+      input: {
+        seed,
+        home,
+        away,
+        environment: {
+          weather,
+          pitchQuality,
+          stadiumCapacity,
+          attendance,
+          referee
+        },
+        config: {
+          enableExtraTime: options.enableExtraTime ?? true,
+          enablePenaltyShootout: options.enablePenaltyShootout ?? true
+        },
+        calibration: {
+          scenario: neutralVenue ? "REAL_CUP_NEUTRAL" : "REAL_CUP",
+          homeQuality: homeDiagnostics.weightedQuality,
+          awayQuality: awayDiagnostics.weightedQuality,
+          expectedFavorite
+        }
+      },
+      diagnostics: {
+        seed,
+        venueName: venue.name,
+        neutralVenue,
+        pitchQuality,
+        attendance,
+        stadiumCapacity,
+        refereeId: referee.id,
+        weatherDescription: weather?.description,
+        home: homeDiagnostics,
+        away: awayDiagnostics,
+        expectedFavorite,
+        qualityGap
+      }
+    };
+  }
+};
+
+// services/match/adapters/cupV2/CupMatchReportAdapter.ts
+var GOAL_TYPES2 = /* @__PURE__ */ new Set([
+  "GOAL" /* GOAL */,
+  "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */,
+  "PENALTY_SCORED" /* PENALTY_SCORED */
+]);
+var IMPORTANT_TIMELINE_TYPES = /* @__PURE__ */ new Set([
+  "GOAL" /* GOAL */,
+  "ONE_ON_ONE_GOAL" /* ONE_ON_ONE_GOAL */,
+  "PENALTY_SCORED" /* PENALTY_SCORED */,
+  "PENALTY_MISSED" /* PENALTY_MISSED */,
+  "SHOT_POST" /* SHOT_POST */,
+  "SHOT_BAR" /* SHOT_BAR */,
+  "SAVE" /* SAVE */,
+  "ONE_ON_ONE_SAVE" /* ONE_ON_ONE_SAVE */,
+  "YELLOW_CARD" /* YELLOW_CARD */,
+  "RED_CARD" /* RED_CARD */,
+  "INJURY_LIGHT" /* INJURY_LIGHT */,
+  "INJURY_SEVERE" /* INJURY_SEVERE */,
+  "SUBSTITUTION" /* SUBSTITUTION */,
+  "PENALTY_AWARDED" /* PENALTY_AWARDED */
+]);
+var pctPossession = (sideTicks, totalTicks) => totalTicks > 0 ? Math.round(sideTicks / totalTicks * 100) : 50;
+var teamStats = (result, side) => {
+  const homeTicks = result.stats.HOME.possessionTicks;
+  const awayTicks = result.stats.AWAY.possessionTicks;
+  const totalTicks = homeTicks + awayTicks;
+  const source = result.stats[side];
+  return {
+    shots: source.shots,
+    shotsOnTarget: source.shotsOnTarget,
+    corners: source.corners,
+    fouls: source.fouls,
+    offsides: source.offsides,
+    yellowCards: source.yellowCards,
+    redCards: source.redCards,
+    possession: pctPossession(source.possessionTicks, totalTicks)
+  };
+};
+var playerLookup = (input) => {
+  const lookup = /* @__PURE__ */ new Map();
+  input.home.players.forEach((player) => lookup.set(player.id, player));
+  input.away.players.forEach((player) => lookup.set(player.id, player));
+  return lookup;
+};
+var playerName2 = (players, statsById, playerId) => {
+  if (!playerId) return "";
+  const player = players.get(playerId);
+  if (player) return `${player.firstName} ${player.lastName}`.trim();
+  return statsById.get(playerId)?.name ?? "";
+};
+var flattenPlayerStats = (result, side) => Object.values(result.playerStats[side]).filter((player) => player.minutesPlayed > 0).sort((a, b) => b.minutesPlayed - a.minutesPlayed || b.rating - a.rating);
+var toPerformance = (player, result) => ({
+  playerId: player.playerId,
+  name: player.name,
+  position: player.position,
+  goals: player.goals,
+  assists: player.assists,
+  yellowCards: player.yellowCards,
+  redCards: player.redCards,
+  missedPenalties: player.penaltiesMissed,
+  savedPenalties: player.penaltiesSaved,
+  healthStatus: player.injuriesLight > 0 || player.injuriesSevere > 0 ? "INJURED" /* INJURED */ : "HEALTHY" /* HEALTHY */,
+  injuryDays: player.injuriesSevere > 0 ? 28 : player.injuriesLight > 0 ? 7 : void 0,
+  fatigue: Math.round(result.finalState.fatigue[player.playerId] ?? 75),
+  rating: player.rating
+});
+var detailBool2 = (event, key) => event.detail?.[key] === true;
+var detailString2 = (event, key) => {
+  const value = event.detail?.[key];
+  return typeof value === "string" ? value : void 0;
+};
+var isOwnGoal = (event) => detailBool2(event, "isOwnGoal");
+var isShootoutPenalty2 = (event) => detailBool2(event, "isShootout");
+var buildGoalTicker = (event, players, statsById) => {
+  const ownGoalPlayerId2 = detailString2(event, "ownGoalPlayerId") ?? (isOwnGoal(event) ? event.playerId : void 0);
+  return {
+    playerName: playerName2(players, statsById, event.playerId) || event.text,
+    scorerId: isOwnGoal(event) ? void 0 : event.playerId,
+    minute: event.minute,
+    isPenalty: event.type === "PENALTY_SCORED" /* PENALTY_SCORED */,
+    assistantName: event.secondaryPlayerId ? playerName2(players, statsById, event.secondaryPlayerId) : void 0,
+    assistantId: event.secondaryPlayerId,
+    isOwnGoal: isOwnGoal(event),
+    ownGoalPlayerId: ownGoalPlayerId2,
+    ownGoalPlayerName: ownGoalPlayerId2 ? playerName2(players, statsById, ownGoalPlayerId2) : void 0
+  };
+};
+var buildGoals = (result, players, statsById, side) => result.events.filter((event) => event.side === side && GOAL_TYPES2.has(event.type) && !isShootoutPenalty2(event)).map((event) => buildGoalTicker(event, players, statsById));
+var buildTimeline = (result, players, statsById) => {
+  let homeScore = 0;
+  let awayScore = 0;
+  return result.events.filter((event) => event.side && (IMPORTANT_TIMELINE_TYPES.has(event.type) || GOAL_TYPES2.has(event.type))).sort((a, b) => a.second - b.second).map((event) => {
+    const shootoutPenalty = isShootoutPenalty2(event);
+    if (GOAL_TYPES2.has(event.type) && !shootoutPenalty) {
+      if (event.side === "HOME") homeScore += 1;
+      if (event.side === "AWAY") awayScore += 1;
+    }
+    const ownGoalPlayerId2 = detailString2(event, "ownGoalPlayerId") ?? (isOwnGoal(event) ? event.playerId : void 0);
+    return {
+      minute: event.minute,
+      type: event.type,
+      playerName: playerName2(players, statsById, event.playerId) || event.text,
+      assistantName: event.secondaryPlayerId && !shootoutPenalty ? playerName2(players, statsById, event.secondaryPlayerId) : void 0,
+      teamSide: event.side,
+      text: event.text,
+      scoreAtMoment: shootoutPenalty ? detailString2(event, "penaltyScore") : GOAL_TYPES2.has(event.type) ? `${homeScore}:${awayScore}` : void 0,
+      isOwnGoal: isOwnGoal(event),
+      ownGoalPlayerName: ownGoalPlayerId2 ? playerName2(players, statsById, ownGoalPlayerId2) : void 0
+    };
+  });
+};
+var playerStatsById = (result) => new Map([
+  ...Object.values(result.playerStats.HOME),
+  ...Object.values(result.playerStats.AWAY)
+].map((player) => [player.playerId, player]));
+var CupMatchReportAdapter = {
+  fromMatchContext: (ctx, input, result, options = {}) => {
+    const players = playerLookup(input);
+    const statsById = playerStatsById(result);
+    return {
+      matchId: ctx.fixture.id,
+      userTeamId: options.userTeamId ?? ctx.homeClub.id,
+      homeClub: ctx.homeClub,
+      awayClub: ctx.awayClub,
+      homeScore: result.homeScore,
+      awayScore: result.awayScore,
+      homeGoals: buildGoals(result, players, statsById, "HOME"),
+      awayGoals: buildGoals(result, players, statsById, "AWAY"),
+      homeStats: teamStats(result, "HOME"),
+      awayStats: teamStats(result, "AWAY"),
+      homePlayers: flattenPlayerStats(result, "HOME").map((player) => toPerformance(player, result)),
+      awayPlayers: flattenPlayerStats(result, "AWAY").map((player) => toPerformance(player, result)),
+      timeline: buildTimeline(result, players, statsById),
+      refereeId: input.environment.referee.id,
+      refereeName: `${input.environment.referee.firstName} ${input.environment.referee.lastName}`,
+      attendance: input.environment.attendance,
+      homePenaltyScore: result.penaltyScore?.home,
+      awayPenaltyScore: result.penaltyScore?.away,
+      isExtraTime: result.finalState.second > 90 * 60
+    };
+  }
+};
+
+// services/match/adapters/cupV2/CupShadowSimulationService.ts
+var summarizeResult = (input, result) => {
+  const home = result.stats.HOME;
+  const away = result.stats.AWAY;
+  const playerSummaries = flattenPlayerStats2(result);
+  return {
+    seed: input.seed,
+    score: `${result.homeScore}:${result.awayScore}`,
+    winner: result.winner,
+    decidedByPenalties: result.decidedByPenalties,
+    penaltyScore: result.penaltyScore ? `${result.penaltyScore.home}:${result.penaltyScore.away}` : void 0,
+    totalShots: home.shots + away.shots,
+    totalShotsOnTarget: home.shotsOnTarget + away.shotsOnTarget,
+    totalGoals: result.homeScore + result.awayScore,
+    totalXg: Math.round((home.xG + away.xG) * 100) / 100,
+    totalCorners: home.corners + away.corners,
+    totalOffsides: home.offsides + away.offsides,
+    totalYellowCards: home.yellowCards + away.yellowCards,
+    totalRedCards: home.redCards + away.redCards,
+    eventCount: result.events.length,
+    topPerformers: topBy(playerSummaries, (player) => player.rating, 5),
+    scorers: topBy(playerSummaries.filter((player) => player.goals > 0 || player.ownGoals > 0), (player) => player.goals * 10 + player.ownGoals * 4 + player.rating, 8),
+    assistants: topBy(playerSummaries.filter((player) => player.assists > 0 || player.chancesCreated > 0), (player) => player.assists * 10 + player.chancesCreated + player.rating * 0.1, 8),
+    shotLeaders: topBy(playerSummaries.filter((player) => player.shots > 0), (player) => player.shots * 10 + player.shotsOnTarget * 2 + player.xG, 8),
+    keeperReports: topBy(playerSummaries.filter((player) => player.saves > 0 || player.goalsConceded > 0), (player) => player.saves * 2 - player.goalsConceded + player.rating * 0.1, 4),
+    ratings: Object.fromEntries(playerSummaries.map((player) => [player.playerId, player.rating]))
+  };
+};
+var toPlayerSummary = (player) => ({
+  playerId: player.playerId,
+  name: player.name,
+  side: player.side,
+  position: player.position,
+  minutesPlayed: player.minutesPlayed,
+  goals: player.goals,
+  ownGoals: player.ownGoals,
+  assists: player.assists,
+  shots: player.shots,
+  shotsOnTarget: player.shotsOnTarget,
+  xG: player.xG,
+  chancesCreated: player.chancesCreated,
+  saves: player.saves,
+  goalsConceded: player.goalsConceded,
+  yellowCards: player.yellowCards,
+  redCards: player.redCards,
+  rating: player.rating
+});
+var flattenPlayerStats2 = (result) => [
+  ...Object.values(result.playerStats.HOME),
+  ...Object.values(result.playerStats.AWAY)
+].map(toPlayerSummary).filter((player) => player.minutesPlayed > 0);
+var topBy = (players, score, limit) => [...players].sort((a, b) => score(b) - score(a) || b.rating - a.rating || b.minutesPlayed - a.minutesPlayed).slice(0, limit);
+var compareWithLegacy = (summary, legacy) => {
+  const legacyTotalShots = legacy.home.shots + legacy.away.shots;
+  const legacyTotalShotsOnTarget = legacy.home.shotsOnTarget + legacy.away.shotsOnTarget;
+  const legacyTotalGoals = legacy.homeScore + legacy.awayScore;
+  const legacyTotalCorners = legacy.home.corners + legacy.away.corners;
+  const legacyTotalOffsides = legacy.home.offsides + legacy.away.offsides;
+  const legacyTotalCards = (legacy.home.yellowCards ?? 0) + (legacy.away.yellowCards ?? 0) + (legacy.home.redCards ?? 0) + (legacy.away.redCards ?? 0);
+  return {
+    scoreDiff: `${summary.score} vs ${legacy.homeScore}:${legacy.awayScore}`,
+    totalShotsDiff: summary.totalShots - legacyTotalShots,
+    totalShotsOnTargetDiff: summary.totalShotsOnTarget - legacyTotalShotsOnTarget,
+    totalGoalsDiff: summary.totalGoals - legacyTotalGoals,
+    totalCornersDiff: summary.totalCorners - legacyTotalCorners,
+    totalOffsidesDiff: summary.totalOffsides - legacyTotalOffsides,
+    totalCardsDiff: summary.totalYellowCards + summary.totalRedCards - legacyTotalCards
+  };
+};
+var CupShadowSimulationService = {
+  simulateFromMatchContext: (ctx, options) => {
+    const adapted = CupMatchInputAdapter.fromMatchContext(ctx, options);
+    const result = CupMatchEngineV2.simulate(adapted.input);
+    const matchSummary = CupMatchReportAdapter.fromMatchContext(ctx, adapted.input, result, {
+      userTeamId: options.userSide === "AWAY" ? ctx.awayClub.id : ctx.homeClub.id
+    });
+    const summary = summarizeResult(adapted.input, result);
+    return {
+      input: adapted.input,
+      result,
+      matchSummary,
+      diagnostics: adapted.diagnostics,
+      summary,
+      legacy: options.legacy,
+      diff: options.legacy ? compareWithLegacy(summary, options.legacy) : void 0,
+      initialLineup: {
+        HOME: {
+          ...adapted.input.home.lineup,
+          startingXI: [...adapted.input.home.lineup.startingXI],
+          bench: [...adapted.input.home.lineup.bench],
+          reserves: [...adapted.input.home.lineup.reserves]
+        },
+        AWAY: {
+          ...adapted.input.away.lineup,
+          startingXI: [...adapted.input.away.lineup.startingXI],
+          bench: [...adapted.input.away.lineup.bench],
+          reserves: [...adapted.input.away.lineup.reserves]
+        }
+      }
+    };
+  },
+  /**
+   * Builds a live handle without simulating a single tick. The adapter runs
+   * once, so later tactical commands mutate only the future runtime input and
+   * never reconstruct the match from the beginning.
+   */
+  createLiveMatch: (ctx, options) => {
+    const adapted = CupMatchInputAdapter.fromMatchContext(ctx, options);
+    return {
+      ctx,
+      options,
+      diagnostics: adapted.diagnostics,
+      live: CupMatchEngineV2.createLiveMatch(adapted.input)
+    };
+  },
+  /** Advances the live engine and maps only the elapsed state to the current UI contract. */
+  tickLiveMatch: (handle, targetSecond) => {
+    CupMatchEngineV2.advanceLiveMatch(handle.live, targetSecond);
+    const result = CupMatchEngineV2.snapshotLiveMatch(handle.live);
+    const matchSummary = CupMatchReportAdapter.fromMatchContext(handle.ctx, handle.live.input, result, {
+      userTeamId: handle.options.userSide === "AWAY" ? handle.ctx.awayClub.id : handle.ctx.homeClub.id
+    });
+    const summary = summarizeResult(handle.live.input, result);
+    return {
+      input: handle.live.input,
+      result,
+      matchSummary,
+      diagnostics: handle.diagnostics,
+      summary,
+      legacy: handle.options.legacy,
+      diff: handle.options.legacy ? compareWithLegacy(summary, handle.options.legacy) : void 0,
+      initialLineup: handle.live.initialLineup
+    };
+  }
+};
+
+// services/match/adapters/cupV2/CupShadowAuditService.ts
+var round2 = (value) => Math.round(value * 100) / 100;
+var pct = (count, total) => total > 0 ? round2(count / total * 100) : 0;
+var detectAnomalies = (item, testCase) => {
+  const anomalies = [];
+  const label = testCase.label ?? `${item.input.home.name} - ${item.input.away.name}`;
+  const summary = item.summary;
+  const add = (type, value, details) => {
+    anomalies.push({
+      caseId: testCase.id,
+      label,
+      type,
+      value,
+      score: summary.score,
+      shots: summary.totalShots,
+      offsides: summary.totalOffsides,
+      details
+    });
+  };
+  if (summary.totalShots < 8) {
+    add("TOO_FEW_SHOTS", summary.totalShots, "Mecz ma mniej ni\u017C 8 strza\u0142\xF3w \u0142\u0105cznie.");
+  }
+  if (summary.totalShots > 38) {
+    add("TOO_MANY_SHOTS", summary.totalShots, "Mecz ma wi\u0119cej ni\u017C 38 strza\u0142\xF3w \u0142\u0105cznie.");
+  }
+  if (summary.totalGoals >= 7 || item.result.homeScore >= 4 && item.result.awayScore >= 4) {
+    add("HOCKEY_SCORE", summary.score, "Wynik wygl\u0105da zbyt hokejowo jak na pojedynczy mecz pi\u0142karski.");
+  }
+  if (summary.totalOffsides > 8) {
+    add("TOO_MANY_OFFSIDES", summary.totalOffsides, "Spalone przekraczaj\u0105 pr\xF3g audytu.");
+  }
+  if (!item.diagnostics.home.hasGoalkeeper || !item.diagnostics.away.hasGoalkeeper) {
+    add("NO_GOALKEEPER", item.diagnostics.home.hasGoalkeeper ? "AWAY" : "HOME", "Jedna z dru\u017Cyn nie ma bramkarza w XI.");
+  }
+  if (item.diagnostics.home.missingStartingSlots > 0 || item.diagnostics.away.missingStartingSlots > 0) {
+    add(
+      "BROKEN_LINEUP",
+      `${item.diagnostics.home.missingStartingSlots}:${item.diagnostics.away.missingStartingSlots}`,
+      "Adapter nie odnalaz\u0142 pe\u0142nej jedenastki w danych kadrowych."
+    );
+  }
+  return anomalies;
+};
+var summarize = (reports, anomalies) => {
+  const matches = reports.length;
+  const totals = reports.reduce((acc, item) => {
+    acc.shots += item.summary.totalShots;
+    acc.shotsOnTarget += item.summary.totalShotsOnTarget;
+    acc.goals += item.summary.totalGoals;
+    acc.xG += item.summary.totalXg;
+    acc.corners += item.summary.totalCorners;
+    acc.offsides += item.summary.totalOffsides;
+    acc.yellowCards += item.summary.totalYellowCards;
+    acc.penalties += item.summary.decidedByPenalties ? 1 : 0;
+    acc.lowShots += item.summary.totalShots < 8 ? 1 : 0;
+    acc.highShots += item.summary.totalShots > 38 ? 1 : 0;
+    acc.hockey += item.summary.totalGoals >= 7 || item.result.homeScore >= 4 && item.result.awayScore >= 4 ? 1 : 0;
+    acc.highOffsides += item.summary.totalOffsides > 8 ? 1 : 0;
+    acc.homeWins += item.summary.winner === "HOME" ? 1 : 0;
+    acc.awayWins += item.summary.winner === "AWAY" ? 1 : 0;
+    if (item.diagnostics.expectedFavorite) {
+      acc.favoriteMatches += 1;
+      acc.favoriteWins += item.summary.winner === item.diagnostics.expectedFavorite ? 1 : 0;
+    }
+    return acc;
+  }, {
+    shots: 0,
+    shotsOnTarget: 0,
+    goals: 0,
+    xG: 0,
+    corners: 0,
+    offsides: 0,
+    yellowCards: 0,
+    penalties: 0,
+    lowShots: 0,
+    highShots: 0,
+    hockey: 0,
+    highOffsides: 0,
+    homeWins: 0,
+    awayWins: 0,
+    favoriteMatches: 0,
+    favoriteWins: 0
+  });
+  return {
+    matches,
+    avgTotalShots: round2(totals.shots / Math.max(1, matches)),
+    avgTotalShotsOnTarget: round2(totals.shotsOnTarget / Math.max(1, matches)),
+    avgTotalGoals: round2(totals.goals / Math.max(1, matches)),
+    avgTotalXg: round2(totals.xG / Math.max(1, matches)),
+    avgTotalCorners: round2(totals.corners / Math.max(1, matches)),
+    avgTotalOffsides: round2(totals.offsides / Math.max(1, matches)),
+    avgTotalYellowCards: round2(totals.yellowCards / Math.max(1, matches)),
+    penaltyShootoutShare: pct(totals.penalties, matches),
+    lowShotShare: pct(totals.lowShots, matches),
+    highShotShare: pct(totals.highShots, matches),
+    hockeyScoreShare: pct(totals.hockey, matches),
+    highOffsideShare: pct(totals.highOffsides, matches),
+    favoriteWinShare: totals.favoriteMatches > 0 ? pct(totals.favoriteWins, totals.favoriteMatches) : void 0,
+    homeWinShare: pct(totals.homeWins, matches),
+    awayWinShare: pct(totals.awayWins, matches),
+    anomalyCount: anomalies.length
+  };
+};
+var CupShadowAuditService = {
+  run: (cases) => {
+    const reports = cases.map(
+      (testCase) => CupShadowSimulationService.simulateFromMatchContext(testCase.ctx, {
+        homeLineup: testCase.homeLineup,
+        awayLineup: testCase.awayLineup,
+        homeInstructions: testCase.homeInstructions,
+        awayInstructions: testCase.awayInstructions,
+        userSide: testCase.userSide,
+        seedSuffix: testCase.id,
+        legacy: testCase.legacy
+      })
+    );
+    const anomalies = reports.flatMap((report, index) => detectAnomalies(report, cases[index]));
+    const scenarios = Array.from(new Set(cases.map((testCase) => testCase.scenario ?? "ALL")));
+    return {
+      reports,
+      summary: summarize(reports, anomalies),
+      byScenario: scenarios.map((scenario) => {
+        const scenarioReports = reports.filter((_, index) => (cases[index].scenario ?? "ALL") === scenario);
+        const scenarioAnomalies = anomalies.filter(
+          (anomaly) => cases.find((testCase) => testCase.id === anomaly.caseId)?.scenario === scenario
+        );
+        return { scenario, ...summarize(scenarioReports, scenarioAnomalies) };
+      }),
+      anomalies
+    };
+  }
+};
+
+// tests/CupMatchEngineV2ShadowAuditTests.ts
+var ATTRIBUTE_KEYS = [
+  "strength",
+  "stamina",
+  "pace",
+  "defending",
+  "passing",
+  "attacking",
+  "finishing",
+  "technique",
+  "vision",
+  "dribbling",
+  "heading",
+  "positioning",
+  "goalkeeping",
+  "freeKicks",
+  "talent",
+  "penalties",
+  "corners",
+  "aggression",
+  "crossing",
+  "leadership",
+  "mentality",
+  "workRate"
+];
+var DEFAULT_INSTRUCTIONS2 = {
+  tempo: "NORMAL",
+  mindset: "NEUTRAL",
+  intensity: "NORMAL",
+  passing: "MIXED",
+  pressing: "NORMAL",
+  counterAttack: "NORMAL",
+  marking: "ZONE",
+  lastChangeMinute: 0,
+  expiryMinute: -1,
+  tempoExpiry: -1,
+  mindsetExpiry: -1,
+  intensityExpiry: -1,
+  tempoCooldown: -1,
+  mindsetCooldown: -1,
+  intensityCooldown: -1,
+  passingCooldown: -1,
+  pressingCooldown: -1,
+  counterAttackCooldown: -1,
+  markingCooldown: -1,
+  tempoResponseFactor: 1,
+  mindsetResponseFactor: 1,
+  intensityResponseFactor: 1,
+  passingResponseFactor: 1,
+  pressingResponseFactor: 1,
+  counterAttackResponseFactor: 1,
+  markingResponseFactor: 1
+};
+var POSITION_BOOSTS = {
+  ["GK" /* GK */]: { goalkeeping: 18, positioning: 8, mentality: 5, passing: 2 },
+  ["DEF" /* DEF */]: { defending: 12, positioning: 9, heading: 7, strength: 5, aggression: 3 },
+  ["MID" /* MID */]: { passing: 10, vision: 8, technique: 8, stamina: 5, workRate: 5 },
+  ["FWD" /* FWD */]: { finishing: 12, attacking: 10, pace: 5, dribbling: 5, technique: 4 }
+};
+var stableTierQuality = (club) => {
+  const tier = club.tier ?? (club.leagueId === "L_PL_1" ? 1 : club.leagueId === "L_PL_2" ? 2 : club.leagueId === "L_PL_3" ? 3 : 4);
+  const tierBase = tier === 1 ? 61 : tier === 2 ? 55 : tier === 3 ? 49 : 43;
+  return clamp3(tierBase + (club.reputation ?? 4) * 2.2, 38, 82);
+};
+var makeAttributes = (seed, position, quality) => {
+  const attrs = {};
+  ATTRIBUTE_KEYS.forEach((key, index) => {
+    const spread = (seededRandom(seed, index, 501) - 0.5) * 15;
+    const positionBoost = POSITION_BOOSTS[position][key] ?? 0;
+    attrs[key] = Math.round(clamp3(quality + spread + positionBoost, 12, 95));
+  });
+  if (position !== "GK" /* GK */) {
+    attrs.goalkeeping = Math.round(clamp3(10 + seededRandom(seed, 77, 502) * 18, 8, 32));
+  }
+  return attrs;
+};
+var overallForPosition = (position, attrs) => {
+  const keys = {
+    ["GK" /* GK */]: ["goalkeeping", "positioning", "mentality", "strength"],
+    ["DEF" /* DEF */]: ["defending", "positioning", "heading", "strength", "pace"],
+    ["MID" /* MID */]: ["passing", "vision", "technique", "stamina", "workRate"],
+    ["FWD" /* FWD */]: ["finishing", "attacking", "pace", "technique", "positioning"]
+  };
+  return Math.round(keys[position].reduce((sum, key) => sum + attrs[key], 0) / keys[position].length);
+};
+var makePlayer = (club, index, position) => {
+  const seed = `${club.id}_${index}_${position}`;
+  const quality = stableTierQuality(club) + (seededRandom(seed, 3, 503) - 0.5) * 4;
+  const attrs = makeAttributes(seed, position, quality);
+  return {
+    id: `${club.id}_AUDIT_${index}`,
+    firstName: "Audit",
+    lastName: `${club.shortName}_${index}`,
+    age: 18 + Math.floor(seededRandom(seed, 4, 504) * 18),
+    clubId: club.id,
+    nationality: "POLAND" /* POLAND */,
+    position,
+    overallRating: overallForPosition(position, attrs),
+    attributes: attrs,
+    stats: {
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      redCards: 0,
+      cleanSheets: 0,
+      matchesPlayed: 8,
+      minutesPlayed: 620,
+      seasonalChanges: {},
+      ratingHistory: [6.2, 6.5, 6.7]
+    },
+    health: { status: "HEALTHY" /* HEALTHY */ },
+    condition: Math.round(clamp3(82 + seededRandom(seed, 5, 505) * 16, 65, 99)),
+    suspensionMatches: 0,
+    contractEndDate: "2028-06-30",
+    annualSalary: 12e4,
+    history: [],
+    boardLockoutUntil: null,
+    isUntouchable: false,
+    negotiationStep: 0,
+    negotiationLockoutUntil: null,
+    contractLockoutUntil: null,
+    fatigueDebt: 0,
+    form: Math.round(clamp3(45 + seededRandom(seed, 6, 506) * 34, 30, 84)),
+    morale: Math.round(clamp3((club.morale ?? 55) + (seededRandom(seed, 7, 507) - 0.5) * 12, 25, 92)),
+    isNegotiationPermanentBlocked: false,
+    transferLockoutUntil: null,
+    freeAgentLockoutUntil: null
+  };
+};
+var makeSquad = (club) => {
+  const positions = [
+    "GK" /* GK */,
+    "GK" /* GK */,
+    "DEF" /* DEF */,
+    "DEF" /* DEF */,
+    "DEF" /* DEF */,
+    "DEF" /* DEF */,
+    "DEF" /* DEF */,
+    "DEF" /* DEF */,
+    "MID" /* MID */,
+    "MID" /* MID */,
+    "MID" /* MID */,
+    "MID" /* MID */,
+    "MID" /* MID */,
+    "MID" /* MID */,
+    "MID" /* MID */,
+    "FWD" /* FWD */,
+    "FWD" /* FWD */,
+    "FWD" /* FWD */,
+    "FWD" /* FWD */
+  ];
+  return positions.map((position, index) => makePlayer(club, index, position));
+};
+var buildLineup = (club, squad, tacticId) => {
+  const tactic = TacticRepository.getById(tacticId);
+  const used = /* @__PURE__ */ new Set();
+  const take = (role) => {
+    const candidates = squad.filter((player2) => player2.position === role && !used.has(player2.id)).sort((a, b) => b.overallRating - a.overallRating);
+    const player = candidates[0] ?? squad.filter((candidate) => !used.has(candidate.id)).sort((a, b) => b.overallRating - a.overallRating)[0];
+    if (!player) return null;
+    used.add(player.id);
+    return player.id;
+  };
+  return {
+    clubId: club.id,
+    tacticId,
+    startingXI: tactic.slots.map((slot) => take(slot.role)),
+    bench: squad.filter((player) => !used.has(player.id)).map((player) => player.id),
+    reserves: []
+  };
+};
+var getTier = (club) => club.tier ?? (club.leagueId === "L_PL_1" ? 1 : club.leagueId === "L_PL_2" ? 2 : club.leagueId === "L_PL_3" ? 3 : 4);
+var tacticFor = (club, opponent, side) => {
+  const qualityGap = stableTierQuality(club) - stableTierQuality(opponent);
+  if (qualityGap <= -8) return side === "HOME" ? "5-2-1-2" : "4-5-1";
+  if (qualityGap >= 8) return "4-3-3";
+  if (getTier(club) > getTier(opponent)) return "5-4-1";
+  return seededRandom(`${club.id}_${opponent.id}_${side}`, 8, 508) > 0.5 ? "4-2-3-1" : "4-4-2";
+};
+var instructionsFor = (club, opponent, side) => {
+  const qualityGap = stableTierQuality(club) - stableTierQuality(opponent);
+  if (qualityGap <= -8) {
+    return { ...DEFAULT_INSTRUCTIONS2, mindset: "DEFENSIVE", tempo: "NORMAL", passing: "LONG", counterAttack: "COUNTER", pressing: "NORMAL" };
+  }
+  if (qualityGap >= 8) {
+    return { ...DEFAULT_INSTRUCTIONS2, mindset: "OFFENSIVE", tempo: "FAST", passing: "MIXED", pressing: "PRESSING", counterAttack: "NORMAL" };
+  }
+  if (side === "HOME") {
+    return { ...DEFAULT_INSTRUCTIONS2, mindset: "NEUTRAL", tempo: "NORMAL", passing: "MIXED", pressing: "PRESSING" };
+  }
+  return DEFAULT_INSTRUCTIONS2;
+};
+var scenarioFor = (home, away, fixture) => {
+  if (fixture.neutralVenue) return "FINAL_NEUTRAL";
+  const tierGap = getTier(home) - getTier(away);
+  if (tierGap > 0) return "LOWER_LEAGUE_HOME";
+  if (stableTierQuality(home) - stableTierQuality(away) >= 6) return "HOME_FAVORITE";
+  if (stableTierQuality(away) - stableTierQuality(home) >= 6) return "AWAY_FAVORITE";
+  return "EQUAL";
+};
+var makeCases = () => {
+  const activeClubs = STATIC_CLUBS.filter((club) => club.isDefaultActive && club.leagueId !== "NONE");
+  const clubById = new Map(activeClubs.map((club) => [club.id, { ...club, morale: 48 + (club.reputation ?? 4) * 4 }]));
+  const participants = PolishCupDrawService.getInitialParticipants(activeClubs);
+  const drawDates = [
+    /* @__PURE__ */ new Date("2026-08-16T18:00:00"),
+    /* @__PURE__ */ new Date("2026-09-20T18:00:00"),
+    /* @__PURE__ */ new Date("2026-10-18T18:00:00"),
+    /* @__PURE__ */ new Date("2026-11-15T18:00:00")
+  ];
+  return drawDates.flatMap((date, drawIndex) => {
+    const fixtures = PolishCupDrawService.drawPairs(participants, activeClubs, date, "1/64", 7600 + drawIndex);
+    return fixtures.slice(0, 64).map((fixture, fixtureIndex) => {
+      const home = clubById.get(fixture.homeTeamId);
+      const away = clubById.get(fixture.awayTeamId);
+      import_strict.default.ok(home, `Brak gospodarza dla ${fixture.homeTeamId}`);
+      import_strict.default.ok(away, `Brak go\u015Bcia dla ${fixture.awayTeamId}`);
+      const homeSquad = makeSquad(home);
+      const awaySquad = makeSquad(away);
+      const homeLineup = buildLineup(home, homeSquad, tacticFor(home, away, "HOME"));
+      const awayLineup = buildLineup(away, awaySquad, tacticFor(away, home, "AWAY"));
+      const ctx = {
+        fixture,
+        homeClub: home,
+        awayClub: away,
+        homePlayers: homeSquad,
+        awayPlayers: awaySquad,
+        homeAdvantage: true,
+        competition: "POLISH_CUP" /* POLISH_CUP */
+      };
+      return {
+        id: `real_cup_shadow_${drawIndex}_${fixtureIndex}`,
+        label: `${home.name} - ${away.name}`,
+        scenario: scenarioFor(home, away, fixture),
+        ctx,
+        homeLineup,
+        awayLineup,
+        homeInstructions: instructionsFor(home, away, "HOME"),
+        awayInstructions: instructionsFor(away, home, "AWAY"),
+        userSide: "HOME"
+      };
+    });
+  });
+};
+var auditCases = makeCases();
+var audit = CupShadowAuditService.run(auditCases);
+console.table([audit.summary]);
+console.table(audit.byScenario.map((row) => ({
+  scenario: row.scenario,
+  matches: row.matches,
+  shots: row.avgTotalShots,
+  onTarget: row.avgTotalShotsOnTarget,
+  goals: row.avgTotalGoals,
+  xG: row.avgTotalXg,
+  corners: row.avgTotalCorners,
+  offsides: row.avgTotalOffsides,
+  yellows: row.avgTotalYellowCards,
+  lowShotPct: row.lowShotShare,
+  hockeyPct: row.hockeyScoreShare,
+  highOffsidePct: row.highOffsideShare,
+  favWinPct: row.favoriteWinShare
+})));
+if (audit.anomalies.length > 0) {
+  console.table(audit.anomalies.slice(0, 20));
+}
+import_strict.default.ok(auditCases.length >= 100, `Za ma\u0142a pr\xF3ba audytu: ${auditCases.length}`);
+import_strict.default.equal(audit.summary.matches, auditCases.length);
+import_strict.default.ok(audit.summary.avgTotalShots >= 12, `Za ma\u0142o strza\u0142\xF3w \u015Brednio: ${audit.summary.avgTotalShots}`);
+import_strict.default.ok(audit.summary.avgTotalShots <= 30, `Za du\u017Co strza\u0142\xF3w \u015Brednio: ${audit.summary.avgTotalShots}`);
+import_strict.default.ok(audit.summary.avgTotalShotsOnTarget >= 4, `Za ma\u0142o celnych \u015Brednio: ${audit.summary.avgTotalShotsOnTarget}`);
+import_strict.default.ok(audit.summary.avgTotalShotsOnTarget <= 14, `Za du\u017Co celnych \u015Brednio: ${audit.summary.avgTotalShotsOnTarget}`);
+import_strict.default.ok(audit.summary.avgTotalGoals >= 1.2, `Za ma\u0142o goli \u015Brednio: ${audit.summary.avgTotalGoals}`);
+import_strict.default.ok(audit.summary.avgTotalGoals <= 3.6, `Za du\u017Co goli \u015Brednio: ${audit.summary.avgTotalGoals}`);
+import_strict.default.ok(audit.summary.avgTotalOffsides <= 4, `Za du\u017Co spalonych \u015Brednio: ${audit.summary.avgTotalOffsides}`);
+import_strict.default.ok(audit.summary.lowShotShare <= 8, `Za du\u017Co mecz\xF3w z martw\u0105 ofensyw\u0105: ${audit.summary.lowShotShare}%`);
+import_strict.default.ok(audit.summary.hockeyScoreShare <= 1, `Za du\u017Co wynik\xF3w hokejowych: ${audit.summary.hockeyScoreShare}%`);
+import_strict.default.ok(audit.summary.highOffsideShare <= 2, `Za du\u017Co mecz\xF3w z absurdalnymi spalonymi: ${audit.summary.highOffsideShare}%`);
+import_strict.default.ok((audit.summary.favoriteWinShare ?? 0) >= 48, `Faworyci wygrywaj\u0105 za rzadko: ${audit.summary.favoriteWinShare}%`);
+import_strict.default.ok(audit.summary.anomalyCount <= 12, `Za du\u017Co anomalii w audycie: ${audit.summary.anomalyCount}`);
+console.log("CupMatchEngineV2ShadowAuditTests: OK");

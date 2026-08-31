@@ -1,6 +1,7 @@
 import { MatchEventType } from '../../../../types';
 import type { CupMatchEvent, CupTeamRuntimeProfile, CupTickContext } from './CupMatchTypes';
 import { clamp, pickWeighted } from './CupMath';
+import { CupMatchClockService } from './CupMatchClockService';
 
 export const CupInjuryResolver = {
   /**
@@ -22,11 +23,20 @@ export const CupInjuryResolver = {
     const pitchRisk = (100 - ctx.input.environment.pitchQuality) * 0.00012;
     const weatherRisk = (ctx.input.environment.weather?.weatherIntensity ?? 0) * 0.006;
     const fatigueRisk = Math.max(0, 62 - profile.staminaReserve) * 0.00055;
-    const injuryChance = clamp(0.0015 + pitchRisk + weatherRisk + fatigueRisk + contactIntensity * 0.010, 0.0005, 0.035);
+    const injuryChance = clamp(
+      (0.0015 + pitchRisk + weatherRisk + fatigueRisk + contactIntensity * 0.010) *
+        ctx.state.coachEffects[profile.side].injuryMultiplier,
+      0.0005,
+      0.035,
+    );
 
-    if (ctx.random(salt) > injuryChance || profile.activePlayers.length === 0) return null;
+    const eligiblePlayers = profile.activePlayers.filter(player => !ctx.state.injuries[player.id]);
+    if (ctx.random(salt) > injuryChance || eligiblePlayers.length === 0) return null;
 
-    const injured = pickWeighted(profile.activePlayers.map(player => ({
+    // One physical incident can affect a player only once. This avoids a light
+    // and severe injury being independently reported for the same footballer
+    // later in one match while he is still awaiting substitution.
+    const injured = pickWeighted(eligiblePlayers.map(player => ({
       item: player,
       weight: Math.max(1, 105 - (ctx.state.fatigue[player.id] ?? player.condition) + contactIntensity * 20),
     })), ctx.random(salt + 1));
@@ -36,7 +46,7 @@ export const CupInjuryResolver = {
     return {
       id: `cupv2_injury_${ctx.state.second}_${injured.id}`,
       second: ctx.state.second,
-      minute: Math.floor(ctx.state.second / 60) + 1,
+      minute: CupMatchClockService.eventMinute(ctx.state, ctx.config),
       side: profile.side,
       type: severe ? MatchEventType.INJURY_SEVERE : MatchEventType.INJURY_LIGHT,
       playerId: injured.id,
@@ -49,4 +59,3 @@ export const CupInjuryResolver = {
     };
   },
 };
-

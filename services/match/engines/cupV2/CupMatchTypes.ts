@@ -12,7 +12,18 @@ export type CupTeamSide = 'HOME' | 'AWAY';
 export type CupMatchPhase = 'FIRST_HALF' | 'SECOND_HALF' | 'EXTRA_TIME_1' | 'EXTRA_TIME_2' | 'PENALTY_SHOOTOUT' | 'FINISHED';
 export type CupPitchZone = 'GK' | 'DEFENSE' | 'MIDFIELD' | 'FINAL_THIRD' | 'BOX' | 'WIDE_LEFT' | 'WIDE_RIGHT';
 export type CupAttackPattern = 'BUILD_UP' | 'DIRECT' | 'COUNTER' | 'WING_PLAY' | 'SET_PIECE' | 'SECOND_BALL';
-export type CupPossessionReason = 'KICK_OFF' | 'TURNOVER' | 'SAVE' | 'OUT_OF_PLAY' | 'GOAL_RESTART' | 'HALF_START';
+export type CupPossessionReason =
+  | 'OPEN_PLAY'
+  | 'KICK_OFF'
+  | 'TURNOVER'
+  | 'SAVE'
+  | 'OUT_OF_PLAY'
+  | 'CORNER'
+  /** Róg wykonany (CORNER_TAKEN już zapisany); ten sam tick rozstrzyga jeszcze, czy z dośrodkowania powstaje sytuacja strzelecka. */
+  | 'CORNER_DELIVERY'
+  | 'GOAL_KICK'
+  | 'GOAL_RESTART'
+  | 'HALF_START';
 export type CupChanceKind = 'DISTANCE' | 'HALF_CHANCE' | 'GOOD_CHANCE' | 'BIG_CHANCE' | 'ONE_ON_ONE' | 'SET_PIECE';
 export type CupHalfTimeTalkStyle = 'NONE' | 'CALM' | 'ENCOURAGE' | 'DEMAND_MORE' | 'PRAISE' | 'TACTICAL_RESET';
 export type CupInjurySeverity = 'LIGHT' | 'SEVERE';
@@ -77,6 +88,31 @@ export type CupMatchInput = {
     awayQuality: number;
     expectedFavorite?: CupTeamSide;
   };
+  /**
+   * Optional live 2D geometry supplied by Match Engine V2 before each tick.
+   * Background cup simulations omit it and retain their calibrated aggregate
+   * model. This object is ephemeral and is never required in a career save.
+   */
+  spatialDecisionContext?: CupSpatialDecisionContext;
+};
+
+export type CupSpatialDecisionPlayer = {
+  playerId: string;
+  side: CupTeamSide;
+  role: Player['position'];
+  x: number;
+  y: number;
+  velocityX: number;
+  velocityY: number;
+  isOnPitch: boolean;
+};
+
+export type CupSpatialDecisionContext = {
+  second: number;
+  pitchLength: 105;
+  pitchWidth: 68;
+  ball: { x: number; y: number; ownerId?: string };
+  players: Record<string, CupSpatialDecisionPlayer>;
 };
 
 export type CupPlayerRuntime = {
@@ -119,6 +155,17 @@ export type CupTeamRuntimeProfile = {
 
 export type CupMatchStats = {
   possessionTicks: number;
+  passesAttempted: number;
+  passesCompleted: number;
+  dribblesAttempted: number;
+  dribblesCompleted: number;
+  tacklesWon: number;
+  crossesAttempted: number;
+  crossesCompleted: number;
+  blocks: number;
+  reboundsWon: number;
+  turnoversWon: number;
+  turnoversLost: number;
   shots: number;
   shotsOnTarget: number;
   goals: number;
@@ -137,6 +184,16 @@ export type CupMatchStats = {
 };
 
 export type CupTeamStatsMap = Record<CupTeamSide, CupMatchStats>;
+
+export type CupCoachEffects = {
+  initiativeModifier: number;
+  ownShotModifier: number;
+  opponentShotModifier: number;
+  turnoverRiskModifier: number;
+  fatigueExtra: number;
+  foulMultiplier: number;
+  injuryMultiplier: number;
+};
 
 export type CupMatchEvent = {
   id: string;
@@ -174,6 +231,19 @@ export type CupPlayerMatchStats = {
   xG: number;
   chancesCreated: number;
   keyPasses: number;
+  passesAttempted: number;
+  passesCompleted: number;
+  controls: number;
+  dribblesAttempted: number;
+  dribblesCompleted: number;
+  tacklesAttempted: number;
+  tacklesWon: number;
+  crossesAttempted: number;
+  crossesCompleted: number;
+  shotsBlocked: number;
+  reboundsWon: number;
+  turnoversWon: number;
+  turnoversLost: number;
   foulsCommitted: number;
   foulsWon: number;
   offsides: number;
@@ -199,6 +269,8 @@ export type CupRuntimeState = {
   phase: CupMatchPhase;
   possession: CupTeamSide;
   possessionReason: CupPossessionReason;
+  /** Current authoritative carrier keeps consecutive actions player-continuous. */
+  ballCarrierId?: string;
   ballZone: CupPitchZone;
   attackPattern: CupAttackPattern;
   homeScore: number;
@@ -206,11 +278,23 @@ export type CupRuntimeState = {
   momentum: number;
   pressure: Record<CupTeamSide, number>;
   organization: Record<CupTeamSide, number>;
+  /** Temporary post-talk response; it fades during the second half. */
+  halfTimeResponse: Record<CupTeamSide, number>;
+  coachEffects: Record<CupTeamSide, CupCoachEffects>;
   fatigue: Record<string, number>;
   yellowCards: Record<string, number>;
   redCards: Record<string, boolean>;
   injuries: Record<string, CupInjurySeverity>;
   substitutionsUsed: Record<CupTeamSide, number>;
+  firstHalfKickOffSide: CupTeamSide;
+  restartSourceEventId?: string;
+  /** Stoppage time resolved independently at the end of each regulation half. */
+  firstHalfAddedTimeSeconds: number;
+  secondHalfAddedTimeSeconds: number;
+  /**
+   * Compatibility total used by reports and rule checks. It is always equal
+   * to firstHalfAddedTimeSeconds + secondHalfAddedTimeSeconds.
+   */
   addedTimeSeconds: number;
   stats: CupTeamStatsMap;
   events: CupMatchEvent[];
@@ -234,9 +318,32 @@ export type CupActionIntent = {
   widthUse: number;
 };
 
+export type CupPossessionAction = 'PASS' | 'DIRECT_PASS' | 'DRIBBLE' | 'CROSS';
+
+/** Individual actors selected for the current possession duel. */
+export type CupPossessionDecision = {
+  passer?: Player;
+  receiver?: Player;
+  presser?: Player;
+  action: CupPossessionAction;
+  spatial?: {
+    passerX: number;
+    passerY: number;
+    receiverX?: number;
+    receiverY?: number;
+    passDistance?: number;
+    forwardProgress?: number;
+    laneClearance?: number;
+    passerPressure?: number;
+    receiverPressure?: number;
+  };
+};
+
 export type CupActionOutcome = {
   nextPossession?: CupTeamSide;
   nextZone?: CupPitchZone;
+  nextPossessionReason?: CupPossessionReason;
+  restartSourceEventId?: string;
   momentumDelta: number;
   events: CupMatchEvent[];
 };
@@ -300,4 +407,20 @@ export type CupMatchResult = {
   playerStats: CupPlayerStatsMap;
   events: CupMatchEvent[];
   finalState: CupRuntimeState;
+};
+
+/**
+ * Mutable runtime owned by the match engine while a live match is in progress.
+ *
+ * React must never edit `state` directly. Tactical commands and substitutions
+ * go through the public engine API so past events remain immutable and every
+ * future random draw continues from the same deterministic timeline.
+ */
+export type CupLiveMatch = {
+  input: CupMatchInput;
+  config: CupEngineConfig;
+  state: CupRuntimeState;
+  initialLineup: Record<CupTeamSide, Lineup>;
+  halfTimeTalkApplied: boolean;
+  finalResult?: CupMatchResult;
 };

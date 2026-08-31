@@ -1,0 +1,1266 @@
+CODEX AI IMPLEMENTATION PLAN
+2D FOOTBALL MATCH ENGINE - PLAYER AI, TEAM SHAPE, MOTION FLOW, DECISION MAKING
+
+PROJECT CONTEXT
+We already have:
+- a working 2D football pitch prototype,
+- player icons that can move,
+- ball movement,
+- initial match tests,
+- player attributes,
+- tactical settings.
+
+The current problem is that the match engine is too chaotic.
+Players move without clear football logic, chase the ball too often, lose formation shape, and do not react intelligently to the current phase of play.
+
+The goal is NOT to rewrite the whole project from scratch.
+
+The goal is to refactor the current prototype step by step into a modular 2D football AI system where:
+- every player has a role,
+- every player has a formation reference point,
+- every player has a current state and movement intention,
+- players react to the ball, teammates, opponents, tactics and current match phase,
+- players with the ball can decide whether to pass, carry, dribble, shoot, cross, play backwards, switch play, etc.,
+- players without the ball make logical support runs, defensive movements, pressing movements and recovery runs,
+- the whole team moves as a coordinated unit,
+- decisions are based on player attributes and tactical instructions,
+- movement remains suitable for a simple 2D visualization and does not require advanced body physics.
+
+IMPORTANT DEVELOPMENT RULES
+
+1. First inspect the existing codebase.
+2. Identify the current player movement, ball movement, formation, AI and match-loop systems.
+3. Do not create a second parallel match engine if the existing systems can be refactored.
+4. Reuse existing data structures and components where practical.
+5. Implement this in stages.
+6. After every stage, create a debug/test scenario.
+7. Do not continue to the next major stage until the previous stage behaves correctly.
+8. Add debug visualization early.
+9. Keep decision logic separate from movement logic.
+10. Keep team-level tactical logic separate from player-level decision logic.
+11. Avoid hard-coded scripted movement for normal open play.
+12. Action scripts can later be used for highlights, set pieces and special events, but they must not control the entire match.
+
+==================================================
+PHASE 0 - CODEBASE AUDIT AND IMPLEMENTATION MAP
+==================================================
+
+GOAL
+Understand the current prototype before changing it.
+
+TASKS
+- Locate the main match update loop.
+- Locate player entity/model classes.
+- Locate player movement code.
+- Locate ball movement and possession logic.
+- Locate formation/tactical code.
+- Locate player attributes.
+- Locate current AI/random movement logic.
+- Locate collision or proximity logic.
+- Locate goal, shot, pass and match-event code.
+- Identify where current chaotic movement is generated.
+
+DELIVERABLE
+Before implementing large changes, produce a short architecture report containing:
+- current relevant files/classes,
+- what should be reused,
+- what should be refactored,
+- what should be replaced,
+- dependencies between systems,
+- likely causes of chaotic movement.
+
+Also propose the exact files/modules to be created or changed.
+
+TEST
+No gameplay change is required yet.
+
+SUCCESS CONDITION
+We understand the current flow:
+Match Loop -> Team Logic -> Player Logic -> Motion -> Ball/Event Resolution.
+
+==================================================
+PHASE 1 - NORMALIZED PITCH COORDINATE SYSTEM
+==================================================
+
+GOAL
+Make all tactical logic independent of screen resolution.
+
+IMPLEMENTATION
+Use normalized pitch coordinates internally.
+
+Example:
+X = 0 to 100 along pitch length.
+Y = 0 to 100 across pitch width.
+
+One team attacks toward X=100.
+The other attacks toward X=0.
+
+Rendering code converts normalized coordinates into screen pixels.
+
+Each player should expose at minimum:
+- currentPosition
+- currentVelocity
+- currentTarget
+- formationAnchor
+- roleZone
+- currentState
+- currentIntent
+- teamId
+- role
+- possessionState
+
+TEST
+Create a debug overlay displaying X/Y coordinates.
+Move players to several normalized locations.
+Resize the pitch UI if supported.
+
+SUCCESS CONDITION
+Football logic works independently of actual screen dimensions.
+
+==================================================
+PHASE 2 - FORMATION ANCHORS AND ROLE ZONES
+==================================================
+
+GOAL
+Stop random wandering.
+
+Start with only:
+4-4-2 vs 4-4-2.
+
+Each role must have:
+- formationAnchor,
+- allowed role zone,
+- minimum/maximum forward displacement,
+- minimum/maximum lateral displacement.
+
+Example concept:
+GK
+LB - CB - CB - RB
+LM - CM - CM - RM
+ST - ST
+
+A formation anchor is NOT a fixed position.
+It is a reference point.
+
+Target position should later be calculated approximately as:
+
+targetPosition =
+formationAnchor
++ ballPositionShift
++ teamShapeModifier
++ tacticalModifier
++ currentIntentModifier
+
+IMPLEMENTATION
+Create formation definitions as data, not hard-coded movement logic.
+
+TEST
+Disable ball actions and player decision AI.
+Move a fake ball position manually around the pitch.
+
+The formation should:
+- shift toward the ball,
+- move higher when the ball moves forward,
+- move lower when the ball moves backward,
+- stay compact,
+- never collapse onto the ball.
+
+SUCCESS CONDITION
+The team visibly moves as one coordinated block.
+
+Do not continue until this looks correct.
+
+==================================================
+PHASE 3 - TEAM PHASE / TEAM STATE SYSTEM
+==================================================
+
+GOAL
+Give the entire team context.
+
+Implement initial team states:
+
+DEFENSIVE_SHAPE
+BUILD_UP
+ATTACK
+FINAL_THIRD
+TRANSITION_ATTACK
+TRANSITION_DEFEND
+
+Optional later:
+HIGH_PRESS
+LOW_BLOCK
+COUNTER_ATTACK
+
+Each team phase modifies formation anchors and tactical priorities.
+
+Examples:
+
+DEFENSIVE_SHAPE
+- defensive line lower,
+- midfield closer to defence,
+- forwards slightly deeper,
+- compact width.
+
+BUILD_UP
+- defenders spread slightly,
+- midfield creates passing options,
+- fullbacks can widen.
+
+ATTACK
+- forwards higher,
+- wingers wider or more advanced,
+- midfield support moves forward.
+
+FINAL_THIRD
+- attacking players enter dangerous zones,
+- defensive cover remains behind the ball.
+
+TRANSITION_ATTACK
+- forward runs receive temporary priority.
+
+TRANSITION_DEFEND
+- recovery and pressing receive temporary priority.
+
+TEST
+Add debug buttons:
+DEFEND
+BUILD UP
+ATTACK
+FINAL THIRD
+TRANSITION ATTACK
+TRANSITION DEFEND
+
+Switch state manually.
+
+SUCCESS CONDITION
+Players smoothly change team shape without teleporting or losing formation structure.
+
+==================================================
+PHASE 4 - MOTION ENGINE
+==================================================
+
+GOAL
+Separate "where the player wants to go" from "how the player gets there".
+
+DECISION AI MUST NOT directly manipulate coordinates every frame.
+
+Player AI assigns:
+- intent,
+- target position,
+- desired speed.
+
+Motion Engine executes movement.
+
+Motion Engine should initially support:
+- walking/jogging/running speed,
+- smooth acceleration/deceleration,
+- stopping near target,
+- pitch boundary constraints,
+- simple player separation,
+- no teleporting,
+- no excessive jitter.
+
+Use player attributes where appropriate:
+- SPEED influences maximum movement speed,
+- CONDITION may later affect speed,
+- WORK_RATE may affect activity frequency.
+
+Avoid advanced physics.
+
+TEST
+Give different players manual targets.
+Run all 22 players simultaneously.
+
+SUCCESS CONDITION
+Movement is smooth, stable, deterministic enough for debugging, and players do not oscillate around targets.
+
+==================================================
+PHASE 5 - PLAYER STATE MACHINE
+==================================================
+
+GOAL
+Every player without the ball must always have a meaningful state.
+
+Initial off-ball states:
+
+HOLD_POSITION
+MOVE_TO_POSITION
+SUPPORT
+MAKE_RUN
+PRESS
+MARK
+COVER
+RECOVER
+
+Initial on-ball states:
+
+HOLD_BALL
+CARRY
+PASS
+SHOOT
+
+Later:
+DRIBBLE
+CROSS
+THROUGH_PASS
+LONG_PASS
+SWITCH_PLAY
+PASS_BACK
+
+RULE
+A player should have one dominant high-level state at a time.
+
+Example:
+CM = SUPPORT
+ST = MAKE_RUN
+CB = HOLD_POSITION
+Opponent CM = PRESS
+
+TEST
+Manually assign states to selected players.
+Verify that each state produces a clearly different and logical movement pattern.
+
+SUCCESS CONDITION
+State behavior is predictable and does not create random movement.
+
+==================================================
+PHASE 6 - BALL POSSESSION STATE
+==================================================
+
+GOAL
+Create a clear ball-state model.
+
+Suggested ball states:
+
+CONTROLLED
+PASSING
+LOOSE
+SHOT
+OUT_OF_PLAY
+
+Track:
+- ownerPlayerId,
+- previousOwnerPlayerId,
+- ballPosition,
+- velocity/destination,
+- intendedReceiverId if relevant.
+
+TEST
+Create a controlled manual sequence:
+Player A -> pass -> Player B -> carry -> shot.
+
+No AI decisions yet.
+
+SUCCESS CONDITION
+Ball ownership transitions are reliable and synchronized with player animation.
+
+==================================================
+PHASE 7 - PASSING LANE EVALUATION
+==================================================
+
+GOAL
+Allow the ball carrier to understand available teammates.
+
+For each possible receiver calculate factors such as:
+- distance,
+- passing angle,
+- forward progression,
+- receiver space,
+- receiver pressure,
+- defender interception risk,
+- passing lane obstruction,
+- tactical relevance.
+
+Create a PASS OPTION SCORE.
+
+Concept:
+
+passOptionScore =
+playerPassing
++ playerVision
++ playerTechnique
++ receiverAvailability
++ forwardProgressValue
++ tacticalPreference
+- interceptionRisk
+- excessiveDistancePenalty
+- receiverPressure
+
+Do not use these exact weights blindly.
+Create configurable weights.
+
+IMPORTANT
+VISION should influence whether a player recognizes difficult options.
+PASSING should influence execution quality.
+These are different responsibilities.
+
+DEBUG
+When selecting the ball carrier, display lines to possible receivers.
+
+Example:
+ST1: 82
+CM2: 74
+RB: 43
+GK: 12
+
+TEST
+Use static player positions.
+Move defenders manually and verify that passing scores change.
+
+SUCCESS CONDITION
+Obviously good passing options normally score higher than dangerous or pointless ones.
+
+==================================================
+PHASE 8 - UTILITY AI FOR THE BALL CARRIER
+==================================================
+
+GOAL
+The player with the ball chooses between meaningful actions.
+
+Initial actions:
+
+PASS
+CARRY
+SHOOT
+PASS_BACK
+
+Later add:
+THROUGH_PASS
+DRIBBLE
+CROSS
+LONG_PASS
+SWITCH_PLAY
+HOLD_BALL
+
+Each possible action receives a Utility Score.
+
+Example concept:
+
+SHOOT =
+FINISHING
++ TECHNIQUE
++ MENTALITY
++ shootingPositionQuality
++ goalVisibility
+- distancePenalty
+- defensivePressure
+
+PASS =
+PASSING
++ VISION
++ TECHNIQUE
++ bestPassOption
++ tacticalPreference
+- interceptionRisk
+
+CARRY =
+DRIBBLING
++ TECHNIQUE
++ SPEED
++ availableSpace
+- pressure
+- nearbyDefenders
+
+PASS_BACK =
+pressure
++ lackOfForwardOptions
++ tacticalSafety
++ mentalityModifier
+
+Do not use purely deterministic choice.
+
+Use small controlled randomness after scoring, for example:
+finalScore = utilityScore * random factor approximately 0.90-1.10
+
+The random factor should be configurable.
+
+IMPORTANT
+Do not recalculate decisions every rendered frame.
+
+Use a decision interval such as approximately 300-700 ms, influenced later by context and mental attributes.
+
+Add decision commitment so a player does not repeatedly change his mind during the same action.
+
+TEST
+Create controlled situations:
+1. open shot,
+2. obvious forward pass,
+3. heavy pressure,
+4. no forward option,
+5. open space to carry.
+
+SUCCESS CONDITION
+The chosen action is usually football-logical while still allowing occasional variation.
+
+==================================================
+PHASE 9 - OFF-BALL ATTACKING INTELLIGENCE
+==================================================
+
+GOAL
+Make the 10 players without the ball create football structure.
+
+Implement initial attacking intents:
+
+SUPPORT_BALL
+SUPPORT_BEHIND
+CREATE_PASSING_LANE
+MAKE_FORWARD_RUN
+MAKE_DIAGONAL_RUN
+ATTACK_BOX
+HOLD_WIDTH
+STAY_BACK
+RECOVER_POSITION
+
+Decision factors can include:
+- role,
+- formation,
+- ball location,
+- distance to ball carrier,
+- free space,
+- teammate positions,
+- opponent positions,
+- offside risk,
+- team phase,
+- tactics,
+- player attributes.
+
+Important attributes:
+POSITIONING
+ATTACK
+WORK_RATE
+VISION
+SPEED
+MENTALITY
+
+Example for MAKE_RUN:
+
+score =
+ATTACK
++ POSITIONING
++ SPEED
++ freeSpaceAhead
++ ballCarrierVisionFactor
++ tacticalRunPreference
+- offsideRisk
+- congestion
+
+TEST
+Freeze the ball carrier or prevent him from passing for 5-10 seconds.
+
+Observe all teammates.
+
+SUCCESS CONDITION
+Players create useful passing angles and forward movement without everyone moving toward the ball.
+
+==================================================
+PHASE 10 - DEFENSIVE AI
+==================================================
+
+GOAL
+Give defenders responsibilities instead of generic ball chasing.
+
+Initial defensive intents:
+
+PRESS_BALL
+MARK_PLAYER
+COVER
+BLOCK_PASSING_LANE
+HOLD_LINE
+RECOVER
+PROTECT_BOX
+
+Use role and team shape to assign responsibility.
+
+Example:
+nearest appropriate midfielder -> PRESS
+second midfielder -> COVER
+CB -> HOLD_LINE or MARK
+fullback -> MARK WINGER / COVER WIDE AREA
+
+Relevant attributes:
+DEFENCE
+POSITIONING
+WORK_RATE
+SPEED
+AGGRESSION
+MENTALITY
+STRENGTH
+
+IMPORTANT
+Not every player should press the ball.
+
+TEST
+Allow attacking team to make simple passes.
+Defending team reacts but does not tackle yet.
+
+SUCCESS CONDITION
+Defensive structure survives several passes without all defenders collapsing around the ball.
+
+==================================================
+PHASE 11 - POSSESSION TRANSITIONS
+==================================================
+
+GOAL
+Create immediate reactions to turnovers.
+
+On possession change:
+
+old possession team:
+TRANSITION_DEFEND
+
+new possession team:
+TRANSITION_ATTACK
+
+TRANSITION_DEFEND priorities:
+- nearest appropriate player presses,
+- others recover,
+- central players protect dangerous zones,
+- defenders regain shape.
+
+TRANSITION_ATTACK priorities:
+- forward runners accelerate,
+- ball carrier searches for forward options,
+- support players move into passing lanes.
+
+Transition state should last only a limited time or until tactical conditions change.
+
+TEST
+Force turnovers in:
+- midfield,
+- defensive third,
+- attacking third.
+
+SUCCESS CONDITION
+A visible and logical behavior change occurs immediately after possession changes.
+
+==================================================
+PHASE 12 - TACTICAL MODIFIERS
+==================================================
+
+GOAL
+Tactics influence decisions rather than directly scripting movement.
+
+Connect existing tactical settings.
+
+Examples:
+
+TEMPO
+Fast:
+- forward pass score increases,
+- forward carry increases,
+- decision interval can become slightly shorter,
+- pass-back preference decreases.
+
+Slow:
+- support and safe passing increase,
+- risky forward actions decrease.
+
+MENTALITY
+Cautious:
+- safer passes,
+- more support behind ball,
+- fewer risky runs,
+- lower defensive line.
+
+Aggressive:
+- forward runs,
+- pressure,
+- attacking numbers,
+- higher risk.
+
+PRESSING
+ON:
+- PRESS_BALL utility increases,
+- defensive recovery behavior changes.
+
+COUNTERATTACK
+ON:
+- forward run utility increases after recovery,
+- through-ball preference increases,
+- slow build-up preference decreases.
+
+PASSING STYLE
+Short:
+- short/medium passing options receive bonuses.
+
+Direct:
+- forward/long passing receives bonuses.
+
+TACTICAL SETTINGS MUST MODIFY SCORES AND SHAPE.
+They should not force identical scripted sequences.
+
+TEST
+Run the same teams repeatedly with:
+1. cautious/slow/no press,
+2. aggressive/fast/high press,
+3. counterattacking.
+
+SUCCESS CONDITION
+The difference should be clearly visible even before looking at statistics.
+
+==================================================
+PHASE 13 - PLAYER ATTRIBUTES INTEGRATION
+==================================================
+
+GOAL
+Use player attributes meaningfully.
+
+Existing attributes include:
+
+STRENGTH
+DEFENCE
+FINISHING
+DRIBBLING
+GOALKEEPING
+PENALTIES
+CROSSING
+WORK_RATE
+CONDITION
+PASSING
+TECHNIQUE
+HEADING
+FREE_KICKS
+CORNERS
+LEADERSHIP
+SPEED
+ATTACK
+VISION
+POSITIONING
+TALENT
+AGGRESSION
+MENTALITY
+
+RULE
+One behavior should rarely depend on only one attribute.
+
+Examples:
+
+PASS DECISION QUALITY
+VISION + PASSING + TECHNIQUE + MENTALITY
+
+PASS EXECUTION
+PASSING + TECHNIQUE + CONDITION + pressure
+
+OFF-BALL ATTACKING RUN
+ATTACK + POSITIONING + SPEED + WORK_RATE + MENTALITY
+
+DEFENSIVE POSITIONING
+DEFENCE + POSITIONING + MENTALITY + WORK_RATE
+
+DRIBBLE
+DRIBBLING + TECHNIQUE + SPEED + TALENT
+
+SHOT
+FINISHING + TECHNIQUE + MENTALITY + shot context
+
+PRESS
+WORK_RATE + AGGRESSION + SPEED + DEFENCE
+
+Do not connect all attributes at once.
+Integrate them gradually and keep weight configuration outside core logic where possible.
+
+TEST
+Create controlled A/B players.
+
+Example:
+Player X:
+PASSING 90
+VISION 90
+
+Player Y:
+PASSING 30
+VISION 30
+
+All other values equal.
+
+Run many identical situations.
+
+SUCCESS CONDITION
+The effect is statistically visible but not perfectly deterministic.
+
+==================================================
+PHASE 14 - ACTION EXECUTION VS ACTION DECISION
+==================================================
+
+GOAL
+Separate:
+"Should I attempt this action?"
+from
+"Did I execute it successfully?"
+
+Example:
+Player chooses PASS using Utility AI.
+
+Then Pass Resolver determines:
+- accuracy,
+- actual destination,
+- interception possibility,
+- receiver control.
+
+Similarly:
+SHOOT DECISION
+is separate from
+SHOT RESULT.
+
+This distinction is mandatory.
+
+TEST
+Use players with identical decision context but different technical attributes.
+
+SUCCESS CONDITION
+Both players may choose the same action, but better players execute it more reliably.
+
+==================================================
+PHASE 15 - DRIBBLING AND 1v1
+==================================================
+
+GOAL
+Add a simple 2D dribbling model.
+
+Do not create detailed foot/body animation.
+
+Decision:
+DRIBBLE utility.
+
+Resolution outcomes:
+SUCCESS
+TACKLED
+FOUL
+LOOSE_BALL
+
+Relevant values:
+attacker:
+DRIBBLING
+TECHNIQUE
+SPEED
+TALENT
+STRENGTH
+
+defender:
+DEFENCE
+POSITIONING
+SPEED
+STRENGTH
+AGGRESSION
+
+TEST
+Run repeated controlled 1v1 situations.
+
+SUCCESS CONDITION
+Strong dribblers outperform weak ones statistically, while good defenders still matter.
+
+==================================================
+PHASE 16 - SHOOTING SYSTEM
+==================================================
+
+GOAL
+Implement logical shot decisions and separate shot result calculation.
+
+Shot decision uses:
+- distance,
+- angle,
+- defenders,
+- visible goal area,
+- teammates in better positions,
+- team tactics,
+- FINISHING,
+- TECHNIQUE,
+- MENTALITY.
+
+Shot execution/result uses:
+- FINISHING,
+- TECHNIQUE,
+- pressure,
+- shot distance,
+- angle,
+- condition,
+- goalkeeper context.
+
+Possible initial results:
+GOAL
+GK_SAVE
+GK_REBOUND
+MISS
+
+TEST
+Run 1000 identical shots with different finishing levels.
+
+SUCCESS CONDITION
+Results form believable statistical differences.
+
+==================================================
+PHASE 17 - GOALKEEPER AI
+==================================================
+
+GOAL
+The goalkeeper continuously positions himself instead of reacting only after shots.
+
+Initial goalkeeper states:
+
+POSITION
+TRACK_BALL
+CLOSE_ANGLE
+SAVE
+CLAIM_BALL
+RECOVER
+
+Goalkeeper position should respond to:
+- ball location,
+- goal center,
+- attacking player location,
+- defensive line,
+- shot context.
+
+GOALKEEPING attribute influences execution quality.
+
+POSITIONING and MENTALITY may influence positioning/decision quality if appropriate in the current data model.
+
+TEST
+Move the ball around attacking areas without shooting.
+Goalkeeper should continuously adjust.
+
+Then test shots from different locations.
+
+SUCCESS CONDITION
+Goalkeeper behavior looks coherent in 2D.
+
+==================================================
+PHASE 18 - SIMPLE PLAYER INTERACTIONS
+==================================================
+
+GOAL
+Add basic football interactions without overengineering physics.
+
+Support:
+- tackle attempt,
+- interception,
+- loose ball,
+- shoulder/strength duel,
+- simple foul probability.
+
+Relevant attributes:
+DEFENCE
+STRENGTH
+AGGRESSION
+POSITIONING
+TECHNIQUE
+DRIBBLING
+MENTALITY
+
+FOUL should be generated as an event.
+Cards should NOT be hard-coded into the foul action.
+A separate referee system can later decide:
+NO_CARD
+YELLOW
+RED
+
+TEST
+Controlled defensive interactions.
+
+SUCCESS CONDITION
+Events occur for football reasons, not random unexplained triggers.
+
+==================================================
+PHASE 19 - OFFSIDE LOGIC
+==================================================
+
+GOAL
+Add basic offside awareness.
+
+Before attacking runs and passes:
+- calculate defensive line,
+- calculate offside risk,
+- skilled attackers should usually time runs better,
+- poor positioning/mentality can create mistakes.
+
+Offside must only be resolved according to the actual football event logic used by the engine.
+
+TEST
+Create:
+- obvious legal run,
+- obvious offside run,
+- defensive line stepping forward.
+
+SUCCESS CONDITION
+Offside events correspond to player movement rather than scripted randomness.
+
+==================================================
+PHASE 20 - DEBUG MODE
+==================================================
+
+THIS SHOULD BE STARTED EARLY AND EXPANDED THROUGHOUT DEVELOPMENT.
+
+GOAL
+Make AI decisions understandable.
+
+When clicking a player, display:
+
+ROLE
+CURRENT STATE
+CURRENT INTENT
+CURRENT TARGET
+FORMATION ANCHOR
+TEAM PHASE
+PRESSURE
+MARKING TARGET if any
+BALL DISTANCE
+
+For ball carrier display top Utility Scores:
+
+PASS: 76
+CARRY: 52
+SHOOT: 21
+PASS_BACK: 17
+
+For pass evaluation:
+ST1: 84
+CM2: 69
+RB: 42
+
+Optional pitch overlays:
+- target line,
+- formation anchor,
+- role zone,
+- passing lanes,
+- defensive marking link,
+- offside line,
+- team compactness bounds.
+
+IMPORTANT
+Debug rendering must be possible to disable for normal gameplay.
+
+SUCCESS CONDITION
+When a player makes a strange decision, we can inspect why.
+
+==================================================
+PHASE 21 - AUTOMATED SIMULATION TESTS
+==================================================
+
+GOAL
+Do not rely only on visual observation.
+
+Collect metrics from repeated simulation.
+
+Examples:
+- passes,
+- forward passes,
+- backward passes,
+- pass completion,
+- turnovers,
+- carries,
+- dribbles,
+- shots,
+- shots by distance,
+- possession duration,
+- possession changes,
+- average formation width,
+- average formation length,
+- average distance between lines,
+- pressing actions,
+- goals.
+
+Run simulation batches:
+100 actions
+1000 actions
+full simulated matches
+
+Create warnings for obviously broken values.
+
+Examples:
+- 100 shots in 10 minutes,
+- every pass is forward,
+- nobody ever passes backwards,
+- 8 players constantly within a few meters of the ball,
+- defenders never recover shape.
+
+SUCCESS CONDITION
+Tuning can be based on both animation quality and statistics.
+
+==================================================
+PHASE 22 - MATCH ENGINE UPDATE LOOP
+==================================================
+
+Target high-level sequence:
+
+1. Update ball state.
+2. Detect/resolve possession.
+3. Detect possession transition.
+4. Update team phase.
+5. Update team shape.
+6. Evaluate tactical context.
+7. Evaluate each player's local context.
+8. Run decision AI where a decision refresh is required.
+9. Assign player intents.
+10. Calculate target positions.
+11. Run motion engine.
+12. Execute ball actions.
+13. Resolve passes, tackles, dribbles and shots.
+14. Detect football events.
+15. Update stats.
+16. Trigger commentary/event presentation.
+17. Render.
+
+Avoid making all AI decisions every render frame.
+
+==================================================
+PHASE 23 - ACTION SCRIPTS / HIGHLIGHT SCENES
+==================================================
+
+GOAL
+Only after open-play AI works, reconnect the special scenarios.
+
+Existing/planned categories include:
+- goal,
+- goalkeeper catch,
+- goalkeeper rebound,
+- missed shot,
+- corner,
+- free kick,
+- foul,
+- offside.
+
+These should NOT replace the normal match AI.
+
+They may be used for:
+- controlled highlight sequences,
+- set-piece starting positions,
+- commentary synchronization,
+- special event presentation,
+- testing.
+
+Where possible, allow branching.
+
+Example:
+
+SHOT
+-> GK_REBOUND
+-> attacker reaches ball
+-> second SHOT
+-> GOAL
+
+or
+
+CORNER
+-> clearance
+-> counterattack
+
+Do not hard-code every entire chain as one long animation.
+
+==================================================
+PHASE 24 - TUNING AND CONFIGURATION
+==================================================
+
+GOAL
+Avoid burying numerical weights in source code.
+
+Create configuration for:
+- Utility AI weights,
+- tactical modifiers,
+- player movement speed scaling,
+- decision intervals,
+- formation shift intensity,
+- compactness,
+- role-zone sizes,
+- transition duration,
+- randomness amplitude.
+
+This will allow match-engine tuning without architecture changes.
+
+Add reasonable default values.
+
+==================================================
+DEVELOPMENT ORDER
+==================================================
+
+Implement in this exact broad order:
+
+1. Code audit
+2. Pitch coordinate system
+3. Formation anchors
+4. Team shape
+5. Motion engine
+6. Player state machine
+7. Ball state/possession
+8. Passing lanes
+9. Ball-carrier Utility AI
+10. Off-ball attacking AI
+11. Defensive AI
+12. Possession transitions
+13. Tactical modifiers
+14. Attribute integration
+15. Action execution/resolution
+16. Dribbling
+17. Shooting
+18. Goalkeeper AI
+19. Interactions/fouls
+20. Offside
+21. Automated simulation metrics
+22. Set pieces/action scripts
+23. Balancing/tuning
+
+==================================================
+HOW TO WORK ON EACH PHASE
+==================================================
+
+For EVERY phase:
+
+1. Inspect current implementation relevant to the phase.
+2. Explain briefly what will be changed.
+3. Reuse existing systems when possible.
+4. Implement only the current phase.
+5. Add/update debug tools.
+6. Create a reproducible test case.
+7. Run available automated tests/build checks.
+8. Report:
+   - files changed,
+   - behavior added,
+   - test performed,
+   - test result,
+   - known limitations.
+9. Do not silently move on to a much larger feature set.
+
+==================================================
+FIRST MILESTONE
+==================================================
+
+The first milestone is NOT a full match.
+
+The first milestone is:
+
+4-4-2 vs 4-4-2
+
+Players can:
+- maintain formation,
+- move with team shape,
+- pass,
+- carry,
+- shoot,
+- make support runs,
+- make forward runs,
+- press,
+- defend,
+- recover position.
+
+The visual result must show:
+- coordinated team movement,
+- no random chasing,
+- clear attacking and defending shapes,
+- smooth transitions,
+- understandable player decisions.
+
+Do not add advanced features until this milestone is stable.
+
+==================================================
+FIRST TASK FOR CODEX
+==================================================
+
+Start with PHASE 0.
+
+Inspect the existing project and produce:
+1. architecture map,
+2. relevant files/classes,
+3. explanation of the current chaotic behavior,
+4. recommended refactor plan,
+5. exact proposed implementation order for this codebase.
+
+Do not begin a large rewrite before presenting that analysis.

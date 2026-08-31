@@ -2578,6 +2578,17 @@ export enum MatchEventType {
   ONE_ON_ONE_MISS = 'ONE_ON_ONE_MISS',
   ONE_ON_ONE_SAVE = 'ONE_ON_ONE_SAVE',
   DRIBBLING = 'DRIBBLING',
+  BALL_CONTROL = 'BALL_CONTROL',
+  PASS_COMPLETED = 'PASS_COMPLETED',
+  TACKLE_WON = 'TACKLE_WON',
+  SHOT_BLOCKED = 'SHOT_BLOCKED',
+  REBOUND_WON = 'REBOUND_WON',
+  CROSS_BLOCKED = 'CROSS_BLOCKED',
+  KICK_OFF = 'KICK_OFF',
+  GOAL_KICK = 'GOAL_KICK',
+  CORNER_TAKEN = 'CORNER_TAKEN',
+  ADVANTAGE_PLAYED = 'ADVANTAGE_PLAYED',
+  MEDICAL_TREATMENT = 'MEDICAL_TREATMENT',
   STUMBLE = 'STUMBLE',
   MISPLACED_PASS = 'MISPLACED_PASS',
   BLUNDER = 'BLUNDER',
@@ -3555,6 +3566,20 @@ export interface MatchContext {
   awayCoach?: Coach | null;
   homeAdvantage: boolean;
   competition: CompetitionType;
+}
+
+/**
+ * Temporary per-fixture choice used while Match Engine 2.0 is being tested.
+ * It deliberately lives outside SaveState: an older or newly loaded save has
+ * no selection and therefore always falls back to the proven legacy engine.
+ */
+export type LeagueMatchEngineId = 'LEGACY_1_0' | 'PROTOTYPE_2_0';
+
+export interface PendingLeagueMatchEngineSelection {
+  fixtureId: string;
+  engineId: LeagueMatchEngineId;
+  /** Once the whistle route is entered, the same fixture cannot swap engines. */
+  locked: boolean;
 }
 
 export interface StatRow {

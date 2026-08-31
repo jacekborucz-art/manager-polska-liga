@@ -91,6 +91,7 @@ export const CupShotResolver = {
       scoreDiff >= 2 ? 0.82 :
       1;
     const goalChanceCap =
+      chance.pattern === 'SET_PIECE' && chance.xG >= 0.60 ? 0.84 :
       scoreDiff >= 5 ? 0.16 :
       scoreDiff >= 4 ? 0.20 :
       scoreDiff >= 3 ? 0.25 :
@@ -106,6 +107,7 @@ export const CupShotResolver = {
       goalChanceCap
     );
     const scored = roll(40) < goalChance;
+    const isPenalty = chance.pattern === 'SET_PIECE' && chance.xG >= 0.60;
     const shotTempoDampener = clamp(1 - Math.max(0, scoreDiff - 2) * 0.055, 0.78, 1);
     const onTargetChance = clamp((0.24 + shotQuality * 1.25 + executionEdge * 0.0012) * shotTempoDampener, 0.14, 0.72);
     const isOnTarget = scored || roll(41) < onTargetChance;
@@ -114,7 +116,11 @@ export const CupShotResolver = {
     const saveChance = isOnTarget ? clamp(0.72 - shotQuality * 1.55 + (keeperScore - shooterExecution) * 0.004, 0.18, 0.88) : 0;
     if (scored) {
       return {
-        eventType: chance.kind === 'ONE_ON_ONE' ? MatchEventType.ONE_ON_ONE_GOAL : MatchEventType.GOAL,
+        eventType: isPenalty
+          ? MatchEventType.PENALTY_SCORED
+          : chance.kind === 'ONE_ON_ONE'
+            ? MatchEventType.ONE_ON_ONE_GOAL
+            : MatchEventType.GOAL,
         goal: true,
         onTarget: true,
         corner: false,
@@ -122,6 +128,22 @@ export const CupShotResolver = {
         xG: chance.xG,
         momentumDelta: 18,
         text: `${shooter.lastName} kończy akcję strzałem do siatki.`,
+      };
+    }
+
+    if (isPenalty) {
+      const saved = isOnTarget && roll(45) < saveChance;
+      return {
+        eventType: MatchEventType.PENALTY_MISSED,
+        goal: false,
+        onTarget: isOnTarget,
+        corner: false,
+        save: saved,
+        xG: chance.xG,
+        momentumDelta: -4,
+        text: saved
+          ? `${keeper?.lastName ?? 'Bramkarz'} broni rzut karny zawodnika ${shooter.lastName}.`
+          : `${shooter.lastName} nie wykorzystuje rzutu karnego.`,
       };
     }
 
@@ -162,6 +184,27 @@ export const CupShotResolver = {
         xG: chance.xG,
         momentumDelta: corner ? 3 : 1,
         text: `${keeper?.lastName ?? 'Bramkarz'} broni strzał zawodnika ${shooter.lastName}.`,
+      };
+    }
+
+    // A blocked shot reuses an already failed shot outcome. It adds the
+    // defender and rebound context without silently reducing goal probability.
+    const blockChance = marker
+      ? clamp(0.08 + markerPressure * 0.0017 + chance.pressure * 0.0011, 0.10, 0.34)
+      : 0;
+    if (!isOnTarget && marker && roll(48) < blockChance) {
+      // Reuse the original missed-shot corner roll so categorising a block
+      // cannot increase attacking possessions or change score calibration.
+      const corner = roll(47) < 0.08 + attacking.crossing * 0.0007;
+      return {
+        eventType: MatchEventType.SHOT_BLOCKED,
+        goal: false,
+        onTarget: false,
+        corner,
+        save: false,
+        xG: chance.xG,
+        momentumDelta: corner ? 3 : 1,
+        text: `${marker.lastName} blokuje strzał zawodnika ${shooter.lastName}.`,
       };
     }
 

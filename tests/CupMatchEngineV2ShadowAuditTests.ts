@@ -286,7 +286,8 @@ const makeCases = (): CupShadowAuditCase[] => {
   });
 };
 
-const audit = CupShadowAuditService.run(makeCases());
+const auditCases = makeCases();
+const audit = CupShadowAuditService.run(auditCases);
 
 console.table([audit.summary]);
 console.table(audit.byScenario.map(row => ({
@@ -309,7 +310,11 @@ if (audit.anomalies.length > 0) {
   console.table(audit.anomalies.slice(0, 20));
 }
 
-assert.equal(audit.summary.matches, 256);
+// The active datapack controls how many valid cup participants exist. The old
+// fixed value (256) made the audit fail after legitimate database updates even
+// though every generated case was simulated correctly.
+assert.ok(auditCases.length >= 100, `Za mała próba audytu: ${auditCases.length}`);
+assert.equal(audit.summary.matches, auditCases.length);
 assert.ok(audit.summary.avgTotalShots >= 12, `Za mało strzałów średnio: ${audit.summary.avgTotalShots}`);
 assert.ok(audit.summary.avgTotalShots <= 30, `Za dużo strzałów średnio: ${audit.summary.avgTotalShots}`);
 assert.ok(audit.summary.avgTotalShotsOnTarget >= 4, `Za mało celnych średnio: ${audit.summary.avgTotalShotsOnTarget}`);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { ViewState, PreMatchStudioData, PlayerPosition, Player, Club } from '../../types';
+import { ViewState, PreMatchStudioData, PlayerPosition, Player, Club, type LeagueMatchEngineId } from '../../types';
 import { PreMatchStudioService } from '../../services/PreMatchStudioService';
 import { TacticRepository } from '../../resources/tactics_db';
 import { PlayerPresentationService } from '../../services/PlayerPresentationService';
@@ -9,6 +9,7 @@ import { LineupService } from '../../services/LineupService';
 import { AttendanceService } from '../../services/AttendanceService';
 import { RivalryService } from '../../services/RivalryService';
 import { PreMatchKitSelectionService } from '../../services/PreMatchKitSelectionService';
+import { MatchEngineRegistry } from '../../services/match/MatchEngineRegistry';
 
 import { KitVariant } from '../../resources/PlayerCardAssets';
 import { getClubLogo } from '../../resources/ClubLogoAssets';
@@ -113,12 +114,26 @@ const PitchPlayerKit: React.FC<{
 };
 
 export const PreMatchStudioView: React.FC = () => {
-  const { navigateTo, userTeamId, clubs, fixtures, players, lineups, currentDate, viewRefereeDetails, setPendingMatchKits } = useGame();
+  const {
+    navigateTo,
+    userTeamId,
+    clubs,
+    fixtures,
+    players,
+    lineups,
+    currentDate,
+    viewRefereeDetails,
+    setPendingMatchKits,
+    pendingLeagueMatchEngine,
+    setPendingLeagueMatchEngine,
+  } = useGame();
   const [data, setData] = useState<PreMatchStudioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showExpertCommentary, setShowExpertCommentary] = useState(false);
   const [showKitModal, setShowKitModal] = useState(false);
   const [matchKits, setMatchKits] = useState<KitSelection | null>(null);
+  const [selectedMatchEngine, setSelectedMatchEngine] = useState<LeagueMatchEngineId>(MatchEngineRegistry.defaultEngineId);
+  const [engineSwitchNotice, setEngineSwitchNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -154,6 +169,39 @@ export const PreMatchStudioView: React.FC = () => {
 
     init();
   }, [userTeamId, clubs, fixtures, players, lineups, currentDate, navigateTo]);
+
+  useEffect(() => {
+    if (!data) return;
+    setSelectedMatchEngine(
+      MatchEngineRegistry.resolveLeagueEngine(data.fixture.id, pendingLeagueMatchEngine).id
+    );
+  }, [data, pendingLeagueMatchEngine]);
+
+  // Ukryty skrót deweloperski (Ctrl+S / Cmd+S) zastępujący widoczny selektor
+  // silnika meczu — przełącza na kolejny zarejestrowany silnik i pokazuje,
+  // który został włączony, tak samo jak dawniej robił to <select>.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      if (!data) return;
+      if (pendingLeagueMatchEngine?.fixtureId === data.fixture.id && pendingLeagueMatchEngine.locked) return;
+      const engines = MatchEngineRegistry.listLeagueEngines();
+      const currentIndex = engines.findIndex(engine => engine.id === selectedMatchEngine);
+      const nextEngine = engines[(currentIndex + 1) % engines.length];
+      setSelectedMatchEngine(nextEngine.id);
+      setPendingLeagueMatchEngine({ fixtureId: data.fixture.id, engineId: nextEngine.id, locked: false });
+      setEngineSwitchNotice(nextEngine.label);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [data, pendingLeagueMatchEngine, selectedMatchEngine, setPendingLeagueMatchEngine]);
+
+  useEffect(() => {
+    if (!engineSwitchNotice) return;
+    const timeout = setTimeout(() => setEngineSwitchNotice(null), 2500);
+    return () => clearTimeout(timeout);
+  }, [engineSwitchNotice]);
 
   const estimatedAttendance = useMemo(() => {
     if (!data) return 0;
@@ -535,7 +583,14 @@ export const PreMatchStudioView: React.FC = () => {
            </div>
 
            {/* PANEL PRZYCISKÓW */}
-           <div className="mt-auto mt-[10px] w-full max-w-[864px] bg-slate-900/30 rounded-[30px] border border-white/10 p-3 flex items-center justify-center gap-3 backdrop-blur-[1px] shadow-2xl shrink-0">
+           <div className="relative mt-auto mt-[10px] w-full max-w-[864px] bg-slate-900/30 rounded-[30px] border border-white/10 p-3 flex items-center justify-center gap-3 backdrop-blur-[1px] shadow-2xl shrink-0">
+              {engineSwitchNotice && (
+                <div className="absolute -top-10 right-3 flex h-8 items-center gap-2 rounded-xl border border-cyan-300/20 bg-slate-950/90 px-3 shadow-lg backdrop-blur-md pointer-events-none">
+                  <span className="font-black italic uppercase tracking-tighter text-[9px] text-cyan-100">
+                    Włączono: {engineSwitchNotice}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={() => setShowExpertCommentary(true)}
                 className="flex-1 px-8 py-6 rounded-[32px] bg-blue-600/30 border-t border-x border-b border-t-blue-400/40 border-x-blue-500/20 border-b-black/60 text-blue-400 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:translate-y-[2px] flex items-center justify-center gap-2.5"
@@ -546,6 +601,17 @@ export const PreMatchStudioView: React.FC = () => {
               <button
                 onClick={() => {
                   setPendingMatchKits({ fixtureId: data.fixture.id, kits: matchKits });
+                  /*
+                   * Lock the per-fixture selection at the same moment as the
+                   * kits. The running view cannot switch engines and create a
+                   * second authoritative timeline; an explicit exit discards
+                   * that isolated prototype before unlocking the fixture.
+                   */
+                  setPendingLeagueMatchEngine({
+                    fixtureId: data.fixture.id,
+                    engineId: selectedMatchEngine,
+                    locked: true,
+                  });
                   navigateTo(ViewState.MATCH_LIVE);
                 }}
                 className="group relative flex-1 px-8 py-6 rounded-[32px] bg-white text-slate-950 font-black italic text-[17px] uppercase tracking-tighter transition-all hover:scale-105 active:translate-y-[2px] overflow-hidden"

@@ -1,4 +1,4 @@
-import type { Player } from '../../../../types';
+import { MatchEventType, type Player } from '../../../../types';
 import type { CupRuntimeState, CupTeamInput, CupTeamRuntimeProfile } from './CupMatchTypes';
 import { pickWeighted, weightedScore } from './CupMath';
 
@@ -30,7 +30,15 @@ export const CupSubstitutionService = {
     if (state.substitutionsUsed[team.side] >= maxSubstitutions) return null;
 
     const activeIds = new Set(team.lineup.startingXI.filter((id): id is string => Boolean(id)));
-    const bench = team.players.filter(player => team.lineup.bench.includes(player.id));
+    const playersWhoAlreadyLeft = new Set(state.events
+      .filter(event => event.type === MatchEventType.SUBSTITUTION && event.side === team.side)
+      .map(event => event.secondaryPlayerId)
+      .filter((id): id is string => Boolean(id)));
+    const bench = team.players.filter(player =>
+      team.lineup.bench.includes(player.id) &&
+      !playersWhoAlreadyLeft.has(player.id) &&
+      !state.redCards[player.id]
+    );
     if (bench.length === 0) return null;
 
     const tiredPlayers = profile.activePlayers.filter(player => (state.fatigue[player.id] ?? player.condition) < 55);
@@ -72,4 +80,3 @@ export const CupSubstitutionService = {
     };
   },
 };
-

@@ -1,0 +1,170 @@
+PLAN WDROŻENIA SILNIKA MECZOWEGO 2D AI
+Wersja robocza: 30 sierpnia 2026
+
+1. CEL WDROŻENIA
+
+- Przebudować prototyp silnika 2.0 tak, aby przebieg akcji wynikał z rzeczywistych pozycji zawodników, ich decyzji, atrybutów, taktyki i sytuacji na boisku.
+- Zachować możliwość wyboru starego silnika oraz silnika 2.0 przed meczem.
+- Zachować dwa sposoby oglądania spotkania: statyczny podgląd z komentarzem oraz interaktywną prezentację 2D.
+- Nie budować drugiego, równoległego źródła wyniku. Docelowo jedna symulacja ma odpowiadać za wynik, zdarzenia, statystyki i obraz meczu.
+- Utrzymać boisko w rzeczywistym układzie 105 × 68 metrów. SVG tylko skaluje ten układ do rozdzielczości ekranu.
+
+2. ZASADY BEZPIECZNEGO WDROŻENIA
+
+- Zmiany będą wprowadzane etapami. Każdy etap musi mieć osobny test automatyczny i test regresji dotychczasowych zasad.
+- Najpierw powstają fundamenty przestrzenne. Wynik, strzelcy i statystyki nie zostaną przełączone na nową logikę, dopóki ruch i decyzje nie będą stabilne.
+- Dotychczasowe rozstrzyganie fauli, kartek, kontuzji, zmian, przerw, dogrywki, karnych i statystyk pozostaje źródłem prawdy podczas pierwszych etapów.
+- Losowość pozostaje deterministyczna: ten sam seed i te same polecenia mają dawać ten sam przebieg.
+- Nie zapisujemy klatki po klatce w save. Stan przestrzenny jest odtwarzany dla bieżącego meczu, więc pierwszy etap nie wymaga rozpoczynania nowej kariery.
+- Każda istotna stała balansu trafi docelowo do jednego pliku ustawień, aby można było ją kalibrować bez szukania wartości w wielu serwisach.
+
+3. STAN WYJŚCIOWY I PROBLEMY DO USUNIĘCIA
+
+- Obecny rdzeń wybiera akcję na podstawie zagregowanej siły zespołów i umownej strefy piłki, a dopiero później dopisuje współrzędne do prezentacji.
+- Warstwa SVG dodatkowo przesuwa zawodników własnymi regułami. W efekcie pozycję zawodnika może wyznaczać więcej niż jeden mechanizm.
+- Brakuje trwałego stanu ruchu: prędkości, przyspieszenia, kierunku, hamowania i zobowiązania do rozpoczętej akcji.
+- Podania nie oceniają jeszcze prawdziwego kąta, odległości, wolnego miejsca ani przecięcia linii podania.
+- Zespół nie ma jawnych faz, dlatego linie nie zawsze przesuwają się razem.
+- Skrypty kluczowych momentów są prezentacją, a nie skutkiem przestrzennej symulacji otwartej gry.
+
+4. ETAP 0 – AUDYT I GRANICE ODPOWIEDZIALNOŚCI – WYKONANY
+
+- Ustalono przepływ: sesja meczu → rdzeń symulacji → zdarzenia i statystyki → stan przestrzenny → kontroler klatek → SVG.
+- Ustalono, że współrzędne 105 × 68 już istnieją i powinny zostać zachowane.
+- Do zachowania: publiczne API silnika 2.0, deterministyczne RNG, reguły meczu, statystyki, komendy trenera, SVG i istniejące testy.
+- Do stopniowej wymiany: wtórne projektowanie pozycji po zdarzeniu oraz niezależne reguły ruchu w kontrolerze klatek.
+
+5. ETAP 1 – FAZY DRUŻYNY I WSPÓLNY KSZTAŁT FORMACJI – WDROŻONY W KODZIE, OCZEKUJE NA TEST GRACZA
+
+- Dodać jawne fazy zespołu:
+  - ustawienie obronne,
+  - budowanie akcji,
+  - atak pozycyjny,
+  - gra w ostatniej tercji,
+  - przejście do ataku,
+  - przejście do obrony.
+- Wykrywać zmianę posiadania i przez krótki czas utrzymywać fazę przejściową.
+- Utworzyć jeden serwis wyznaczający cel ruchu całej formacji.
+- Formacja ma reagować na położenie piłki jako blok, zachowując odległości między obroną, pomocą i atakiem.
+- Każdy zawodnik zachowuje własną niewidoczną strefę wynikającą z pozycji w taktyce.
+- Bramkarz pozostaje blisko własnej bramki i przesuwa się tylko w bezpiecznym zakresie.
+- Pressing wykonuje ograniczona liczba najbliższych zawodników; reszta zabezpiecza strukturę.
+- Na tym etapie nowy model wpływa wyłącznie na stan przestrzenny i podgląd SVG. Nie zmienia wyniku.
+- Test kontrolny: 4-4-2 kontra 4-4-2, różne położenia piłki, obie strony w posiadaniu, przejścia oraz deterministyczne powtórzenie.
+- Test automatyczny został dodany i przechodzi. Przeszedł również pełny zestaw dotychczasowych testów silnika 2.0 oraz kompilacja wersji produkcyjnej.
+
+6. ETAP 2 – JEDEN AUTORYTATYWNY STAN RUCHU – FUNDAMENT WDROŻONY
+
+- Rozszerzyć stan zawodnika o prędkość, kierunek, przyspieszenie, zwalnianie i bieżący cel.
+- Ograniczyć maksymalną zmianę pozycji na podstawie czasu oraz atrybutów szybkości i kondycji.
+- Wprowadzić ciągłość decyzji: rozpoczęty bieg lub doskok trwa przez minimalny czas, chyba że nastąpi ważne zdarzenie.
+- Usunąć niezależne przesuwanie zawodników z warstwy renderującej. SVG ma tylko interpolować stan wyliczony przez silnik.
+- Dodać ochronę przed teleportacją i test maksymalnej drogi przebytej w jednej aktualizacji.
+
+7. ETAP 3 – PIŁKA, POSIADANIE I LINIE PODAŃ – FUNDAMENT WDROŻONY
+
+- Wprowadzić jeden stan piłki: pozycja, wysokość, prędkość, kierunek, właściciel i stan lotu.
+- Podanie ma być ruchem piłki w czasie, a nie natychmiastowym przeniesieniem właściciela.
+- Oceniać dystans, kąt, presję na podającym, wolne miejsce odbiorcy i możliwość przecięcia toru przez rywala.
+- Odbiorca zaczyna ruch przed podaniem. Pozostali zawodnicy tworzą opcje i zabezpieczenie.
+- Zablokować nielogiczne podania przez całe boisko do własnego bramkarza, chyba że sytuacja i taktyka rzeczywiście to uzasadniają.
+
+8. ETAP 4 – INDYWIDUALNE DECYZJE ZAWODNIKÓW – PIERWSZY ZAKRES WDROŻONY
+
+- Co krótki interwał zawodnik ocenia możliwe działania: podanie, prowadzenie, drybling, strzał, dośrodkowanie, wybicie, utrzymanie piłki albo ruch bez piłki.
+- Każde działanie otrzymuje ocenę użyteczności zależną od sytuacji, roli, atrybutów, zmęczenia, taktyki, wyniku, czasu i niewielkiego RNG.
+- Rozdzielić wybór od wykonania. Dobra decyzja może zostać źle wykonana, a ryzykowna czasem może się udać.
+- Atrybut decyzji ogranicza błędy wyboru; technika, podania, drybling, wykończenie i opanowanie wpływają na jakość wykonania.
+- Decyzja ma obowiązywać przez krótki czas, aby zawodnik nie zmieniał zamiaru w każdej klatce.
+
+9. ETAP 5 – RUCH BEZ PIŁKI I ZACHOWANIE BLOKÓW
+
+- Dodać wybiegnięcia za linię, zejścia po piłkę, poszerzanie gry, wejścia w półprzestrzeń i wsparcie podającego.
+- Obrona ma zachowywać linię, asekurację, krycie strefowe lub indywidualne oraz kontrolę odległości między formacjami.
+- Po stracie najbliżsi gracze mogą kontrpressować, a pozostali odbudowują strukturę.
+- Po odbiorze zespół wybiera kontratak lub uspokojenie gry zgodnie z poleceniami i sytuacją.
+- Dodać debugowy podgląd kotwic, stref, celów, faz oraz linii podania dostępny wyłącznie w trybie testowym.
+
+10. ETAP 6 – POJEDYNKI, STRZAŁY I BRAMKARZ
+
+- Drybling i odbiór rozstrzygać na podstawie realnej odległości, kierunku ruchu, szybkości, techniki, obrony i pomocy partnerów.
+- Strzał może powstać tylko z pozycji, w której zawodnik rzeczywiście znajduje się przy piłce.
+- Jakość sytuacji uwzględnia kąt, dystans, słabszą nogę, presję, ustawienie bramkarza, zasłonięcie i rodzaj podania.
+- Bramkarz utrzymuje pozycję względem piłki i bramki, reaguje z opóźnieniem zależnym od atrybutów i może piąstkować, łapać lub odbijać.
+- Odbita piłka pozostaje aktywna i może wywołać dobitkę lub przejęcie.
+
+11. ETAP 7 – STAŁE FRAGMENTY I PRZERWY W GRZE
+
+- Rzuty rożne: zawodnicy zajmują role w polu karnym, kryją, atakują strefy i walczą o pierwszą oraz drugą piłkę.
+- Auty: wykonawca, dostępne krótkie opcje, ruch po linii i możliwość długiego wrzutu.
+- Rzuty wolne: bezpośrednie, dośrodkowania i krótkie rozegrania zależnie od miejsca i taktyki.
+- Rzuty karne: ustawienie wykonawcy i bramkarza, rozbieg, strzał, obrona lub dobitka zgodna z przepisami.
+- Spalone wynikają z momentu podania i pozycji zawodnika, a nie z niezależnego losowania.
+- Zachować przerwę, doliczony czas, zmiany, urazy, kartki i wznowienia.
+
+12. ETAP 8 – POLECENIA TRENERA, POGODA I OTOCZENIE
+
+- Podłączyć tempo, mentalność, intensywność, podania, pressing, kontratak i krycie do celów ruchu oraz oceny decyzji.
+- Krzyki i polecenia boczne mają zmieniać zachowanie stopniowo, zależnie od jakości komunikacji i reakcji drużyny.
+- Pogoda oraz jakość murawy wpływają na przyspieszenie, zmęczenie, kontrolę piłki i błędy techniczne.
+- Atut własnego boiska i frekwencja wpływają subtelnie na pewność, intensywność oraz presję, ale nie gwarantują wyniku.
+
+13. ETAP 9 – KLUCZOWE MOMENTY I PREZENTACJA
+
+- Dopiero po ustabilizowaniu otwartej gry generować z symulacji kluczowe momenty.
+- Tryby oglądania:
+  - sam komentarz,
+  - minimum: gole i najważniejsze okazje,
+  - więcej akcji: strzały, obrony, faule, stałe fragmenty i spalone.
+- Powtórki goli pozostają opcjonalne.
+- Scenariusze akcji mogą służyć jako szablony kamery i prezentacji, ale nie mogą narzucać wyniku ani teleportować zawodników.
+
+14. ETAP 10 – TESTY, KALIBRACJA I PRZEŁĄCZENIE ŹRÓDŁA PRAWDY
+
+- Testy jednostkowe: geometria, strefy, fazy, prędkość, podania, przecięcia, spalone, strzały, bramkarz i stałe fragmenty.
+- Testy scenariuszowe: równe 4-4-2, niski blok kontra pressing, kontraatak, czerwona kartka, końcówka meczu i zmęczenie.
+- Testy statystyczne wielu spotkań: liczba goli, strzałów, podań, fauli, kartek, niespodzianek i wysokich wyników.
+- Test deterministyczny: identyczny seed i komendy dają identyczne zdarzenia.
+- Test wydajności: płynna prezentacja na 1920 × 1080 i brak blokowania interfejsu.
+- Dopiero po przejściu testów nowy stan przestrzenny zacznie wpływać na autorytatywne decyzje, a stara projekcja zostanie usunięta.
+
+15. KRYTERIA ODBIORU PIERWSZEGO ETAPU
+
+- Obie jedenastki zachowują czytelne linie i reagują wspólnie na położenie piłki.
+- Bramkarze pozostają w prawidłowej strefie.
+- Zmiana posiadania tworzy widoczną, krótką fazę przejściową.
+- Zawodnicy nie wychodzą poza swoje strefy robocze.
+- Nie więcej niż dwóch zawodników jednego zespołu doskakuje jednocześnie do piłki w podstawowym modelu.
+- Ten sam stan wejściowy zawsze daje te same cele ruchu.
+- Wszystkie dotychczasowe testy wyniku, reguł, zdarzeń, klatek, widoku SVG i sterowania nadal przechodzą.
+
+16. SPOSÓB TESTOWANIA PRZEZ GRACZA PO ETAPIE 1
+
+- Można użyć istniejącego zapisu gry, ponieważ etap nie zmienia danych kariery ani wyniku meczu.
+- Przed meczem ligowym należy wybrać silnik 2.0 oraz widok interaktywny.
+- Obserwować przede wszystkim wspólne przesuwanie linii, ustawienie bramkarzy, szerokość formacji i liczbę graczy doskakujących do piłki.
+- Płynność ruchu klatka po klatce będzie przedmiotem etapu 2; pierwszy etap ocenia właściwe cele i strukturę zespołu.
+
+17. PAKIET STABILIZACYJNY PO TEŚCIE GRACZA – WYKONANY
+
+- Poprawiono rozpoczęcie meczu. Przy kole środkowym ustawiają się wykonawca i najbliższy partner, a pozostali zawodnicy zachowują pozycje formacji.
+- Stan przestrzenny silnika jest jedynym źródłem pozycji zawodników podczas otwartej gry. Warstwa SVG nie prowadzi już własnej, konkurencyjnej symulacji ruchu.
+- Dodano prędkość, kierunek, przyspieszanie, hamowanie oraz krótkie utrzymanie zamiaru ruchu. Ograniczono również maksymalny dystans możliwy do pokonania w jednej aktualizacji.
+- Wznowienia mogą tymczasowo wyprowadzić wykonawcę poza jego zwykłą strefę. Po wznowieniu zawodnik wraca do niej płynnie, bez natychmiastowego przeskoku.
+- Piłka ma jeden stan obejmujący pozycję, prędkość, wysokość, właściciela, ostatni kontakt i planowanego odbiorcę.
+- Podczas podania, dośrodkowania i strzału piłka nie należy równocześnie do żadnego zawodnika. Po opanowaniu znajduje się dokładnie przy aktualnym właścicielu.
+- Decyzje o podaniu korzystają z rzeczywistych pozycji: dystansu, postępu akcji, presji przy zawodnikach i wolnej linii podania.
+- Miejsce oddania strzału oraz wybór strzelca są powiązane z rzeczywistym ustawieniem zawodników.
+- Zdarzenia zapisują początek i koniec zagrania, dzięki czemu kolejne fragmenty akcji mogą być łączone bez przeskakiwania piłki do przypadkowego zawodnika.
+- Widok meczu zawsze pokazuje piłkę. Przy spokojniejszym fragmencie informuje także, kto ma piłkę albo który zespół jest w posiadaniu.
+- Przy aktywnej akcji na murawie wyświetlany jest wykonawca oraz odbiorca zagrania, aby przebieg był łatwiejszy do śledzenia.
+- Dodano automatyczny test ciągłości przestrzennej. Sprawdza rozpoczęcie meczu, limit ruchu zawodników, jednego właściciela piłki, dane przestrzenne podań oraz łączenie kolejnych fragmentów akcji.
+
+18. SPOSÓB TESTOWANIA PAKIETU STABILIZACYJNEGO
+
+- Można użyć istniejącego zapisu gry. Zmiany dotyczą działania i prezentacji bieżącego meczu, a nie struktury danych kariery.
+- Przed meczem ligowym wybrać silnik 2.0 i widok interaktywny.
+- Sprawdzić ustawienie przy rozpoczęciu: tylko dwóch zawodników rozpoczynającej drużyny powinno znajdować się przy kole środkowym.
+- Obserwować, czy zawodnicy poruszają się stopniowo, a po wznowieniach płynnie wracają do swoich stref.
+- Obserwować podpis posiadania i uczestników akcji oraz sprawdzić, czy piłka przechodzi między wskazanym podającym i odbiorcą.
+- Ten pakiet stabilizuje fundament otwartej gry. Kolejne części planu nadal obejmują pełniejszy ruch bez piłki, pojedynki, bramkarza, stałe fragmenty oraz kalibrację wielu spotkań.

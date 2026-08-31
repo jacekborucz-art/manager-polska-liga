@@ -1,6 +1,7 @@
 import type { Lineup, MatchContext, MatchSummary, TacticalInstructions } from '../../../../types';
 import {
   CupMatchEngineV2,
+  type CupLiveMatch,
   type CupMatchInput,
   type CupPlayerMatchStats,
   type CupMatchResult,
@@ -100,6 +101,7 @@ export type CupShadowSimulationReport = {
   summary: CupShadowSimulationSummary;
   legacy?: CupLegacyComparableStats;
   diff?: CupShadowSimulationDiff;
+  initialLineup: Record<CupTeamSide, Lineup>;
 };
 
 export type CupShadowSimulationOptions = Omit<CupMatchInputAdapterOptions, 'homeLineup' | 'awayLineup'> & {
@@ -108,6 +110,15 @@ export type CupShadowSimulationOptions = Omit<CupMatchInputAdapterOptions, 'home
   homeInstructions?: Partial<TacticalInstructions>;
   awayInstructions?: Partial<TacticalInstructions>;
   legacy?: CupLegacyComparableStats;
+  /** Side controlled manually by the live UI; retained for adapter diagnostics. */
+  manualSubstitutionSide?: CupTeamSide;
+};
+
+export type CupLiveMatchHandle = {
+  ctx: MatchContext;
+  options: CupShadowSimulationOptions;
+  live: CupLiveMatch;
+  diagnostics: CupMatchInputAdapterDiagnostics;
 };
 
 const summarizeResult = (input: CupMatchInput, result: CupMatchResult): CupShadowSimulationSummary => {
@@ -217,6 +228,56 @@ export const CupShadowSimulationService = {
       summary,
       legacy: options.legacy,
       diff: options.legacy ? compareWithLegacy(summary, options.legacy) : undefined,
+      initialLineup: {
+        HOME: {
+          ...adapted.input.home.lineup,
+          startingXI: [...adapted.input.home.lineup.startingXI],
+          bench: [...adapted.input.home.lineup.bench],
+          reserves: [...adapted.input.home.lineup.reserves],
+        },
+        AWAY: {
+          ...adapted.input.away.lineup,
+          startingXI: [...adapted.input.away.lineup.startingXI],
+          bench: [...adapted.input.away.lineup.bench],
+          reserves: [...adapted.input.away.lineup.reserves],
+        },
+      },
+    };
+  },
+
+  /**
+   * Builds a live handle without simulating a single tick. The adapter runs
+   * once, so later tactical commands mutate only the future runtime input and
+   * never reconstruct the match from the beginning.
+   */
+  createLiveMatch: (ctx: MatchContext, options: CupShadowSimulationOptions): CupLiveMatchHandle => {
+    const adapted = CupMatchInputAdapter.fromMatchContext(ctx, options);
+    return {
+      ctx,
+      options,
+      diagnostics: adapted.diagnostics,
+      live: CupMatchEngineV2.createLiveMatch(adapted.input),
+    };
+  },
+
+  /** Advances the live engine and maps only the elapsed state to the current UI contract. */
+  tickLiveMatch: (handle: CupLiveMatchHandle, targetSecond: number): CupShadowSimulationReport => {
+    CupMatchEngineV2.advanceLiveMatch(handle.live, targetSecond);
+    const result = CupMatchEngineV2.snapshotLiveMatch(handle.live);
+    const matchSummary = CupMatchReportAdapter.fromMatchContext(handle.ctx, handle.live.input, result, {
+      userTeamId: handle.options.userSide === 'AWAY' ? handle.ctx.awayClub.id : handle.ctx.homeClub.id,
+    });
+    const summary = summarizeResult(handle.live.input, result);
+
+    return {
+      input: handle.live.input,
+      result,
+      matchSummary,
+      diagnostics: handle.diagnostics,
+      summary,
+      legacy: handle.options.legacy,
+      diff: handle.options.legacy ? compareWithLegacy(summary, handle.options.legacy) : undefined,
+      initialLineup: handle.live.initialLineup,
     };
   },
 };
